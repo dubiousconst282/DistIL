@@ -10,6 +10,36 @@ _TBD_
 
 Assembly reading and writing is done using DOM abstractions built on top of `System.Reflection.Metadata`.
 
+
+## IR example
+Original C# code:
+```cs
+public static int Nonsense(int[] arr1, int[] arr2, int startIndex, int seed) {
+    var bar = new Bar();
+    bar.i = startIndex;
+    while (bar.MoveNext(arr1)) {
+        arr2[bar.r & 15] = seed;
+        seed = (seed * 8121 + 28411) % 134456;
+    }
+    return bar.r;
+}
+public class Bar {
+    public int i, r;
+
+    public bool MoveNext(int[] a) {
+        if (i < 16) {
+            r += a[i++] < 8 ? 1 : 0;
+            return true;
+        }
+        return false;
+    }
+}
+```
+Optimized IR:
+
+![nonsense-cfg](https://user-images.githubusercontent.com/87553666/163573233-fc52b057-646b-4f52-8682-0b94ed0d1335.png)
+
+
 # Implementation status
 - [*] Assembly loading
   - [*] Type system (generics)

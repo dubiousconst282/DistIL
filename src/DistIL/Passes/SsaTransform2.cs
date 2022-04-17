@@ -164,8 +164,8 @@ public class SsaTransform2 : Pass
         }
         //Propagate usefulness
         while (propagationStack.TryPop(out var phi)) {
-            foreach (var oper in phi.Operands) {
-                if (oper is PhiInst otherPhi && usefulPhis.Add(otherPhi)) {
+            for (int i = 0; i < phi.NumArgs; i++) {
+                if (phi.GetValue(i) is PhiInst otherPhi && usefulPhis.Add(otherPhi)) {
                     propagationStack.Push(otherPhi);
                 }
             }

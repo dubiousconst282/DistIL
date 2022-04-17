@@ -2,13 +2,16 @@
 
 public class BasicBlock : Value
 {
-    public Method Method { get; }
+    public Method Method { get; internal set; }
 
     public List<BasicBlock> Preds { get; } = new();
     public List<BasicBlock> Succs { get; } = new();
 
     public Instruction First { get; set; } = null!;
     public Instruction Last { get; set; } = null!; //Either a BranchInst or ReturnInst
+
+    public BasicBlock? Prev { get; set; }
+    public BasicBlock? Next { get; set; }
 
     public Instruction FirstNonPhi {
         get {
@@ -19,7 +22,6 @@ public class BasicBlock : Value
             return inst;
         }
     }
-    public Instruction? LastNonBranch => Last.Prev;
 
     /// <summary> Whether <see cref="Instruction.Order" /> values are valid. </summary>
     public bool OrderValid { get; private set; }
@@ -103,6 +105,8 @@ public class BasicBlock : Value
     
     public void Remove(Instruction inst, bool removeOperUses = true)
     {
+        Ensure(inst.Block == this);
+        
         if (inst.Prev != null) {
             inst.Prev.Next = inst.Next;
         } else {
@@ -114,6 +118,8 @@ public class BasicBlock : Value
         } else {
             Last = inst.Prev!;
         }
+
+        inst.Block = null!; //to ensure it can't be removed again
         OnCodeChanged();
     }
 

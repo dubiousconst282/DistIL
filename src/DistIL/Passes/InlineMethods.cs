@@ -24,7 +24,7 @@ public class InlineMethods : Pass
         if (callInst.Method is Method callee) {
             //TODO: better inlining heuristics
             //FIXME: block inlining for methods with accesses to private members of different classes
-            return caller != callee && callee.GetBlocks().Count <= 8;
+            return caller != callee && callee.NumBlocks <= 8;
         }
         return false;
     }
@@ -42,7 +42,7 @@ public class InlineMethods : Pass
             store.InsertBefore(callInst);
             cloner.AddMapping(callee.Args[i], tempVar);
         }
-        var newBlocks = cloner.CloneBlocks(callee.GetBlocks());
+        var newBlocks = cloner.CloneBlocks(callee);
 
         if (newBlocks.Count > 1) {
             InlineManyBlocks(callInst, newBlocks);

@@ -63,7 +63,7 @@ public abstract class Instruction : Value
     /// <summary> Removes this instruction from the parent basic block. Operand uses are removed. </summary>
     public void Remove()
     {
-        Block.Remove(this);
+        Block?.Remove(this);
 
         for (int i = 0; i < Operands.Length; i++) {
             Operands[i].RemoveUse(this, i);

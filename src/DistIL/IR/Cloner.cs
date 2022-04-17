@@ -17,20 +17,23 @@ public class Cloner
         _mappings.Add(key, val);
     }
 
-    public List<BasicBlock> CloneBlocks(List<BasicBlock> blocks)
+    //TODO: Streaming API
+    public List<BasicBlock> CloneBlocks(Method method)
     {
         var newBlocks = new List<BasicBlock>();
         //List of instructions that need to be remapped last (they may depend on a instruction in a unvisited pred block)
         var pendingInsts = new List<Instruction>();
 
         //Create empty blocks to initialize mappings
-        foreach (var oldBlock in blocks) {
+        foreach (var oldBlock in method) {
             var newBlock = _targetMethod.CreateBlock();
             _mappings.Add(oldBlock, newBlock);
             newBlocks.Add(newBlock);
         }
         //Fill in the new blocks
-        foreach (var (oldBlock, newBlock) in blocks.Zip(newBlocks)) {
+        int blockIdx = 0;
+        foreach (var oldBlock in method) {
+            var newBlock = newBlocks[blockIdx++];
             //Clone edges
             foreach (var succ in oldBlock.Succs) {
                 newBlock.Succs.Add(Remap(succ));

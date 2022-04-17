@@ -21,7 +21,7 @@ public class IRPrinter
         tw.WriteLine("digraph {");
         tw.WriteLine("  node[shape=plaintext fontname=consolas fontsize=12]");
 
-        foreach (var block in method.GetBlocks()) {
+        foreach (var block in method) {
             tw.Write($"  {block}[label=<\n");
             tw.Write("    <table border='0' cellborder='1' cellspacing='0' cellpadding='4'>\n");
             tw.Write("      <tr><td colspan='2' balign='left'>\n");
@@ -34,7 +34,7 @@ public class IRPrinter
                 inst.Print(instSb, slotTracker);
                 instSb.Replace("<", "&lt;");
                 instSb.Replace(">", "&gt;");
-                instSb.Replace("\n", "<br/>\n    ");
+                instSb.Replace("\n", "<br/>\n  ");
                 tw.Write(instSb);
                 instSb.Clear();
             }
@@ -81,7 +81,7 @@ public class IRPrinter
         var instSb = new StringBuilder();
         var slotTracker = method.GetSlotTracker();
 
-        foreach (var block in method.GetBlocks()) {
+        foreach (var block in method) {
             tw.Write($"{block}{(block == method.EntryBlock ? " (entry)" : "")}:");
             if (block.Preds.Count > 0) {
                 tw.Write(" //preds: ");

@@ -8,7 +8,7 @@ public class SimplifyConds : Pass
 {
     public override void Transform(Method method)
     {
-        foreach (var block in method.GetBlocks().ToArray()) {
+        foreach (var block in method) {
             while (TransformSelect(block));
         }
     }

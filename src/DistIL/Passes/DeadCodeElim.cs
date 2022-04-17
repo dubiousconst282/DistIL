@@ -31,7 +31,7 @@ public class DeadCodeElim : RewritePass
                 }
             }
             //Remove unreachable blocks
-            foreach (var block in method.GetBlocks().ToArray()) {
+            foreach (var block in method) {
                 if (block == method.EntryBlock || visitedBlocks.Contains(block)) continue;
 
                 //Rewrite phi

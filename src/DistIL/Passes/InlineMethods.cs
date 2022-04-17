@@ -88,6 +88,7 @@ public class InlineMethods : Pass
         foreach (var block in blocks) {
             if (block == blocks[0]) { //entry block
                 startBlock.SetBranch(block);
+                MergeBlocks.MergeSingleSucc(startBlock);
             }
             if (block.Last is ReturnInst ret) {
                 if (callInst.HasResult) {
@@ -97,12 +98,13 @@ public class InlineMethods : Pass
             }
         }
         //Replace uses of the call with the returned value, or a phi for each returning block
-        if (callInst.HasResult) {
-            //FIXME: check if it' ok to add phis before the SSA pass
-            var value = returnedVals.Count >= 2
-                ? endBlock.AddPhi(returnedVals)
-                : returnedVals[0].Value;
+        if (returnedVals.Count >= 2) {
+            var value = endBlock.AddPhi(returnedVals);
             callInst.ReplaceWith(value);
+        } else if (returnedVals.Count == 1) {
+            var (exitBlock, retValue) = returnedVals[0];
+            callInst.ReplaceWith(retValue);
+            MergeBlocks.MergeSingleSucc(exitBlock);
         } else {
             callInst.Remove();
         }

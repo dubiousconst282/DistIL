@@ -32,6 +32,7 @@ public class IRPrinter
                 if (i++ != 0) tw.Write(" <br/>\n");
                 tw.Write("  ");
                 inst.Print(instSb, slotTracker);
+                instSb.Replace("&", "&amp;");
                 instSb.Replace("<", "&lt;");
                 instSb.Replace(">", "&gt;");
                 instSb.Replace("\n", "<br/>\n  ");
@@ -51,7 +52,7 @@ public class IRPrinter
                 if (block.Last is BranchInst { IsConditional: true } br) {
                     port = succ == br.Then ? "T" : "F";
                 }
-                tw.Write($"  {block}:{port} -> {succ}:n\n");
+                tw.Write($"  {block}:{port} -> {succ}\n");
             }
 
             //var dom = domTree.IDom(block);

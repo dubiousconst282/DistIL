@@ -69,7 +69,7 @@ public enum TypeKind
     Single,
     Double,
     String,
-    TypedReference,
+    TypedRef,
     IntPtr,
     UIntPtr,
     Pointer,
@@ -100,7 +100,7 @@ public static class TypeKindEx
         (32,   0), //Single
         (64,   0), //Double
         (0,  Obj), //String
-        (0,    0), //TypedReference
+        (0,    0), //TypedRef
         (0,  Sig | Ptr), //IntPtr
         (0,  Uns | Ptr), //UIntPtr
         (0,  Ptr), //Pointer

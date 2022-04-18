@@ -23,6 +23,13 @@ public class TypeDef : RType, EntityDef
     public override string? Namespace { get; }
     public override string Name { get; }
 
+    //Member lists must be lazily initialized to prevent infinite recursion on TypeDef ctor
+    private List<FieldDef>? _fields;
+    public List<FieldDef> Fields => _fields ??= LoadFields();
+
+    private List<MethodDef>? _methods;
+    public List<MethodDef> Methods => _methods ??= LoadMethods();
+
     internal TypeDef(ModuleDef mod, TypeDefinitionHandle handle)
     {
         Module = mod;
@@ -41,18 +48,23 @@ public class TypeDef : RType, EntityDef
         Kind = TypeKind.Object;
     }
 
-    public IEnumerable<MethodDef> GetMethods()
+    private List<FieldDef> LoadFields()
     {
-        foreach (var handle in _entity.GetMethods()) {
-            yield return Module.GetMethod(handle);
+        var handles = _entity.GetFields();
+        var fields = new List<FieldDef>(handles.Count);
+        foreach (var handle in handles) {
+            fields.Add(Module.GetField(handle));
         }
+        return fields;
     }
-
-    public IEnumerable<FieldDef> GetFields()
+    private List<MethodDef> LoadMethods()
     {
-        foreach (var handle in _entity.GetFields()) {
-            yield return Module.GetField(handle);
+        var handles = _entity.GetMethods();
+        var methods = new List<MethodDef>(handles.Count);
+        foreach (var handle in handles) {
+            methods.Add(Module.GetMethod(handle));
         }
+        return methods;
     }
 
     public override bool Equals(RType? other)

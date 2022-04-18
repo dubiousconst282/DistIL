@@ -5,14 +5,16 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
+using DistIL.IR;
+
 public class ModuleWriter
 {
     readonly ModuleDef _mod;
     readonly MetadataBuilder _builder;
-    readonly BlobBuilder _ilStream;
+    readonly MethodBodyStreamEncoder _bodyEncoder;
     private BlobBuilder? _fieldDataStream;
     private BlobBuilder? _managedResourceStream;
-    MethodDefinitionHandle _entryPoint;
+    private MethodDefinitionHandle _entryPoint;
 
     private Dictionary<EntityDef, EntityHandle> _handleMap = new();
 
@@ -20,13 +22,59 @@ public class ModuleWriter
     {
         _mod = mod;
         _builder = new MetadataBuilder();
-        _ilStream = new BlobBuilder();
+        _bodyEncoder = new MethodBodyStreamEncoder(new BlobBuilder());
     }
 
-    public void Serialize(BlobBuilder peBlob)
+    private EntityHandle GetTypeHandle(RType type)
     {
-        //https://github.com/Lokad/ILPack/blob/master/src/AssemblyGenerator.cs
+        if (type is TypeDef def) {
+            if (_handleMap.TryGetValue(def, out var handle)) {
+                return handle;
+            }
+            Ensure(def.Module != _mod); //Module must have all handles allocated first
+
+            handle = _builder.AddTypeReference(
+                GetAsmHandle(def.Module),
+                AddString(def.Namespace),
+                AddString(def.Name)
+            );
+            _handleMap[def] = handle;
+            return handle;
+        }
+        throw new NotImplementedException();
+    }
+
+    private EntityHandle GetAsmHandle(ModuleDef module)
+    {
+        if (_handleMap.TryGetValue(module, out var handle)) {
+            return handle;
+        }
+        var name = module.Name;
+        handle = _builder.AddAssemblyReference(
+            AddString(name.Name),
+            name.Version!,
+            AddString(name.CultureName),
+            AddBlob(name.GetPublicKey() ?? name.GetPublicKeyToken()),
+            (AssemblyFlags)name.Flags,
+            default
+        );
+        _handleMap.Add(module, handle);
+        return handle;
+    }
+
+    public void Emit(BlobBuilder peBlob)
+    {
+        //https://github.com/dotnet/runtime/blob/main/src/libraries/System.Reflection.Metadata/tests/PortableExecutable/PEBuilderTests.cs
         var name = _mod.Name;
+        var modDef = _mod.Reader.GetModuleDefinition();
+
+        var mainModHandle = _builder.AddModule(
+            modDef.Generation, 
+            AddString(_mod.Reader.GetString(modDef.Name)), 
+            _builder.GetOrAddGuid(_mod.Reader.GetGuid(modDef.Mvid)),
+            _builder.GetOrAddGuid(_mod.Reader.GetGuid(modDef.GenerationId)),
+            _builder.GetOrAddGuid(_mod.Reader.GetGuid(modDef.BaseGenerationId))
+        );
         var mainAsmHandle = _builder.AddAssembly(
             AddString(name.Name!),
             name.Version!,
@@ -35,19 +83,230 @@ public class ModuleWriter
             (AssemblyFlags)name.Flags,
             (AssemblyHashAlgorithm)name.HashAlgorithm
         );
+        _handleMap.Add(_mod, mainAsmHandle);
+
+        AllocHandles();
+        EmitTypes();
 
         SerializePE(peBlob);
     }
 
-    private void SerializeTypes()
+    private void AllocHandles()
+    {
+        int typeIdx = 1, fieldIdx = 1, methodIdx = 1;
+
+        foreach (var type in _mod.GetDefinedTypes()) {
+            _handleMap.Add(type, MetadataTokens.TypeDefinitionHandle(typeIdx++));
+
+            foreach (var field in type.Fields) {
+                _handleMap.Add(field, MetadataTokens.FieldDefinitionHandle(fieldIdx++));
+            }
+            foreach (var method in type.Methods) {
+                _handleMap.Add(method, MetadataTokens.MethodDefinitionHandle(methodIdx++));
+            }
+        }
+    }
+
+    private void EmitTypes()
     {
         foreach (var type in _mod.GetDefinedTypes()) {
-            /*var handle = _builder.AddTypeDefinition(
-                type.Attribs, 
-                AddString(type.Namespace),
-                AddString(type.Name), 
-*/
+            EmitType(type);
         }
+    }
+
+    private void CheckHandle(EntityDef def, EntityHandle handle)
+    {
+        Assert(_handleMap[def] == handle);
+    }
+
+    private void EmitType(TypeDef type)
+    {
+        var firstFieldHandle = MetadataTokens.FieldDefinitionHandle(_builder.GetRowCount(TableIndex.Field) + 1);
+        var firstMethodHandle = MetadataTokens.MethodDefinitionHandle(_builder.GetRowCount(TableIndex.MethodDef) + 1);
+
+        var handle = _builder.AddTypeDefinition(
+            type.Attribs,
+            AddString(type.Namespace),
+            AddString(type.Name),
+            type.BaseType == null ? default : GetTypeHandle(type.BaseType),
+            firstFieldHandle,
+            firstMethodHandle
+        );
+        CheckHandle(type, handle);
+
+        foreach (var field in type.Fields) {
+            EmitField(field);
+        }
+        foreach (var method in type.Methods) {
+            EmitMethod(method);
+        }
+    }
+
+    private void EmitField(FieldDef field)
+    {
+        var handle = _builder.AddFieldDefinition(
+            field.Attribs,
+            AddString(field.Name),
+            EmitSig(b => EncodeType(b.FieldSignature(), field.Type))
+        );
+        CheckHandle(field, handle);
+
+        if (field.Attribs.HasFlag(FieldAttributes.HasFieldRVA)) {
+            unsafe {
+                var data = field.GetStaticDataBlock();
+                _fieldDataStream ??= new();
+                _fieldDataStream.Align(4); //FIXME: how to correctly align field RVA data?
+                _builder.AddFieldRelativeVirtualAddress(handle, _fieldDataStream.Count);
+                _fieldDataStream.WriteBytes(data.Pointer, data.Length);
+            }
+        }
+        if (field.Attribs.HasFlag(FieldAttributes.HasDefault)) {
+            _builder.AddConstant(handle, field.DefaultValue);
+        }
+        //TODO: _builder.AddFieldLayout()
+        //TODO: _builder.AddMarshallingDescriptor()
+    }
+
+    private void EmitMethod(MethodDef method)
+    {
+        var signature = EmitMethodSig(method);
+        int bodyOffset = EmitBody(method.Body);
+
+        var handle = _builder.AddMethodDefinition(
+            method.Attribs,
+            method.ImplAttribs,
+            AddString(method.Name),
+            signature,
+            bodyOffset,
+            MetadataTokens.ParameterHandle(1)
+        );
+        CheckHandle(method, handle);
+    }
+
+    private int EmitBody(MethodBody? body)
+    {
+        if (body == null) {
+            return -1;
+        }
+        var localVarSigs = default(StandaloneSignatureHandle);
+        var attribs = body.InitLocals ? MethodBodyAttributes.InitLocals : 0;
+
+        if (body.Locals.Count > 0) {
+            var sigBlobHandle = EmitSig(b => {
+                var sigEnc = b.LocalVariableSignature(body.Locals.Count);
+                foreach (var localVar in body.Locals) {
+                    var typeEnc = sigEnc.AddVariable().Type(false, localVar.IsPinned);
+                    EncodeType(typeEnc, localVar.Type);
+                }
+            });
+            localVarSigs = _builder.AddStandaloneSignature(sigBlobHandle);
+        }
+
+        var enc = _bodyEncoder.AddMethodBody(
+            body.ILBytes.Length, body.MaxStack,
+            body.ExceptionRegions.Count,
+            hasSmallExceptionRegions: false, //TODO
+            localVarSigs, attribs
+        );
+        //Copy IL bytes to output blob
+        new BlobWriter(enc.Instructions).WriteBytes(body.ILBytes);
+
+        //Copy exception regions
+        foreach (var ehr in body.ExceptionRegions) {
+            enc.ExceptionRegions.Add(
+                ehr.Kind,
+                ehr.TryOffset, ehr.TryLength,
+                ehr.HandlerOffset, ehr.HandlerLength,
+                ehr.CatchType == null ? default : GetTypeHandle(ehr.CatchType),
+                ehr.FilterOffset
+            );
+        }
+        return enc.Offset;
+    }
+
+    private BlobHandle EmitMethodSig(MethodDef method)
+    {
+        return EmitSig(b => {
+            //TODO: callconv, genericParamCount
+            bool isInst = !method.IsStatic;
+            b.MethodSignature(isInstanceMethod: isInst)
+                .Parameters(
+                    method.NumArgs - (isInst ? 1 : 0), //`this` is always explicit in IR
+                    out var retTypeEnc, out var parsEnc
+                );
+            EncodeType(retTypeEnc.Type(), method.RetType);
+            foreach (var arg in method.Args) {
+                var parEnc = parsEnc.AddParameter();
+                EncodeType(parEnc.Type(), arg.Type);
+            }
+        });
+    }
+
+    private void EncodeType(SignatureTypeEncoder enc, RType type)
+    {
+        //Bypassing the encoder api because it's kinda weird and inconsistent.
+        //https://github.com/dotnet/runtime/blob/1ba0394d71a4ea6bee7f6b28a22d666b7b56f913/src/libraries/System.Reflection.Metadata/src/System/Reflection/Metadata/Ecma335/Encoding/BlobEncoders.cs#L809
+        switch (type) {
+            case PrimType t: {
+                var code = type.Kind switch {
+                    #pragma warning disable format
+                    TypeKind.Void   => SignatureTypeCode.Void,
+                    TypeKind.Bool   => SignatureTypeCode.Boolean,
+                    TypeKind.Char   => SignatureTypeCode.Char,
+                    TypeKind.SByte  => SignatureTypeCode.SByte,
+                    TypeKind.Byte   => SignatureTypeCode.Byte,
+                    TypeKind.Int16  => SignatureTypeCode.Int16,
+                    TypeKind.UInt16 => SignatureTypeCode.UInt16,
+                    TypeKind.Int32  => SignatureTypeCode.Int32,
+                    TypeKind.UInt32 => SignatureTypeCode.UInt32,
+                    TypeKind.Int64  => SignatureTypeCode.Int64,
+                    TypeKind.UInt64 => SignatureTypeCode.UInt64,
+                    TypeKind.Single => SignatureTypeCode.Single,
+                    TypeKind.Double => SignatureTypeCode.Double,
+                    TypeKind.IntPtr => SignatureTypeCode.IntPtr,
+                    TypeKind.UIntPtr => SignatureTypeCode.UIntPtr,
+                    TypeKind.String => SignatureTypeCode.String,
+                    TypeKind.Object => SignatureTypeCode.Object,
+                    _ => throw new NotSupportedException()
+                    #pragma warning restore format
+                };
+                enc.Builder.WriteByte((byte)code);
+                break;
+            }
+            case ArrayType t: {
+                EncodeType(enc.SZArray(), t.ElemType);
+                break;
+            }
+            case MDArrayType t: {
+                enc.Array(
+                    e => EncodeType(e, t.ElemType),
+                    s => s.Shape(t.Rank, t.Sizes, t.LowerBounds)
+                );
+                break;
+            }
+            case PointerType t: {
+                EncodeType(enc.Pointer(), t.ElemType);
+                break;
+            }
+            case ByrefType t: {
+                enc.Builder.WriteByte((byte)SignatureTypeCode.ByReference);
+                EncodeType(enc, t.ElemType);
+                break;
+            }
+            case TypeDef t: {
+                enc.Type(GetTypeHandle(t), t.IsValueType);
+                break;
+            }
+            default: throw new NotImplementedException();
+        }
+    }
+
+    private BlobHandle EmitSig(Action<BlobEncoder> encode)
+    {
+        var builder = new BlobBuilder();
+        var encoder = new BlobEncoder(builder);
+        encode(encoder);
+        return _builder.GetOrAddBlob(builder);
     }
 
     private StringHandle AddString(string? str)
@@ -87,13 +346,16 @@ public class ModuleWriter
             sizeOfHeapReserve: peHdr.SizeOfHeapReserve,
             sizeOfHeapCommit: peHdr.SizeOfHeapCommit
         );
+
+        var entryPoint = _mod.GetEntryPoint();
+
         var peBuilder = new ManagedPEBuilder(
             header: header,
             metadataRootBuilder: new MetadataRootBuilder(_builder),
-            ilStream: _ilStream,
+            ilStream: _bodyEncoder.Builder,
             mappedFieldData: _fieldDataStream,
             managedResources: _managedResourceStream,
-            entryPoint: _entryPoint
+            entryPoint: entryPoint == null ? default : (MethodDefinitionHandle)_handleMap[entryPoint]
         );
         peBuilder.Serialize(peBlob);
     }

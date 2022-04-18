@@ -1,5 +1,6 @@
 namespace DistIL.AsmIO;
 
+using System.IO;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
@@ -17,6 +18,7 @@ public class ModuleDef : EntityDef
     public AssemblyName Name { get; }
 
     private TypeDef?[] _typeDefs;
+
     private MethodDef?[] _methodDefs;
     private FieldDef?[] _fieldDefs;
     //resolved reference cache
@@ -112,7 +114,7 @@ public class ModuleDef : EntityDef
         string name = Reader.GetString(entity.Name);
         var signature = entity.DecodeMethodSignature(TypeDecoder, null);
 
-        foreach (var method in parent.GetMethods()) {
+        foreach (var method in parent.Methods) {
             if (method.Name == name && method.ArgTypes.SequenceEqual(signature.ParameterTypes)) {
                 resolved = method;
                 return method;
@@ -134,7 +136,7 @@ public class ModuleDef : EntityDef
         string name = Reader.GetString(entity.Name);
         var type = entity.DecodeFieldSignature(TypeDecoder, null);
 
-        foreach (var field in parent.GetFields()) {
+        foreach (var field in parent.Fields) {
             if (field.Name == name && field.Type == type) {
                 resolved = field;
                 return field;
@@ -233,6 +235,13 @@ public class ModuleDef : EntityDef
         }
     }
 
+    public IEnumerable<ModuleDef> GetReferencedAssemblies()
+    {
+        foreach (var asmHandle in Reader.AssemblyReferences) {
+            yield return ResolveAsm(asmHandle);
+        }
+    }
+
     public MethodDef? GetEntryPoint()
     {
         int entryPointToken = PE.PEHeaders.CorHeader?.EntryPointTokenOrRelativeVirtualAddress ?? 0;
@@ -240,6 +249,15 @@ public class ModuleDef : EntityDef
             return null;
         }
         return GetMethod(MetadataTokens.EntityHandle(entryPointToken));
+    }
+
+    public void Save(Stream stream)
+    {
+        var builder = new BlobBuilder();
+        new ModuleWriter(this).Emit(builder);
+        foreach (var blob in builder.GetBlobs()) {
+            stream.Write(blob.GetBytes());
+        }
     }
 
     public override string ToString() => Name.ToString();

@@ -22,32 +22,32 @@ public struct ILInstruction
         Operand = operand;
     }
 
-    public static ILInstruction Decode(ref BlobReader br)
+    public static ILInstruction Decode(ref SpanReader reader)
     {
-        int baseOffset = br.Offset;
-        int code = br.ReadByte();
+        int baseOffset = reader.Offset;
+        int code = reader.ReadByte();
         if (code == 0xFE) {
-            code = (code << 8) | br.ReadByte();
+            code = (code << 8) | reader.ReadByte();
         }
         var opcode = (ILCode)code;
         object? operand = opcode.GetOperandType() switch {
-            ILOperandType.BrTarget => br.ReadInt32() + br.Offset,
+            ILOperandType.BrTarget => reader.ReadLE<int>() + reader.Offset,
             ILOperandType.Field or
             ILOperandType.Method or
             ILOperandType.Sig or
             ILOperandType.String or
             ILOperandType.Tok or
             ILOperandType.Type
-                => MetadataTokens.Handle(br.ReadInt32()),
-            ILOperandType.I => br.ReadInt32(),
-            ILOperandType.I8 => br.ReadInt64(),
-            ILOperandType.R => br.ReadDouble(),
-            ILOperandType.Switch => ReadJumpTable(ref br),
-            ILOperandType.Var => (int)br.ReadUInt16(),
-            ILOperandType.ShortBrTarget => (int)br.ReadSByte() + br.Offset,
-            ILOperandType.ShortI => (int)br.ReadSByte(),
-            ILOperandType.ShortR => br.ReadSingle(),
-            ILOperandType.ShortVar => (int)br.ReadByte(),
+                => MetadataTokens.Handle(reader.ReadLE<int>()),
+            ILOperandType.I => reader.ReadLE<int>(),
+            ILOperandType.I8 => reader.ReadLE<long>(),
+            ILOperandType.R => reader.ReadLE<double>(),
+            ILOperandType.Switch => ReadJumpTable(ref reader),
+            ILOperandType.Var => (int)reader.ReadLE<ushort>(),
+            ILOperandType.ShortBrTarget => (int)reader.ReadLE<sbyte>() + reader.Offset,
+            ILOperandType.ShortI => (int)reader.ReadLE<sbyte>(),
+            ILOperandType.ShortR => reader.ReadLE<float>(),
+            ILOperandType.ShortVar => (int)reader.ReadByte(),
             _ => null
         };
         return new ILInstruction() {
@@ -56,14 +56,14 @@ public struct ILInstruction
             Operand = operand
         };
 
-        static int[] ReadJumpTable(ref BlobReader br)
+        static int[] ReadJumpTable(ref SpanReader reader)
         {
-            int count = br.ReadInt32();
-            int baseOffset = br.Offset + count * 4;
+            int count = reader.ReadLE<int>();
+            int baseOffset = reader.Offset + count * 4;
             var targets = new int[count];
 
             for (int i = 0; i < count; i++) {
-                targets[i] = baseOffset + br.ReadInt32();
+                targets[i] = baseOffset + reader.ReadLE<int>();
             }
             return targets;
         }

@@ -16,7 +16,6 @@ public class FieldDef : Field, MemberDef
 
     public int RVA { get; }
     public object? DefaultValue { get; }
-    public bool HasDefaultValue { get; }
 
     public FieldDef(ModuleDef mod, FieldDefinitionHandle handle)
     {
@@ -28,19 +27,30 @@ public class FieldDef : Field, MemberDef
         Type = def.DecodeSignature(mod.TypeDecoder, null);
 
         Name = reader.GetString(def.Name);
-        RVA = def.GetRelativeVirtualAddress();
 
-        IsStatic = (Attribs & FieldAttributes.Static) != 0;
+        IsStatic = Attribs.HasFlag(FieldAttributes.Static);
 
-        if (def.GetDefaultValue() is { IsNil: false } valHnd) {
-            DefaultValue = DecodeConst(reader, valHnd);
-            HasDefaultValue = true;
+        if (Attribs.HasFlag(FieldAttributes.HasFieldRVA)) {
+            RVA = def.GetRelativeVirtualAddress();
+        }
+        if (Attribs.HasFlag(FieldAttributes.HasDefault)) {
+            DefaultValue = DecodeConst(reader, def.GetDefaultValue());
         }
     }
 
-    public PEMemoryBlock GetInlineData()
+    /// <summary> Returns the memory block of the field RVA data, assuming (Attribs has HasFieldRVA). </summary>
+    public PEMemoryBlock GetStaticDataBlock()
     {
         return DeclaringType.Module.PE.GetSectionData(RVA);
+    }
+    /// <summary> 
+    /// Returns a span of the field RVA data, assuming (Attribs has HasFieldRVA). 
+    /// It is backed by an unmanaged pointer, which is valid until the declaring type module PE is dispoed.
+    /// </summary>
+    public unsafe ReadOnlySpan<byte> GetStaticData()
+    {
+        var data = GetStaticDataBlock();
+        return new(data.Pointer, data.Length);
     }
 
     private static object? DecodeConst(MetadataReader reader, ConstantHandle handle)

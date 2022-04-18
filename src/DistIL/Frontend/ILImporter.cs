@@ -6,19 +6,19 @@ using DistIL.AsmIO;
 public class ILImporter
 {
     public MethodDef Method { get; }
-    readonly Variable[] _vars;
+    readonly MethodBody _body;
     readonly Dictionary<int, BlockState> _blocks = new();
 
     public ILImporter(MethodDef method)
     {
         Method = method;
-        _vars = GetLocalVars();
+        _body = method.Body ?? throw new ArgumentException("Method has no body to import");
     }
 
     public void ImportCode()
     {
         //Decode instructions and find block boundaries (leaders)
-        var reader = Method.Body!.GetILReader();
+        var reader = _body.GetILReader();
         var code = new List<ILInstruction>(reader.Length / 2);
         while (reader.Offset < reader.Length) {
             var inst = ILInstruction.Decode(ref reader);
@@ -85,29 +85,6 @@ public class ILImporter
         throw new InvalidProgramException("Invalid instruction offset");
     }
 
-    private Variable[] GetLocalVars()
-    {
-        var body = Method.Body!;
-        var mod = Method.Module;
-
-        if (body.LocalSignature.IsNil) {
-            return Array.Empty<Variable>();
-        }
-        var sig = mod.Reader.GetStandaloneSignature(body.LocalSignature);
-        var types = sig.DecodeLocalSignature(mod.TypeDecoder, null);
-        var vars = new Variable[types.Length];
-        for (int i = 0; i < vars.Length; i++) {
-            var type = types[i];
-            bool isPinned = false;
-            if (type is PinnedType_ pinnedType) {
-                type = pinnedType.ElemType;
-                isPinned = true;
-            }
-            vars[i] = new Variable(type, isPinned, "loc" + (i + 1));
-        }
-        return vars;
-    }
-
     /// <summary> Gets or creates a block for the specified instruction offset. </summary>
     internal BlockState GetBlock(int offset)
     {
@@ -117,5 +94,5 @@ public class ILImporter
     }
 
     internal Variable GetVar(int index, bool isArg) 
-        => isArg ? Method.Args[index] : _vars[index];
+        => isArg ? Method.Args[index] : _body.Locals[index];
 }

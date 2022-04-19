@@ -10,7 +10,7 @@ using SB = ILStackBehaviour;
 
 // Enum for opcode values. Note that the value names are used to construct
 // publicly visible ilasm-compatible opcode names, so their exact form is important!
-public enum ILCode
+public enum ILCode : ushort
 {
     Nop = 0x00,
     Break = 0x01,

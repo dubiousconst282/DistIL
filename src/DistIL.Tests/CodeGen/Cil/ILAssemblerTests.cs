@@ -16,9 +16,8 @@ public class ILAssemblerTests
         asm.Emit(ILCode.Mul);
         asm.Emit(ILCode.Add);
         asm.Emit(ILCode.Ret);
-        asm.Bake(new BlobBuilder());
 
-        var rawInsts = asm.GetInstructions().ToArray();
+        var rawInsts = asm.Bake().ToArray();
         var genInsts = rawInsts.Select(v => (v.Offset, v.OpCode, v.Operand));
 
         var expInsts = new (int, ILCode, object)[] {
@@ -54,9 +53,7 @@ public class ILAssemblerTests
         asm.MarkLabel(lblRet);
         asm.Emit(ILCode.Ret);
 
-        asm.Bake(new BlobBuilder());
-
-        var rawInsts = asm.GetInstructions().ToArray();
+        var rawInsts = asm.Bake().ToArray();
         var genInsts = rawInsts.Select(v => (v.Offset, v.OpCode, v.Operand));
 
         var expInsts = new (int, ILCode, object)[] {

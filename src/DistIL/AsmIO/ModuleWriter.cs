@@ -62,6 +62,17 @@ public class ModuleWriter
         return handle;
     }
 
+    private EntityHandle GetEntityHandle(EntityDef entity)
+    {
+        if (_handleMap.TryGetValue(entity, out var handle)) {
+            return handle;
+        }
+        return entity switch {
+            TypeDef type => GetTypeHandle((RType)entity),
+            _ => throw new NotImplementedException()
+        };
+    }
+
     public void Emit(BlobBuilder peBlob)
     {
         //https://github.com/dotnet/runtime/blob/main/src/libraries/System.Reflection.Metadata/tests/PortableExecutable/PEBuilderTests.cs
@@ -208,15 +219,16 @@ public class ModuleWriter
             });
             localVarSigs = _builder.AddStandaloneSignature(sigBlobHandle);
         }
+        var ilBytes = EncodeInsts(body);
 
         var enc = _bodyEncoder.AddMethodBody(
-            body.ILBytes.Length, body.MaxStack,
+            ilBytes.Count, body.MaxStack,
             body.ExceptionRegions.Count,
             hasSmallExceptionRegions: false, //TODO
             localVarSigs, attribs
         );
         //Copy IL bytes to output blob
-        new BlobWriter(enc.Instructions).WriteBytes(body.ILBytes);
+        new BlobWriter(enc.Instructions).WriteBytes(ilBytes);
 
         //Copy exception regions
         foreach (var ehr in body.ExceptionRegions) {
@@ -229,6 +241,103 @@ public class ModuleWriter
             );
         }
         return enc.Offset;
+    }
+
+    private BlobBuilder EncodeInsts(MethodBody body)
+    {
+        var blob = new BlobBuilder();
+        foreach (ref var inst in body.Instructions.AsSpan()) {
+            EncodeInst(blob, ref inst);
+        }
+        return blob;
+    }
+
+    private void EncodeInst(BlobBuilder bb, ref ILInstruction inst)
+    {
+        int code = (int)inst.OpCode;
+        if ((code & 0xFF00) == 0xFE00) {
+            bb.WriteByte((byte)(code >> 8));
+        }
+        bb.WriteByte((byte)code);
+
+        switch (inst.OpCode.GetOperandType()) {
+            case ILOperandType.BrTarget: {
+                bb.WriteInt32((int)inst.Operand! - inst.GetEndOffset());
+                break;
+            }
+            case ILOperandType.Field:
+            case ILOperandType.Method:
+            case ILOperandType.Sig:
+            case ILOperandType.Tok: {
+                var handle = GetEntityHandle((EntityDef)inst.Operand!);
+                bb.WriteInt32(MetadataTokens.GetToken(handle));
+                break;
+            }
+            case ILOperandType.Type: {
+                var handle = GetTypeHandle((TypeDef)inst.Operand!);
+                bb.WriteInt32(MetadataTokens.GetToken(handle));
+                break;
+            }
+            case ILOperandType.String:{
+                var handle = AddString((string)inst.Operand!);
+                bb.WriteInt32(MetadataTokens.GetToken(handle));
+                break;
+            }
+            case ILOperandType.I: {
+                bb.WriteInt32((int)inst.Operand!);
+                break;
+            }
+            case ILOperandType.I8: {
+                bb.WriteInt64((long)inst.Operand!);
+                break;
+            }
+            case ILOperandType.R: {
+                bb.WriteDouble((double)inst.Operand!);
+                break;
+            }
+            case ILOperandType.Switch: {
+                WriteTumpTable(bb, ref inst);
+                break;
+            }
+            case ILOperandType.Var: {
+                int varIndex = (int)inst.Operand!;
+                Assert(varIndex == (ushort)varIndex);
+                bb.WriteUInt16((ushort)varIndex);
+                break;
+            }
+            case ILOperandType.ShortBrTarget: {
+                int offset = (int)inst.Operand! - inst.GetEndOffset();
+                Assert(offset == (sbyte)offset);
+                bb.WriteSByte((sbyte)offset);
+                break;
+            }
+            case ILOperandType.ShortI: {
+                int value = (int)inst.Operand!;
+                Assert(value == (sbyte)value);
+                bb.WriteSByte((sbyte)value);
+                break;
+            }
+            case ILOperandType.ShortR: {
+                bb.WriteSingle((float)inst.Operand!);
+                break;
+            }
+            case ILOperandType.ShortVar: {
+                int varIndex = (int)inst.Operand!;
+                Assert(varIndex == (byte)varIndex);
+                bb.WriteByte((byte)varIndex);
+                break;
+            }
+        }
+        static void WriteTumpTable(BlobBuilder bb, ref ILInstruction inst)
+        {
+            int baseOffset = inst.GetEndOffset();
+            var targets = (int[])inst.Operand!;
+
+            bb.WriteInt32(targets.Length);
+            for (int i = 0; i < targets.Length; i++) {
+                bb.WriteInt32(targets[i] - baseOffset);
+            }
+        }
     }
 
     private BlobHandle EmitMethodSig(MethodDef method)

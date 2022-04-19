@@ -12,13 +12,17 @@ public class ILGenerator : InstVisitor
 
     Dictionary<Variable, int> _varTable = new();
 
-    public void EmitMethod(Method method)
+    public void EmitMethod(MethodDef method)
     {
         foreach (var block in method) {
             _asm.MarkLabel(GetLabel(block));
             EmitBlock(block);
         }
-        _asm.ComputeOffsets();
+        var body = method.Body!;
+        body.Instructions.Clear();
+        body.Instructions.AddRange(_asm.Bake());
+        body.Locals.Clear();
+        body.Locals.AddRange(_varTable.Keys);
 
         System.IO.File.WriteAllText("../../logs/codegen.txt", _asm.ToString());
     }
@@ -33,7 +37,7 @@ public class ILGenerator : InstVisitor
         foreach (var inst in block) {
             if (!inst.HasResult || inst.Uses.Count == 0) {
                 inst.Accept(this);
-                if (inst.Uses.Count == 0) {
+                if (inst.HasResult) {
                     _asm.Emit(ILCode.Pop);
                 }
             }
@@ -42,7 +46,7 @@ public class ILGenerator : InstVisitor
                 _temps.Add(inst, tempVar);
 
                 inst.Accept(this);
-                _asm.Emit(ILCode.Stloc, tempVar);
+                _asm.Emit(ILCode.Stloc, GetVarIndex(tempVar));
             }
             //else: this is a leaf
         }
@@ -74,6 +78,15 @@ public class ILGenerator : InstVisitor
     private Label GetLabel(BasicBlock block)
     {
         return _blockLabels.GetOrAddRef(block) ??= new();
+    }
+
+    private int GetVarIndex(Variable var)
+    {
+        ref int index = ref _varTable.GetOrAddRef(var, out bool exists);
+        if (!exists) {
+            index = _varTable.Count - 1;
+        }
+        return index;
     }
 
     private void Push(Value value)
@@ -109,7 +122,7 @@ public class ILGenerator : InstVisitor
             }
             case Instruction inst: {
                 if (_temps.TryGetValue(inst, out var tempVar)) {
-                    _asm.Emit(ILCode.Ldloc, tempVar);
+                    _asm.Emit(ILCode.Ldloc, GetVarIndex(tempVar));
                 } else {
                     inst.Accept(this);
                 }
@@ -122,14 +135,6 @@ public class ILGenerator : InstVisitor
     public void VisitDefault(Instruction inst)
     {
         throw new NotImplementedException("Missing emitter for " + inst.GetType().Name);
-    }
-
-    private int GetVarIndex(Variable var)
-    {
-        if (!_varTable.TryGetValue(var, out int index)) {
-            _varTable[var] = index = _varTable.Count;
-        }
-        return index;
     }
 
     public void Visit(LoadVarInst inst)

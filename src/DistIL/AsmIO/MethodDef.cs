@@ -2,6 +2,7 @@ namespace DistIL.AsmIO;
 
 using System.Reflection;
 using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
 
 using DistIL.IR;
 
@@ -15,7 +16,19 @@ public class MethodDef : Method, MemberDef
     public MethodAttributes Attribs { get; }
     public MethodImplAttributes ImplAttribs { get; }
 
-    public MethodBody? Body { get; }
+    private int _bodyRVA;
+    private MethodBody? _body;
+
+    public MethodBody? Body {
+        get {
+            if (_body == null && _bodyRVA != 0) {
+                _body = new MethodBody(Module, _bodyRVA);
+                _bodyRVA = 0;
+            }
+            return _body;
+        }
+        set => _body = value;
+    }
 
     public MethodDef(ModuleDef mod, MethodDefinitionHandle handle)
     {
@@ -49,24 +62,26 @@ public class MethodDef : Method, MemberDef
         }
         foreach (var paramHandle in entity.GetParameters()) {
             var info = reader.GetParameter(paramHandle);
+
+            Ensure(info.GetMarshallingDescriptor().IsNil); //not impl
+            Ensure(info.Attributes == ParameterAttributes.None);
+
             int index = info.SequenceNumber - 1;
-            
+
             if (index >= 0 && index < Args.Count) {
                 Args[index].Name = reader.GetString(info.Name);
             }
         }
         ArgTypes = Args.Select(a => a.Type).ToImmutableArray();
 
-        if (entity.RelativeVirtualAddress != 0) {
-            Body = new MethodBody(mod, entity.RelativeVirtualAddress);
-        }
+        _bodyRVA = entity.RelativeVirtualAddress;
     }
 }
 
 public class MethodBody
 {
     public List<ExceptionRegion> ExceptionRegions { get; set; }
-    public byte[] ILBytes { get; set; }
+    public List<ILInstruction> Instructions { get; set; }
     public int MaxStack { get; set; }
     public bool InitLocals { get; set; }
     public List<Variable> Locals { get; set; }
@@ -76,13 +91,67 @@ public class MethodBody
         var block = mod.PE.GetMethodBody(rva);
 
         ExceptionRegions = DecodeExceptionRegions(mod, block);
-        ILBytes = block.GetILBytes() ?? throw new NotImplementedException();
+        Instructions = DecodeInsts(mod, block.GetILReader());
         MaxStack = block.MaxStack;
         InitLocals = block.LocalVariablesInitialized;
         Locals = DecodeLocals(mod, block);
     }
 
-    public SpanReader GetILReader() => new(ILBytes);
+    private List<ILInstruction> DecodeInsts(ModuleDef mod, BlobReader reader)
+    {
+        var list = new List<ILInstruction>(reader.Length / 2);
+        while (reader.Offset < reader.Length) {
+            var inst = DecodeInst(mod, ref reader);
+            list.Add(inst);
+        }
+        return list;
+    }
+
+    private static ILInstruction DecodeInst(ModuleDef mod, ref BlobReader reader)
+    {
+        int baseOffset = reader.Offset;
+        int code = reader.ReadByte();
+        if (code == 0xFE) {
+            code = (code << 8) | reader.ReadByte();
+        }
+        var opcode = (ILCode)code;
+        object? operand = opcode.GetOperandType() switch {
+            ILOperandType.BrTarget => reader.ReadInt32() + reader.Offset,
+            ILOperandType.Field => mod.GetField(MetadataTokens.EntityHandle(reader.ReadInt32())),
+            ILOperandType.Method => mod.GetMethod(MetadataTokens.EntityHandle(reader.ReadInt32())),
+            ILOperandType.Sig => throw new NotImplementedException(),
+            ILOperandType.String => mod.Reader.GetUserString(MetadataTokens.UserStringHandle(reader.ReadInt32())),
+            ILOperandType.Tok => throw new NotImplementedException(),
+            ILOperandType.Type => mod.GetType(MetadataTokens.EntityHandle(reader.ReadInt32())),
+            ILOperandType.I => reader.ReadInt32(),
+            ILOperandType.I8 => reader.ReadInt64(),
+            ILOperandType.R => reader.ReadDouble(),
+            ILOperandType.Switch => ReadJumpTable(ref reader),
+            ILOperandType.Var => (int)reader.ReadUInt16(),
+            ILOperandType.ShortBrTarget => (int)reader.ReadSByte() + reader.Offset,
+            ILOperandType.ShortI => (int)reader.ReadSByte(),
+            ILOperandType.ShortR => reader.ReadSingle(),
+            ILOperandType.ShortVar => (int)reader.ReadByte(),
+            _ => null
+        };
+        return new ILInstruction() {
+            OpCode = opcode,
+            Offset = baseOffset,
+            Operand = operand
+        };
+
+        static int[] ReadJumpTable(ref BlobReader reader)
+        {
+            int count = reader.ReadInt32();
+            int baseOffset = reader.Offset + count * 4;
+            var targets = new int[count];
+
+            for (int i = 0; i < count; i++) {
+                targets[i] = baseOffset + reader.ReadInt32();
+            }
+            return targets;
+        }
+    }
 
     private static List<ExceptionRegion> DecodeExceptionRegions(ModuleDef mod, MethodBodyBlock block)
     {

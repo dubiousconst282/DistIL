@@ -10,7 +10,7 @@ public class ILAssembler
     ILInstruction[] _insts = new ILInstruction[16];
     int _pos;
 
-    public Span<ILInstruction> GetInstructions()
+    private Span<ILInstruction> GetInstructions()
     {
         return _insts.AsSpan(0, _pos);
     }
@@ -26,7 +26,7 @@ public class ILAssembler
         Ensure(lbl._index < 0, "Label already marked");
 
         //Check and remove branches like "br IL_0002; IL_0002: ..."
-        if (_pos > 0 && _insts[_pos - 1].Operand == lbl) {
+        while (_pos > 0 && _insts[_pos - 1].Operand == lbl) {
             _pos--;
         }
         lbl._index = _pos;
@@ -45,17 +45,14 @@ public class ILAssembler
         }
         ref var dest = ref _insts[_pos++];
         dest = inst;
-        //Optimize(ref dest);
+        Optimize(ref dest);
     }
     public void Emit(ILCode op, object? operand = null) => Add(new(op, operand));
 
-    public void Bake(BlobBuilder bb)
+    public ArraySegment<ILInstruction> Bake()
     {
         ComputeOffsets();
-
-        foreach (ref var inst in GetInstructions()) {
-            ILInstruction.Encode(bb, ref inst);
-        }
+        return new(_insts, 0, _pos);
     }
 
     private void Optimize(ref ILInstruction inst)
@@ -65,11 +62,10 @@ public class ILAssembler
             case ILCode.Ldc_I4: {
                 int cst = (int)inst.Operand!;
                 if (cst >= -1 && cst <= 8) {
-                    inst.OpCode = ILCode.Ldc_I4_0 + cst;
+                    inst.OpCode = (ILCode)((int)ILCode.Ldc_I4_0 + cst);
                     inst.Operand = null;
                 } else if ((sbyte)cst == cst) {
                     inst.OpCode = ILCode.Ldc_I4_S;
-                    inst.Operand = (sbyte)cst;
                 }
                 break;
             }
@@ -87,7 +83,7 @@ public class ILAssembler
         {
             int n = (int)inst.Operand!;
             if (n < inlineCount) {
-                inst.OpCode = inlineCode + n;
+                inst.OpCode = (ILCode)((int)inlineCode + n);
                 inst.Operand = null;
             } else if (n < 256) {
                 inst.OpCode = shortCode;
@@ -102,7 +98,7 @@ public class ILAssembler
         }
     }
     
-    public void ComputeOffsets()
+    private void ComputeOffsets()
     {
         //Compute offsets
         var insts = GetInstructions();

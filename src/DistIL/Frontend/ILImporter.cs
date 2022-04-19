@@ -17,14 +17,9 @@ public class ILImporter
 
     public void ImportCode()
     {
-        //Decode instructions and find block boundaries (leaders)
-        var reader = _body.GetILReader();
-        var code = new List<ILInstruction>(reader.Length / 2);
-        while (reader.Offset < reader.Length) {
-            var inst = ILInstruction.Decode(ref reader);
-            code.Add(inst);
-        }
-        var leaders = FindLeaders(code.AsSpan());
+        //Find leaders (block boundaries)
+        var code = _body.Instructions.AsSpan();
+        var leaders = FindLeaders(code);
 
         //Ensure that the entry block don't have predecessors
         if (leaders.Remove(0)) {
@@ -37,7 +32,7 @@ public class ILImporter
         foreach (int endIndex in leaders) {
             int offset = code[startIndex].Offset;
             var block = GetBlock(offset);
-            block.ImportCode(code.AsSpan(), startIndex, endIndex);
+            block.ImportCode(code, startIndex, endIndex);
 
             startIndex = endIndex;
         }

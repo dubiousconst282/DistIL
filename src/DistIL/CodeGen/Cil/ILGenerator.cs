@@ -155,6 +155,38 @@ public class ILGenerator : InstVisitor
         }
     }
 
+    public void Visit(LoadPtrInst inst)
+    {
+        Push(inst.Address);
+        EmitLdOrStInd(inst);
+    }
+    public void Visit(StorePtrInst inst)
+    {
+        Push(inst.Address);
+        Push(inst.Value);
+        EmitLdOrStInd(inst);
+    }
+    private void EmitLdOrStInd(PtrAccessInst inst)
+    {
+        bool isLoad = inst is LoadPtrInst;
+        if (inst.Volatile) _asm.Emit(ILCode.Volatile_);
+        if (inst.Unaligned) _asm.Emit(ILCode.Unaligned_, 1); //TODO: keep alignment in IR
+
+        var addrType = inst.Address.ResultType;
+        var interpType = inst.ElemType;
+        var codes = GetCodeForPtrAcc(interpType);
+
+        var refCode = isLoad ? ILCode.Ldind_Ref : ILCode.Stind_Ref;
+        var objCode = isLoad ? ILCode.Ldobj : ILCode.Stobj;
+        var code = isLoad ? codes.Ld : codes.St;
+
+        if (!interpType.IsValueType && addrType.ElemType == interpType) {
+            _asm.Emit(refCode);
+        } else {
+            _asm.Emit(code, code == objCode ? interpType : null);
+        }
+    }
+
     public void Visit(BinaryInst inst)
     {
         Push(inst.Left);
@@ -304,6 +336,23 @@ public class ILGenerator : InstVisitor
             _ => (ILCode.Nop, F)
         };
         return code != ILCode.Nop;
+    }
+
+    private static (ILCode Ld, ILCode St) GetCodeForPtrAcc(RType type)
+    {
+        return type.Kind switch {
+            TypeKind.Bool or TypeKind.Byte      => (ILCode.Ldind_U1, ILCode.Stind_I1),
+            TypeKind.SByte                      => (ILCode.Ldind_I1, ILCode.Stind_I1),
+            TypeKind.Char or TypeKind.UInt16    => (ILCode.Ldind_U2, ILCode.Stind_I2),
+            TypeKind.Int16                      => (ILCode.Ldind_I2, ILCode.Stind_I2),
+            TypeKind.Int32                      => (ILCode.Ldind_I4, ILCode.Stind_I4),
+            TypeKind.UInt32                     => (ILCode.Ldind_U4, ILCode.Stind_I4),
+            TypeKind.Int64 or TypeKind.UInt64   => (ILCode.Ldind_I8, ILCode.Stind_I8),
+            TypeKind.Single                     => (ILCode.Ldind_R4, ILCode.Stind_R4),
+            TypeKind.Double                     => (ILCode.Ldind_R8, ILCode.Stind_R8),
+            TypeKind.IntPtr or TypeKind.UIntPtr => (ILCode.Ldind_I, ILCode.Stind_I),
+            _                                   => (ILCode.Ldobj, ILCode.Stobj)
+        };
     }
 #pragma warning restore format
 }

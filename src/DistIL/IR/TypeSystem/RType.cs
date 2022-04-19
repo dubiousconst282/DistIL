@@ -7,7 +7,8 @@ public abstract class RType : IEquatable<RType>
     public abstract TypeKind Kind { get; }
     public abstract StackType StackType { get; }
 
-    public virtual RType ElemType => throw new InvalidOperationException();
+    /// <summary> Element type of the array, pointer or byref type. </summary>
+    public virtual RType? ElemType => null;
     public virtual bool IsValueType => false;
     public virtual bool IsGeneric => false;
 

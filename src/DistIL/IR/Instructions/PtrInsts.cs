@@ -8,26 +8,28 @@ public abstract class PtrAccessInst : Instruction
     }
     public override bool MayThrow => true;
 
-    public bool Unaligned { get; set; }
-    public bool Volatile { get; set; }
+    public abstract RType ElemType { get; set; }
+    public PointerFlags Flags { get; set; }
 
-    protected PtrAccessInst(bool un, bool vlt, params Value[] operands)
+    public bool Unaligned => (Flags & PointerFlags.Unaligned) != 0;
+    public bool Volatile => (Flags & PointerFlags.Volatile) != 0;
+
+    protected PtrAccessInst(PointerFlags flags, params Value[] operands)
         : base(operands)
     {
-        Unaligned = un;
-        Volatile = vlt;
+        Flags = flags;
     }
 }
 public class LoadPtrInst : PtrAccessInst
 {
-    public RType ElemType {
+    public override RType ElemType {
         get => ResultType;
         set => ResultType = value;
     }
     public override string InstName => "ldptr" + (Unaligned ? ".un" : "") + (Volatile ? ".volatile" : "");
 
-    public LoadPtrInst(Value addr, RType elemType, bool isUnaligned = false, bool isVolatile = false)
-        : base(isUnaligned, isVolatile, addr)
+    public LoadPtrInst(Value addr, RType elemType, PointerFlags flags = PointerFlags.None)
+        : base(flags, addr)
     {
         ElemType = elemType;
     }
@@ -40,16 +42,23 @@ public class StorePtrInst : PtrAccessInst
         get => Operands[1];
         set => ReplaceOperand(1, value);
     }
-    public RType ElemType { get; set; }
+    public override RType ElemType { get; set; }
 
     public override string InstName => "stptr" + (Unaligned ? ".un" : "") + (Volatile ? ".volatile" : "");
     public override bool HasSideEffects => true;
 
-    public StorePtrInst(Value addr, Value value, RType elemType, bool isUnaligned = false, bool isVolatile = false)
-        : base(isUnaligned, isVolatile, addr, value)
+    public StorePtrInst(Value addr, Value value, RType elemType, PointerFlags flags = PointerFlags.Volatile)
+        : base(flags, addr, value)
     {
         ElemType = elemType;
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
+}
+
+public enum PointerFlags
+{
+    None = 0,
+    Unaligned   = 1 << 0,
+    Volatile    = 1 << 1
 }

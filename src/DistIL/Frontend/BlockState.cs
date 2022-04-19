@@ -639,7 +639,7 @@ internal class BlockState
             type = ((ArrayType)array.ResultType).ElemType; //ldelem_any
             Assert(type.StackType == StackType.Object);
         }
-        Push(new LoadArrayInst(array, index, type, GetArrayAccFlags()));
+        Push(new LoadArrayInst(array, index, type, PopArrayAccFlags()));
     }
     private void ImportStoreElem(RType? type)
     {
@@ -651,15 +651,15 @@ internal class BlockState
             type = ((ArrayType)array.ResultType).ElemType; //stelem_any
             Assert(type.StackType == StackType.Object);
         }
-        Emit(new StoreArrayInst(array, index, value, type, GetArrayAccFlags()));
+        Emit(new StoreArrayInst(array, index, value, type, PopArrayAccFlags()));
     }
     private void ImportLoadElemAddr()
     {
         var index = Pop();
         var array = Pop();
-        Push(new ArrayAddrInst(array, index, GetArrayAccFlags()));
+        Push(new ArrayAddrInst(array, index, PopArrayAccFlags()));
     }
-    private ArrayAccessFlags GetArrayAccFlags()
+    private ArrayAccessFlags PopArrayAccFlags()
     {
         var flags = ArrayAccessFlags.None;
         if (HasPrefix(InstFlags.NoRangeCheck)) flags |= ArrayAccessFlags.NoBoundsCheck;
@@ -674,13 +674,11 @@ internal class BlockState
         var addr = Pop();
 
         if (type == null) {
-            type = addr.ResultType.ElemType; //ldind_ref
+            Ensure(addr.ResultType is PointerType or ByrefType);
+            type = addr.ResultType.ElemType!; //ldind_ref
             Assert(type.StackType == StackType.Object);
         }
-        bool isUnaligned = HasPrefix(InstFlags.Unaligned);
-        bool isVolatile = HasPrefix(InstFlags.Volatile);
-
-        Push(new LoadPtrInst(addr, type, isUnaligned, isVolatile));
+        Push(new LoadPtrInst(addr, type, PopPointerFlags()));
     }
     private void ImportStoreInd(RType? type)
     {
@@ -688,13 +686,18 @@ internal class BlockState
         var addr = Pop();
 
         if (type == null) {
-            type = addr.ResultType.ElemType; //stind_ref
+            Ensure(addr.ResultType is PointerType or ByrefType);
+            type = addr.ResultType.ElemType!; //stind_ref
             Assert(type.StackType == StackType.Object);
         }
-        bool isUnaligned = HasPrefix(InstFlags.Unaligned);
-        bool isVolatile = HasPrefix(InstFlags.Volatile);
-
-        Emit(new StorePtrInst(addr, value, type, isUnaligned, isVolatile));
+        Emit(new StorePtrInst(addr, value, type, PopPointerFlags()));
+    }
+    private PointerFlags PopPointerFlags()
+    {
+        var flags = PointerFlags.None;
+        if (HasPrefix(InstFlags.Unaligned)) flags |= PointerFlags.Unaligned;
+        if (HasPrefix(InstFlags.Volatile)) flags |= PointerFlags.Volatile;
+        return flags;
     }
 
     private void ImportLoadField(Handle handle, bool isStatic)

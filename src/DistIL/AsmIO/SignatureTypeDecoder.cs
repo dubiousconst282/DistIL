@@ -86,7 +86,13 @@ public class SignatureTypeDecoder : ISignatureTypeProvider<RType, IGenericContex
 
     public RType GetFunctionPointerType(MethodSignature<RType> signature)
     {
-        throw new NotImplementedException();
+        Ensure(signature.GenericParameterCount == 0); //not impl
+        var header = signature.Header;
+        return new FuncPtrType(
+            signature.ReturnType, signature.ParameterTypes,
+            (CallConvention)header.CallingConvention, 
+            header.IsInstance, header.HasExplicitThis
+        );
     }
 
     public RType GetGenericInstantiation(RType genericType, ImmutableArray<RType> typeArguments)

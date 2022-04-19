@@ -15,7 +15,7 @@ public class ModuleDef : EntityDef
     public SignatureTypeDecoder TypeDecoder { get; }
     public ModuleResolver Resolver { get; }
 
-    public AssemblyName Name { get; }
+    public AssemblyName AsmName { get; }
 
     private TypeDef?[] _typeDefs;
 
@@ -35,7 +35,7 @@ public class ModuleDef : EntityDef
         TypeDecoder = new SignatureTypeDecoder(this);
         Resolver = resolver;
 
-        Name = Reader.GetAssemblyDefinition().GetAssemblyName();
+        AsmName = Reader.GetAssemblyDefinition().GetAssemblyName();
 
         _typeDefs = new TypeDef[Reader.TypeDefinitions.Count];
         _methodDefs = new MethodDef[Reader.MethodDefinitions.Count];
@@ -175,7 +175,7 @@ public class ModuleDef : EntityDef
             return null;
         NextModuleInForwardChain:;
         }
-        throw new InvalidOperationException("Loop detected in type forward chain of assembly " + Name.Name);
+        throw new InvalidOperationException("Loop detected in type forward chain of assembly " + AsmName.Name);
     }
 
     private static ref T? GetEntity<T>(T?[] arr, EntityHandle handle)
@@ -255,10 +255,8 @@ public class ModuleDef : EntityDef
     {
         var builder = new BlobBuilder();
         new ModuleWriter(this).Emit(builder);
-        foreach (var blob in builder.GetBlobs()) {
-            stream.Write(blob.GetBytes());
-        }
+        builder.WriteContentTo(stream);
     }
 
-    public override string ToString() => Name.ToString();
+    public override string ToString() => AsmName.ToString();
 }

@@ -7,7 +7,7 @@ using System.Reflection.PortableExecutable;
 
 using DistIL.IR;
 
-public class ModuleWriter
+internal class ModuleWriter
 {
     readonly ModuleDef _mod;
     readonly MetadataBuilder _builder;
@@ -49,7 +49,7 @@ public class ModuleWriter
         if (_handleMap.TryGetValue(module, out var handle)) {
             return handle;
         }
-        var name = module.Name;
+        var name = module.AsmName;
         handle = _builder.AddAssemblyReference(
             AddString(name.Name),
             name.Version!,
@@ -76,7 +76,7 @@ public class ModuleWriter
     public void Emit(BlobBuilder peBlob)
     {
         //https://github.com/dotnet/runtime/blob/main/src/libraries/System.Reflection.Metadata/tests/PortableExecutable/PEBuilderTests.cs
-        var name = _mod.Name;
+        var name = _mod.AsmName;
         var modDef = _mod.Reader.GetModuleDefinition();
 
         var mainModHandle = _builder.AddModule(
@@ -279,7 +279,7 @@ public class ModuleWriter
                 break;
             }
             case ILOperandType.String:{
-                var handle = AddString((string)inst.Operand!);
+                var handle = _builder.GetOrAddUserString((string)inst.Operand!);
                 bb.WriteInt32(MetadataTokens.GetToken(handle));
                 break;
             }

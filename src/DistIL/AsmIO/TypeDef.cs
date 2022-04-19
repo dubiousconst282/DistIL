@@ -2,6 +2,7 @@ namespace DistIL.AsmIO;
 
 using System.Reflection;
 using System.Reflection.Metadata;
+using System.Text;
 
 using DistIL.IR;
 
@@ -19,6 +20,8 @@ public class TypeDef : RType, EntityDef
 
     /// <summary> Base type of this type. Only null if this is the root type (System.Object). </summary>
     public RType? BaseType { get; }
+
+    public TypeDef? DeclaringType { get; }
 
     public override string? Namespace { get; }
     public override string Name { get; }
@@ -40,11 +43,14 @@ public class TypeDef : RType, EntityDef
 
         Attribs = _entity.Attributes;
 
-        Namespace = reader.GetString(_entity.Namespace);
+        Namespace = _entity.Namespace.IsNil ? null : reader.GetString(_entity.Namespace);
         Name = reader.GetString(_entity.Name);
 
         if (!_entity.BaseType.IsNil) {
             BaseType = mod.GetType(_entity.BaseType);
+        }
+        if (_entity.IsNested) {
+            DeclaringType = mod.GetType(_entity.GetDeclaringType());
         }
         IsValueType = false; //TODO: resolve value type
         Kind = TypeKind.Object;
@@ -67,6 +73,17 @@ public class TypeDef : RType, EntityDef
             methods.Add(Module.GetMethod(handle));
         }
         return methods;
+    }
+
+    public override void Print(StringBuilder sb)
+    {
+        if (DeclaringType != null) {
+            DeclaringType.Print(sb);
+            sb.Append("+");
+            sb.Append(DeclaringType.Name);
+        } else {
+            base.Print(sb);
+        }
     }
 
     public override bool Equals(RType? other)

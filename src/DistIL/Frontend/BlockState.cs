@@ -84,6 +84,7 @@ internal class BlockState
                 temps.Push(new Variable(value.ResultType));
             }
         } else {
+            //FIXME: III.1.8.1.3
             var types1 = temps.Select(v => v.ResultType.StackType);
             var types2 = _stack.Select(v => v.ResultType.StackType);
             if (!types1.SequenceEqual(types2)) {
@@ -524,10 +525,11 @@ internal class BlockState
                        code == ILCode.Add && sb == StackType.ByRef ? b : null;
             }
             if (sa == StackType.ByRef) {
+                //& +- int = &
                 //& +- nint = &
                 //& - & = nint
-                return sb == StackType.NInt && (code == ILCode.Add || code == ILCode.Sub) ? a :
-                       sb == StackType.ByRef && code == ILCode.Sub ? b : null;
+                return (sb == StackType.NInt || sb == StackType.Int) && (code == ILCode.Add || code == ILCode.Sub) ? a :
+                       sb == StackType.ByRef && code == ILCode.Sub ? PrimType.IntPtr : null;
             }
             return null;
         }

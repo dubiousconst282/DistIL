@@ -151,19 +151,18 @@ public class ModuleWriter
         );
         CheckHandle(field, handle);
 
-        if (field.Attribs.HasFlag(FieldAttributes.HasFieldRVA)) {
-            unsafe {
-                var data = field.GetStaticDataBlock();
-                _fieldDataStream ??= new();
-                _fieldDataStream.Align(4); //FIXME: how to correctly align field RVA data?
-                _builder.AddFieldRelativeVirtualAddress(handle, _fieldDataStream.Count);
-                _fieldDataStream.WriteBytes(data.Pointer, data.Length);
-            }
+        if (field.MappedData != null) {
+            _fieldDataStream ??= new();
+            _builder.AddFieldRelativeVirtualAddress(handle, _fieldDataStream.Count);
+            _fieldDataStream.WriteBytes(field.MappedData);
+            _fieldDataStream.Align(ManagedPEBuilder.MappedFieldDataAlignment);
         }
         if (field.Attribs.HasFlag(FieldAttributes.HasDefault)) {
             _builder.AddConstant(handle, field.DefaultValue);
         }
-        //TODO: _builder.AddFieldLayout()
+        if (field.LayoutOffset >= 0) {
+            _builder.AddFieldLayout(handle, field.LayoutOffset);
+        }
         //TODO: _builder.AddMarshallingDescriptor()
     }
 
@@ -171,14 +170,22 @@ public class ModuleWriter
     {
         var signature = EmitMethodSig(method);
         int bodyOffset = EmitBody(method.Body);
+        var firstParamHandle = default(ParameterHandle);
+
+        foreach (var arg in method.Args) {
+            if (arg.Name == null) continue;
+
+            var parHandle = _builder.AddParameter(ParameterAttributes.None, AddString(arg.Name), arg.Index + 1);
+            if (firstParamHandle.IsNil) {
+                firstParamHandle = parHandle;
+            }
+        }
 
         var handle = _builder.AddMethodDefinition(
             method.Attribs,
             method.ImplAttribs,
             AddString(method.Name),
-            signature,
-            bodyOffset,
-            MetadataTokens.ParameterHandle(1)
+            signature, bodyOffset, firstParamHandle
         );
         CheckHandle(method, handle);
     }

@@ -2,55 +2,78 @@ namespace DistIL.AsmIO;
 
 using System.Reflection;
 using System.Reflection.Metadata;
-using System.Reflection.PortableExecutable;
 
 using DistIL.IR;
 
 public class FieldDef : Field, MemberDef
 {
     public override TypeDef DeclaringType { get; }
-    
     public ModuleDef Module => DeclaringType.Module;
 
     public FieldAttributes Attribs { get; }
 
-    public int RVA { get; }
     public object? DefaultValue { get; }
+
+    /// <summary> The field layout offset (e.g. x in [FieldOffset(x)]), or -1 if not available. </summary>
+    public int LayoutOffset { get; set; }
+
+    /// <summary> Static data associated with the field. Attribs must have HasFieldRVA, and array length must be equal to the type layout size. </summary>
+    public byte[]? MappedData { get; set; }
+
+    public override bool IsStatic => Attribs.HasFlag(FieldAttributes.Static);
 
     public FieldDef(ModuleDef mod, FieldDefinitionHandle handle)
     {
         var reader = mod.Reader;
         var def = reader.GetFieldDefinition(handle);
 
-        DeclaringType = mod.GetType(def.GetDeclaringType());
         Attribs = def.Attributes;
         Type = def.DecodeSignature(mod.TypeDecoder, null);
-
         Name = reader.GetString(def.Name);
 
-        IsStatic = Attribs.HasFlag(FieldAttributes.Static);
+        DeclaringType = mod.GetType(def.GetDeclaringType());
 
         if (Attribs.HasFlag(FieldAttributes.HasFieldRVA)) {
-            RVA = def.GetRelativeVirtualAddress();
+            int rva = def.GetRelativeVirtualAddress();
+            var data = mod.PE.GetSectionData(rva);
+            unsafe { MappedData = new Span<byte>(data.Pointer, GetMappedDataSize(Type)).ToArray(); }
         }
         if (Attribs.HasFlag(FieldAttributes.HasDefault)) {
             DefaultValue = DecodeConst(reader, def.GetDefaultValue());
         }
+        LayoutOffset = def.GetOffset();
+
+        Ensure(def.GetMarshallingDescriptor().IsNil); //not impl
+        Ensure(def.GetCustomAttributes().Count == 0);
     }
 
-    /// <summary> Returns the memory block of the field RVA data, assuming (Attribs has HasFieldRVA). </summary>
-    public PEMemoryBlock GetStaticDataBlock()
+    private static int GetMappedDataSize(RType type)
     {
-        return DeclaringType.Module.PE.GetSectionData(RVA);
-    }
-    /// <summary> 
-    /// Returns a span of the field RVA data, assuming (Attribs has HasFieldRVA). 
-    /// It is backed by an unmanaged pointer, which is valid until the declaring type module PE is dispoed.
-    /// </summary>
-    public unsafe ReadOnlySpan<byte> GetStaticData()
-    {
-        var data = GetStaticDataBlock();
-        return new(data.Pointer, data.Length);
+        switch (type.Kind) {
+            case TypeKind.Bool:
+            case TypeKind.SByte:
+            case TypeKind.Byte:
+                return 1;
+            case TypeKind.Char:
+            case TypeKind.Int16:
+            case TypeKind.UInt16:
+                return 2;
+            case TypeKind.Int32:
+            case TypeKind.UInt32:
+            case TypeKind.Single:
+                return 4;
+            case TypeKind.Int64:
+            case TypeKind.UInt64:
+            case TypeKind.Double:
+                return 8;
+            default:
+                if (type is TypeDef def) {
+                    var layout = def.Layout;
+                    Ensure(!layout.IsDefault); //not impl
+                    return layout.Size;
+                }
+                return 0;
+        }
     }
 
     private static object? DecodeConst(MetadataReader reader, ConstantHandle handle)

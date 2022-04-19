@@ -30,6 +30,8 @@ public class TypeDef : RType, EntityDef
     private List<MethodDef>? _methods;
     public List<MethodDef> Methods => _methods ??= LoadMethods();
 
+    public TypeLayout Layout => _entity.GetLayout();
+
     internal TypeDef(ModuleDef mod, TypeDefinitionHandle handle)
     {
         Module = mod;

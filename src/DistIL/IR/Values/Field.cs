@@ -8,7 +8,7 @@ public abstract class Field : Value
     public RType Type { get; init; } = null!;
     public string Name { get; init; } = null!;
 
-    public bool IsStatic { get; init; }
+    public abstract bool IsStatic { get; }
 
     public override void Print(StringBuilder sb, SlotTracker slotTracker)
     {

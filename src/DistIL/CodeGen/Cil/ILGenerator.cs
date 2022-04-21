@@ -46,7 +46,7 @@ public partial class ILGenerator : InstVisitor
                 _temps.Add(inst, tempVar);
 
                 inst.Accept(this);
-                _asm.Emit(ILCode.Stloc, GetVarIndex(tempVar));
+                EmitVarInst(tempVar, VarOp.Store);
             }
             //else: this is a leaf
         }
@@ -80,25 +80,48 @@ public partial class ILGenerator : InstVisitor
         return _blockLabels.GetOrAddRef(block) ??= new();
     }
 
-    private int GetVarIndex(Variable var)
+    private void EmitVarInst(Variable var, VarOp op)
     {
-        ref int index = ref _varTable.GetOrAddRef(var, out bool exists);
-        if (!exists) {
-            index = _varTable.Count - 1;
+        int index;
+        if (var is Argument arg) {
+            index = arg.Index;
+        } else if (!_varTable.TryGetValue(var, out index)) {
+            _varTable[var] = index = _varTable.Count;
         }
-        return index;
+        var codes = GetCodesForVar(op, var is Argument);
+
+        if (index < 4) {
+            _asm.Emit((ILCode)((int)codes.Inline + index));
+        } else if (index < 256) {
+            _asm.Emit(codes.Short, index);
+        } else {
+            _asm.Emit(codes.Norm, index);
+        }
+    }
+
+    private void EmitLdcI4(int value)
+    {
+        if (value >= -1 && value <= 8) {
+            _asm.Emit((ILCode)((int)ILCode.Ldc_I4_0 + value));
+        } else if ((sbyte)value == value) {
+            _asm.Emit(ILCode.Ldc_I4_S, value);
+        } else {
+            _asm.Emit(ILCode.Ldc_I4, value);
+        }
     }
 
     private void Push(Value value)
     {
         switch (value) {
             case Argument arg: {
-                _asm.Emit(ILCode.Ldarg, arg.Index);
+                EmitVarInst(arg, VarOp.Load);
                 break;
             }
             case ConstInt cons: {
-                if (cons.IsInt) {
-                    _asm.Emit(ILCode.Ldc_I4, (int)cons.Value);
+                //Emit int, or small long followed by conv.i8
+                if (cons.IsInt || (cons.Value == (int)cons.Value)) {
+                    EmitLdcI4((int)cons.Value);
+                    if (!cons.IsInt) _asm.Emit(ILCode.Conv_I8);
                 } else {
                     _asm.Emit(ILCode.Ldc_I8, cons.Value);
                 }
@@ -122,7 +145,7 @@ public partial class ILGenerator : InstVisitor
             }
             case Instruction inst: {
                 if (_temps.TryGetValue(inst, out var tempVar)) {
-                    _asm.Emit(ILCode.Ldloc, GetVarIndex(tempVar));
+                    EmitVarInst(tempVar, VarOp.Load);
                 } else {
                     inst.Accept(this);
                 }
@@ -163,20 +186,16 @@ public partial class ILGenerator : InstVisitor
 
     public void Visit(LoadVarInst inst)
     {
-        if (inst.Source is Argument arg) {
-            _asm.Emit(ILCode.Ldarg, arg.Index);
-        } else {
-            _asm.Emit(ILCode.Ldloc, GetVarIndex(inst.Source));
-        }
+        EmitVarInst(inst.Source, VarOp.Load);
     }
     public void Visit(StoreVarInst inst)
     {
         Push(inst.Value);
-        if (inst.Dest is Argument arg) {
-            _asm.Emit(ILCode.Starg, arg.Index);
-        } else {
-            _asm.Emit(ILCode.Stloc, GetVarIndex(inst.Dest));
-        }
+        EmitVarInst(inst.Dest, VarOp.Store);
+    }
+    public void Visit(VarAddrInst inst)
+    {
+        EmitVarInst(inst.Source, VarOp.Addr);
     }
 
     public void Visit(LoadPtrInst inst)

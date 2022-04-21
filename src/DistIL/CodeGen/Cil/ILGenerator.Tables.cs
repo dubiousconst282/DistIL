@@ -149,5 +149,61 @@ public partial class ILGenerator
             _                                   => (ILCode.Ldobj, ILCode.Stobj)
         };
     }
+
+    enum VarOp { Load, Store, Addr }
+
+    private static (ILCode Norm, ILCode Inline, ILCode Short) GetCodesForVar(VarOp op, bool isArg)
+    {
+        return (op, isArg) switch {
+            (VarOp.Load,    F) => (ILCode.Ldloc,  ILCode.Ldloc_0, ILCode.Ldloc_S),
+            (VarOp.Store,   F) => (ILCode.Stloc,  ILCode.Stloc_0, ILCode.Stloc_S),
+            (VarOp.Addr,    F) => (ILCode.Ldloca, ILCode.Nop,     ILCode.Ldloca_S),
+            (VarOp.Load,    T) => (ILCode.Ldarg,  ILCode.Ldarg_0, ILCode.Ldarg_S),
+            (VarOp.Store,   T) => (ILCode.Starg,  ILCode.Nop,     ILCode.Starg_S),
+            (VarOp.Addr,    T) => (ILCode.Ldarga, ILCode.Nop,     ILCode.Ldarga_S),
+            _ => throw new InvalidOperationException()
+        };
+    }
+
+    private static readonly Dictionary<TypeKind, ILCode> _ldelemMacros = new() {
+        { TypeKind.Bool,    ILCode.Ldelem_U1 },
+        { TypeKind.Char,    ILCode.Ldelem_U2 },
+        { TypeKind.SByte,   ILCode.Ldelem_I1 },
+        { TypeKind.Int16,   ILCode.Ldelem_I2 },
+        { TypeKind.Int32,   ILCode.Ldelem_I4 },
+        { TypeKind.Int64,   ILCode.Ldelem_I8 },
+        { TypeKind.Byte,    ILCode.Ldelem_U1 },
+        { TypeKind.UInt16,  ILCode.Ldelem_U2 },
+        { TypeKind.UInt32,  ILCode.Ldelem_U4 },
+        { TypeKind.UInt64,  ILCode.Ldelem_I8 },
+        { TypeKind.Single,  ILCode.Ldelem_R4 },
+        { TypeKind.Double,  ILCode.Ldelem_R8 },
+        { TypeKind.IntPtr,  ILCode.Ldelem_I },
+        { TypeKind.UIntPtr, ILCode.Ldelem_I },
+        { TypeKind.Pointer, ILCode.Ldelem_I },
+
+        { TypeKind.Object,  ILCode.Ldelem_Ref },
+        { TypeKind.String,  ILCode.Ldelem_Ref },
+    };
+    private static readonly Dictionary<TypeKind, ILCode> _stelemMacros = new() {
+        { TypeKind.Bool,    ILCode.Stelem_I1 },
+        { TypeKind.Char,    ILCode.Stelem_I2 },
+        { TypeKind.SByte,   ILCode.Stelem_I1 },
+        { TypeKind.Int16,   ILCode.Stelem_I2 },
+        { TypeKind.Int32,   ILCode.Stelem_I4 },
+        { TypeKind.Int64,   ILCode.Stelem_I8 },
+        { TypeKind.Byte,    ILCode.Stelem_I1 },
+        { TypeKind.UInt16,  ILCode.Stelem_I2 },
+        { TypeKind.UInt32,  ILCode.Stelem_I4 },
+        { TypeKind.UInt64,  ILCode.Stelem_I8 },
+        { TypeKind.Single,  ILCode.Stelem_R4 },
+        { TypeKind.Double,  ILCode.Stelem_R8 },
+        { TypeKind.IntPtr,  ILCode.Stelem_I },
+        { TypeKind.UIntPtr, ILCode.Stelem_I },
+        { TypeKind.Pointer, ILCode.Stelem_I },
+
+        { TypeKind.Object,  ILCode.Stelem_Ref },
+        { TypeKind.String,  ILCode.Stelem_Ref },
+    };
 #pragma warning restore format
 }

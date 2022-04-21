@@ -1,5 +1,6 @@
 ﻿namespace DistIL.IR;
 
+//TODO: Encapsulate into InstList and BlockList to avoid manual manipulation of nodes/links
 public class BasicBlock : Value
 {
     public Method Method { get; internal set; }
@@ -34,8 +35,11 @@ public class BasicBlock : Value
     /// <summary> Adds a successor to this block. </summary>
     public void Connect(BasicBlock succ)
     {
-        Assert(!Succs.Contains(succ) && !succ.Preds.Contains(this));
-        Succs.Add(succ);
+        //Allow calls with duplicated edges, but don't dupe in the list (SwitchInst)
+        if (!Succs.Contains(succ)) {
+            Succs.Add(succ);
+        }
+        Ensure(!succ.Preds.Contains(this));
         succ.Preds.Add(this);
     }
 

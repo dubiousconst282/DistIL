@@ -82,7 +82,7 @@ public class ArrayAddrInst : ArrayAccessInst
     public ArrayAddrInst(Value array, Value index, ArrayAccessFlags flags = 0)
         : base(flags, array, index)
     {
-        ResultType = new ByrefType(array.ResultType.ElemType);
+        ResultType = new ByrefType(((ArrayType)array.ResultType).ElemType);
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);

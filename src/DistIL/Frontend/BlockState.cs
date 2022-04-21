@@ -145,7 +145,7 @@ internal class BlockState
                 case ILCode.Ldc_R4: ImportConst(ConstFloat.CreateS((float)inst.Operand!)); break;
                 case ILCode.Ldc_R8: ImportConst(ConstFloat.CreateD((double)inst.Operand!)); break;
                 case ILCode.Ldnull: ImportConst(ConstNull.Create()); break;
-                case ILCode.Ldstr:  ImportConst(ConstString.Create(GetString((Handle)inst.Operand!))); break;
+                case ILCode.Ldstr:  ImportConst(ConstString.Create((string)inst.Operand!)); break;
                 #endregion
 
                 #region Load/Store Local/Argument
@@ -332,7 +332,7 @@ internal class BlockState
                 case ILCode.Ldelem_R8:  ImportLoadElem(PrimType.Double); break;
                 case ILCode.Ldelem_I:   ImportLoadElem(PrimType.IntPtr); break;
                 case ILCode.Ldelem:     ImportLoadElem(null); break;
-                case ILCode.Ldelem_Ref: ImportLoadElem(GetType((Handle)inst.Operand!)); break;
+                case ILCode.Ldelem_Ref: ImportLoadElem((RType)inst.Operand!); break;
 
                 case ILCode.Stelem_I1:  ImportStoreElem(PrimType.SByte); break;
                 case ILCode.Stelem_I2:  ImportStoreElem(PrimType.Int16); break;
@@ -342,7 +342,7 @@ internal class BlockState
                 case ILCode.Stelem_R8:  ImportStoreElem(PrimType.Double); break;
                 case ILCode.Stelem_I:   ImportStoreElem(PrimType.IntPtr); break;
                 case ILCode.Stelem_Ref: ImportStoreElem(null); break;
-                case ILCode.Stelem:     ImportStoreElem(GetType((Handle)inst.Operand!)); break;
+                case ILCode.Stelem:     ImportStoreElem((RType)inst.Operand!); break;
                 #endregion
 
                 #region Load/Store Indirect
@@ -367,19 +367,19 @@ internal class BlockState
                 case ILCode.Stind_I:  ImportStoreInd(PrimType.IntPtr); break;
                 case ILCode.Stind_Ref: ImportStoreInd(null); break;
 
-                case ILCode.Ldobj: ImportLoadInd(GetType((Handle)inst.Operand!)); break;
-                case ILCode.Stobj: ImportStoreInd(GetType((Handle)inst.Operand!)); break;
+                case ILCode.Ldobj: ImportLoadInd((RType)inst.Operand!); break;
+                case ILCode.Stobj: ImportStoreInd((RType)inst.Operand!); break;
                 #endregion
 
                 #region Load/Store Field
                 case ILCode.Ldfld:
                 case ILCode.Ldsfld:
-                    ImportLoadField((Handle)inst.Operand!, opcode == ILCode.Ldsfld);
+                    ImportLoadField((Field)inst.Operand!, opcode == ILCode.Ldsfld);
                     break;
 
                 case ILCode.Stfld:
                 case ILCode.Stsfld:
-                    ImportStoreField((Handle)inst.Operand!, opcode == ILCode.Stsfld);
+                    ImportStoreField((Field)inst.Operand!, opcode == ILCode.Stsfld);
                     break;
                 #endregion
 
@@ -398,11 +398,11 @@ internal class BlockState
 
                 #region Intrinsics
                 case ILCode.Newarr:
-                    ImportNewArray((Handle)inst.Operand!);
+                    ImportNewArray((RType)inst.Operand!);
                     break;
 
                 case ILCode.Ldtoken:
-                    ImportLoadToken((Handle)inst.Operand!);
+                    ImportLoadToken((EntityDef)inst.Operand!);
                     break;
 
                 #endregion
@@ -413,10 +413,10 @@ internal class BlockState
 
                 case ILCode.Call:
                 case ILCode.Callvirt:
-                    ImportCall((Handle)inst.Operand!, opcode == ILCode.Callvirt);
+                    ImportCall((Callsite)inst.Operand!, opcode == ILCode.Callvirt);
                     break;
 
-                case ILCode.Newobj:     ImportNewObj((Handle)inst.Operand!); break;
+                case ILCode.Newobj:     ImportNewObj((Callsite)inst.Operand!); break;
 
                 case ILCode.Switch:     ImportSwitch(ref inst); break;
 
@@ -439,15 +439,6 @@ internal class BlockState
             var succ = AddSucc(code[end].Offset);
             TerminateBlock(new BranchInst(succ));
         }
-    }
-
-    private RType GetType(Handle handle)
-    {
-        return _mod.GetType((EntityHandle)handle);
-    }
-    private string GetString(Handle handle)
-    {
-        return _mod.Reader.GetUserString((UserStringHandle)handle);
     }
 
     private void ImportPop()
@@ -702,23 +693,20 @@ internal class BlockState
         return flags;
     }
 
-    private void ImportLoadField(Handle handle, bool isStatic)
+    private void ImportLoadField(Field field, bool isStatic)
     {
-        var field = _mod.GetField((EntityHandle)handle);
         var obj = field.IsStatic ? null : Pop();
         Push(new LoadFieldInst(field, obj));
     }
-    private void ImportStoreField(Handle handle, bool isStatic)
+    private void ImportStoreField(Field field, bool isStatic)
     {
-        var field = _mod.GetField((EntityHandle)handle);
         var value = Pop();
         var obj = field.IsStatic ? null : Pop();
         Emit(new StoreFieldInst(field, value, obj));
     }
 
-    private void ImportCall(Handle methodHandle, bool isVirt)
+    private void ImportCall(Callsite method, bool isVirt)
     {
-        var method = _mod.GetMethod((EntityHandle)methodHandle);
         var args = PopCallArgs(method);
         var inst = new CallInst(method, args, isVirt);
 
@@ -728,9 +716,8 @@ internal class BlockState
             Push(inst);
         }
     }
-    private void ImportNewObj(Handle ctorHandle)
+    private void ImportNewObj(Callsite ctor)
     {
-        var ctor = _mod.GetMethod((EntityHandle)ctorHandle);
         var args = PopCallArgs(ctor, true);
         Push(new NewObjInst(ctor, args));
     }
@@ -751,7 +738,7 @@ internal class BlockState
         Emit(new ReturnInst(value));
     }
 
-    private void ImportNewArray(Handle elemType)
+    private void ImportNewArray(RType elemType)
     {
         var length = Pop();
         var lengthType = length.ResultType.StackType switch {
@@ -759,13 +746,14 @@ internal class BlockState
             StackType.NInt => PrimType.IntPtr,
             _ => throw Error("Invalid argument type for newarr")
         };
-        var type = new ArrayType(GetType(elemType));
+        var type = new ArrayType(elemType);
         var intrinsic = new Intrinsic(IntrinsicId.NewArray, type, lengthType);
         Push(new CallInst(intrinsic, new[] { length }));
     }
 
-    private void ImportLoadToken(Handle token)
+    private void ImportLoadToken(EntityDef entity)
     {
+        var token = entity.Handle;
         var handleType = token.Kind switch {
             HandleKind.MethodDefinition or
             HandleKind.MethodSpecification

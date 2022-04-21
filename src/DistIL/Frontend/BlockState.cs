@@ -702,7 +702,7 @@ internal class BlockState
     {
         var value = Pop();
         var obj = field.IsStatic ? null : Pop();
-        Emit(new StoreFieldInst(field, value, obj));
+        Emit(new StoreFieldInst(field, obj, value));
     }
 
     private void ImportCall(Callsite method, bool isVirt)

@@ -140,7 +140,7 @@ public class Cloner
         public void Visit(ArrayAddrInst inst) => Out(new ArrayAddrInst(Remap(inst.Array), Remap(inst.Index), inst.Flags));
 
         public void Visit(LoadFieldInst inst) => Out(new LoadFieldInst(inst.Field, inst.IsStatic ? null : Remap(inst.Obj)));
-        public void Visit(StoreFieldInst inst) => Out(new StoreFieldInst(inst.Field, Remap(inst.Value), inst.IsStatic ? null : Remap(inst.Obj)));
+        public void Visit(StoreFieldInst inst) => Out(new StoreFieldInst(inst.Field, inst.IsStatic ? null : Remap(inst.Obj), Remap(inst.Value)));
 
         public void Visit(BinaryInst inst) => Out(new BinaryInst(inst.Op, Remap(inst.Left), Remap(inst.Right)));
         public void Visit(CompareInst inst) => Out(new CompareInst(inst.Op, Remap(inst.Left), Remap(inst.Right)));

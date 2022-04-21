@@ -187,6 +187,26 @@ public class ILGenerator : InstVisitor
         }
     }
 
+    public void Visit(LoadFieldInst inst)
+    {
+        EmitLoadOrStoreField(inst, ILCode.Ldfld, ILCode.Ldsfld);
+    }
+    public void Visit(StoreFieldInst inst)
+    {
+        EmitLoadOrStoreField(inst, ILCode.Stfld, ILCode.Stsfld);
+    }
+    private void EmitLoadOrStoreField(FieldAccessInst inst, ILCode instanceCode, ILCode staticCode)
+    {
+        if (!inst.IsStatic) {
+            Push(inst.Obj);
+        }
+        if (inst is StoreFieldInst store) {
+            Push(store.Value);
+        }
+        var code = inst.IsStatic ? staticCode : instanceCode;
+        _asm.Emit(code, inst.Field);
+    }
+
     public void Visit(BinaryInst inst)
     {
         Push(inst.Left);

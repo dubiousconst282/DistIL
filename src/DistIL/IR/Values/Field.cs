@@ -10,6 +10,8 @@ public abstract class Field : Value
 
     public abstract bool IsStatic { get; }
 
+    public bool IsInstance => !IsStatic;
+
     public override void Print(StringBuilder sb, SlotTracker slotTracker)
     {
         sb.Append($"{(IsStatic ? "static " : "")}{Type} {DeclaringType}::{Name}");

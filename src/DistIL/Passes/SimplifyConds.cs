@@ -9,7 +9,7 @@ public class SimplifyConds : Pass
     public override void Transform(Method method)
     {
         foreach (var block in method) {
-            while (TransformSelect(block));
+            while (TransformSelect(block) || InvertIf(block));
         }
     }
 
@@ -101,5 +101,21 @@ public class SimplifyConds : Pass
             );
         }
         return null;
+    }
+
+    private bool InvertIf(BasicBlock block)
+    {
+        //goto x == 0 ? T : F  ->  goto x ? F : T
+        //goto x != 0 ? T : F  ->  goto x ? T : F
+        if (block.Last is BranchInst br && 
+            br.Cond is CompareInst { Op: CompareOp.Eq or CompareOp.Ne, Right: ConstInt { Value: 0 } } cond)
+        {
+            bool inv = cond.Op == CompareOp.Eq;
+            var newThen = inv ? br.Else : br.Then;
+            var newElse = inv ? br.Then : br.Else;
+            br.ReplaceWith(new BranchInst(cond.Left, newThen!, newElse!));
+            return true;
+        }
+        return false;
     }
 }

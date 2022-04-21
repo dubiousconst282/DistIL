@@ -9,7 +9,7 @@ using DistIL.IR;
 public class MethodDef : Method, MemberDef
 {
     public ModuleDef Module { get; }
-    readonly MethodDefinitionHandle _handle;
+    public EntityHandle Handle { get; }
 
     public TypeDef DeclaringType { get; }
 
@@ -33,7 +33,7 @@ public class MethodDef : Method, MemberDef
     public MethodDef(ModuleDef mod, MethodDefinitionHandle handle)
     {
         Module = mod;
-        _handle = handle;
+        Handle = handle;
 
         var reader = mod.Reader;
         var entity = reader.GetMethodDefinition(handle);
@@ -64,7 +64,7 @@ public class MethodDef : Method, MemberDef
             var info = reader.GetParameter(paramHandle);
 
             Ensure(info.GetMarshallingDescriptor().IsNil); //not impl
-            Ensure(info.Attributes == ParameterAttributes.None);
+            //Ensure(info.Attributes == ParameterAttributes.None);
 
             int index = info.SequenceNumber - 1;
 

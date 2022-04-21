@@ -9,6 +9,7 @@ public class FieldDef : Field, MemberDef
 {
     public override TypeDef DeclaringType { get; }
     public ModuleDef Module => DeclaringType.Module;
+    public EntityHandle Handle { get; }
 
     public FieldAttributes Attribs { get; }
 
@@ -24,6 +25,8 @@ public class FieldDef : Field, MemberDef
 
     public FieldDef(ModuleDef mod, FieldDefinitionHandle handle)
     {
+        Handle = handle;
+        
         var reader = mod.Reader;
         var def = reader.GetFieldDefinition(handle);
 

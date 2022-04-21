@@ -24,7 +24,7 @@ public class InlineMethods : Pass
         if (callInst.Method is Method callee) {
             //TODO: better inlining heuristics
             //FIXME: block inlining for methods with accesses to private members of different classes
-            return caller != callee && callee.NumBlocks <= 8;
+            return caller != callee && callee.CodeAvailable && callee.NumBlocks <= 8;
         }
         return false;
     }

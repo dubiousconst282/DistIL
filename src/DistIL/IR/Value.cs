@@ -12,6 +12,7 @@ public abstract class Value
     internal void AddUse(Instruction user, int operandIdx)
     {
         Assert(!RemoveUse(user, operandIdx));
+        Assert(GetType() != typeof(Variable) || user is LoadVarInst or StoreVarInst);
 
         Uses.Add(new() { 
             Inst = user, 

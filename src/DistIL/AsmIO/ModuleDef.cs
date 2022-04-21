@@ -12,7 +12,7 @@ public class ModuleDef : EntityDef
 {
     public PEReader PE { get; }
     public MetadataReader Reader { get; }
-    public SignatureTypeDecoder TypeDecoder { get; }
+    public TypeProvider TypeProvider { get; }
     public ModuleResolver Resolver { get; }
 
     public AssemblyName AsmName { get; }
@@ -38,7 +38,7 @@ public class ModuleDef : EntityDef
     {
         PE = pe;
         Reader = pe.GetMetadataReader();
-        TypeDecoder = new SignatureTypeDecoder(this);
+        TypeProvider = new TypeProvider(this);
         Resolver = resolver;
 
         AsmName = Reader.GetAssemblyDefinition().GetAssemblyName();
@@ -54,13 +54,26 @@ public class ModuleDef : EntityDef
         _exportedTypes = new ExportedType[Reader.ExportedTypes.Count];
     }
 
-    public TypeDef GetType(EntityHandle handle)
+    public RType GetType(EntityHandle handle)
     {
         return handle.Kind switch {
-            HandleKind.TypeDefinition => GetEntity(_typeDefs, handle) ??= new TypeDef(this, (TypeDefinitionHandle)handle),
+            HandleKind.TypeDefinition => GetType((TypeDefinitionHandle)handle),
             HandleKind.TypeReference => ResolveType((TypeReferenceHandle)handle),
+            HandleKind.TypeSpecification => GetTypeSpec((TypeSpecificationHandle)handle),
             _ => throw new NotSupportedException()
         };
+    }
+
+    public TypeDef GetType(TypeDefinitionHandle handle)
+    {
+        return GetEntity(_typeDefs, handle) ??= new TypeDef(this, handle);
+    }
+
+    private RType GetTypeSpec(TypeSpecificationHandle handle)
+    {
+        //TODO: SpecializedType cache
+        var info = Reader.GetTypeSpecification(handle);
+        return info.DecodeSignature(TypeProvider, default);
     }
 
     public MethodDef GetMethod(EntityHandle handle)

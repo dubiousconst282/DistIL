@@ -44,7 +44,7 @@ public class MethodDef : Method, MemberDef
         Name = reader.GetString(entity.Name);
 
         IsStatic = (Attribs & MethodAttributes.Static) != 0;
-        var sig = entity.DecodeSignature(mod.TypeDecoder, null);
+        var sig = entity.DecodeSignature(mod.TypeProvider, default);
 
         RetType = sig.ReturnType;
         Args = new List<Argument>(sig.RequiredParameterCount + (IsStatic ? 0 : 1));
@@ -176,7 +176,7 @@ public class MethodBody
             return new List<Variable>();
         }
         var sig = mod.Reader.GetStandaloneSignature(block.LocalSignature);
-        var types = sig.DecodeLocalSignature(mod.TypeDecoder, null);
+        var types = sig.DecodeLocalSignature(mod.TypeProvider, default);
         var vars = new List<Variable>(types.Length);
 
         for (int i = 0; i < types.Length; i++) {

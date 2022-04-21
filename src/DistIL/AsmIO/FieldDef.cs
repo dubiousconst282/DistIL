@@ -31,7 +31,7 @@ public class FieldDef : Field, MemberDef
         var def = reader.GetFieldDefinition(handle);
 
         Attribs = def.Attributes;
-        Type = def.DecodeSignature(mod.TypeDecoder, null);
+        Type = def.DecodeSignature(mod.TypeProvider, default);
         Name = reader.GetString(def.Name);
 
         DeclaringType = mod.GetType(def.GetDeclaringType());

@@ -4,16 +4,11 @@ using System.Collections.Immutable;
 using System.Reflection.Metadata;
 using DistIL.IR;
 
-public interface IGenericContext
-{
-    ImmutableArray<RType> GenericTypeParams { get; }
-    ImmutableArray<RType> GenericMethodParams { get; }
-}
-public class SignatureTypeDecoder : ISignatureTypeProvider<RType, IGenericContext?>
+public class TypeProvider : ISignatureTypeProvider<RType, GenericContext>
 {
     public ModuleDef Module { get; }
 
-    public SignatureTypeDecoder(ModuleDef mod)
+    public TypeProvider(ModuleDef mod)
     {
         Module = mod;
     }
@@ -54,11 +49,10 @@ public class SignatureTypeDecoder : ISignatureTypeProvider<RType, IGenericContex
         return Module.GetType(handle);
     }
 
-    public RType GetTypeFromSpecification(MetadataReader reader, IGenericContext? genericContext, TypeSpecificationHandle handle, byte rawTypeKind)
+    public RType GetTypeFromSpecification(MetadataReader reader, GenericContext context, TypeSpecificationHandle handle, byte rawTypeKind)
     {
-        var typeSpec = reader.GetTypeSpecification(handle);
-        var sig = typeSpec.DecodeSignature(this, genericContext);
-        throw new NotImplementedException();
+        Assert(reader == Module.Reader);
+        return Module.GetType(handle);
     }
 
     public RType GetSZArrayType(RType elementType)
@@ -97,25 +91,25 @@ public class SignatureTypeDecoder : ISignatureTypeProvider<RType, IGenericContex
 
     public RType GetGenericInstantiation(RType genericType, ImmutableArray<RType> typeArguments)
     {
-        throw new NotImplementedException();
+        return new TypeSpec((TypeDef)genericType, typeArguments);
     }
 
-    public RType GetGenericMethodParameter(IGenericContext? genericContext, int index)
+    public RType GetGenericMethodParameter(GenericContext context, int index)
     {
-        throw new NotImplementedException();
+        return context.GetMethodArg(index);
     }
-    public RType GetGenericTypeParameter(IGenericContext? genericContext, int index)
+    public RType GetGenericTypeParameter(GenericContext context, int index)
     {
-        throw new NotImplementedException();
+        return context.GetTypeArg(index);
     }
 
     public RType GetModifiedType(RType modifier, RType unmodifiedType, bool isRequired)
     {
-        throw new NotImplementedException();
+        return unmodifiedType; //FIXME: implement this thing
     }
 }
 
-/// <summary> Represents a type for a local variable that holds a pinned GC reference. It should never be used directly. </summary>
+/// <summary> Represents the type of a local variable that holds a pinned GC reference. It should never be used directly. </summary>
 public class PinnedType_ : CompoundType
 {
     public override TypeKind Kind => ElemType.Kind;

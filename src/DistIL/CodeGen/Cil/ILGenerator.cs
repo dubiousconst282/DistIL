@@ -151,7 +151,7 @@ public partial class ILGenerator : InstVisitor
                 }
                 break;
             }
-            default: throw null!;
+            default: throw new NotSupportedException(value.GetType().Name + " as operand");
         }
     }
 
@@ -165,6 +165,11 @@ public partial class ILGenerator : InstVisitor
         Push(inst.Left);
         Push(inst.Right);
         _asm.Emit(GetCodeForBinOp(inst.Op));
+    }
+    public void Visit(UnaryInst inst)
+    {
+        Push(inst.Value);
+        _asm.Emit(GetCodeForUnOp(inst.Op));
     }
     public void Visit(ConvertInst inst)
     {
@@ -248,6 +253,60 @@ public partial class ILGenerator : InstVisitor
         }
         var code = inst.IsStatic ? staticCode : instanceCode;
         _asm.Emit(code, inst.Field);
+    }
+
+    public void Visit(ArrayLenInst inst)
+    {
+        Push(inst.Array);
+        _asm.Emit(ILCode.Ldlen);
+    }
+    //TODO: array inst prefixes: no. / readonly.
+    public void Visit(LoadArrayInst inst)
+    {
+        Push(inst.Array);
+        Push(inst.Index);
+
+        if (_ldelemMacros.TryGetValue(inst.ElemType.Kind, out var code)) {
+            _asm.Emit(code);
+        } else {
+            _asm.Emit(ILCode.Ldelem, inst.ElemType);
+        }
+    }
+    public void Visit(StoreArrayInst inst)
+    {
+        Push(inst.Array);
+        Push(inst.Index);
+        Push(inst.Value);
+
+        if (_stelemMacros.TryGetValue(inst.ElemType.Kind, out var code)) {
+            _asm.Emit(code);
+        } else {
+            _asm.Emit(ILCode.Stelem, inst.ElemType);
+        }
+    }
+    public void Visit(ArrayAddrInst inst)
+    {
+        Push(inst.Array);
+        Push(inst.Index);
+        _asm.Emit(ILCode.Ldelema);
+    }
+
+    public void Visit(CallInst inst)
+    {
+        foreach (var arg in inst.Args) {
+            Push(arg);
+        }
+        Assert(inst.Method is MethodDef);
+        var code = inst.IsVirtual ? ILCode.Callvirt : ILCode.Call;
+        _asm.Emit(code, inst.Method);
+    }
+    public void Visit(NewObjInst inst)
+    {
+        foreach (var arg in inst.Args) {
+            Push(arg);
+        }
+        Assert(inst.Constructor is MethodDef);
+        _asm.Emit(ILCode.Newobj, inst.Constructor);
     }
 
     public void Visit(BranchInst inst)

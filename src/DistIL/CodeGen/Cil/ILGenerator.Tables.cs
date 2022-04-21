@@ -34,6 +34,15 @@ public partial class ILGenerator
         };
     }
 
+    private static ILCode GetCodeForUnOp(UnaryOp op)
+    {
+        return op switch {
+            UnaryOp.FNeg or UnaryOp.Neg => ILCode.Neg,
+            UnaryOp.Not => ILCode.Not,
+            _ => throw new InvalidOperationException()
+        };
+    }
+
     private static ILCode GetCodeForConv(ConvertInst inst)
     {
         var srcType = inst.Value.ResultType;

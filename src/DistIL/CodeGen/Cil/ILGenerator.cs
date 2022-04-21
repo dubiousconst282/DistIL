@@ -158,15 +158,15 @@ public class ILGenerator : InstVisitor
     public void Visit(LoadPtrInst inst)
     {
         Push(inst.Address);
-        EmitLdOrStInd(inst);
+        EmitLoadOrStorePtr(inst);
     }
     public void Visit(StorePtrInst inst)
     {
         Push(inst.Address);
         Push(inst.Value);
-        EmitLdOrStInd(inst);
+        EmitLoadOrStorePtr(inst);
     }
-    private void EmitLdOrStInd(PtrAccessInst inst)
+    private void EmitLoadOrStorePtr(PtrAccessInst inst)
     {
         bool isLoad = inst is LoadPtrInst;
         if (inst.Volatile) _asm.Emit(ILCode.Volatile_);
@@ -193,6 +193,7 @@ public class ILGenerator : InstVisitor
         Push(inst.Right);
         _asm.Emit(GetCodeForBinOp(inst.Op));
     }
+
     public void Visit(ConvertInst inst)
     {
         Push(inst.Value);
@@ -201,8 +202,17 @@ public class ILGenerator : InstVisitor
 
     public void Visit(CompareInst inst)
     {
-        throw new NotImplementedException();
+        Push(inst.Left);
+        Push(inst.Right);
+
+        var (code, inv) = GetCodeForCompare(inst.Op);
+        _asm.Emit(code);
+        if (inv) { //!cond
+            _asm.Emit(ILCode.Ldc_I4_0);
+            _asm.Emit(ILCode.Ceq);
+        }
     }
+
     public void Visit(BranchInst inst)
     {
         var thenLabel = GetLabel(inst.Then);
@@ -236,6 +246,7 @@ public class ILGenerator : InstVisitor
             _asm.Emit(ILCode.Br, elseLabel);
         }
     }
+
     public void Visit(ReturnInst inst)
     {
         if (inst.HasValue) {
@@ -245,6 +256,7 @@ public class ILGenerator : InstVisitor
     }
 
 #pragma warning disable format
+    const bool T = true, F = false;
 
     private static ILCode GetCodeForBinOp(BinaryOp op)
     {
@@ -277,44 +289,44 @@ public class ILGenerator : InstVisitor
         var srcType = inst.Value.ResultType;
         var dstType = inst.ResultType;
 
-        return (dstType.Kind, inst.SrcUnsigned ? 1 : 0, inst.CheckOverflow ? 1 : 0) switch {
-            (TypeKind.SByte,   0, 0) => ILCode.Conv_I1,
-            (TypeKind.Int16,   0, 0) => ILCode.Conv_I2,
-            (TypeKind.Int32,   0, 0) => ILCode.Conv_I4,
-            (TypeKind.Int64,   0, 0) => ILCode.Conv_I8,
-            (TypeKind.Byte,    0, 0) => ILCode.Conv_U1,
-            (TypeKind.UInt16,  0, 0) => ILCode.Conv_U2,
-            (TypeKind.UInt32,  0, 0) => ILCode.Conv_U4,
-            (TypeKind.UInt64,  0, 0) => ILCode.Conv_U8,
-            (TypeKind.IntPtr,  0, 0) => ILCode.Conv_I,
-            (TypeKind.UIntPtr, 0, 0) => ILCode.Conv_U,
-            (TypeKind.Single,  0, 0) => ILCode.Conv_R4,
-            (TypeKind.Double,  0, 0) => ILCode.Conv_R8,
+        return (dstType.Kind, inst.SrcUnsigned, inst.CheckOverflow) switch {
+            (TypeKind.SByte,   F, F) => ILCode.Conv_I1,
+            (TypeKind.Int16,   F, F) => ILCode.Conv_I2,
+            (TypeKind.Int32,   F, F) => ILCode.Conv_I4,
+            (TypeKind.Int64,   F, F) => ILCode.Conv_I8,
+            (TypeKind.Byte,    F, F) => ILCode.Conv_U1,
+            (TypeKind.UInt16,  F, F) => ILCode.Conv_U2,
+            (TypeKind.UInt32,  F, F) => ILCode.Conv_U4,
+            (TypeKind.UInt64,  F, F) => ILCode.Conv_U8,
+            (TypeKind.IntPtr,  F, F) => ILCode.Conv_I,
+            (TypeKind.UIntPtr, F, F) => ILCode.Conv_U,
+            (TypeKind.Single,  F, F) => ILCode.Conv_R4,
+            (TypeKind.Double,  F, F) => ILCode.Conv_R8,
             
-            (TypeKind.SByte,   0, 1) => ILCode.Conv_Ovf_I1,
-            (TypeKind.Int16,   0, 1) => ILCode.Conv_Ovf_I2,
-            (TypeKind.Int32,   0, 1) => ILCode.Conv_Ovf_I4,
-            (TypeKind.Int64,   0, 1) => ILCode.Conv_Ovf_I8,
-            (TypeKind.Byte,    0, 1) => ILCode.Conv_Ovf_U1,
-            (TypeKind.UInt16,  0, 1) => ILCode.Conv_Ovf_U2,
-            (TypeKind.UInt32,  0, 1) => ILCode.Conv_Ovf_U4,
-            (TypeKind.UInt64,  0, 1) => ILCode.Conv_Ovf_U8,
-            (TypeKind.IntPtr,  0, 1) => ILCode.Conv_Ovf_I,
-            (TypeKind.UIntPtr, 0, 1) => ILCode.Conv_Ovf_U,
+            (TypeKind.SByte,   F, T) => ILCode.Conv_Ovf_I1,
+            (TypeKind.Int16,   F, T) => ILCode.Conv_Ovf_I2,
+            (TypeKind.Int32,   F, T) => ILCode.Conv_Ovf_I4,
+            (TypeKind.Int64,   F, T) => ILCode.Conv_Ovf_I8,
+            (TypeKind.Byte,    F, T) => ILCode.Conv_Ovf_U1,
+            (TypeKind.UInt16,  F, T) => ILCode.Conv_Ovf_U2,
+            (TypeKind.UInt32,  F, T) => ILCode.Conv_Ovf_U4,
+            (TypeKind.UInt64,  F, T) => ILCode.Conv_Ovf_U8,
+            (TypeKind.IntPtr,  F, T) => ILCode.Conv_Ovf_I,
+            (TypeKind.UIntPtr, F, T) => ILCode.Conv_Ovf_U,
             
-            (TypeKind.SByte,   1, 1) => ILCode.Conv_Ovf_I1_Un,
-            (TypeKind.Int16,   1, 1) => ILCode.Conv_Ovf_I2_Un,
-            (TypeKind.Int32,   1, 1) => ILCode.Conv_Ovf_I4_Un,
-            (TypeKind.Int64,   1, 1) => ILCode.Conv_Ovf_I8_Un,
-            (TypeKind.Byte,    1, 1) => ILCode.Conv_Ovf_U1_Un,
-            (TypeKind.UInt16,  1, 1) => ILCode.Conv_Ovf_U2_Un,
-            (TypeKind.UInt32,  1, 1) => ILCode.Conv_Ovf_U4_Un,
-            (TypeKind.UInt64,  1, 1) => ILCode.Conv_Ovf_U8_Un,
-            (TypeKind.IntPtr,  1, 1) => ILCode.Conv_Ovf_I_Un,
-            (TypeKind.UIntPtr, 1, 1) => ILCode.Conv_Ovf_U_Un,
+            (TypeKind.SByte,   T, T) => ILCode.Conv_Ovf_I1_Un,
+            (TypeKind.Int16,   T, T) => ILCode.Conv_Ovf_I2_Un,
+            (TypeKind.Int32,   T, T) => ILCode.Conv_Ovf_I4_Un,
+            (TypeKind.Int64,   T, T) => ILCode.Conv_Ovf_I8_Un,
+            (TypeKind.Byte,    T, T) => ILCode.Conv_Ovf_U1_Un,
+            (TypeKind.UInt16,  T, T) => ILCode.Conv_Ovf_U2_Un,
+            (TypeKind.UInt32,  T, T) => ILCode.Conv_Ovf_U4_Un,
+            (TypeKind.UInt64,  T, T) => ILCode.Conv_Ovf_U8_Un,
+            (TypeKind.IntPtr,  T, T) => ILCode.Conv_Ovf_I_Un,
+            (TypeKind.UIntPtr, T, T) => ILCode.Conv_Ovf_U_Un,
 
-            (TypeKind.Single,  1, 0) => ILCode.Conv_R_Un,
-            (TypeKind.Double,  1, 0) => ILCode.Conv_R_Un,
+            (TypeKind.Single,  T, F) => ILCode.Conv_R_Un,
+            (TypeKind.Double,  T, F) => ILCode.Conv_R_Un,
 
             _ => throw new NotSupportedException("Invalid combination in ConvertInst: " + inst)
         };
@@ -322,20 +334,53 @@ public class ILGenerator : InstVisitor
 
     private static bool GetCodeForBranch(CompareOp op, out ILCode code, out bool invert)
     {
-        const bool T = true, F = false;
         (code, invert) = op switch {
-            CompareOp.Eq  or CompareOp.FOeq => (ILCode.Beq, F),
-            CompareOp.Slt or CompareOp.FOlt => (ILCode.Blt, F),
-            CompareOp.Sgt or CompareOp.FOgt => (ILCode.Bgt, F),
-            CompareOp.Sle or CompareOp.FOle => (ILCode.Ble, F),
-            CompareOp.Sge or CompareOp.FOge => (ILCode.Bge, F),
-            CompareOp.Ult or CompareOp.FUlt => (ILCode.Blt_Un, F),
-            CompareOp.Ugt or CompareOp.FUgt => (ILCode.Bgt_Un, F),
-            CompareOp.Ule or CompareOp.FUle => (ILCode.Ble_Un, F),
-            CompareOp.Uge or CompareOp.FUge => (ILCode.Bge_Un, F),
+            CompareOp.Eq  or CompareOp.FOeq => (ILCode.Beq,     F),
+            CompareOp.Ne  or CompareOp.FUne => (ILCode.Bne_Un,  F),
+            CompareOp.Slt or CompareOp.FOlt => (ILCode.Blt,     F),
+            CompareOp.Sgt or CompareOp.FOgt => (ILCode.Bgt,     F),
+            CompareOp.Sle or CompareOp.FOle => (ILCode.Ble,     F),
+            CompareOp.Sge or CompareOp.FOge => (ILCode.Bge,     F),
+            CompareOp.Ult or CompareOp.FUlt => (ILCode.Blt_Un,  F),
+            CompareOp.Ugt or CompareOp.FUgt => (ILCode.Bgt_Un,  F),
+            CompareOp.Ule or CompareOp.FUle => (ILCode.Ble_Un,  F),
+            CompareOp.Uge or CompareOp.FUge => (ILCode.Bge_Un,  F),
+            //TODO: FUeq/FOne
             _ => (ILCode.Nop, F)
         };
         return code != ILCode.Nop;
+    }
+
+    private static (ILCode Code, bool Invert) GetCodeForCompare(CompareOp op)
+    {
+        return op switch {
+            CompareOp.Eq    => (ILCode.Ceq,     F),
+            CompareOp.Ne    => (ILCode.Ceq,     T),
+            CompareOp.Slt   => (ILCode.Clt,     F),
+            CompareOp.Sgt   => (ILCode.Cgt,     F),
+            CompareOp.Sle   => (ILCode.Cgt,     T), //x <= y  ->  !(x > y)
+            CompareOp.Sge   => (ILCode.Clt,     T), //x >= y  ->  !(x < y)
+            CompareOp.Ult   => (ILCode.Clt_Un,  F),
+            CompareOp.Ugt   => (ILCode.Cgt_Un,  F),
+            CompareOp.Ule   => (ILCode.Cgt_Un,  T), //x <= y  ->  !(x > y)
+            CompareOp.Uge   => (ILCode.Clt_Un,  T), //x >= y  ->  !(x < y)
+
+            CompareOp.FOeq  => (ILCode.Ceq,     F),
+            CompareOp.FOlt  => (ILCode.Clt,     F),
+            CompareOp.FOgt  => (ILCode.Cgt,     F),
+            CompareOp.FOle  => (ILCode.Cgt_Un,  T),
+            CompareOp.FOge  => (ILCode.Clt_Un,  T),
+
+            CompareOp.FUne  => (ILCode.Ceq,     T),
+            CompareOp.FUlt  => (ILCode.Clt_Un,  F),
+            CompareOp.FUgt  => (ILCode.Cgt_Un,  F),
+            CompareOp.FUle  => (ILCode.Cgt,     T),
+            CompareOp.FUge  => (ILCode.Clt,     T),
+            //FIXME: mappings for fcmp.one and fcmp.ueq
+            //one -> x < y || x > y
+            //ueq -> !one
+            _ => throw new ArgumentException()
+        };
     }
 
     private static (ILCode Ld, ILCode St) GetCodeForPtrAcc(RType type)

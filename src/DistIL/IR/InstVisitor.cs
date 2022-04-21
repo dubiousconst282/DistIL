@@ -2,6 +2,11 @@ namespace DistIL.IR;
 
 public interface InstVisitor
 {
+    void Visit(BinaryInst inst) => VisitDefault(inst);
+    void Visit(UnaryInst inst) => VisitDefault(inst);
+    void Visit(CompareInst inst) => VisitDefault(inst);
+    void Visit(ConvertInst inst) => VisitDefault(inst);
+
     void Visit(LoadVarInst inst) => VisitDefault(inst);
     void Visit(StoreVarInst inst) => VisitDefault(inst);
     void Visit(VarAddrInst inst) => VisitDefault(inst);
@@ -9,18 +14,13 @@ public interface InstVisitor
     void Visit(LoadPtrInst inst) => VisitDefault(inst);
     void Visit(StorePtrInst inst) => VisitDefault(inst);
 
+    void Visit(ArrayLenInst inst) => VisitDefault(inst);
     void Visit(LoadArrayInst inst) => VisitDefault(inst);
     void Visit(StoreArrayInst inst) => VisitDefault(inst);
-    void Visit(ArrayLenInst inst) => VisitDefault(inst);
     void Visit(ArrayAddrInst inst) => VisitDefault(inst);
 
     void Visit(LoadFieldInst inst) => VisitDefault(inst);
     void Visit(StoreFieldInst inst) => VisitDefault(inst);
-
-    void Visit(BinaryInst inst) => VisitDefault(inst);
-    void Visit(UnaryInst inst) => VisitDefault(inst);
-    void Visit(CompareInst inst) => VisitDefault(inst);
-    void Visit(ConvertInst inst) => VisitDefault(inst);
 
     void Visit(CallInst inst) => VisitDefault(inst);
     void Visit(NewObjInst inst) => VisitDefault(inst);

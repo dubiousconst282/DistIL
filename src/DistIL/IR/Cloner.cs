@@ -127,24 +127,25 @@ public class Cloner
             return newArgs;
         }
 
+        public void Visit(BinaryInst inst) => Out(new BinaryInst(inst.Op, Remap(inst.Left), Remap(inst.Right)));
+        public void Visit(UnaryInst inst) => Out(new UnaryInst(inst.Op, Remap(inst.Value)));
+        public void Visit(CompareInst inst) => Out(new CompareInst(inst.Op, Remap(inst.Left), Remap(inst.Right)));
+        public void Visit(ConvertInst inst) => Out(new ConvertInst(Remap(inst.Value), inst.ResultType, inst.CheckOverflow, inst.SrcUnsigned));
+
         public void Visit(LoadVarInst inst) => Out(new LoadVarInst(Remap(inst.Source)));
         public void Visit(StoreVarInst inst) => Out(new StoreVarInst(Remap(inst.Dest), Remap(inst.Value)));
         public void Visit(VarAddrInst inst) => Out(new VarAddrInst(Remap(inst.Source)));
 
         public void Visit(LoadPtrInst inst) => Out(new LoadPtrInst(Remap(inst.Address), inst.ElemType, inst.Flags));
         public void Visit(StorePtrInst inst) => Out(new StorePtrInst(Remap(inst.Address), Remap(inst.Value), inst.ElemType, inst.Flags));
-
+        
+        public void Visit(ArrayLenInst inst) => Out(new ArrayLenInst(Remap(inst.Array)));
         public void Visit(LoadArrayInst inst) => Out(new LoadArrayInst(Remap(inst.Array), Remap(inst.Index), inst.ElemType, inst.Flags));
         public void Visit(StoreArrayInst inst) => Out(new StoreArrayInst(Remap(inst.Array), Remap(inst.Index), Remap(inst.Value), inst.ElemType, inst.Flags));
-        public void Visit(ArrayLenInst inst) => Out(new ArrayLenInst(Remap(inst.Array)));
         public void Visit(ArrayAddrInst inst) => Out(new ArrayAddrInst(Remap(inst.Array), Remap(inst.Index), inst.Flags));
 
         public void Visit(LoadFieldInst inst) => Out(new LoadFieldInst(inst.Field, inst.IsStatic ? null : Remap(inst.Obj)));
         public void Visit(StoreFieldInst inst) => Out(new StoreFieldInst(inst.Field, inst.IsStatic ? null : Remap(inst.Obj), Remap(inst.Value)));
-
-        public void Visit(BinaryInst inst) => Out(new BinaryInst(inst.Op, Remap(inst.Left), Remap(inst.Right)));
-        public void Visit(CompareInst inst) => Out(new CompareInst(inst.Op, Remap(inst.Left), Remap(inst.Right)));
-        public void Visit(ConvertInst inst) => Out(new ConvertInst(Remap(inst.Value), inst.ResultType, inst.CheckOverflow, inst.SrcUnsigned));
 
         public void Visit(CallInst inst) => Out(new CallInst(inst.Method, RemapArgs(inst.Args), inst.IsVirtual));
         public void Visit(NewObjInst inst) => Out(new NewObjInst(inst.Constructor, RemapArgs(inst.Args)));

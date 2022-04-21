@@ -7,10 +7,16 @@ public abstract class Method : Callsite
     private bool _slotsDirty = true;
 
     public List<Argument> Args { get; init; } = null!;
+    /// <summary> Gets a view over `Args` excluding the first argument (`this`) if this is an instance method. </summary>
+    public ReadOnlySpan<Argument> StaticArgs => Args.AsSpan(IsStatic ? 0 : 1);
+
     /// <summary> The entry block of this method. Should not have predecessors. </summary>
     public BasicBlock EntryBlock { get; set; } = null!;
     public int NumBlocks { get; private set; } = 0;
     private BasicBlock? _lastBlock; //Last block in the list
+
+    /// <summary> Whether IR is available for this method (was sucessfully imported). </summary>
+    public bool CodeAvailable => EntryBlock != null;
 
     /// <summary> Creates and adds an empty block to this method. If the method is empty, this block will be set as the entry block. </summary>
     public BasicBlock CreateBlock()

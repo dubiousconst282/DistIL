@@ -34,9 +34,9 @@ public class FuncPtrType : RType
     }
 
     public override bool Equals(RType? other)
-    {
-        return false;
-    }
+        => other is FuncPtrType o && o.RetType == RetType && o.CallConv == CallConv &&
+           o.IsInstance == IsInstance && o.IsGeneric == IsGeneric &&
+           o.ArgTypes.SequenceEqual(ArgTypes);
 }
 
 //Copied from SignatureCallingConvention

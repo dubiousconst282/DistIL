@@ -25,67 +25,21 @@ internal class ModuleWriter
         _bodyEncoder = new MethodBodyStreamEncoder(new BlobBuilder());
     }
 
-    private EntityHandle GetTypeHandle(RType type)
-    {
-        if (type is TypeDef def) {
-            if (_handleMap.TryGetValue(def, out var handle)) {
-                return handle;
-            }
-            Ensure(def.Module != _mod); //Module must have all handles allocated first
-
-            handle = _builder.AddTypeReference(
-                GetAsmHandle(def.Module),
-                AddString(def.Namespace),
-                AddString(def.Name)
-            );
-            _handleMap[def] = handle;
-            return handle;
-        }
-        throw new NotImplementedException();
-    }
-
-    private EntityHandle GetAsmHandle(ModuleDef module)
-    {
-        if (_handleMap.TryGetValue(module, out var handle)) {
-            return handle;
-        }
-        var name = module.AsmName;
-        handle = _builder.AddAssemblyReference(
-            AddString(name.Name),
-            name.Version!,
-            AddString(name.CultureName),
-            AddBlob(name.GetPublicKey() ?? name.GetPublicKeyToken()),
-            (AssemblyFlags)name.Flags,
-            default
-        );
-        _handleMap.Add(module, handle);
-        return handle;
-    }
-
-    private EntityHandle GetEntityHandle(EntityDef entity)
-    {
-        if (_handleMap.TryGetValue(entity, out var handle)) {
-            return handle;
-        }
-        return entity switch {
-            TypeDef type => GetTypeHandle((RType)entity),
-            _ => throw new NotImplementedException()
-        };
-    }
-
     public void Emit(BlobBuilder peBlob)
     {
         //https://github.com/dotnet/runtime/blob/main/src/libraries/System.Reflection.Metadata/tests/PortableExecutable/PEBuilderTests.cs
-        var name = _mod.AsmName;
-        var modDef = _mod.Reader.GetModuleDefinition();
+        var reader = _mod.Reader;
 
+        var modDef = reader.GetModuleDefinition();
         var mainModHandle = _builder.AddModule(
             modDef.Generation, 
-            AddString(_mod.Reader.GetString(modDef.Name)), 
-            _builder.GetOrAddGuid(_mod.Reader.GetGuid(modDef.Mvid)),
-            _builder.GetOrAddGuid(_mod.Reader.GetGuid(modDef.GenerationId)),
-            _builder.GetOrAddGuid(_mod.Reader.GetGuid(modDef.BaseGenerationId))
+            AddString(reader.GetString(modDef.Name)), 
+            _builder.GetOrAddGuid(reader.GetGuid(modDef.Mvid)),
+            _builder.GetOrAddGuid(reader.GetGuid(modDef.GenerationId)),
+            _builder.GetOrAddGuid(reader.GetGuid(modDef.BaseGenerationId))
         );
+
+        var name = _mod.AsmName;
         var mainAsmHandle = _builder.AddAssembly(
             AddString(name.Name!),
             name.Version!,
@@ -125,7 +79,75 @@ internal class ModuleWriter
         }
     }
 
-    private void CheckHandle(EntityDef def, EntityHandle handle)
+    private EntityHandle GetEntityHandle(EntityDef entity)
+    {
+        if (_handleMap.TryGetValue(entity, out var handle)) {
+            return handle;
+        }
+        Assert(entity.Module != _mod); //all handles in _mod must be allocated first
+
+        handle = entity switch {
+            ModuleDef mod   => AddAsmRef(mod),
+            TypeDef type    => AddTypeRef(type),
+            MethodDef meth  => AddMethodRef(meth),
+            FieldDef field  => AddFieldRef(field),
+            _ => throw new NotImplementedException()
+        };
+        _handleMap[entity] = handle;
+        return handle;
+    }
+
+    private EntityHandle GetTypeHandle(RType type)
+    {
+        return type switch {
+            TypeDef def => GetEntityHandle(def),
+            _ => throw new NotImplementedException()
+        };
+    }
+
+    private EntityHandle AddAsmRef(ModuleDef module)
+    {
+        var name = module.AsmName;
+        return _builder.AddAssemblyReference(
+            AddString(name.Name),
+            name.Version!,
+            AddString(name.CultureName),
+            AddBlob(name.GetPublicKey() ?? name.GetPublicKeyToken()),
+            (AssemblyFlags)name.Flags,
+            default
+        );
+    }
+
+    private EntityHandle AddTypeRef(TypeDef type)
+    {
+        return _builder.AddTypeReference(
+            GetEntityHandle(_mod.GetRefAssembly(type)),
+            AddString(type.Namespace),
+            AddString(type.Name)
+        );
+    }
+
+    private EntityHandle AddMethodRef(MethodDef meth)
+    {
+        var declType = GetEntityHandle(meth.DeclaringType);
+        return _builder.AddMemberReference(
+            declType,
+            AddString(meth.Name),
+            EmitMethodSig(meth)
+        );
+    }
+
+    private EntityHandle AddFieldRef(FieldDef field)
+    {
+        var declType = GetEntityHandle(field.DeclaringType);
+        return _builder.AddMemberReference(
+            declType,
+            AddString(field.Name),
+            EmitFieldSig(field)
+        );
+    }
+
+    private void AssertHandleAllocated(EntityDef def, EntityHandle handle)
     {
         Assert(_handleMap[def] == handle);
     }
@@ -143,8 +165,13 @@ internal class ModuleWriter
             firstFieldHandle,
             firstMethodHandle
         );
-        CheckHandle(type, handle);
+        AssertHandleAllocated(type, handle);
+        Assert(type.Fields.Count == 0 || _handleMap[type.Fields[0]] == firstFieldHandle);
+        Assert(type.Methods.Count == 0 || _handleMap[type.Methods[0]] == firstMethodHandle);
 
+        if (type.IsNested) {
+            _builder.AddNestedType(handle, (TypeDefinitionHandle)GetTypeHandle(type.DeclaringType));
+        }
         foreach (var field in type.Fields) {
             EmitField(field);
         }
@@ -158,9 +185,9 @@ internal class ModuleWriter
         var handle = _builder.AddFieldDefinition(
             field.Attribs,
             AddString(field.Name),
-            EmitSig(b => EncodeType(b.FieldSignature(), field.Type))
+            EmitFieldSig(field)
         );
-        CheckHandle(field, handle);
+        AssertHandleAllocated(field, handle);
 
         if (field.MappedData != null) {
             _fieldDataStream ??= new();
@@ -183,7 +210,7 @@ internal class ModuleWriter
         int bodyOffset = EmitBody(method.Body);
         var firstParamHandle = default(ParameterHandle);
 
-        foreach (var arg in method.Args) {
+        foreach (var arg in method.StaticArgs) {
             if (arg.Name == null) continue;
 
             var parHandle = _builder.AddParameter(ParameterAttributes.None, AddString(arg.Name), arg.Index + 1);
@@ -198,7 +225,7 @@ internal class ModuleWriter
             AddString(method.Name),
             signature, bodyOffset, firstParamHandle
         );
-        CheckHandle(method, handle);
+        AssertHandleAllocated(method, handle);
     }
 
     private int EmitBody(MethodBody? body)
@@ -274,7 +301,7 @@ internal class ModuleWriter
                 break;
             }
             case ILOperandType.Type: {
-                var handle = GetTypeHandle((TypeDef)inst.Operand!);
+                var handle = AddTypeRef((TypeDef)inst.Operand!);
                 bb.WriteInt32(MetadataTokens.GetToken(handle));
                 break;
             }
@@ -344,18 +371,23 @@ internal class ModuleWriter
     {
         return EmitSig(b => {
             //TODO: callconv, genericParamCount
-            bool isInst = !method.IsStatic;
-            b.MethodSignature(isInstanceMethod: isInst)
+            var args = method.StaticArgs;
+            b.MethodSignature(isInstanceMethod: method.IsInstance)
                 .Parameters(
-                    method.NumArgs - (isInst ? 1 : 0), //`this` is always explicit in IR
+                    args.Length,
                     out var retTypeEnc, out var parsEnc
                 );
             EncodeType(retTypeEnc.Type(), method.RetType);
-            foreach (var arg in method.Args) {
+            foreach (var arg in method.StaticArgs) {
                 var parEnc = parsEnc.AddParameter();
                 EncodeType(parEnc.Type(), arg.Type);
             }
         });
+    }
+
+    private BlobHandle EmitFieldSig(FieldDef field)
+    {
+        return EmitSig(b => EncodeType(b.FieldSignature(), field.Type));
     }
 
     private void EncodeType(SignatureTypeEncoder enc, RType type)
@@ -410,7 +442,7 @@ internal class ModuleWriter
                 break;
             }
             case TypeDef t: {
-                enc.Type(GetTypeHandle(t), t.IsValueType);
+                enc.Type(GetEntityHandle(t), t.IsValueType);
                 break;
             }
             default: throw new NotImplementedException();

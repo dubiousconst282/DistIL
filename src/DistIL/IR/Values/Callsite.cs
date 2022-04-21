@@ -12,13 +12,17 @@ public abstract class Callsite : Value
     public string Name { get; init; } = null!;
 
     public bool IsStatic { get; init; }
-    
+
+    /// <summary> Whether this method is not static. </summary>
+    public bool IsInstance => !IsStatic;
+
     /// <summary> Whether this method is pure (doesn't cause any visible side effects) </summary>
     public virtual bool IsPure => false;
 
     public override void Print(StringBuilder sb, SlotTracker slotTracker)
     {
-        sb.Append($"{(IsStatic ? "static " : "")}{RetType} {Name}(");
+        var decl = this is AsmIO.MemberDef m ? (m.DeclaringType.ToString() + "::") : "";
+        sb.Append($"{(IsStatic ? "static " : "")}{RetType} {decl}{Name}(");
         sb.AppendJoin(", ", ArgTypes);
         sb.Append(')');
     }

@@ -31,13 +31,30 @@ public abstract class Value
         return false;
     }
 
-    /// <summary> Replace uses of this value with `newValue`. Use list is cleared. </summary>
+    /// <summary> Replace uses of this value with `newValue`. Use list is cleared on return. </summary>
     public void ReplaceUses(Value newValue)
+    {
+        if (newValue == this) return;
+
+        foreach (var (inst, operIdx) in Uses) {
+            Assert(inst.Operands[operIdx] == this);
+
+            inst.Operands[operIdx] = newValue;
+            newValue.AddUse(inst, operIdx);
+        }
+        Uses.Clear();
+    }
+
+    /// <summary> Replace each use of this value with the value returned by `getNewValueForUser`. Use list is cleared on return. </summary>
+    public void ReplaceUses(Func<Instruction, Value> getNewValueForUser)
     {
         for (int i = 0; i < Uses.Count; i++) {
             var (inst, operIdx) = Uses[i];
-
             Assert(inst.Operands[operIdx] == this);
+
+            var newValue = getNewValueForUser(inst);
+            Assert(newValue != this); //not impl
+
             inst.Operands[operIdx] = newValue;
             newValue.AddUse(inst, operIdx);
         }

@@ -288,7 +288,7 @@ public partial class ILGenerator : InstVisitor
     {
         Push(inst.Array);
         Push(inst.Index);
-        _asm.Emit(ILCode.Ldelema);
+        _asm.Emit(ILCode.Ldelema, inst.ElemType);
     }
 
     public void Visit(CallInst inst)

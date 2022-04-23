@@ -319,7 +319,7 @@ internal class BlockState
 
                 #region Load/Store Array Element
                 case ILCode.Ldlen: ImportLoadLen(); break;
-                case ILCode.Ldelema: ImportLoadElemAddr(); break;
+                case ILCode.Ldelema: ImportLoadElemAddr((RType)inst.Operand!); break;
 
                 case ILCode.Ldelem_I1:  ImportLoadElem(PrimType.SByte); break;
                 case ILCode.Ldelem_I2:  ImportLoadElem(PrimType.Int16); break;
@@ -646,11 +646,11 @@ internal class BlockState
         }
         Emit(new StoreArrayInst(array, index, value, type, PopArrayAccFlags()));
     }
-    private void ImportLoadElemAddr()
+    private void ImportLoadElemAddr(RType elemType)
     {
         var index = Pop();
         var array = Pop();
-        Push(new ArrayAddrInst(array, index, PopArrayAccFlags()));
+        Push(new ArrayAddrInst(array, index, elemType, PopArrayAccFlags()));
     }
     private ArrayAccessFlags PopArrayAccFlags()
     {

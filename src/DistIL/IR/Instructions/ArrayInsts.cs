@@ -31,6 +31,7 @@ public abstract class ArrayAccessInst : Instruction
         get => Operands[1];
         set => ReplaceOperand(1, value);
     }
+    public abstract RType ElemType { get; set; }
     public ArrayAccessFlags Flags { get; set; }
 
     protected ArrayAccessInst(ArrayAccessFlags flags, params Value[] operands)
@@ -42,7 +43,7 @@ public abstract class ArrayAccessInst : Instruction
 
 public class LoadArrayInst : ArrayAccessInst
 {
-    public RType ElemType {
+    public override RType ElemType {
         get => ResultType;
         set => ResultType = value;
     }
@@ -62,7 +63,7 @@ public class StoreArrayInst : ArrayAccessInst
         get => Operands[2];
         set => ReplaceOperand(2, value);
     }
-    public RType ElemType { get; set; }
+    public override RType ElemType { get; set; }
 
     public override string InstName => "starr";
     public override bool HasSideEffects => true;
@@ -77,12 +78,18 @@ public class StoreArrayInst : ArrayAccessInst
 }
 public class ArrayAddrInst : ArrayAccessInst
 {
+    /// <summary> Specifies the access type. For primitive arrays, it is used as the element stride (address = baseAddr + index * elemStride). </summary>
+    public override RType ElemType {
+        get => ResultType.ElemType!;
+        set => ResultType = new ByrefType(value);
+    }
+
     public override string InstName => "arraddr";
 
-    public ArrayAddrInst(Value array, Value index, ArrayAccessFlags flags = 0)
+    public ArrayAddrInst(Value array, Value index, RType elemType, ArrayAccessFlags flags = 0)
         : base(flags, array, index)
     {
-        ResultType = new ByrefType(((ArrayType)array.ResultType).ElemType);
+        ElemType = elemType;
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);

@@ -26,6 +26,12 @@ public class Variable : Value
             sb.Append(slotTracker.GetId(this));
         }
     }
+
+    protected override SlotTracker GetDefaultSlotTracker()
+    {
+        var parentMethod = Uses.Count > 0 ? GetUse(0).Block.Method : null;
+        return parentMethod?.GetSlotTracker() ?? base.GetDefaultSlotTracker();
+    }
 }
 
 /// <summary>

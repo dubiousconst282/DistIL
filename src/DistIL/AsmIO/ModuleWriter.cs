@@ -208,14 +208,11 @@ internal class ModuleWriter
     {
         var signature = EmitMethodSig(method);
         int bodyOffset = EmitBody(method.Body);
-        var firstParamHandle = default(ParameterHandle);
+        var firstParamHandle = MetadataTokens.ParameterHandle(_builder.GetRowCount(TableIndex.Param) + 1);
 
         foreach (var arg in method.StaticArgs) {
-            if (arg.Name == null) continue;
-
-            var parHandle = _builder.AddParameter(ParameterAttributes.None, AddString(arg.Name), arg.Index + 1);
-            if (firstParamHandle.IsNil) {
-                firstParamHandle = parHandle;
+            if (arg.Name != null) {
+                _builder.AddParameter(ParameterAttributes.None, AddString(arg.Name), arg.Index + 1);
             }
         }
 
@@ -352,6 +349,10 @@ internal class ModuleWriter
                 int varIndex = (int)inst.Operand!;
                 Assert(varIndex == (byte)varIndex);
                 bb.WriteByte((byte)varIndex);
+                break;
+            }
+            default: {
+                Assert(inst.Operand == null);
                 break;
             }
         }

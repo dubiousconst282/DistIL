@@ -90,7 +90,7 @@ public partial class ILGenerator : InstVisitor
         }
         var codes = GetCodesForVar(op, var is Argument);
 
-        if (index < 4) {
+        if (index < 4 && codes.Inline != ILCode.Nop) {
             _asm.Emit((ILCode)((int)codes.Inline + index));
         } else if (index < 256) {
             _asm.Emit(codes.Short, index);
@@ -296,6 +296,7 @@ public partial class ILGenerator : InstVisitor
         foreach (var arg in inst.Args) {
             Push(arg);
         }
+        if (inst.Method is not MethodDef) throw null!;
         Assert(inst.Method is MethodDef);
         var code = inst.IsVirtual ? ILCode.Callvirt : ILCode.Call;
         _asm.Emit(code, inst.Method);

@@ -62,13 +62,6 @@ public class BasicBlockTests
         Assert.Equal(new Instruction[] { inst1, inst2, inst3, inst4, inst5 }, ToList(block.GetEnumerator()));
         Assert.Equal(new Instruction[] { inst3, inst4, inst5 }, ToList(block.NonPhis().GetEnumerator()));
         Assert.Equal(new Instruction[] { inst1, inst2 }, ToList(block.Phis().GetEnumerator()));
-
-        static List<Instruction> ToList(IEnumerator<Instruction> itr)
-        {
-            var list = new List<Instruction>();
-            while (itr.MoveNext()) list.Add(itr.Current);
-            return list;
-        }
     }
 
     [Fact]
@@ -119,5 +112,59 @@ public class BasicBlockTests
         Assert.Equal(inst4, newBlock.First);
         Assert.Equal(inst4, newBlock.Last);
         Assert.Equal(inst4.Prev, null);
+    }
+
+    [Fact]
+    public void TestInsertRange()
+    {
+        var method = new DummyMethod();
+        var block = method.CreateBlock();
+
+        var insts = GetDummyInsts(8);
+        block.InsertRange(null, insts[0], insts[3]);
+        Assert.Equal(insts[0], block.First);
+        Assert.Equal(insts[3], block.Last);
+        Assert.Null(block.First.Prev);
+        Assert.Null(block.Last.Next);
+
+        block.InsertRange(block.Last, insts[4], insts[7]);
+        Assert.Equal(insts[0], block.First);
+        Assert.Equal(insts[7], block.Last);
+        Assert.Null(block.First.Prev);
+        Assert.Null(block.Last.Next);
+    }
+
+    [Fact]
+    public void TestRemove()
+    {
+        var method = new DummyMethod();
+        var block = method.CreateBlock();
+
+        var insts = GetDummyInsts(8);
+        block.InsertRange(null, insts[0], insts[7]);
+
+        block.Remove(insts[3]);
+        Assert.Equal(insts.Except(new[] { insts[3] }), ToList(block.GetEnumerator()));
+    }
+
+    private List<Instruction> GetDummyInsts(int count)
+    {
+        var insts = new List<Instruction>();
+        for (int i = 0; i < count; i++) {
+            var inst = new ReturnInst(ConstInt.CreateI(i));
+            if (i > 0) {
+                inst.Prev = insts[i - 1];
+                insts[i - 1].Next = inst;
+            }
+            insts.Add(inst);
+        }
+        return insts;
+    }
+
+    private List<Instruction> ToList(IEnumerator<Instruction> itr)
+    {
+        var list = new List<Instruction>();
+        while (itr.MoveNext()) list.Add(itr.Current);
+        return list;
     }
 }

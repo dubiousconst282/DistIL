@@ -55,23 +55,13 @@ public class InlineMethods : Pass
 
     private static void InlineOneBlock(CallInst callInst, BasicBlock block)
     {
-        var returnedVal = ((ReturnInst)block.Last).Value;
-        block.Last.Remove();
-
-        //Move block instructions into caller block after callInst
-        var callerBlock = callInst.Block;
-
-        block.First.Prev = callInst;
-        block.Last.Next = callInst.Next;
-        callInst.Next!.Prev = block.Last;
-        callInst.Next = block.First;
-
-        foreach (var inst in block) {
-            inst.Block = callerBlock;
+        //Move code (if not a single return)
+        if (block.Last.Prev != null) {
+            block.MoveRange(callInst.Block, callInst, block.First, block.Last.Prev!);
         }
         //Replace call value
-        if (callInst.HasResult) {
-            callInst.ReplaceWith(returnedVal!);
+        if (block.Last is ReturnInst ret && ret.HasValue) {
+            callInst.ReplaceWith(ret.Value!);
         } else {
             callInst.Remove();
         }

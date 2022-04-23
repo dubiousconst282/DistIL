@@ -1,6 +1,5 @@
 ﻿namespace DistIL.IR;
 
-//TODO: Encapsulate into InstList and BlockList to avoid manual manipulation of nodes/links
 public class BasicBlock : Value
 {
     public Method Method { get; internal set; }
@@ -8,8 +7,8 @@ public class BasicBlock : Value
     public List<BasicBlock> Preds { get; } = new();
     public List<BasicBlock> Succs { get; } = new();
 
-    public Instruction First { get; set; } = null!;
-    public Instruction Last { get; set; } = null!; //Either a BranchInst or ReturnInst
+    public Instruction First { get; private set; } = null!;
+    public Instruction Last { get; private set; } = null!; //Either a BranchInst or ReturnInst
 
     public BasicBlock? Prev { get; set; }
     public BasicBlock? Next { get; set; }
@@ -35,11 +34,11 @@ public class BasicBlock : Value
     /// <summary> Adds a successor to this block. </summary>
     public void Connect(BasicBlock succ)
     {
+        Ensure(!succ.Preds.Contains(this));
         //Allow calls with duplicated edges, but don't dupe in the list (SwitchInst)
         if (!Succs.Contains(succ)) {
             Succs.Add(succ);
         }
-        Ensure(!succ.Preds.Contains(this));
         succ.Preds.Add(this);
     }
 
@@ -50,81 +49,88 @@ public class BasicBlock : Value
         succ.Preds.Remove(this);
     }
 
+    public void Reconnect(BasicBlock prevSucc, BasicBlock newSucc)
+    {
+        Disconnect(prevSucc);
+        Connect(newSucc);
+    }
+
     /// <summary> Inserts `newInst` before the first instruction in this block. </summary>
-    public void InsertFirst(Instruction newInst)
-    {
-        Assert(newInst.Prev == null && newInst.Next == null);
-
-        if (First == null) {
-            First = Last = newInst;
-            newInst.Block = this;
-            OnCodeChanged();
-        } else {
-            InsertBefore(First, newInst);
-        }
-    }
+    public void InsertFirst(Instruction newInst) => InsertRange(null, newInst, newInst);
     /// <summary> Inserts `newInst` after the last instruction in this block. </summary>
-    public void InsertLast(Instruction newInst)
-    {
-        Assert(newInst.Prev == null && newInst.Next == null);
-
-        if (Last == null) {
-            First = Last = newInst;
-            newInst.Block = this;
-            OnCodeChanged();
-        } else {
-            InsertAfter(Last, newInst);
-        }
-    }
+    public void InsertLast(Instruction newInst) => InsertRange(Last, newInst, newInst);
     /// <summary> Inserts `newInst` before `inst`. </summary>
-    public void InsertBefore(Instruction inst, Instruction newInst)
-    {
-        newInst.Block = this;
-        newInst.Prev = inst.Prev;
-        newInst.Next = inst;
-
-        if (inst.Prev != null) {
-            inst.Prev.Next = newInst;
-        } else {
-            First = newInst;
-        }
-        inst.Prev = newInst;
-        OnCodeChanged();
-    }
+    public void InsertBefore(Instruction inst, Instruction newInst) => InsertRange(inst.Prev, newInst, newInst);
     /// <summary> Inserts `newInst` after `inst`. </summary>
-    public void InsertAfter(Instruction inst, Instruction newInst)
-    {
-        newInst.Block = this;
-        newInst.Prev = inst;
-        newInst.Next = inst.Next;
+    public void InsertAfter(Instruction inst, Instruction newInst) => InsertRange(inst, newInst, newInst);
 
-        if (inst.Next != null) {
-            inst.Next.Prev = newInst;
-        } else {
-            Last = newInst;
+    /// <summary> Inserts a range of instructions into this block after pos (null means before the first instruction). </summary>
+    /// <param name="rangeFirst">The first instruction in the range.</param>
+    /// <param name="rangeLast">The last instruction in the range, or `first` if only one instruction is to be added.</param>
+    public void InsertRange(Instruction? pos, Instruction rangeFirst, Instruction rangeLast)
+    {
+        //Set parent block for range
+        for (var inst = rangeFirst; true; inst = inst.Next!) {
+            Ensure(inst.Block != this); //prevent creating cycles
+            inst.Block = this;
+            if (inst == rangeLast) break;
         }
-        inst.Next = newInst;
+
+        if (pos != null) {
+            rangeFirst.Prev = pos;
+            rangeLast.Next = pos.Next;
+
+            if (pos.Next != null) {
+                pos.Next.Prev = rangeLast;
+            } else {
+                Assert(pos == Last);
+                Last = rangeLast;
+            }
+            pos.Next = rangeFirst;
+        } else {
+            if (First != null) {
+                First.Prev = rangeLast;
+            }
+            rangeLast.Next = First;
+            rangeFirst.Prev = null;
+            First = rangeFirst;
+            Last ??= rangeLast;
+        }
         OnCodeChanged();
     }
-    
-    public void Remove(Instruction inst, bool removeOperUses = true)
+
+    /// <summary> Moves a range of instructions from this block to `newParent`, after `newParentPos`. </summary>
+    public void MoveRange(BasicBlock newParent, Instruction? newParentPos, Instruction first, Instruction last)
+    {
+        Ensure(newParentPos == null || newParentPos?.Block == newParent);
+        Ensure(first.Block == this && last.Block == this);
+
+        UnlinkRange(first, last);
+        newParent.InsertRange(newParentPos, first, last);
+        OnCodeChanged();
+    }
+
+    public void Remove(Instruction inst)
     {
         Ensure(inst.Block == this);
-        
-        if (inst.Prev != null) {
-            inst.Prev.Next = inst.Next;
-        } else {
-            First = inst.Next!;
-        }
+        inst.Block = null!; //prevent inst from being removed again
 
-        if (inst.Next != null) {
-            inst.Next.Prev = inst.Prev;
-        } else {
-            Last = inst.Prev!;
-        }
-
-        inst.Block = null!; //to ensure it can't be removed again
+        UnlinkRange(inst, inst);
         OnCodeChanged();
+    }
+
+    private void UnlinkRange(Instruction rangeFirst, Instruction rangeLast)
+    {
+        if (rangeFirst.Prev != null) {
+            rangeFirst.Prev.Next = rangeLast.Next;
+        } else {
+            First = rangeLast.Next!;
+        }
+        if (rangeLast.Next != null) {
+            rangeLast.Next.Prev = rangeFirst.Prev;
+        } else {
+            Last = rangeFirst.Prev!;
+        }
     }
 
     private void OnCodeChanged()
@@ -165,9 +171,8 @@ public class BasicBlock : Value
     }
 
     /// <summary>
-    /// Splits this block before the specified instruction.
-    /// This methods adds an unconditional branch to the new block before `pos`,
-    /// and moves instructions after it to the new block.
+    /// Splits this block, moving instructions starting from `pos` to the new block,
+    /// and adds a unconditional branch to the new block.
     /// Note that `pos` cannot be a PhiInst and it must be in this block.
     /// </summary>
     public BasicBlock Split(Instruction pos)
@@ -175,40 +180,28 @@ public class BasicBlock : Value
         Ensure(pos.Block == this && pos is not PhiInst);
 
         var newBlock = Method.CreateBlock();
-        var branchToNewBlock = new BranchInst(newBlock);
-        InsertBefore(pos, branchToNewBlock);
+        MoveRange(newBlock, null, pos, Last);
 
-        //Unlink previous instructions
-        if (pos.Prev != null) {
-            pos.Prev.Next = null;
-            pos.Prev = null;
-        }
-        //Move remaining instructions to the new block
-        newBlock.First = pos;
-        newBlock.Last = Last;
-        Last = branchToNewBlock;
-
-        foreach (var inst in newBlock) {
-            inst.Block = newBlock;
-        }
-        //Update edges
+        //Move edges to new block
         foreach (var succ in Succs) {
             succ.Preds.Remove(this);
             newBlock.Connect(succ);
         }
         Succs.Clear();
-        Connect(newBlock);
-
+        //Add branch to new block
+        SetBranch(newBlock);
         return newBlock;
     }
 
     /// <summary> 
-    /// Replaces the last instruction in the block with the specified branch and
-    /// update successors accordingly. 
+    /// Removes the last branch instruction from the block (if it exists),
+    /// then adds `br` and update successors accordingly.
     /// </summary>
     public void SetBranch(BranchInst br)
     {
-        Last?.Remove();
+        if (Last != null && Last.IsBranch) {
+            Last.Remove();
+        }
         InsertLast(br);
 
         //Disconnect successors
@@ -232,13 +225,16 @@ public class BasicBlock : Value
     }
 
     /// <summary> 
-    /// Removes this block from the parent method, and clear its edges. 
+    /// Removes this block from the parent method, and clear edges, and uses from child instruction operands. 
     /// Will throw if the use list is not empty.
     /// </summary>
     public void Remove()
     {
         Ensure(Uses.Count == 0);
 
+        foreach (var inst in this) {
+            inst.RemoveOperandUses();
+        }
         foreach (var succ in Succs) {
             succ.Preds.Remove(this);
         }

@@ -64,7 +64,11 @@ public abstract class Instruction : Value
     public void Remove()
     {
         Block?.Remove(this);
+        RemoveOperandUses();
+    }
 
+    internal void RemoveOperandUses()
+    {
         for (int i = 0; i < Operands.Length; i++) {
             Operands[i].RemoveUse(this, i);
         }

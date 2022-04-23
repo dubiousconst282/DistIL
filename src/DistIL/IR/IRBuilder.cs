@@ -57,58 +57,29 @@ public class IRBuilder
         _first = _last = null!;
     }
 
-    public void PrependInto(BasicBlock block) => MoveBefore(block, block.First);
-    public void AppendInto(BasicBlock block) => MoveAfter(block, block.Last);
-
-    public void MoveBefore(Instruction inst) => MoveBefore(inst.Block, inst);
-    public void MoveAfter(Instruction inst) => MoveAfter(inst.Block, inst);
-
-    public void MoveBefore(BasicBlock block, Instruction? pos)
+    public void PrependInto(BasicBlock block)
     {
-        if (_first == null) return;
-
-        if (pos != null) {
-            _last.Next = pos;
-            _first.Prev = pos.Prev;
-
-            if (pos.Prev != null) {
-                pos.Prev.Next = _first;
-            } else {
-                block.First = _first;
-            }
-            pos.Prev = _last;
-        } else {
-            block.First = _first;
+        if (_first != null) {
+            block.InsertRange(null, _first, _last);
         }
-        block.Last ??= _last;
+    }
+    public void AppendInto(BasicBlock block)
+    {
+        if (_first != null) {
+            block.InsertRange(block.Last, _first, _last);
+        }
     }
 
-    public void MoveAfter(BasicBlock block, Instruction? pos)
+    public void MoveBefore(Instruction inst)
     {
-        if (_first == null) return;
-        TransferTo(block);
-
-        if (pos != null) {
-            _first.Prev = pos;
-            _last.Next = pos.Next;
-
-            if (pos.Next != null) {
-                pos.Next.Prev = _last;
-            } else {
-                block.Last = _last;
-            }
-            pos.Next = _first;
-        } else {
-            block.Last = _last;
+        if (_first != null) {
+            inst.Block.InsertRange(inst.Prev, _first, _last);
         }
-        block.First ??= _first;
     }
-
-    private void TransferTo(BasicBlock block)
+    public void MoveAfter(Instruction inst)
     {
-        for (var inst = _first; inst != null; inst = inst.Next) {
-            Assert(inst.Block == null, "IRBuilder instruction is already owned by a block!");
-            inst.Block = block;
+        if (_first != null) {
+            inst.Block.InsertRange(inst, _first, _last);
         }
     }
 }

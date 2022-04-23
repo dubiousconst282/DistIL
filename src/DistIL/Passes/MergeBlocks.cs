@@ -6,28 +6,23 @@ public class MergeBlocks : Pass
 {
     public override void Transform(Method method)
     {
-        var visited = new HashSet<BasicBlock>();
-        var pending = new ArrayStack<BasicBlock>();
-        pending.Push(method.EntryBlock);
+        bool changed = true;
+        while (changed) {
+            changed = false;
 
-        while (pending.TryPop(out var block)) {
-            //Merge blocks with single preds that jumps into them
-            //  BB_01:
-            //    ...
-            //    goto BB_02
-            //  BB_02: //preds=BB_01
-            //    ...
-            while (MergeSingleSucc(block) || ForwardJump(block));
-
-            //Visit successors
-            foreach (var succ in block.Succs) {
-                if (visited.Add(succ)) {
-                    pending.Push(succ);
-                }
+            foreach (var block in method) {
+                changed |= MergeSingleSucc(block);
+                changed |= ForwardJump(block);
             }
         }
     }
 
+    //Merge blocks with single preds that jumps into them
+    //  BB_01:
+    //    ...
+    //    goto BB_02
+    //  BB_02: //preds=BB_01
+    //    ...
     public static bool MergeSingleSucc(BasicBlock b1)
     {
         if (!(b1.Succs.Count == 1 && b1.Succs[0].Preds.Count == 1)) return false;
@@ -39,18 +34,8 @@ public class MergeBlocks : Pass
 
         //Remove "goto b2" from b1
         b1.Last.Remove();
-
         //Move instructions in b2 to b1
-        foreach (var inst in b2) {
-            inst.Block = b1;
-        }
-        if (b1.Last != null) {
-            b1.Last.Next = b2.First;
-            b2.First.Prev = b1.Last;
-        } else {
-            b1.First = b2.First;
-        }
-        b1.Last = b2.Last;
+        b2.MoveRange(b1, b1.Last, b2.First, b2.Last);
 
         //Forward edges
         b1.Succs.Remove(b2);
@@ -63,10 +48,16 @@ public class MergeBlocks : Pass
         return true;
     }
 
+    //Forwards unconditional jumps
+    //  BB_01:
+    //    ...
+    //    goto BB_02
+    //  BB_02: //preds=BB_01
+    //    goto BB_03
     public static bool ForwardJump(BasicBlock b1)
     {
         if (!(b1.Preds.Count == 1 && b1.Succs.Count == 1)) return false;
-        if (!(b1.First is BranchInst { IsJump: true } br)) return false;
+        if (!(b1.First is BranchInst br)) return false;
 
         var pred = b1.Preds[0];
         var succ = b1.Succs[0];
@@ -78,15 +69,9 @@ public class MergeBlocks : Pass
         //We can remove either B1 or B2, but not both.
         //TODO: we can still remove it (and dedup edges) if there's no phi in succ.
         if (succ.Preds.Contains(pred)) return false;
-
-        pred.Succs.Remove(b1);
-        pred.Succs.Add(succ);
-
-        succ.Preds.Remove(b1);
-        succ.Preds.Add(pred);
+        pred.Reconnect(b1, succ);
 
         foreach (var (inst, operIdx) in b1.Uses.ToArray()) {
-            Assert(inst.Block == pred || inst.Block == succ);
             var replBlock = inst is PhiInst ? pred : succ;
             inst.ReplaceOperand(operIdx, replBlock);
         }

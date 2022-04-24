@@ -135,7 +135,7 @@ internal class BlockState
             switch (opcode) {
                 #region Load Const
                 case >= ILCode.Ldc_I4_M1 and <= ILCode.Ldc_I4_8:
-                    ImportConst(ConstInt.CreateI(opcode - ILCode.Ldc_I4_0));
+                    ImportConst(ConstInt.CreateI((int)opcode - (int)ILCode.Ldc_I4_0));
                     break;
                 case ILCode.Ldc_I4_S:
                 case ILCode.Ldc_I4:

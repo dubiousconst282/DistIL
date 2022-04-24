@@ -21,29 +21,33 @@ public class BinaryInst : Instruction
     public BinaryInst(BinaryOp op, Value left, Value right)
         : base(left, right)
     {
-        var lt = left.ResultType;
-        var rt = right.ResultType;
-        var res = lt;
-
-        //Restrict operands to the same type, but special case pointers and byrefs mixed with integers
-        if (lt != rt) {
-            res = null;
-            bool isRefL = lt is ByrefType;
-            bool isRefR = rt is ByrefType;
-            bool isOfsL = lt.StackType is StackType.Int or StackType.NInt;
-            bool isOfsR = rt.StackType is StackType.Int or StackType.NInt;
-
-            //ref + int | ref - int
-            if (isRefL && isOfsR && op is BinaryOp.Add or BinaryOp.Sub) res = lt;
-            else //int + ref
-            if (isOfsL && isRefR && op is BinaryOp.Add) res = rt;
-            else //no restriction for unmanaged pointers (they're nint on eval stack)
-            if (isOfsL || isOfsR) res = rt.StackType > lt.StackType || rt is PointerType ? rt : lt; //select nint/ptr over int
-
-            Ensure(res != null, "Invalid operand types for BinaryInst");
-        }
-        ResultType = res;
+        ResultType = GetResultType(op, left.ResultType, right.ResultType);
         Op = op;
+    }
+
+    private static RType GetResultType(BinaryOp op, RType a, RType b)
+    {
+        //ECMA335 III.1.5
+        var sa = a.StackType;
+        var sb = b.StackType;
+
+        //Sort sa, sb to reduce number of cases,
+        //such that sa <= sb with order [int long nint float nint byref]
+        if (sa > sb) (sa, sb) = (sb, sa);
+
+        #pragma warning disable format
+        return (sa, sb, op) switch {
+            (StackType.Int,     StackType.Int, _)   => PrimType.Int32,
+            (StackType.Long,    StackType.Long, _)  => PrimType.Int64,
+            (StackType.Float,   StackType.Float, _) => a == PrimType.Double ? a : b, //pick double over float
+            (StackType.NInt,    StackType.NInt, _)  => a == b ? a : PrimType.IntPtr, //pick pointer over nint
+            (StackType.ByRef,   StackType.ByRef, BinaryOp.Sub) => PrimType.IntPtr,   //& - & = nint
+            //& + int/nint = &
+            (StackType.ByRef,   StackType.Int or StackType.NInt, BinaryOp.Add or BinaryOp.AddOvf)
+                    => a,
+            _ => throw new InvalidOperationException("Invalid operand types in BinaryInst")
+        };
+        #pragma warning restore format
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);

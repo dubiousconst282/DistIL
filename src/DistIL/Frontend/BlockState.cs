@@ -189,27 +189,27 @@ internal class BlockState
                 #endregion
 
                 #region Arithmetic/Bitwise
-                case ILCode.Add:    ImportBinary(ILCode.Add, BinaryOp.Add, BinaryOp.FAdd); break;
-                case ILCode.Sub:    ImportBinary(ILCode.Sub, BinaryOp.Sub, BinaryOp.FSub); break;
-                case ILCode.Mul:    ImportBinary(ILCode.Mul, BinaryOp.Mul, BinaryOp.FMul); break;
-                case ILCode.Div:    ImportBinary(ILCode.Div, BinaryOp.SDiv, BinaryOp.FDiv); break;
-                case ILCode.Rem:    ImportBinary(ILCode.Rem, BinaryOp.SRem, BinaryOp.FRem); break;
-                case ILCode.Div_Un: ImportBinary(ILCode.Div, BinaryOp.UDiv); break;
-                case ILCode.Rem_Un: ImportBinary(ILCode.Rem, BinaryOp.URem); break;
+                case ILCode.Add:        ImportBinary(BinaryOp.Add, BinaryOp.FAdd); break;
+                case ILCode.Sub:        ImportBinary(BinaryOp.Sub, BinaryOp.FSub); break;
+                case ILCode.Mul:        ImportBinary(BinaryOp.Mul, BinaryOp.FMul); break;
+                case ILCode.Div:        ImportBinary(BinaryOp.SDiv, BinaryOp.FDiv); break;
+                case ILCode.Rem:        ImportBinary(BinaryOp.SRem, BinaryOp.FRem); break;
+                case ILCode.Div_Un:     ImportBinary(BinaryOp.UDiv); break;
+                case ILCode.Rem_Un:     ImportBinary(BinaryOp.URem); break;
 
-                case ILCode.And:    ImportBinary(ILCode.And, BinaryOp.And); break;
-                case ILCode.Or:     ImportBinary(ILCode.Or,  BinaryOp.Or); break;
-                case ILCode.Xor:    ImportBinary(ILCode.Xor, BinaryOp.Xor); break;
-                case ILCode.Shl:    ImportBinary(ILCode.Shl, BinaryOp.Shl); break;
-                case ILCode.Shr:    ImportBinary(ILCode.Shr, BinaryOp.Shra); break;
-                case ILCode.Shr_Un: ImportBinary(ILCode.Shr_Un, BinaryOp.Shrl); break;
+                case ILCode.And:        ImportBinary(BinaryOp.And); break;
+                case ILCode.Or:         ImportBinary(BinaryOp.Or); break;
+                case ILCode.Xor:        ImportBinary(BinaryOp.Xor); break;
+                case ILCode.Shl:        ImportBinary(BinaryOp.Shl); break;
+                case ILCode.Shr:        ImportBinary(BinaryOp.Shra); break;
+                case ILCode.Shr_Un:     ImportBinary(BinaryOp.Shrl); break;
 
-                case ILCode.Add_Ovf:      ImportBinaryOvf(ILCode.Add, BinaryOp.AddOvf); break;
-                case ILCode.Add_Ovf_Un:   ImportBinaryOvf(ILCode.Add, BinaryOp.UAddOvf); break;
-                case ILCode.Sub_Ovf:      ImportBinaryOvf(ILCode.Sub, BinaryOp.SubOvf); break;
-                case ILCode.Sub_Ovf_Un:   ImportBinaryOvf(ILCode.Sub, BinaryOp.USubOvf); break;
-                case ILCode.Mul_Ovf:      ImportBinaryOvf(ILCode.Mul, BinaryOp.MulOvf); break;
-                case ILCode.Mul_Ovf_Un:   ImportBinaryOvf(ILCode.Mul, BinaryOp.UMulOvf); break;
+                case ILCode.Add_Ovf:    ImportBinary(BinaryOp.AddOvf); break;
+                case ILCode.Add_Ovf_Un: ImportBinary(BinaryOp.UAddOvf); break;
+                case ILCode.Sub_Ovf:    ImportBinary(BinaryOp.SubOvf); break;
+                case ILCode.Sub_Ovf_Un: ImportBinary(BinaryOp.USubOvf); break;
+                case ILCode.Mul_Ovf:    ImportBinary(BinaryOp.MulOvf); break;
+                case ILCode.Mul_Ovf_Un: ImportBinary(BinaryOp.UMulOvf); break;
 
                 case ILCode.Neg:
                 case ILCode.Not:
@@ -475,62 +475,14 @@ internal class BlockState
         Push(new VarAddrInst(variable));
     }
 
-    private void ImportBinary(ILCode code, BinaryOp op, BinaryOp opFlt = (BinaryOp)(-1))
+    private void ImportBinary(BinaryOp op, BinaryOp opFlt = (BinaryOp)(-1))
     {
         var right = Pop();
         var left = Pop();
 
-        var resultType = GetResultType(code, left.ResultType, right.ResultType)
-            ?? throw new InvalidProgramException();
-
-        //TODO: convert left,right to resultType (BinaryInst only accepts operands of the same type)
-        //TODO: unsigned types
-        if (resultType.StackType == StackType.Float) {
+        if (left.ResultType.StackType == StackType.Float || right.ResultType.StackType == StackType.Float) {
             op = opFlt >= 0 ? opFlt : throw new InvalidProgramException();
         }
-        Push(new BinaryInst(op, left, right));
-
-        static RType? GetResultType(ILCode code, RType a, RType b)
-        {
-            //ECMA335 III.1.5
-            var sa = a.StackType;
-            var sb = b.StackType;
-
-            if (sa == StackType.Int) {
-                //int : int = int
-                //int : nint = nint
-                //int : & = &
-                return sb == StackType.Int ? a : 
-                       code == ILCode.Add && (sb == StackType.NInt || sb == StackType.ByRef) ? b : null;
-            }
-            if (sa == StackType.Long || sa == StackType.Float) {
-                //int64 : int64 = int64
-                //float : float = float
-                return sb == sa ? a : null;
-            }
-            if (sa == StackType.NInt) {
-                //nint : int = nint
-                //nint : nint = nint
-                //nint + & = &
-                return sb == StackType.NInt || sb == StackType.Int ? a :
-                       code == ILCode.Add && sb == StackType.ByRef ? b : null;
-            }
-            if (sa == StackType.ByRef) {
-                //& +- int = &
-                //& +- nint = &
-                //& - & = nint
-                return (sb == StackType.NInt || sb == StackType.Int) && (code == ILCode.Add || code == ILCode.Sub) ? a :
-                       sb == StackType.ByRef && code == ILCode.Sub ? PrimType.IntPtr : null;
-            }
-            return null;
-        }
-    }
-    private void ImportBinaryOvf(ILCode code, BinaryOp op)
-    {
-        var right = Pop();
-        var left = Pop();
-
-        Assert(left.ResultType == right.ResultType); //TODO: check BinaryInst overflow operand types
         Push(new BinaryInst(op, left, right));
     }
 

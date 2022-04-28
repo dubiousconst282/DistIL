@@ -117,12 +117,13 @@ public class MethodBody
         var opcode = (ILCode)code;
         object? operand = opcode.GetOperandType() switch {
             ILOperandType.BrTarget => reader.ReadInt32() + reader.Offset,
-            ILOperandType.Field => mod.GetField(MetadataTokens.EntityHandle(reader.ReadInt32())),
-            ILOperandType.Method => mod.GetMethod(MetadataTokens.EntityHandle(reader.ReadInt32())),
-            ILOperandType.Sig => throw new NotImplementedException(),
+            ILOperandType.Field or
+            ILOperandType.Method or
+            ILOperandType.Sig or
+            ILOperandType.Tok or
+            ILOperandType.Type 
+                => DecodeEntity(mod, reader.ReadInt32()),
             ILOperandType.String => mod.Reader.GetUserString(MetadataTokens.UserStringHandle(reader.ReadInt32())),
-            ILOperandType.Tok => throw new NotImplementedException(),
-            ILOperandType.Type => mod.GetType(MetadataTokens.EntityHandle(reader.ReadInt32())),
             ILOperandType.I => reader.ReadInt32(),
             ILOperandType.I8 => reader.ReadInt64(),
             ILOperandType.R => reader.ReadDouble(),
@@ -140,6 +141,23 @@ public class MethodBody
             Operand = operand
         };
 
+        static object DecodeEntity(ModuleDef mod, int token)
+        {
+            var handle = MetadataTokens.EntityHandle(token);
+            return handle.Kind switch {
+                HandleKind.TypeDefinition or 
+                HandleKind.TypeReference or 
+                HandleKind.TypeSpecification
+                    => mod.GetType(handle),
+                HandleKind.MethodDefinition
+                    => mod.GetMethod(handle),
+                HandleKind.FieldDefinition
+                    => mod.GetField(handle),
+                HandleKind.MemberReference
+                    => mod.GetMember((MemberReferenceHandle)handle),
+                _ => throw new InvalidOperationException()
+            };
+        }
         static int[] ReadJumpTable(ref BlobReader reader)
         {
             int count = reader.ReadInt32();

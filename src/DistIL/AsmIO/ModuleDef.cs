@@ -58,7 +58,7 @@ public class ModuleDef : EntityDef
     {
         return handle.Kind switch {
             HandleKind.TypeDefinition => GetType((TypeDefinitionHandle)handle),
-            HandleKind.TypeReference => ResolveType((TypeReferenceHandle)handle),
+            HandleKind.TypeReference => GetOrResolveType((TypeReferenceHandle)handle),
             HandleKind.TypeSpecification => GetTypeSpec((TypeSpecificationHandle)handle),
             _ => throw new NotSupportedException()
         };
@@ -80,7 +80,7 @@ public class ModuleDef : EntityDef
     {
         return handle.Kind switch {
             HandleKind.MethodDefinition => GetEntity(_methodDefs, handle) ??= new MethodDef(this, (MethodDefinitionHandle)handle),
-            HandleKind.MemberReference => ResolveMethod((MemberReferenceHandle)handle),
+            HandleKind.MemberReference => (MethodDef)GetMember((MemberReferenceHandle)handle),
             _ => throw new NotSupportedException()
         };
     }
@@ -89,12 +89,26 @@ public class ModuleDef : EntityDef
     {
         return handle.Kind switch {
             HandleKind.FieldDefinition => GetEntity(_fieldDefs, handle) ??= new FieldDef(this, (FieldDefinitionHandle)handle),
-            HandleKind.MemberReference => ResolveField((MemberReferenceHandle)handle),
+            HandleKind.MemberReference => (FieldDef)GetMember((MemberReferenceHandle)handle),
             _ => throw new NotSupportedException()
         };
     }
 
-    private ModuleDef ResolveAsm(AssemblyReferenceHandle handle)
+    public MemberDef GetMember(MemberReferenceHandle handle)
+    {
+        ref var entity = ref GetEntity(_resolvedMemberRefs, handle);
+        if (entity != null) {
+            return entity;
+        }
+        var info = Reader.GetMemberReference(handle);
+        return entity = info.GetKind() switch {
+            MemberReferenceKind.Field => ResolveField(info),
+            MemberReferenceKind.Method => ResolveMethod(info),
+            _ => throw new InvalidOperationException()
+        };
+    }
+
+    private ModuleDef GetOrResolveAsm(AssemblyReferenceHandle handle)
     {
         ref var entity = ref GetEntity(_resolvedAsmRefs, handle);
         if (entity != null) {
@@ -104,7 +118,7 @@ public class ModuleDef : EntityDef
         return entity = Resolver.Resolve(info.GetAssemblyName());
     }
 
-    private TypeDef ResolveType(TypeReferenceHandle handle)
+    private TypeDef GetOrResolveType(TypeReferenceHandle handle)
     {
         ref var entity = ref GetEntity(_resolvedTypeRefs, handle);
         if (entity != null) {
@@ -122,21 +136,15 @@ public class ModuleDef : EntityDef
         throw new InvalidOperationException($"Could not resolve referenced type '{typeName}'");
     }
 
-    private MethodDef ResolveMethod(MemberReferenceHandle handle)
+    private MethodDef ResolveMethod(MemberReference info)
     {
-        ref var entity = ref GetEntity(_resolvedMemberRefs, handle);
-        if (entity != null) {
-            return (MethodDef)entity;
-        }
-        var info = Reader.GetMemberReference(handle);
-        var parent = ResolveType((TypeReferenceHandle)info.Parent);
+        var parent = GetOrResolveType((TypeReferenceHandle)info.Parent);
 
         string name = Reader.GetString(info.Name);
         var signature = info.DecodeMethodSignature(TypeProvider, default);
 
         foreach (var method in parent.Methods) {
             if (method.Name == name && ArgTypesEqual(method, signature.ParameterTypes)) {
-                entity = method;
                 return method;
             }
             //TODO: check base types
@@ -153,21 +161,15 @@ public class ModuleDef : EntityDef
         return args1.SequenceEqual(types.AsSpan());
     }
 
-    private FieldDef ResolveField(MemberReferenceHandle handle)
+    private FieldDef ResolveField(MemberReference info)
     {
-        ref var entity = ref GetEntity(_resolvedMemberRefs, handle);
-        if (entity != null) {
-            return (FieldDef)entity;
-        }
-        var info = Reader.GetMemberReference(handle);
-        var parent = ResolveType((TypeReferenceHandle)info.Parent);
+        var parent = GetOrResolveType((TypeReferenceHandle)info.Parent);
 
         string name = Reader.GetString(info.Name);
         var type = info.DecodeFieldSignature(TypeProvider, default);
 
         foreach (var field in parent.Fields) {
             if (field.Name == name && field.Type == type) {
-                entity = field;
                 return field;
             }
         }
@@ -191,7 +193,7 @@ public class ModuleDef : EntityDef
             impl = parent.GetNestedType(name);
             scope = parent;
         } else {
-            var asm = ResolveAsm((AssemblyReferenceHandle)info.Implementation);
+            var asm = GetOrResolveAsm((AssemblyReferenceHandle)info.Implementation);
             impl = asm.FindType(ns, name);
             scope = asm;
         }
@@ -205,7 +207,7 @@ public class ModuleDef : EntityDef
         if (type != null) {
             return type;
         }
-        var scope = ResolveAsm(scopeHandle);
+        var scope = GetOrResolveAsm(scopeHandle);
         type = scope.FindType(ns, name);
         if (type != null) {
             SetRefAssembly(type, scope);
@@ -276,7 +278,7 @@ public class ModuleDef : EntityDef
     public IEnumerable<ModuleDef> GetReferencedAssemblies()
     {
         foreach (var asmHandle in Reader.AssemblyReferences) {
-            yield return ResolveAsm(asmHandle);
+            yield return GetOrResolveAsm(asmHandle);
         }
     }
 

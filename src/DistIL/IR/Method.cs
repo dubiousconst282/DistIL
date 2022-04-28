@@ -2,7 +2,6 @@ namespace DistIL.IR;
 
 public abstract class Method : Callsite
 {
-    private ImmutableArray<BasicBlock> _blocksPO;
     private SlotTracker? _slotTracker = null;
     private bool _slotsDirty = true;
 
@@ -11,7 +10,7 @@ public abstract class Method : Callsite
     public ReadOnlySpan<Argument> StaticArgs => Args.AsSpan(IsStatic ? 0 : 1);
 
     /// <summary> The entry block of this method. Should not have predecessors. </summary>
-    public BasicBlock EntryBlock { get; set; } = null!;
+    public BasicBlock EntryBlock { get; private set; } = null!;
     public int NumBlocks { get; private set; } = 0;
     private BasicBlock? _lastBlock; //Last block in the list
 
@@ -53,20 +52,11 @@ public abstract class Method : Callsite
         return false;
     }
 
-    /// <summary> Returns an array containing the method's blocks in DFS post order. </summary>
-    public ImmutableArray<BasicBlock> GetBlocksPostOrder()
+    public void ClearBlocks()
     {
-        if (_blocksPO.IsDefault) {
-            var blocks = ImmutableArray.CreateBuilder<BasicBlock>();
-
-            GraphTraversal.DepthFirst(
-                entry: EntryBlock,
-                getChildren: b => b.Succs,
-                postVisit: blocks.Add
-            );
-            _blocksPO = blocks.ToImmutable();
-        }
-        return _blocksPO;
+        EntryBlock = _lastBlock = null!;
+        NumBlocks = 0;
+        InvalidateBlocks();
     }
 
     public SlotTracker GetSlotTracker()
@@ -80,13 +70,11 @@ public abstract class Method : Callsite
     }
     public void InvalidateSlots()
     {
-        _slotTracker?.Clear();
         _slotsDirty = true;
     }
     //Called when a block is added/removed, to invalidate cached DFS lists and slots.
     internal void InvalidateBlocks()
     {
-        _blocksPO = default;
         InvalidateSlots();
     }
 

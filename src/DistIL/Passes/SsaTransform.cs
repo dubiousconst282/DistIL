@@ -13,7 +13,12 @@ public class SsaTransform : Pass
     public override void Transform(Method method)
     {
         var entryBlock = method.EntryBlock;
-        var blocks = method.GetBlocksPostOrder();
+        var blocks = new List<BasicBlock>();
+        GraphTraversal.DepthFirst(
+            entry: method.EntryBlock,
+            getChildren: b => b.Succs,
+            postVisit: blocks.Add
+        );
 
         //Init the definition map for arguments (set values to themselves)
         foreach (var arg in method.Args) {

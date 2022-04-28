@@ -64,12 +64,12 @@ public class PhiInst : Instruction
 
     public void RemoveArg(int index, bool removeTrivialPhi)
     {
+        if (removeTrivialPhi && NumArgs == 2) {
+            ReplaceWith(GetValue(1 - index), false);
+            return;
+        }
         Ensure(index >= 0 && index < NumArgs);
         RemoveOperands(index * 2, 2);
-
-        if (removeTrivialPhi && NumArgs == 1) {
-            ReplaceWith(GetValue(0), false);
-        }
     }
 
     public void RemoveArg(BasicBlock block, bool removeTrivialPhi) 

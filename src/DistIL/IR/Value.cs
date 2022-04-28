@@ -30,6 +30,16 @@ public abstract class Value
         }
         return false;
     }
+    internal bool RelocUse(Instruction user, int prevOperandIdx, int newOperandIdx)
+    {
+        foreach (ref var use in Uses.AsSpan()) {
+            if (use.Inst == user && use.OperandIdx == prevOperandIdx) {
+                use.OperandIdx = newOperandIdx;
+                return true;
+            }
+        }
+        return false;
+    }
 
     /// <summary> Replace uses of this value with `newValue`. Use list is cleared on return. </summary>
     public void ReplaceUses(Value newValue)
@@ -82,7 +92,7 @@ public abstract class Value
 public struct Use
 {
     public Instruction Inst { get; init; }
-    public int OperandIdx { get; init; }
+    public int OperandIdx { get; internal set; }
 
     public void Deconstruct(out Instruction inst, out int operandIdx)
         => (inst, operandIdx) = (Inst, OperandIdx);

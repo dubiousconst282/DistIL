@@ -4,6 +4,17 @@ using DistIL.IR;
 
 public class ConstFold : RewritePass
 {
+    private bool _phiArgRemoved; //whether a phi arg was removed and another pass must be run
+
+    public override void Transform(Method method)
+    {
+        while (true) {
+            _phiArgRemoved = false;
+            base.Transform(method);
+            if (!_phiArgRemoved) break;
+        }
+    }
+
     protected override Value Transform(IRBuilder ib, Instruction inst)
     {
         var result = inst switch {
@@ -19,8 +30,15 @@ public class ConstFold : RewritePass
     }
     protected override void LeaveBlock(BasicBlock block)
     {
-        if (block.Last is BranchInst { IsConditional: true } br && br.Cond is ConstInt c) {
-            block.SetBranch(c.Value != 0 ? br.Then : br.Else);
+        if (block.Last is BranchInst br && br.Cond is ConstInt c) {
+            bool cond = c.Value != 0;
+            block.SetBranch(cond ? br.Then : br.Else!);
+            var removedBlock = cond ? br.Else! : br.Then;
+
+            foreach (var phi in removedBlock.Phis()) {
+                phi.RemoveArg(block, true);
+                _phiArgRemoved = true;
+            }
         }
     }
 

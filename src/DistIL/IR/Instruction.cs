@@ -113,15 +113,19 @@ public abstract class Instruction : Value
     protected void RemoveOperands(int startIndex, int count)
     {
         Assert(startIndex >= 0 && startIndex + count <= Operands.Length);
-        for (int i = startIndex; i < startIndex + count; i++) {
-            Operands[i].RemoveUse(this, i);
-        }
+
+        var oldArr = Operands;
         var newArr = new Value[Operands.Length - count];
+
         if (startIndex > 0) {
-            Array.Copy(Operands, 0, newArr, 0, startIndex);
+            Array.Copy(oldArr, 0, newArr, 0, startIndex);
         }
-        if (startIndex + count < Operands.Length) {
-            Array.Copy(Operands, startIndex + count, newArr, startIndex, count);
+        for (int i = startIndex; i < startIndex + count; i++) {
+            oldArr[i].RemoveUse(this, i);
+        }
+        for (int i = startIndex + count; i < oldArr.Length; i++) {
+            oldArr[i].RelocUse(this, i, i - count);
+            newArr[i - count] = oldArr[i];
         }
         Operands = newArr;
     }

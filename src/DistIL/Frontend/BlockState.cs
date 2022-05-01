@@ -9,12 +9,12 @@ internal class BlockState
 {
     readonly ILImporter _importer;
     readonly MethodDef _method;
-    ModuleDef _mod => _method.Module;
+    private ModuleDef _mod => _method.Module;
 
-    public readonly BasicBlock Block;
+    public BasicBlock Block { get; }
     private ValueStack _stack;
 
-    /// <summary> Variables that were left in the stack after the execution of a predecessor block. </summary>
+    //Variables that were left in the stack after the execution of a predecessor block.
     private ValueStack? _entryStrack;
     private List<BlockState> _succStates = new();
 
@@ -118,13 +118,10 @@ internal class BlockState
             ILFlowControl.Return;
     }
 
-    /// <summary>
-    /// Translates the IL code into IR instructions. 
-    /// `code` contains all instructions in the method, but only the range `start`-`end` is imported.
-    /// </summary>
-    public void ImportCode(Span<ILInstruction> code, int start, int end)
+    /// <summary> Translates the IL code into IR instructions. </summary>
+    public void ImportCode(Span<ILInstruction> code)
     {
-        foreach (ref var inst in code[start..end]) {
+        foreach (ref var inst in code) {
             _currOffset = inst.Offset;
             var prefix = InstFlags.None;
             var opcode = inst.OpCode;
@@ -265,7 +262,7 @@ internal class BlockState
                     break;
                 case ILCode.Brtrue:
                 case ILCode.Brtrue_S:
-                    ImportUnaryBranch(ref inst, CompareOp.Ne, CompareOp.FOne);
+                    ImportUnaryBranch(ref inst, CompareOp.Ne, CompareOp.FUne);
                     break;
                 case ILCode.Beq_S:
                 case ILCode.Beq:
@@ -289,7 +286,7 @@ internal class BlockState
                     break;
                 case ILCode.Bne_Un_S:
                 case ILCode.Bne_Un:
-                    ImportBinaryBranch(ref inst, CompareOp.Ne, CompareOp.FOne);
+                    ImportBinaryBranch(ref inst, CompareOp.Ne, CompareOp.FUne);
                     break;
                 case ILCode.Bge_Un_S:
                 case ILCode.Bge_Un:
@@ -435,8 +432,8 @@ internal class BlockState
             }
         }
         //Fallthrough the next block
-        if (!IsTerminator(ref code[end - 1])) {
-            var succ = AddSucc(code[end].Offset);
+        if (!IsTerminator(ref code[^1])) {
+            var succ = AddSucc(code[^1].GetEndOffset());
             TerminateBlock(new BranchInst(succ));
         }
     }
@@ -460,20 +457,22 @@ internal class BlockState
 
     private void ImportVarLoad(int varIndex, bool isArg = false)
     {
-        var variable = _importer.GetVar(varIndex, isArg);
+        var variable = GetVar(varIndex, isArg);
         Push(new LoadVarInst(variable));
     }
     private void ImportVarStore(int varIndex, bool isArg = false)
     {
         var value = Pop();
-        var variable = _importer.GetVar(varIndex, isArg);
+        var variable = GetVar(varIndex, isArg);
         Emit(new StoreVarInst(variable, value));
     }
     private void ImportVarAddr(int varIndex, bool isArg = false)
     {
-        var variable = _importer.GetVar(varIndex, isArg);
+        var variable = GetVar(varIndex, isArg);
         Push(new VarAddrInst(variable));
     }
+    private Variable GetVar(int index, bool isArg)
+        => isArg ? _method.Args[index] : _method.Body!.Locals[index];
 
     private void ImportBinary(BinaryOp op, BinaryOp opFlt = (BinaryOp)(-1))
     {

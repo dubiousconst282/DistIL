@@ -1,68 +1,86 @@
 ﻿namespace DistIL.Frontend;
 
-using DistIL.IR;
 using DistIL.AsmIO;
+using ExceptionRegionKind = System.Reflection.Metadata.ExceptionRegionKind;
 
 public class ILImporter
 {
     public MethodDef Method { get; }
-    readonly MethodBody _body;
     readonly Dictionary<int, BlockState> _blocks = new();
 
     public ILImporter(MethodDef method)
     {
         Method = method;
-        _body = method.Body ?? throw new ArgumentException("Method has no body to import");
+        if (method.Body == null) {
+            throw new ArgumentException("Method has no body to import");
+        }
     }
 
     public void ImportCode()
     {
+        var body = Method.Body!;
         //Find leaders (block boundaries)
-        var code = _body.Instructions.AsSpan();
-        var leaders = FindLeaders(code);
+        var code = body.Instructions.AsSpan();
+        var leaders = FindLeaders(code, body.ExceptionRegions);
 
+        //Create blocks
+        int startOffset = 0;
+        foreach (int endOffset in leaders) {
+            _blocks[startOffset] = new BlockState(this, startOffset);
+            startOffset = endOffset;
+        }
         //Ensure that the entry block don't have predecessors
         if (leaders.Remove(0)) {
             var entryBlock = Method.CreateBlock();
             var firstBlock = GetBlock(0).Block;
             entryBlock.SetBranch(firstBlock);
         }
-        //Build CFG and import code
+        //Import blocks
         int startIndex = 0;
-        foreach (int endIndex in leaders) {
-            int offset = code[startIndex].Offset;
-            var block = GetBlock(offset);
-            block.ImportCode(code, startIndex, endIndex);
-
+        foreach (int endOffset in leaders) {
+            var block = GetBlock(code[startIndex].Offset);
+            int endIndex = FindIndex(code, endOffset);
+            block.ImportCode(code[startIndex..endIndex]);
             startIndex = endIndex;
         }
     }
 
-    //Returns a bitset containing all block starts (branch targets).
-    private BitSet FindLeaders(Span<ILInstruction> code)
+    //Returns a bitset containing instruction offsets marking block starts (branch targets).
+    private static BitSet FindLeaders(Span<ILInstruction> code, List<ExceptionRegion> ehRegions)
     {
-        var leaders = new BitSet(code.Length + 1);
-        leaders.Set(code.Length); //add a leader after the last inst to make the import loop simpler
+        int codeSize = code[^1].GetEndOffset();
+        var leaders = new BitSet(codeSize);
 
-        for (int i = 0; i < code.Length; i++) {
-            ref var inst = ref code[i];
+        foreach (ref var inst in code) {
             if (!BlockState.IsTerminator(ref inst)) continue;
 
             if (inst.Operand is int targetOffset) {
-                leaders.Set(FindIndex(code, targetOffset));
+                leaders.Set(targetOffset);
             }
             //switch
             else if (inst.Operand is int[] targetOffsets) {
                 foreach (int offset in targetOffsets) {
-                    leaders.Set(FindIndex(code, offset));
+                    leaders.Set(offset);
                 }
             }
-            leaders.Set(i + 1); //fallthrough
+            leaders.Set(inst.GetEndOffset()); //fallthrough
+        }
+
+        foreach (var region in ehRegions) {
+            leaders.Set(region.TryOffset);
+            leaders.Set(region.TryOffset + region.TryLength);
+
+            if (region.Kind == ExceptionRegionKind.Catch) {
+                leaders.Set(region.HandlerOffset);
+                leaders.Set(region.HandlerOffset + region.HandlerLength);
+            } else {
+                throw new NotImplementedException();
+            }
         }
         return leaders;
     }
     //Binary search to find instruction index using offset
-    private int FindIndex(Span<ILInstruction> code, int offset)
+    private static int FindIndex(Span<ILInstruction> code, int offset)
     {
         int start = 0;
         int end = code.Length - 1;
@@ -77,17 +95,13 @@ public class ILImporter
                 return mid;
             }
         }
+        //Special case last instruction
+        if (offset >= code[^1].Offset) {
+            return code.Length;
+        }
         throw new InvalidProgramException("Invalid instruction offset");
     }
 
     /// <summary> Gets or creates a block for the specified instruction offset. </summary>
-    internal BlockState GetBlock(int offset)
-    {
-        ref var state = ref _blocks.GetOrAddRef(offset);
-        state ??= new BlockState(this, offset);
-        return state;
-    }
-
-    internal Variable GetVar(int index, bool isArg) 
-        => isArg ? Method.Args[index] : _body.Locals[index];
+    internal BlockState GetBlock(int offset) => _blocks[offset];
 }

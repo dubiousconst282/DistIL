@@ -7,7 +7,7 @@ using DistIL.IR;
 /// <summary> Represents a generic type instantiation. </summary>
 public class TypeSpec : RType
 {
-    /// <summary> The generic type specification. </summary>
+    /// <summary> The generic type definition. </summary>
     public TypeDef GenericType { get; }
     public ImmutableArray<RType> GenericArgs { get; }
 
@@ -43,19 +43,19 @@ public class PlaceholderType : RType
     public override StackType StackType => StackType.Void;
 
     public override string? Namespace => null;
-    public override string Name => (IsMethodArg ? "!!" : "!") + Index;
+    public override string Name => (IsMethodParam ? "!!" : "!") + Index;
 
     public int Index { get; }
-    public bool IsMethodArg { get; }
+    public bool IsMethodParam { get; }
 
-    public PlaceholderType(int index, bool isMethodArg)
+    public PlaceholderType(int index, bool isMethodParam)
     {
         Index = index;
-        IsMethodArg = isMethodArg;
+        IsMethodParam = isMethodParam;
     }
 
     public override bool Equals(RType? other)
-        => other is PlaceholderType o && o.Index == Index && o.IsMethodArg == IsMethodArg;
+        => other is PlaceholderType o && o.Index == Index && o.IsMethodParam == IsMethodParam;
 }
 
 public struct GenericContext

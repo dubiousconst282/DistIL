@@ -23,8 +23,6 @@ public partial class ILGenerator : InstVisitor
         body.Instructions.AddRange(_asm.Bake());
         body.Locals.Clear();
         body.Locals.AddRange(_varTable.Keys);
-
-        System.IO.File.WriteAllText("../../logs/codegen.txt", _asm.ToString());
     }
 
     private void EmitBlock(BasicBlock block)

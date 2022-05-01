@@ -446,6 +446,22 @@ internal class ModuleWriter
                 enc.Type(GetEntityHandle(t), t.IsValueType);
                 break;
             }
+            case FuncPtrType t: {
+                var attrs =
+                    (t.HasExplicitThis ? FunctionPointerAttributes.HasExplicitThis : 0) |
+                    (t.IsInstance ? FunctionPointerAttributes.HasThis : 0);
+
+                var sigEnc = enc.FunctionPointer((SignatureCallingConvention)t.CallConv, attrs);
+                sigEnc.Parameters(t.ArgTypes.Length, out var retTypeEnc, out var paramsEnc);
+
+                EncodeType(retTypeEnc.Type(), t.RetType);
+
+                foreach (var argType in t.ArgTypes) {
+                    var paramEnc = paramsEnc.AddParameter();
+                    EncodeType(paramEnc.Type(), argType);
+                }
+                break;
+            }
             default: throw new NotImplementedException();
         }
     }

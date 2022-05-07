@@ -2,7 +2,7 @@ using System.Reflection.PortableExecutable;
 using System.IO;
 using DistIL.AsmIO;
 using DistIL.Frontend;
-using DistIL.IR;
+using DistIL.IR.Utils;
 using DistIL.CodeGen.Cil;
 
 using var stream = File.OpenRead("../TestSamples/CsSamples/bin/Debug/IRTests.dll");

@@ -83,6 +83,14 @@ public class SwitchInst : Instruction
     public BasicBlock GetTarget(int index) => (BasicBlock)Operands[index + 2];
     public void SetTarget(int index, BasicBlock block) => Operands[index + 2] = block;
 
+    /// <summary> Returns all target blocks in this switch, including the default (first element). </summary>
+    public IEnumerable<BasicBlock> GetTargets()
+    {
+        for (int i = 1; i < Operands.Length; i++) {
+            yield return (BasicBlock)Operands[i];
+        }
+    }
+
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
     public override void Print(StringBuilder sb, SlotTracker slotTracker)

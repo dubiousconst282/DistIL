@@ -1,4 +1,4 @@
-namespace DistIL.IR;
+namespace DistIL.IR.Utils;
 
 using System.Globalization;
 using System.Text.RegularExpressions;

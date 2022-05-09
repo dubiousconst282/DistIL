@@ -135,7 +135,7 @@ public abstract class Instruction : Value
     public override void PrintAsOperand(StringBuilder sb, SlotTracker slotTracker)
     {
         int? id = slotTracker.GetId(this);
-        sb.Append(id == null ? "v?" : "v" + id);
+        sb.Append(id == null ? "r?" : "r" + id);
     }
     public override void Print(StringBuilder sb, SlotTracker slotTracker)
     {

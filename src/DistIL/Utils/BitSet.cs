@@ -180,38 +180,36 @@ public sealed class BitSet : IEquatable<BitSet>
 
     public struct Enumerator
     {
+        ulong _word;
+        int _wordBitPos, _end;
         ulong[] _data;
-        int _index, _end;
 
-        public int Current => _index;
+        public int Current { get; private set; } = 0;
 
-        internal Enumerator(ulong[] data, int startIndex, int endIndex)
+        internal Enumerator(ulong[] data, int start, int end)
         {
-            Assert(startIndex >= 0 && (endIndex >> 6) <= data.Length);
+            Assert(start >= 0 && (end >> 6) <= data.Length);
             _data = data;
-            _index = startIndex - 1;
-            _end = endIndex;
+            _end = end;
+            
+            int wordIndex = start >> 6;
+            _word = (data[wordIndex] >> start) << start; //clear bits before `start % 64`
+            _wordBitPos = wordIndex << 6;
         }
 
         public bool MoveNext()
         {
-            if (_index >= _end) {
-                return false;
-            }
-            _index++;
-            int wordIndex = _index >> 6;
-            ulong word = _data[wordIndex] & (~0ul << _index); //mask out bits before `index % 64`
-
             while (true) {
-                if (word != 0) {
-                    _index = (wordIndex << 6) + BitOperations.TrailingZeroCount(word);
-                    return _index < _end;
+                if (_word != 0) {
+                    Current = _wordBitPos + BitOperations.TrailingZeroCount(_word);
+                    _word &= _word - 1; //clear lsb
+                    return Current < _end;
                 }
-                wordIndex++;
-                if (wordIndex >= _data.Length || wordIndex > (_end >> 6)) {
+                _wordBitPos += 64;
+                if (_wordBitPos >= _end) {
                     return false;
                 }
-                word = _data[wordIndex];
+                _word = _data[_wordBitPos >> 6];
             }
         }
 

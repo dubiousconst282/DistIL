@@ -84,11 +84,7 @@ public sealed class BitSet : IEquatable<BitSet>
     /// <summary> Checks if any bit is set between start (inclusive) and end (exclusive) </summary>
     public bool ContainsRange(int start, int end)
     {
-        Ensure(
-            (uint)end <= (uint)_len &&
-            start >= 0 && start <= end
-        );
-        return new Enumerator(_data, start, end).MoveNext();
+        return GetRangeEnumerator(start, end).MoveNext();
     }
 
     public void Intersect(BitSet other)
@@ -173,6 +169,14 @@ public sealed class BitSet : IEquatable<BitSet>
     }
 
     public Enumerator GetEnumerator() => new(_data, 0, _len);
+    public Enumerator GetRangeEnumerator(int start, int end)
+    {
+        Ensure(
+            (uint)end <= (uint)_len &&
+            start >= 0 && start <= end
+        );
+        return new Enumerator(_data, start, end);
+    }
 
     public struct Enumerator
     {
@@ -210,5 +214,7 @@ public sealed class BitSet : IEquatable<BitSet>
                 word = _data[wordIndex];
             }
         }
+
+        public Enumerator GetEnumerator() => this;
     }
 }

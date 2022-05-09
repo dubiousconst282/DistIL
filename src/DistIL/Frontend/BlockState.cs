@@ -20,6 +20,7 @@ internal class BlockState
 
     private InstFlags _prefixFlags = InstFlags.None;
     private int _startOffset, _currOffset;
+    private GuardInst? _activeGuard;
 
     public BlockState(ILImporter importer, int offset)
     {
@@ -31,20 +32,29 @@ internal class BlockState
         _startOffset = _currOffset = offset;
     }
 
-    private void Emit(Instruction inst)
+    public void Emit(Instruction inst)
     {
         inst.ILOffset = _currOffset;
         Block.InsertLast(inst);
     }
 
-    private void Push(Value value)
+    public void SetActiveGuard(GuardInst guard)
+    {
+        _activeGuard ??= guard;
+    }
+
+    public void PushNoEmit(Value value)
+    {
+        _stack.Push(value);
+    }
+    public void Push(Value value)
     {
         if (value is Instruction inst) {
             Emit(inst);
         }
         _stack.Push(value);
     }
-    private Value Pop()
+    public Value Pop()
     {
         return _stack.Pop();
     }
@@ -115,7 +125,8 @@ internal class BlockState
         return inst.FlowControl is
             ILFlowControl.Branch or
             ILFlowControl.CondBranch or
-            ILFlowControl.Return;
+            ILFlowControl.Return or
+            ILFlowControl.Throw;
     }
 
     /// <summary> Translates the IL code into IR instructions. </summary>
@@ -391,6 +402,21 @@ internal class BlockState
                     prefix = (InstFlags)(flags << (int)InstFlags.NoPrefixShift_);
                     break;
                 }
+                #endregion
+
+                #region Exception Leave/End/Throw
+                case ILCode.Leave:
+                case ILCode.Leave_S:
+                    ImportLeave((int)inst.Operand!);
+                    break;
+                case ILCode.Throw:
+                case ILCode.Rethrow:
+                    ImportThrow(opcode == ILCode.Rethrow);
+                    break;
+                case ILCode.Endfinally:
+                case ILCode.Endfilter:
+                    ImportContinue(opcode == ILCode.Endfilter);
+                    break;
                 #endregion
 
                 #region Intrinsics
@@ -687,6 +713,25 @@ internal class BlockState
         var value = isVoid ? null : Pop();
 
         Emit(new ReturnInst(value));
+    }
+
+    private void ImportLeave(int targetOffset)
+    {
+        Ensure(_activeGuard != null, "Cannot leave non protected region");
+        var targetBlock = AddSucc(targetOffset);
+        TerminateBlock(new LeaveInst(_activeGuard, targetBlock));
+    }
+    private void ImportContinue(bool isFromFilter)
+    {
+        Ensure(_activeGuard != null, "Cannot leave non protected region");
+        var filterResult = isFromFilter ? Pop() : null;
+        TerminateBlock(new ContinueInst(_activeGuard, filterResult));
+    }
+
+    private void ImportThrow(bool isRethrow)
+    {
+        var exception = isRethrow ? null : Pop();
+        TerminateBlock(new ThrowInst(exception));
     }
 
     private void ImportNewArray(RType elemType)

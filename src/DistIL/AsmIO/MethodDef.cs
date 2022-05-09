@@ -178,11 +178,11 @@ public class MethodBody
             list.Add(new() {
                 Kind = region.Kind,
                 CatchType = region.CatchType.IsNil ? null : mod.GetType(region.CatchType),
-                HandlerOffset = region.HandlerOffset,
-                HandlerLength = region.HandlerLength,
-                TryOffset = region.TryOffset,
-                TryLength = region.TryLength,
-                FilterOffset = region.FilterOffset
+                HandlerStart = region.HandlerOffset,
+                HandlerEnd = region.HandlerOffset + region.HandlerLength,
+                TryStart = region.TryOffset,
+                TryEnd = region.TryOffset + region.TryLength,
+                FilterStart = region.FilterOffset
             });
         }
         return list;
@@ -217,15 +217,32 @@ public struct ExceptionRegion
     public RType? CatchType { get; set; }
 
     /// <summary> Gets the starting IL offset of the exception handler. </summary>
-    public int HandlerOffset { get; set; }
-    /// <summary> Gets the length in bytes of the exception handler. </summary>
-    public int HandlerLength { get; set; }
+    public int HandlerStart { get; set; }
+    /// <summary> Gets the ending IL offset of the exception handler. </summary>
+    public int HandlerEnd { get; set; }
 
-    /// <summary> Gets the starting IL offset of the try block. </summary>
-    public int TryOffset { get; set; }
-    /// <summary> Gets the length in bytes of the try block.</summary>
-    public int TryLength { get; set; }
+    /// <summary> Gets the starting IL offset of the try region. </summary>
+    public int TryStart { get; set; }
+    /// <summary> Gets the ending IL offset of the try region. </summary>
+    public int TryEnd { get; set; }
 
-    /// <summary> Gets the IL offset of the start of the filter block, or -1 if the region is not a filter. </summary>
-    public int FilterOffset { get; set; }
+    /// <summary> Gets the starting IL offset of the filter region, or -1 if the region is not a filter. </summary>
+    public int FilterStart { get; set; }
+    /// <summary> Gets the ending IL offset of the filter region. This is an alias for `HandlerStart`. </summary>
+    public int FilterEnd => HandlerStart;
+
+    public override string ToString()
+    {
+        var sb = new StringBuilder();
+        sb.Append($"Try(IL_{TryStart:X4}-IL_{TryEnd:X4}) ");
+        sb.Append(Kind);
+        if (Kind == ExceptionRegionKind.Catch) {
+            sb.Append($"<{CatchType}>");
+        }
+        sb.Append($"(IL_{HandlerStart:X4}-IL_{HandlerEnd:X4})");
+        if (FilterStart >= 0) {
+            sb.Append($" Filter IL_{FilterStart:X4}");
+        }
+        return sb.ToString();
+    }
 }

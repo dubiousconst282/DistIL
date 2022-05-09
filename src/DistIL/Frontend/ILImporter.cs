@@ -1,6 +1,8 @@
 ﻿namespace DistIL.Frontend;
 
 using DistIL.AsmIO;
+using DistIL.IR;
+
 using ExceptionRegionKind = System.Reflection.Metadata.ExceptionRegionKind;
 
 public class ILImporter
@@ -19,23 +21,77 @@ public class ILImporter
     public void ImportCode()
     {
         var body = Method.Body!;
-        //Find leaders (block boundaries)
         var code = body.Instructions.AsSpan();
-        var leaders = FindLeaders(code, body.ExceptionRegions);
+        var ehRegions = body.ExceptionRegions;
+        var leaders = FindLeaders(code, ehRegions);
 
-        //Create blocks
+        CreateBlocks(leaders);
+        GuardRegions(leaders, ehRegions);
+        ImportBlocks(code, leaders);
+    }
+
+    private void CreateBlocks(BitSet leaders)
+    {
+        //Remove 0th label to avoid creating 2 blocks
+        bool firstHasPred = leaders.Remove(0);
+        var entryBlock = firstHasPred ? Method.CreateBlock() : null!;
+
         int startOffset = 0;
         foreach (int endOffset in leaders) {
             _blocks[startOffset] = new BlockState(this, startOffset);
             startOffset = endOffset;
         }
         //Ensure that the entry block don't have predecessors
-        if (leaders.Remove(0)) {
-            var entryBlock = Method.CreateBlock();
+        if (firstHasPred) {
             var firstBlock = GetBlock(0).Block;
             entryBlock.SetBranch(firstBlock);
         }
-        //Import blocks
+    }
+
+    private void GuardRegions(BitSet leaders, List<ExceptionRegion> ehRegions)
+    {
+        //I.12.4.2.5 Overview of exception handling
+        foreach (var region in ehRegions) {
+            var kind = region.Kind switch {
+                ExceptionRegionKind.Catch or
+                ExceptionRegionKind.Filter  => GuardKind.Catch,
+                ExceptionRegionKind.Finally => GuardKind.Finally,
+                ExceptionRegionKind.Fault   => GuardKind.Fault,
+                _ => throw new InvalidOperationException()
+            };
+            bool hasFilter = region.Kind == ExceptionRegionKind.Filter;
+
+            var handlerBlock = GetBlock(region.HandlerStart);
+            var filterBlock = hasFilter ? GetBlock(region.FilterStart) : null;
+            var guard = new GuardInst(kind, handlerBlock.Block, region.CatchType, filterBlock?.Block);
+            GetBlock(region.TryStart).Emit(guard);
+
+            //Push exception on handler block stack
+            if (kind == GuardKind.Catch) {
+                handlerBlock.PushNoEmit(guard);
+            }
+            if (hasFilter) {
+                filterBlock!.PushNoEmit(guard);
+            }
+            //Set active region for leave/endf* instructions
+            ActiveRegion(guard, region.TryStart, region.TryEnd);
+            ActiveRegion(guard, region.HandlerStart, region.HandlerEnd);
+        }
+
+        void ActiveRegion(GuardInst guard, int start, int end)
+        {
+            //leaders[0] is always unset at this point
+            if (start == 0) {
+                GetBlock(0).SetActiveGuard(guard);
+            }
+            foreach (int offset in leaders.GetRangeEnumerator(start, end)) {
+                GetBlock(offset).SetActiveGuard(guard);
+            }
+        }
+    }
+
+    private void ImportBlocks(Span<ILInstruction> code, BitSet leaders)
+    {
         int startIndex = 0;
         foreach (int endOffset in leaders) {
             var block = GetBlock(code[startIndex].Offset);
@@ -67,14 +123,14 @@ public class ILImporter
         }
 
         foreach (var region in ehRegions) {
-            leaders.Set(region.TryOffset);
-            leaders.Set(region.TryOffset + region.TryLength);
+            //Note: end offsets must have already been marked by leave/endfinally
+            leaders.Set(region.TryStart);
 
-            if (region.Kind == ExceptionRegionKind.Catch) {
-                leaders.Set(region.HandlerOffset);
-                leaders.Set(region.HandlerOffset + region.HandlerLength);
-            } else {
-                throw new NotImplementedException();
+            if (region.HandlerStart >= 0) {
+                leaders.Set(region.HandlerStart);
+            }
+            if (region.FilterStart >= 0) {
+                leaders.Set(region.FilterStart);
             }
         }
         return leaders;

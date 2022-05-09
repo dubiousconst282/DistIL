@@ -26,7 +26,7 @@ public class IRPrinter
             tw.Write("    <table border='0' cellborder='1' cellspacing='0' cellpadding='4'>\n");
             tw.Write("      <tr><td colspan='2' balign='left'>\n");
 
-            tw.Write($"{block}{(block == method.EntryBlock ? " (entry)" : "")}: <br/>\n");
+            tw.Write($"{block}: {(block == method.EntryBlock ? "//entry" : "")} <br/>\n");
             int i = 0;
             foreach (var inst in block) {
                 if (i++ != 0) tw.Write(" <br/>\n");
@@ -79,24 +79,41 @@ public class IRPrinter
     }
     public static void ExportPlain(Method method, TextWriter tw)
     {
-        var instSb = new StringBuilder();
+        var tmpSb = new StringBuilder();
         var slotTracker = method.GetSlotTracker();
 
         foreach (var block in method) {
-            tw.Write($"{block}{(block == method.EntryBlock ? " (entry)" : "")}:");
+            tw.Write($"{block}:");
             if (block.Preds.Count > 0) {
-                tw.Write(" //preds: ");
-                tw.Write(string.Join(" ", block.Preds));
+                tmpSb.Append("preds: ").AppendJoin(" ", block.Preds);
+            } else if (block == method.EntryBlock) {
+                tmpSb.Append("(entry)");
+            }
+
+            foreach (var use in block.Uses) {
+                if (use.Inst is GuardInst tryInst) {
+                    tmpSb.Append(block == tryInst.FilterBlock ? " filter <- " : $" {tryInst.Kind.ToString().ToLower()} <- ");
+                    use.Inst.PrintAsOperand(tmpSb, slotTracker);
+                }
+            }
+
+            if (tmpSb.Length > 0) {
+                tw.Write(" //");
+                if (tmpSb[0] == ' ') {
+                    tmpSb.Remove(0, 1);
+                }
+                tw.Write(tmpSb);
+                tmpSb.Clear();
             }
             tw.WriteLine();
 
             foreach (var inst in block) {
                 tw.Write("  ");
-                inst.Print(instSb, slotTracker);
-                instSb.Replace("\n", "\n  ");
+                inst.Print(tmpSb, slotTracker);
+                tmpSb.Replace("\n", "\n  ");
 
-                tw.WriteLine(instSb);
-                instSb.Clear();
+                tw.WriteLine(tmpSb);
+                tmpSb.Clear();
             }
         }
     }

@@ -31,5 +31,10 @@ public interface InstVisitor
 
     void Visit(PhiInst inst) => VisitDefault(inst);
 
+    void Visit(GuardInst inst) => VisitDefault(inst);
+    void Visit(LeaveInst inst) => VisitDefault(inst);
+    void Visit(ContinueInst inst) => VisitDefault(inst);
+    void Visit(ThrowInst inst) => VisitDefault(inst);
+
     protected void VisitDefault(Instruction inst) { }
 }

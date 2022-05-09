@@ -254,14 +254,16 @@ internal class ModuleWriter
         //Copy IL bytes to output blob
         new BlobWriter(enc.Instructions).WriteBytes(ilBytes);
 
-        //Copy exception regions
+        //Add exception regions
         foreach (var ehr in body.ExceptionRegions) {
             enc.ExceptionRegions.Add(
-                ehr.Kind,
-                ehr.TryOffset, ehr.TryLength,
-                ehr.HandlerOffset, ehr.HandlerLength,
-                ehr.CatchType == null ? default : GetTypeHandle(ehr.CatchType),
-                ehr.FilterOffset
+                kind: ehr.Kind,
+                tryOffset: ehr.TryStart,
+                tryLength: ehr.TryEnd - ehr.TryStart,
+                handlerOffset: ehr.HandlerStart,
+                handlerLength: ehr.HandlerEnd - ehr.HandlerStart,
+                catchType: ehr.CatchType == null ? default : GetTypeHandle(ehr.CatchType),
+                filterOffset: ehr.FilterStart
             );
         }
         return enc.Offset;

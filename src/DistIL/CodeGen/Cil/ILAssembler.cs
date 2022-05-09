@@ -1,21 +1,19 @@
 ﻿namespace DistIL.CodeGen.Cil;
 
-using System.Reflection.Metadata;
-
 using DistIL.AsmIO;
-using DistIL.IR;
 
 public class ILAssembler
 {
     ILInstruction[] _insts = new ILInstruction[16];
     int _pos;
+    int _stackDepth = 0, _maxStackDepth = 0;
 
     /// <summary> Creates a new empty label to be marked later with <see cref="MarkLabel(Label)"/>. </summary>
     public Label DefineLabel()
     {
         return new Label();
     }
-    /// <summary> Marks the label to point to the last added instruction. </summary>
+    /// <summary> Marks the label to point to the next instruction. </summary>
     public void MarkLabel(Label lbl)
     {
         Ensure(lbl._index < 0, "Label already marked");
@@ -39,12 +37,17 @@ public class ILAssembler
             Array.Resize(ref _insts, _insts.Length * 2);
         }
         _insts[_pos++] = new ILInstruction(op, operand);
+        _stackDepth += op.GetStackChange();
+        _maxStackDepth = Math.Max(_maxStackDepth, _stackDepth);
     }
 
-    public ArraySegment<ILInstruction> Bake()
+    public (ArraySegment<ILInstruction> Code, int MaxStack) Bake()
     {
         ComputeOffsets();
-        return new(_insts, 0, _pos);
+        return (
+            Code: new(_insts, 0, _pos),
+            MaxStack: _maxStackDepth
+        );
     }
 
     private void ComputeOffsets()

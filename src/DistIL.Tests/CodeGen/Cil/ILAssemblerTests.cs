@@ -1,5 +1,3 @@
-using System.Reflection.Metadata;
-
 using DistIL.AsmIO;
 using DistIL.CodeGen.Cil;
 
@@ -17,8 +15,8 @@ public class ILAssemblerTests
         asm.Emit(ILCode.Add);
         asm.Emit(ILCode.Ret);
 
-        var rawInsts = asm.Bake().ToArray();
-        var genInsts = rawInsts.Select(v => (v.Offset, v.OpCode, v.Operand));
+        var (code, maxStack) = asm.Bake();
+        var genInsts = code.Select(v => (v.Offset, v.OpCode, v.Operand));
 
         var expInsts = new (int, ILCode, object)[] {
             (0,  ILCode.Ldarg_0, null),
@@ -30,6 +28,7 @@ public class ILAssemblerTests
         };
 
         Assert.Equal(expInsts, genInsts);
+        Assert.Equal(3, maxStack);
     }
 
     [Fact]
@@ -53,8 +52,8 @@ public class ILAssemblerTests
         asm.MarkLabel(lblRet);
         asm.Emit(ILCode.Ret);
 
-        var rawInsts = asm.Bake().ToArray();
-        var genInsts = rawInsts.Select(v => (v.Offset, v.OpCode, v.Operand));
+        var (code, maxStack) = asm.Bake();
+        var genInsts = code.Select(v => (v.Offset, v.OpCode, v.Operand));
 
         var expInsts = new (int, ILCode, object)[] {
             (0, ILCode.Ldarg_1, null),
@@ -67,5 +66,6 @@ public class ILAssemblerTests
         };
 
         Assert.Equal(expInsts, genInsts);
+        Assert.Equal(2, maxStack);
     }
 }

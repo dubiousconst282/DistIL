@@ -19,10 +19,10 @@ public partial class ILGenerator : InstVisitor
             EmitBlock(block);
         }
         var body = method.Body!;
-        body.Instructions.Clear();
-        body.Instructions.AddRange(_asm.Bake());
-        body.Locals.Clear();
-        body.Locals.AddRange(_varTable.Keys);
+        var bakedAsm = _asm.Bake();
+        body.Instructions = bakedAsm.Code.ToList();
+        body.Locals = _varTable.Keys.ToList();
+        body.MaxStack = bakedAsm.MaxStack;
     }
 
     private void EmitBlock(BasicBlock block)
@@ -38,9 +38,8 @@ public partial class ILGenerator : InstVisitor
                 if (inst.HasResult) {
                     _asm.Emit(ILCode.Pop);
                 }
-            }
-            else if (inst.HasResult && NeedsTemp(inst)) {
-                var tempVar = new Variable(inst.ResultType, false, name: $"tmp" + _temps.Count);
+            } else if (inst.HasResult && NeedsTemp(inst)) {
+                var tempVar = new Variable(inst.ResultType, false, $"tmp" + _temps.Count);
                 _temps.Add(inst, tempVar);
 
                 inst.Accept(this);
@@ -235,21 +234,19 @@ public partial class ILGenerator : InstVisitor
 
     public void Visit(LoadFieldInst inst)
     {
-        EmitLoadOrStoreField(inst, ILCode.Ldfld, ILCode.Ldsfld);
+        if (!inst.IsStatic) {
+            Push(inst.Obj);
+        }
+        var code = inst.IsStatic ? ILCode.Ldsfld : ILCode.Ldfld;
+        _asm.Emit(code, inst.Field);
     }
     public void Visit(StoreFieldInst inst)
-    {
-        EmitLoadOrStoreField(inst, ILCode.Stfld, ILCode.Stsfld);
-    }
-    private void EmitLoadOrStoreField(FieldAccessInst inst, ILCode instanceCode, ILCode staticCode)
     {
         if (!inst.IsStatic) {
             Push(inst.Obj);
         }
-        if (inst is StoreFieldInst store) {
-            Push(store.Value);
-        }
-        var code = inst.IsStatic ? staticCode : instanceCode;
+        Push(inst.Value);
+        var code = inst.IsStatic ? ILCode.Stsfld : ILCode.Stfld;
         _asm.Emit(code, inst.Field);
     }
 

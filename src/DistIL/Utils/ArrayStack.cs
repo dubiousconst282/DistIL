@@ -59,4 +59,6 @@ public class ArrayStack<T>
         Unsafe.SkipInit(out value);
         return false;
     }
+
+    public Span<T>.Enumerator GetEnumerator() => _arr.AsSpan(0, _head).GetEnumerator();
 }

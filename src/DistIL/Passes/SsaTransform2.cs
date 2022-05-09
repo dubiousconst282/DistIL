@@ -2,12 +2,11 @@ namespace DistIL.Passes;
 
 using DistIL.IR;
 
-//Alternative SSA transform that uses the standard dominance frontier algorithm.
+//SSA transform implementation based on the standard dominance frontier algorithm.
 public class SsaTransform2 : Pass
 {
     Method _method = null!;
     DominatorTree _domTree = null!;
-    Dictionary<Variable, List<BasicBlock>> _defBlocks = new(); //var -> blocks assigning to var
     Dictionary<PhiInst, Variable> _phiDefs = new(); //phi -> variable
 
     public override void Transform(Method method)
@@ -15,51 +14,50 @@ public class SsaTransform2 : Pass
         _method = method;
         _domTree = new DominatorTree(_method);
 
-        FindDefs();
         InsertPhis();
         RenameDefs();
 
         PrunePhis();
-
-        _defBlocks.Clear();
         _phiDefs.Clear();
-    }
-
-    private void FindDefs()
-    {
-        foreach (var inst in _method.Instructions()) {
-            if (inst is StoreVarInst store) {
-                var list = _defBlocks.GetOrAddRef(store.Dest) ??= new();
-                list.Add(store.Block);
-            }
-        }
     }
 
     private void InsertPhis()
     {
-        //TODO: avoid inserting useless phis
-        var phiAdded = new HashSet<BasicBlock>();
-        var processed = new HashSet<BasicBlock>();
-        var pending = new Stack<BasicBlock>();
+        var varDefs = new Dictionary<Variable, ArrayStack<BasicBlock>>(); //var -> blocks assigning to var
 
-        var domFrontier = new DominanceFrontier(_domTree);
-
-        foreach (var (variable, defs) in _defBlocks) {
-            //Copy defs to pending stack (we do this to avoid keeping a whole HashSet for each variable)
-            foreach (var def in defs) {
-                if (processed.Add(def)) {
-                    pending.Push(def);
+        //Find variable definitions
+        foreach (var inst in _method.Instructions()) {
+            if (inst is StoreVarInst store) {
+                var worklist = varDefs.GetOrAddRef(store.Dest) ??= new();
+                //Add the block to the stack avoiding dupes
+                if (worklist.Count == 0 || worklist.Top != store.Block) {
+                    worklist.Push(store.Block);
                 }
             }
-            //Insert phis on the DF of each block in the pending stack
-            while (pending.TryPop(out var block)) {
+        }
+
+        var phiAdded = new HashSet<BasicBlock>(); //blocks where a phi has been added
+        var processed = new HashSet<BasicBlock>(); //blocks already visited in worklist
+        var domFrontier = new DominanceFrontier(_domTree);
+
+        //Insert phis
+        foreach (var (variable, worklist) in varDefs) {
+            //Avoid inserting phis for variables only assigned in a single block
+            if (worklist.Count == 1 && variable is not Argument) continue;
+
+            //Initialize processed set (we do this to avoid keeping a whole HashSet for each variable)
+            foreach (var def in worklist) {
+                processed.Add(def);
+            }
+            //Insert phis on the DF of each block in the worklist
+            while (worklist.TryPop(out var block)) {
                 foreach (var dom in domFrontier.Of(block)) {
                     if (phiAdded.Add(dom)) {
                         var phi = dom.AddPhi(variable.ResultType);
                         _phiDefs.Add(phi, variable);
 
                         if (processed.Add(dom)) {
-                            pending.Push(dom);
+                            worklist.Push(dom);
                         }
                     }
                 }
@@ -91,7 +89,7 @@ public class SsaTransform2 : Pass
 
         void RenameBlock(BasicBlock block)
         {
-            //Update defs for phis (they aren't assigned to real variables)
+            //Init phi defs
             foreach (var phi in block.Phis()) {
                 if (_phiDefs.TryGetValue(phi, out var variable)) {
                     PushDef(block, variable, phi);
@@ -162,7 +160,7 @@ public class SsaTransform2 : Pass
                 }
             }
         }
-        //Propagate usefulness
+        //Usefulness propagation
         while (propagationStack.TryPop(out var phi)) {
             for (int i = 0; i < phi.NumArgs; i++) {
                 if (phi.GetValue(i) is PhiInst otherPhi && usefulPhis.Add(otherPhi)) {

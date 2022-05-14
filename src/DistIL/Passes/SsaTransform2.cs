@@ -16,8 +16,8 @@ public class SsaTransform2 : Pass
 
         InsertPhis();
         RenameDefs();
-
         PrunePhis();
+
         _phiDefs.Clear();
     }
 
@@ -29,7 +29,7 @@ public class SsaTransform2 : Pass
         foreach (var inst in _method.Instructions()) {
             if (inst is StoreVarInst store) {
                 var worklist = varDefs.GetOrAddRef(store.Dest) ??= new();
-                //Add the block to the stack avoiding dupes
+                //Add parent block to the worklist, avoiding dupes
                 if (worklist.Count == 0 || worklist.Top != store.Block) {
                     worklist.Push(store.Block);
                 }
@@ -147,20 +147,25 @@ public class SsaTransform2 : Pass
         //Algorithm from the SSABook
         var usefulPhis = new HashSet<PhiInst>();
         var propagationStack = new ArrayStack<PhiInst>();
+        var pruneablePhis = new List<PhiInst>();
         //Initial marking phase
-        foreach (var phi in _phiDefs.Keys) {
-            if (IsTrivialPhi(phi)) {
-                phi.ReplaceWith(phi.GetValue(0), false);
-                continue;
-            }
-            foreach (var use in phi.Uses) {
-                if (use.Inst is not PhiInst && usefulPhis.Add(phi)) {
+        foreach (var block in _method) {
+            foreach (var phi in block.Phis()) {
+                //Remove phis with the same value in all args
+                if (IsTrivialPhi(phi)) {
+                    phi.ReplaceWith(phi.GetValue(0), false);
+                }
+                //Enqueue phis with dependencies from non-phi instructions
+                else if (HasStrongDependencies(phi)) {
                     propagationStack.Push(phi);
-                    break;
+                }
+                //This phi is not considered useful yet, enqueue for possible removal
+                else {
+                    pruneablePhis.Add(phi);
                 }
             }
         }
-        //Usefulness propagation
+        //Propagate usefulness
         while (propagationStack.TryPop(out var phi)) {
             for (int i = 0; i < phi.NumArgs; i++) {
                 if (phi.GetValue(i) is PhiInst otherPhi && usefulPhis.Add(otherPhi)) {
@@ -168,22 +173,31 @@ public class SsaTransform2 : Pass
                 }
             }
         }
-        //Pruning phase
-        foreach (var phi in _phiDefs.Keys) {
+        //Prune useless phis
+        foreach (var phi in pruneablePhis) {
             if (!usefulPhis.Contains(phi)) {
                 phi.Remove();
             }
         }
-    }
-
-    private bool IsTrivialPhi(PhiInst phi)
-    {
-        var value = phi.GetValue(0);
-        for (int i = 1; i < phi.NumArgs; i++) {
-            if (phi.GetValue(i) != value) {
-                return false;
+        
+        static bool IsTrivialPhi(PhiInst phi)
+        {
+            var value = phi.GetValue(0);
+            for (int i = 1; i < phi.NumArgs; i++) {
+                if (phi.GetValue(i) != value) {
+                    return false;
+                }
             }
+            return true;
         }
-        return true;
+        static bool HasStrongDependencies(PhiInst phi)
+        {
+            foreach (var use in phi.Uses) {
+                if (use.Inst is not PhiInst) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 }

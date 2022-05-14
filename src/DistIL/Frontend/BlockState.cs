@@ -12,10 +12,10 @@ internal class BlockState
     private ModuleDef _mod => _method.Module;
 
     public BasicBlock Block { get; }
-    private ValueStack _stack;
+    private ArrayStack<Value> _stack;
 
     //Variables that were left in the stack after the execution of a predecessor block.
-    private ValueStack? _entryStrack;
+    private ArrayStack<PhiInst>? _entryStack;
     private List<BlockState> _succStates = new();
 
     private InstFlags _prefixFlags = InstFlags.None;
@@ -27,7 +27,7 @@ internal class BlockState
         _importer = importer;
         _method = importer.Method;
         Block = _method.CreateBlock();
-        _stack = new ValueStack(_method.Body!.MaxStack);
+        _stack = new ArrayStack<Value>(_method.Body!.MaxStack);
 
         _startOffset = _currOffset = offset;
     }
@@ -80,42 +80,31 @@ internal class BlockState
     }
     private void PropagateStack()
     {
-        if (_stack.Count == 0) return;
+        var exitStack = _stack;
+        if (exitStack.Count == 0) return;
 
-        //Allocate temp variables to store the spilled values, 
-        //or reuse from another predecessor of a successor
-        var temps = _succStates
-                       .Select(s => s._entryStrack)
-                       .FirstOrDefault(s => s != null);
-
-        if (temps == null) {
-            temps = new ValueStack(_stack.Count);
-            foreach (var value in _stack) {
-                temps.Push(new Variable(value.ResultType));
-            }
-        } else {
-            //FIXME: III.1.8.1.3
-            var types1 = temps.Select(v => v.ResultType.StackType);
-            var types2 = _stack.Select(v => v.ResultType.StackType);
-            if (!types1.SequenceEqual(types2)) {
-                throw Error("Inconsistent evaluation stack between basic blocks.");
-            }
-        }
-        //Copy spilled values to temps
-        for (int i = 0; i < _stack.Count; i++) {
-            if (temps[i] != _stack[i]) {
-                Emit(new StoreVarInst((Variable)temps[i], _stack[i]));
-            }
-        }
-        //Propagate to successors
         foreach (var succ in _succStates) {
-            if (succ._entryStrack != null) {
-                Assert(succ._entryStrack.SequenceEqual(temps));
-                continue;
-            }
-            succ._entryStrack = temps;
-            foreach (Variable var in temps) {
-                succ.Push(new LoadVarInst(var));
+            var entryStack = succ._entryStack;
+
+            if (entryStack == null) {
+                //Create dummy phis
+                succ._entryStack = entryStack = new ArrayStack<PhiInst>(exitStack.Count);
+                foreach (var value in exitStack) {
+                    var phi = new PhiInst(new PhiArg(Block, value));
+                    entryStack.Push(phi);
+                    succ.Push(phi);
+                }
+            } else {
+                //Update phis
+                for (int i = 0; i < exitStack.Count; i++) {
+                    var phi = entryStack[i];
+                    var value = exitStack[i];
+                    //Ensure types are compatible (FIXME: III.1.8.1.3)
+                    if (value.ResultType.StackType != phi.ResultType.StackType) {
+                        throw Error("Inconsistent evaluation stack between basic blocks.");
+                    }
+                    phi.AddArg(Block, value);
+                }
             }
         }
     }

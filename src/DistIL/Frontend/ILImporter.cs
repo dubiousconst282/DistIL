@@ -9,6 +9,8 @@ public class ILImporter
 {
     public MethodDef Method { get; }
     readonly Dictionary<int, BlockState> _blocks = new();
+    //used to discover variables crossing try blocks/exposed address
+    internal VarFlags[] _varFlags;
 
     public ILImporter(MethodDef method)
     {
@@ -16,6 +18,8 @@ public class ILImporter
         if (method.Body == null) {
             throw new ArgumentException("Method has no body to import");
         }
+        int numVars = method.Args.Count + method.Body.Locals.Count;
+        _varFlags = new VarFlags[numVars];
     }
 
     public void ImportCode()
@@ -61,12 +65,14 @@ public class ILImporter
             };
             bool hasFilter = region.Kind == ExceptionRegionKind.Filter;
 
+            var startBlock = GetBlock(region.TryStart);
             var handlerBlock = GetBlock(region.HandlerStart);
             var filterBlock = hasFilter ? GetBlock(region.FilterStart) : null;
             var guard = new GuardInst(kind, handlerBlock.Block, region.CatchType, filterBlock?.Block);
-            GetBlock(region.TryStart).Emit(guard);
+            startBlock.Emit(guard);
+            startBlock.Block.Connect(handlerBlock.Block); //dummy edge to avoid unreachable blocks
 
-            //Push exception on handler block stack
+            //Push exception on handler/filter entry stack
             if (kind == GuardKind.Catch) {
                 handlerBlock.PushNoEmit(guard);
             }

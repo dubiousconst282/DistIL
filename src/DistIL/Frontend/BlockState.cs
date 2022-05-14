@@ -61,7 +61,7 @@ internal class BlockState
 
     private bool HasPrefix(InstFlags flag)
     {
-        return _prefixFlags.HasFlag(flag);
+        return (_prefixFlags & flag) == flag;
     }
 
     private BasicBlock AddSucc(int offset)
@@ -472,22 +472,31 @@ internal class BlockState
 
     private void ImportVarLoad(int varIndex, bool isArg = false)
     {
-        var variable = GetVar(varIndex, isArg);
+        var variable = GetVar(varIndex, isArg, VarFlags.Loaded);
         Push(new LoadVarInst(variable));
     }
     private void ImportVarStore(int varIndex, bool isArg = false)
     {
         var value = Pop();
-        var variable = GetVar(varIndex, isArg);
+        var variable = GetVar(varIndex, isArg, VarFlags.Stored);
         Emit(new StoreVarInst(variable, value));
     }
     private void ImportVarAddr(int varIndex, bool isArg = false)
     {
-        var variable = GetVar(varIndex, isArg);
+        var variable = GetVar(varIndex, isArg, VarFlags.AddrTaken);
         Push(new VarAddrInst(variable));
     }
-    private Variable GetVar(int index, bool isArg)
-        => isArg ? _method.Args[index] : _method.Body!.Locals[index];
+    private Variable GetVar(int index, bool isArg, VarFlags flagsToAdd)
+    {
+        var variable = isArg ? _method.Args[index] : _method.Body!.Locals[index];
+        ref var flags = ref _importer._varFlags[index + (isArg ? 0 : _method.NumArgs)];
+        flags |= flagsToAdd | (_activeGuard != null ? VarFlags.UsedInsideTry : VarFlags.UsedOutsideTry);
+
+        if ((flags & VarFlags.CrossesTry) == VarFlags.CrossesTry || (flags & VarFlags.AddrTaken) != 0) {
+            variable.IsExposed = true;
+        }
+        return variable;
+    }
 
     private void ImportBinary(BinaryOp op, BinaryOp opFlt = (BinaryOp)(-1))
     {
@@ -769,4 +778,32 @@ internal class BlockState
     {
         return new InvalidProgramException(msg);
     }
+}
+
+internal enum InstFlags
+{
+    None            = 0,
+
+    Unaligned       = 1 << 0,
+    Volatile        = 1 << 1,
+    Tailcall        = 1 << 2,
+    Constrained     = 1 << 3,
+    Readonly        = 1 << 4,
+
+    //Bits [16..23] are reserved for `no.` prefix
+    NoPrefixShift_  = 16,
+    NoTypeCheck     = 1 << 16,
+    NoRangeCheck    = 1 << 17,
+    NoNullCheck     = 1 << 18,
+}
+internal enum VarFlags
+{
+    None = 0,
+    Loaded          = 1 << 1,
+    Stored          = 1 << 2,
+    AddrTaken       = 1 << 3,
+    UsedInsideTry   = 1 << 4,
+    UsedOutsideTry  = 1 << 5,
+
+    CrossesTry = UsedInsideTry | UsedOutsideTry
 }

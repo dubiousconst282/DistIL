@@ -9,6 +9,11 @@ public class Variable : Value
     public RType Type => ResultType;
     public string? Name { get; set; }
     public bool IsPinned { get; set; }
+    /// <summary>
+    /// Whether this variable's address has been exposed, or if it is alive across try regions.
+    /// Setting to true disables SSA renaming.
+    /// </summary>
+    public bool IsExposed { get; set; }
 
     public Variable(RType type, bool isPinned = false, string? name = null)
     {

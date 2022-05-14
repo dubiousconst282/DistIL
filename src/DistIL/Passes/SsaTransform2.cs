@@ -27,7 +27,7 @@ public class SsaTransform2 : Pass
 
         //Find variable definitions
         foreach (var inst in _method.Instructions()) {
-            if (inst is StoreVarInst store) {
+            if (inst is StoreVarInst store && !store.Dest.IsExposed) {
                 var worklist = varDefs.GetOrAddRef(store.Dest) ??= new();
                 //Add parent block to the worklist, avoiding dupes
                 if (worklist.Count == 0 || worklist.Top != store.Block) {
@@ -96,13 +96,13 @@ public class SsaTransform2 : Pass
                 }
             }
             foreach (var inst in block.NonPhis()) {
-                //Update def
-                if (inst is StoreVarInst store) {
+                //Update latest def
+                if (inst is StoreVarInst store && !store.Dest.IsExposed) {
                     PushDef(block, store.Dest, store.Value);
                     store.Remove();
                 }
-                //Replace loads with most recent defs
-                else if (inst is LoadVarInst load) {
+                //Replace load with latest def
+                else if (inst is LoadVarInst load && !load.Source.IsExposed) {
                     var currDef = ReadDef(load.Source);
                     load.ReplaceWith(currDef);
                 }

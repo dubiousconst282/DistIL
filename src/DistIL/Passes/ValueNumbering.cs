@@ -25,6 +25,7 @@ public class ValueNumbering : Pass
                 LoadArrayInst c     => (TagKind.Array,    c,        null),
                 StoreArrayInst c    => (TagKind.Array,    c,        c.Value),
                 BinaryInst c        => (TagKind.Binary,   c,        c),
+                UnaryInst c         => (TagKind.Unary,    c,        c),
                 _ => default
             };
             #pragma warning restore format
@@ -32,7 +33,7 @@ public class ValueNumbering : Pass
 
             var tag = new Tag() { Kind = info.kind, Source = info.src };
 
-            if (info.newVal == null || info.kind == TagKind.Binary) {
+            if (info.newVal == null || info.kind is TagKind.Binary or TagKind.Unary) {
                 if (tags.TryGetValue(tag, out var currValue)) {
                     inst.ReplaceWith(currValue);
                 } else {
@@ -55,17 +56,16 @@ public class ValueNumbering : Pass
                 TagKind.Field or TagKind.Var => other.Source == Source,
                 TagKind.Array => ArrEq((ArrayAccessInst)Source, (ArrayAccessInst)other.Source),
                 TagKind.Binary => BinEq((BinaryInst)Source, (BinaryInst)other.Source),
+                TagKind.Unary => UnEq((UnaryInst)Source, (UnaryInst)other.Source),
                 _ => false
             };
             static bool ArrEq(ArrayAccessInst a, ArrayAccessInst b)
-            {
-                return a.Array == b.Array && a.Index == b.Index &&
-                       a.Flags == b.Flags && a.ElemType == b.ElemType;
-            }
+                => a.Array == b.Array && a.Index == b.Index &&
+                   a.Flags == b.Flags && a.ElemType == b.ElemType;
             static bool BinEq(BinaryInst a, BinaryInst b)
-            {
-                return a.Op == b.Op && a.Left == b.Left && a.Right == b.Right;
-            }
+                => a.Op == b.Op && a.Left.Equals(b.Left) && a.Right.Equals(b.Right);
+            static bool UnEq(UnaryInst a, UnaryInst b)
+                => a.Op == b.Op && a.Value.Equals(b.Value);
         }
 
         public override int GetHashCode()
@@ -74,11 +74,13 @@ public class ValueNumbering : Pass
                 TagKind.Field or TagKind.Var => Source.GetHashCode(),
                 TagKind.Array => ArrHash((ArrayAccessInst)Source),
                 TagKind.Binary => BinHash((BinaryInst)Source),
+                TagKind.Unary => UnHash((UnaryInst)Source),
                 _ => 0
             };
             static int ArrHash(ArrayAccessInst inst) => HashCode.Combine(inst.Array, inst.Index);
             static int BinHash(BinaryInst inst) => HashCode.Combine(inst.Op, inst.Left, inst.Right);
+            static int UnHash(UnaryInst inst) => HashCode.Combine(inst.Op, inst.Value);
         }
     }
-    enum TagKind { None_, Var, Field, Array, Binary }
+    enum TagKind { None_, Var, Field, Array, Binary, Unary }
 }

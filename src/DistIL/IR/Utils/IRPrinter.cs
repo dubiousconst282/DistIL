@@ -20,6 +20,7 @@ public class IRPrinter
 
         tw.WriteLine("digraph {");
         tw.WriteLine("  node[shape=plaintext fontname=consolas fontsize=12]");
+        tw.WriteLine("  edge[fontname=consolas fontsize=10]");
 
         foreach (var block in method) {
             tw.Write($"  {block}[label=<\n");
@@ -49,10 +50,20 @@ public class IRPrinter
 
             foreach (var succ in block.Succs) {
                 string port = "s";
+                string style = "";
                 if (block.Last is BranchInst { IsConditional: true } br) {
                     port = succ == br.Then ? "T" : "F";
                 }
-                tw.Write($"  {block}:{port} -> {succ}\n");
+                if (block.Last is LeaveInst) {
+                    style = "[color=red]";
+                }
+                foreach (var inst in block) {
+                    if (inst is not GuardInst guard) break;
+                    if (guard.HandlerBlock == succ || guard.FilterBlock == succ) {
+                        (style, port) = ("[style=dashed color=gray]", "e");
+                    }
+                }
+                tw.Write($"  {block}:{port} -> {succ}{style}\n");
             }
 
             //var dom = domTree.IDom(block);
@@ -87,7 +98,7 @@ public class IRPrinter
             if (block.Preds.Count > 0) {
                 tmpSb.Append("preds: ").AppendJoin(" ", block.Preds);
             } else if (block == method.EntryBlock) {
-                tmpSb.Append("(entry)");
+                tmpSb.Append("entry");
             }
 
             foreach (var use in block.Uses) {

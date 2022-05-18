@@ -32,7 +32,7 @@ public class MergeBlocks : Pass
         //"b1: ...; goto b2" and not "b1: ...; goto b1"
         if (!(b1.Last is BranchInst br && br.Then == b2 && br.Then != b1)) return false;
         //Phi depends on control flow
-        if (b2.First is PhiInst) return false;
+        if (b2.First is PhiInst or GuardInst) return false;
 
         //Remove "goto b2" from b1
         b1.Last.Remove();

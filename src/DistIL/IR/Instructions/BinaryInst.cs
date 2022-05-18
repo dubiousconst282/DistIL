@@ -21,15 +21,23 @@ public class BinaryInst : Instruction
     public BinaryInst(BinaryOp op, Value left, Value right)
         : base(left, right)
     {
-        ResultType = GetResultType(op, left.ResultType, right.ResultType);
+        ResultType = GetResultType(op, left.ResultType, right.ResultType) 
+            ?? throw new InvalidOperationException("Invalid operand types in BinaryInst");
         Op = op;
     }
 
-    private static RType GetResultType(BinaryOp op, RType a, RType b)
+    private static RType? GetResultType(BinaryOp op, RType a, RType b)
     {
         //ECMA335 III.1.5
         var sa = a.StackType;
         var sb = b.StackType;
+
+        //Shift allows any combination of <i4|i8|nint> op <i4|nint>
+        if (op is BinaryOp.Shl or BinaryOp.Shra or BinaryOp.Shrl && 
+            sa is StackType.Int or StackType.Long or StackType.NInt &&
+            sb is StackType.Int or StackType.NInt) {
+            return a;
+        }
 
         //Sort sa, sb to reduce number of cases,
         //such that sa <= sb with order [int long nint float nint byref]
@@ -45,7 +53,7 @@ public class BinaryInst : Instruction
             //& + int/nint = &
             (StackType.ByRef,   StackType.Int or StackType.NInt, BinaryOp.Add or BinaryOp.AddOvf)
                     => a,
-            _ => throw new InvalidOperationException("Invalid operand types in BinaryInst")
+            _ => null
         };
         #pragma warning restore format
     }

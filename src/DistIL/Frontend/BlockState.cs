@@ -19,22 +19,18 @@ internal class BlockState
     private List<BlockState> _succStates = new();
 
     private InstFlags _prefixFlags = InstFlags.None;
-    private int _startOffset, _currOffset;
     private GuardInst? _activeGuard;
 
-    public BlockState(ILImporter importer, int offset)
+    public BlockState(ILImporter importer)
     {
         _importer = importer;
         _method = importer.Method;
         Block = _method.CreateBlock();
         _stack = new ArrayStack<Value>(_method.Body!.MaxStack);
-
-        _startOffset = _currOffset = offset;
     }
 
     public void Emit(Instruction inst)
     {
-        inst.ILOffset = _currOffset;
         Block.InsertLast(inst);
     }
 
@@ -122,7 +118,6 @@ internal class BlockState
     public void ImportCode(Span<ILInstruction> code)
     {
         foreach (ref var inst in code) {
-            _currOffset = inst.Offset;
             var prefix = InstFlags.None;
             var opcode = inst.OpCode;
 

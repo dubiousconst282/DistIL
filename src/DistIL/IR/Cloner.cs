@@ -102,7 +102,6 @@ public class Cloner
         {
             _fullyRemapped = false;
             inst.Accept(this);
-            _newInst.ILOffset = inst.ILOffset;
             return (_newInst, _fullyRemapped);
         }
 

@@ -42,7 +42,7 @@ public class ILImporter
 
         int startOffset = 0;
         foreach (int endOffset in leaders) {
-            _blocks[startOffset] = new BlockState(this, startOffset);
+            _blocks[startOffset] = new BlockState(this);
             startOffset = endOffset;
         }
         //Ensure that the entry block don't have predecessors

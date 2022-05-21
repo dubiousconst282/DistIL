@@ -11,11 +11,6 @@ public abstract class Instruction : Value
 
     public Value[] Operands { get; set; }
 
-    public int ILOffset { get; set; } = -1;
-
-    /// <summary> Index of this instruction in the parent basic block. Only valid if `Block.OrderValid == true` </summary>
-    public int Order { get; set; }
-
     public abstract string InstName { get; }
 
     /// <summary> Whether this instructions modifies global state, affects control flow, or throws exceptions. </summary>

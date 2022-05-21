@@ -1,4 +1,4 @@
-﻿namespace DistIL.IR;
+namespace DistIL.IR;
 
 public class BasicBlock : Value
 {
@@ -137,18 +137,6 @@ public class BasicBlock : Value
     {
         OrderValid = false;
         Method.InvalidateSlots();
-    }
-
-    /// <summary> Update <see cref="Instruction.Order"/> values if needed. </summary>
-    public void EnsureOrder()
-    {
-        if (OrderValid) return;
-        OrderValid = true;
-        
-        int i = 0;
-        foreach (var inst in this) {
-            inst.Order = i++;
-        }
     }
 
     public PhiInst AddPhi(RType resultType)

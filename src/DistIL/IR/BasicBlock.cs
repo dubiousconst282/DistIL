@@ -1,4 +1,4 @@
-namespace DistIL.IR;
+﻿namespace DistIL.IR;
 
 public class BasicBlock : Value
 {
@@ -99,7 +99,7 @@ public class BasicBlock : Value
         OnCodeChanged();
     }
 
-    /// <summary> Moves a range of instructions from this block to `newParent`, after `newParentPos`. </summary>
+    /// <summary> Moves a range of instructions from this block to `newParent`, after `newParentPos` (null means before the first instruction in `newParent`). </summary>
     public void MoveRange(BasicBlock newParent, Instruction? newParentPos, Instruction first, Instruction last)
     {
         Ensure(newParentPos == null || newParentPos?.Block == newParent);
@@ -188,15 +188,15 @@ public class BasicBlock : Value
     public void SetBranch(BranchInst br)
     {
         if (Last != null && Last.IsBranch) {
+            //Disconnect successors
+            foreach (var oper in Last.Operands) {
+                if (oper is BasicBlock target) {
+                    Disconnect(target);
+                } 
+            }
             Last.Remove();
         }
         InsertLast(br);
-
-        //Disconnect successors
-        foreach (var succ in Succs) {
-            succ.Preds.Remove(this);
-        }
-        Succs.Clear();
         //Connect new branch targets
         Connect(br.Then);
         if (br.IsConditional) {

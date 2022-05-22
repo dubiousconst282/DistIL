@@ -34,7 +34,6 @@ foreach (var method in mod.GetDefinedMethods()) {
 
     new DistIL.Passes.SsaTransform2().Transform(method);
     new DistIL.Passes.SimplifyConds().Transform(method);
-    new DistIL.Passes.SimplifyArithm().Transform(method);
     new DistIL.Passes.ConstFold().Transform(method);
     new DistIL.Passes.DeadCodeElim().Transform(method);
     new DistIL.Passes.MergeBlocks().Transform(method);

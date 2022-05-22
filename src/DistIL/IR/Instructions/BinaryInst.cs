@@ -18,6 +18,8 @@ public class BinaryInst : Instruction
         (>= BinaryOp.SDiv and <= BinaryOp.URem) or
         (>= BinaryOp.FirstOvf_ and <= BinaryOp.LastOvf_);
 
+    public bool IsCommutative => Op.IsCommutative();
+
     public BinaryInst(BinaryOp op, Value left, Value right)
         : base(left, right)
     {
@@ -78,4 +80,15 @@ public enum BinaryOp
     UAddOvf, USubOvf, UMulOvf,
 
     FirstOvf_ = AddOvf, LastOvf_ = UMulOvf
+}
+public static class BinaryOps
+{
+    public static bool IsCommutative(this BinaryOp op)
+    {
+        return op is
+            BinaryOp.Add or BinaryOp.Mul or
+            BinaryOp.FAdd or BinaryOp.FMul or
+            BinaryOp.And or BinaryOp.Or or BinaryOp.Xor or
+            BinaryOp.AddOvf or BinaryOp.MulOvf;
+    }
 }

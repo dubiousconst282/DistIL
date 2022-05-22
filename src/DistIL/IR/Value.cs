@@ -2,7 +2,7 @@ namespace DistIL.IR;
 
 public abstract class Value
 {
-    public RType ResultType { get; set; } = PrimType.Void;
+    public RType ResultType { get; protected set; } = PrimType.Void;
     /// <summary> Whether this value's result type is not void. </summary>
     public bool HasResult => ResultType.Kind != TypeKind.Void;
 

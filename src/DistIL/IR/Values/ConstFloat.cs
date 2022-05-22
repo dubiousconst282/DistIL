@@ -19,7 +19,7 @@ public class ConstFloat : Const
 
     public static ConstFloat Create(RType type, double value)
     {
-        Assert(type.StackType == StackType.Float);
+        Ensure(type.StackType == StackType.Float);
         return new ConstFloat() { ResultType = type, Value = value };
     }
 

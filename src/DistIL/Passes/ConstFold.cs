@@ -2,34 +2,48 @@ namespace DistIL.Passes;
 
 using DistIL.IR;
 
+/// <summary> Implements constant folding, and operand sorting for commutative instructions. </summary>
 public class ConstFold : MethodPass
 {
-    private bool _phiArgRemoved; //whether a phi arg was removed and another pass must be run
-
     public override void Transform(Method method)
     {
-        while (true) {
-            _phiArgRemoved = false;
-            base.Transform(method);
-            if (!_phiArgRemoved) break;
+        bool changed = true;
+        while (changed) {
+            changed = false;
+
+            foreach (var block in method) {
+                foreach (var inst in block) {
+                    //swap opers of `const <op> value` if op is commutative
+                    if (inst is BinaryInst { Left: Const, Right: not Const, IsCommutative: true } b) {
+                        (b.Left, b.Right) = (b.Right, b.Left);
+                    }
+                    var newValue = Fold(inst);
+                    if (newValue != null) {
+                        inst.ReplaceWith(newValue);
+                    }
+                }
+                //FoldBranch() may change phis, so we need another pass to propagate constants.
+                changed |= FoldBranch(block);
+            }
         }
     }
 
-    protected override Value Transform(IRBuilder ib, Instruction inst)
+    public static Value? Fold(Instruction inst)
     {
-        var result = inst switch {
+        return inst switch {
             BinaryInst b 
                 => FoldBinary(b.Op, b.Left, b.Right),
             ConvertInst c when !c.CheckOverflow
-                => FoldConvert(c.Value, c.ResultType),
+                => FoldConvert(c.Value, c.ResultType, c.SrcUnsigned),
             CompareInst c
                 => FoldCompare(c.Op, c.Left, c.Right),
             _ => null
         };
-        return result ?? inst;
     }
-    protected override void LeaveBlock(BasicBlock block)
+    private bool FoldBranch(BasicBlock block)
     {
+        bool phiChanged = false;
+
         if (block.Last is BranchInst br && br.Cond is ConstInt c) {
             bool cond = c.Value != 0;
             block.SetBranch(cond ? br.Then : br.Else!);
@@ -37,84 +51,100 @@ public class ConstFold : MethodPass
 
             foreach (var phi in removedBlock.Phis()) {
                 phi.RemoveArg(block, true);
-                _phiArgRemoved = true;
+                phiChanged = true;
             }
         }
+        return phiChanged;
     }
 
     public static Value? FoldBinary(BinaryOp op, Value left, Value right)
     {
-        if (left is ConstInt i1 && right is ConstInt i2) {
-            long v1 = i1.Value;
-            long v2 = i2.Value;
+        switch (left, right, op) {
+            case (ConstInt i1, ConstInt i2, _): {
+                long v1 = i1.Value;
+                long v2 = i2.Value;
 
-            long? result = op switch {
-                BinaryOp.Add  => v1 + v2,
-                BinaryOp.Sub  => v1 - v2,
-                BinaryOp.Mul  => v1 * v2,
-                BinaryOp.SDiv => v2 == 0 ? null : v1 / v2,
-                BinaryOp.UDiv => v2 == 0 ? null : (long)((ulong)v1 / (ulong)v2),
-                BinaryOp.SRem => v2 == 0 ? null : v1 % v2,
-                BinaryOp.URem => v2 == 0 ? null : (long)((ulong)v1 % (ulong)v2),
-                BinaryOp.And  => v1 & v2,
-                BinaryOp.Or   => v1 | v2,
-                BinaryOp.Xor  => v1 ^ v2,
-                BinaryOp.Shl  => v1 << (int)v2,
-                BinaryOp.Shra => v1 >> (int)v2,
-                BinaryOp.Shrl => (long)((ulong)v1 >> (int)v2),
-                _ => null
-            };
-            if (result != null) {
-                bool isUnsigned = (i1.IsUnsigned && i2.IsUnsigned) || op is BinaryOp.UDiv or BinaryOp.URem;
-                var resultType = i1.IsLong || i2.IsLong
-                    ? (isUnsigned ? PrimType.UInt64 : PrimType.Int64)
-                    : (isUnsigned ? PrimType.UInt32 : PrimType.Int32);
-                return ConstInt.Create(resultType, result.Value);
+                long? result = op switch {
+                    BinaryOp.Add  => v1 + v2,
+                    BinaryOp.Sub  => v1 - v2,
+                    BinaryOp.Mul  => v1 * v2,
+                    BinaryOp.SDiv => (v1, v2) is (_, 0) or (int.MinValue, -1) ? null : v1 / v2,
+                    BinaryOp.UDiv => v2 == 0 ? null : (long)(i1.UValue / i2.UValue),
+                    BinaryOp.SRem => (v1, v2) is (_, 0) or (int.MinValue, -1) ? null : v1 % v2,
+                    BinaryOp.URem => v2 == 0 ? null : (long)(i1.UValue % i2.UValue),
+                    BinaryOp.And  => v1 & v2,
+                    BinaryOp.Or   => v1 | v2,
+                    BinaryOp.Xor  => v1 ^ v2,
+                    BinaryOp.Shl  => v1 << (int)v2,
+                    BinaryOp.Shra => v1 >> (int)v2,
+                    BinaryOp.Shrl => (long)((ulong)v1 >> (int)v2),
+                    _ => null
+                };
+                if (result != null) {
+                    bool isUnsigned = (i1.IsUnsigned && i2.IsUnsigned) || op is BinaryOp.UDiv or BinaryOp.URem;
+                    var resultType = i1.IsLong || i2.IsLong
+                        ? (isUnsigned ? PrimType.UInt64 : PrimType.Int64)
+                        : (isUnsigned ? PrimType.UInt32 : PrimType.Int32);
+                    return ConstInt.Create(resultType, result.Value);
+                }
+                break;
             }
-        }
-        //
-        else if (left is ConstFloat f1 && right is ConstFloat f2) {
-            double v1 = f1.Value;
-            double v2 = f2.Value;
+            case (ConstFloat f1, ConstFloat f2, _): {
+                double v1 = f1.Value;
+                double v2 = f2.Value;
 
-            double? result = op switch {
-                BinaryOp.FAdd => v1 + v2,
-                BinaryOp.FSub => v1 - v2,
-                BinaryOp.FMul => v1 * v2,
-                BinaryOp.FDiv => v1 / v2,
-                BinaryOp.FRem => v1 % v2,
-                _ => null
-            };
-            if (result != null) {
-                var resultType = f1.IsDouble || f2.IsDouble ? PrimType.Double : PrimType.Single;
-                return ConstFloat.Create(resultType, result.Value);
+                double? result = op switch {
+                    BinaryOp.FAdd => v1 + v2,
+                    BinaryOp.FSub => v1 - v2,
+                    BinaryOp.FMul => v1 * v2,
+                    BinaryOp.FDiv => v1 / v2,
+                    BinaryOp.FRem => v1 % v2,
+                    _ => null
+                };
+                if (result != null) {
+                    var resultType = f1.IsDouble || f2.IsDouble ? PrimType.Double : PrimType.Single;
+                    return ConstFloat.Create(resultType, result.Value);
+                }
+                break;
+            }
+            //Identity property: x op 0, x * 1, x & ~0 = x
+            case (_, ConstInt { Value: 0 }, BinaryOp.Add or BinaryOp.Sub or BinaryOp.Or or BinaryOp.Xor or BinaryOp.Shl or BinaryOp.Shra or BinaryOp.Shrl):
+            case (_, ConstInt { Value: 1 }, BinaryOp.Mul):
+            case (_, ConstInt { Value: ~0L }, BinaryOp.And): {
+                return left;
+            }
+            //Multiplication property: x * 0, x & 0 = 0
+            case (_, ConstInt { Value: 0 }, BinaryOp.Mul or BinaryOp.And): {
+                return right;
             }
         }
         return null;
     }
 
-    public static Value? FoldConvert(Value srcValue, RType dstType)
+    public static Value? FoldConvert(Value srcValue, RType dstType, bool srcUnsigned)
     {
-        var srcType = srcValue.ResultType;
-
-        if (srcValue is ConstInt ci) {
-            if (srcType.Kind.IsInt() && dstType.Kind.IsInt()) {
-                return ConstInt.Create(dstType, ci.Value);
-            }
+        var simpleDstType = dstType.StackType;
+        if (simpleDstType == StackType.Long) {
+            simpleDstType = StackType.Int;
         }
-        return null;
+        return (srcValue, simpleDstType) switch {
+            (ConstInt c, StackType.Int)     => ConstInt.Create(dstType, c.Value),
+            (ConstInt c, StackType.Float)   => ConstFloat.Create(dstType, srcUnsigned ? c.UValue : c.Value),
+            (ConstFloat c, StackType.Int)   => ConstInt.Create(dstType, dstType.Kind.IsUnsigned() ? (long)(ulong)c.Value : (long)c.Value),
+            (ConstFloat c, StackType.Float) => ConstFloat.Create(dstType, c.Value),
+            _ => null
+        };
     }
 
-    private Value? FoldCompare(CompareOp op, Value left, Value right)
+    public static Value? FoldCompare(CompareOp op, Value left, Value right)
     {
-        if (left is Const c1 && right is Const c2) {
-            bool? r = null;
-
-            if (op is CompareOp.Eq or CompareOp.Ne) {
+        bool? r = null;
+        switch (left, right, op) {
+            case (Const c1, Const c2, CompareOp.Eq or CompareOp.Ne): {
                 r = c1.Equals(c2) ^ (op == CompareOp.Ne);
+                break;
             }
-            //
-            else if (left is ConstInt i1 && right is ConstInt i2) {
+            case (ConstInt i1, ConstInt i2, _): {
                 int sc = i1.Value.CompareTo(i2.Value);
                 int uc = i1.UValue.CompareTo(i2.UValue);
 
@@ -129,9 +159,31 @@ public class ConstFold : MethodPass
                     CompareOp.Uge => uc >= 0,
                     _ => null
                 };
+                break;
             }
-            return r == null ? null : ConstInt.CreateI(r.Value ? 1 : 0);
+            case (ConstFloat f1, ConstFloat f2, _): {
+                int c = f1.Value.CompareTo(f2.Value);
+
+                r = op switch {
+                    CompareOp.FOeq => c == 0,
+                    CompareOp.FOlt => c < 0,
+                    CompareOp.FOgt => c > 0,
+                    CompareOp.FOle => c <= 0,
+                    CompareOp.FOge => c >= 0,
+                    CompareOp.FUne => c != 0,
+                    CompareOp.FUlt => !(c < 0),
+                    CompareOp.FUgt => !(c > 0),
+                    CompareOp.FUle => !(c <= 0),
+                    CompareOp.FUge => !(c >= 0),
+                    _ => null
+                };
+                break;
+            }
+            //x != 0 -> x  (if x type is int)
+            case (_, ConstInt { IsInt: true, Value: 0 }, CompareOp.Ne): {
+                return left;
+            }
         }
-        return null;
+        return r == null ? null : ConstInt.CreateI(r.Value ? 1 : 0);
     }
 }

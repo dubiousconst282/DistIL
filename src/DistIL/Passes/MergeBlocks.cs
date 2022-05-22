@@ -2,7 +2,7 @@ namespace DistIL.Passes;
 
 using DistIL.IR;
 
-public class MergeBlocks : Pass
+public class MergeBlocks : MethodPass
 {
     public override void Transform(Method method)
     {

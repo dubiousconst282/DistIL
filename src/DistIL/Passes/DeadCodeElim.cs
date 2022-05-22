@@ -2,7 +2,7 @@ namespace DistIL.Passes;
 
 using DistIL.IR;
 
-public class DeadCodeElim : RewritePass
+public class DeadCodeElim : MethodPass
 {
     public override void Transform(Method method)
     {

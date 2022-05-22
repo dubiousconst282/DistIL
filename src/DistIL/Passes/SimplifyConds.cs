@@ -4,7 +4,7 @@ using System.Numerics;
 
 using DistIL.IR;
 
-public class SimplifyConds : Pass
+public class SimplifyConds : MethodPass
 {
     public override void Transform(Method method)
     {

@@ -2,7 +2,7 @@ namespace DistIL.Passes;
 
 using DistIL.IR;
 
-public class ConstFold : RewritePass
+public class ConstFold : MethodPass
 {
     private bool _phiArgRemoved; //whether a phi arg was removed and another pass must be run
 

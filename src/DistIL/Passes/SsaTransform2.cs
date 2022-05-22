@@ -3,7 +3,7 @@ namespace DistIL.Passes;
 using DistIL.IR;
 
 //SSA transform implementation based on the standard dominance frontier algorithm.
-public class SsaTransform2 : Pass
+public class SsaTransform2 : MethodPass
 {
     Method _method = null!;
     DominatorTree _domTree = null!;

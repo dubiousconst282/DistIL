@@ -2,19 +2,28 @@ namespace DistIL.Passes;
 
 using DistIL.IR;
 
-public class SimplifyArithm : RewritePass
+public class SimplifyArithm : MethodPass
 {
-    protected override Value Transform(IRBuilder ib, Instruction inst)
+    public override void Transform(Method method)
     {
-        var result = inst switch {
-            BinaryInst      c => SimplifyBinary(ib, c),
-            CompareInst     c => SimplifyCompare(ib, c),
-            _ => null
-        };
-        return result ?? inst;
+        foreach (var inst in method.Instructions()) {
+            var newValue = Transform(inst);
+            if (newValue != null) {
+                inst.ReplaceUses(newValue);
+            }
+        }
     }
 
-    private Value? SimplifyBinary(IRBuilder ib, BinaryInst inst)
+    private Value? Transform(Instruction inst)
+    {
+        return inst switch {
+            BinaryInst      c => SimplifyBinary(c),
+            CompareInst     c => SimplifyCompare(c),
+            _ => null
+        };
+    }
+
+    private Value? SimplifyBinary(BinaryInst inst)
     {
         var (op, left, right) = (inst.Op, inst.Left, inst.Right);
 
@@ -38,7 +47,7 @@ public class SimplifyArithm : RewritePass
         return null;
     }
 
-    private Value? SimplifyCompare(IRBuilder ib, CompareInst inst)
+    private Value? SimplifyCompare(CompareInst inst)
     {
         var (op, left, right) = (inst.Op, inst.Left, inst.Right);
 

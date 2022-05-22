@@ -2,7 +2,7 @@ namespace DistIL.Passes;
 
 using DistIL.IR;
 
-public class RemovePhis : Pass
+public class RemovePhis : MethodPass
 {
     public override void Transform(Method method)
     {
@@ -29,6 +29,10 @@ public class RemovePhis : Pass
             }
             var load = new LoadVarInst(tempVar);
             phi.ReplaceWith(load);
+        }
+
+        foreach (var phi in phis) {
+            phi.Remove();
         }
     }
 }

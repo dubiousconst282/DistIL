@@ -2,7 +2,7 @@ namespace DistIL.Passes;
 
 using DistIL.IR;
 
-public class ValueNumbering : Pass
+public class ValueNumbering : MethodPass
 {
     public override void Transform(Method method)
     {

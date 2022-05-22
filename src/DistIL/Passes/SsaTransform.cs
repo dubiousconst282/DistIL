@@ -4,7 +4,7 @@ using DistIL.IR;
 
 //Algorithm from the paper "Simple and Efficient Construction of Static Single Assignment Form"
 //https://pp.ipd.kit.edu/uploads/publikationen/braun13cc.pdf
-public class SsaTransform : Pass
+public class SsaTransform : MethodPass
 {
     readonly Dictionary<(BasicBlock, Variable), Value> _currDefs = new();
     readonly HashSet<BasicBlock> _sealedBlocks = new();

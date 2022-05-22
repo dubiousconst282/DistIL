@@ -2,7 +2,7 @@ namespace DistIL.Passes;
 
 using DistIL.IR;
 
-public class InlineMethods : Pass
+public class InlineMethods : MethodPass
 {
     public override void Transform(Method method)
     {

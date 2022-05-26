@@ -4,15 +4,9 @@ using System.IO;
 using System.Reflection;
 using System.Reflection.PortableExecutable;
 
-public class ModuleResolver : IDisposable
+public class ModuleResolver
 {
     protected readonly Dictionary<string, ModuleDef> _cache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly List<PEReader> _openPEs = new();
-
-    public void Register(AssemblyName name, string path)
-    {
-        _cache[name.FullName] = LoadModule(path);
-    }
 
     public ModuleDef Resolve(AssemblyName name, [MaybeNullWhen(false)] bool throwIfNotFound = true)
     {
@@ -38,25 +32,20 @@ public class ModuleResolver : IDisposable
         foreach (string path in searchPaths.Split(Path.PathSeparator)) {
             var fileName = Path.GetFileNameWithoutExtension(path.AsSpan());
             if (fileName.EqualsIgnoreCase(targetName)) {
-                return LoadModule(path);
+                return Load(path);
             }
         }
         return null;
     }
 
-    private ModuleDef LoadModule(string path)
+    public ModuleDef Load(string path)
     {
-        var pe = new PEReader(File.OpenRead(path), PEStreamOptions.PrefetchEntireImage);
-        _openPEs.Add(pe);
-        return new ModuleDef(pe, this);
-    }
-
-    public void Dispose()
-    {
-        foreach (var pe in _openPEs) {
-            pe.Dispose();
-        }
-        _openPEs.Clear();
-        _cache.Clear();
+        Console.WriteLine("LoadModule: " + path);
+        using var pe = new PEReader(File.OpenRead(path));
+        var module = new ModuleDef();
+        var loader = new ModuleLoader(pe, this, module);
+        _cache.Add(module.AsmName.FullName, module);
+        loader.Load();
+        return module;
     }
 }

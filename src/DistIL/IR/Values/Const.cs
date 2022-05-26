@@ -6,7 +6,7 @@ namespace DistIL.IR;
 public abstract class Const : Value, IEquatable<Const>
 {
     /// <summary> Returns a constant zero/null for the given primitive/object type. </summary>
-    public static Const CreateZero(RType type)
+    public static Const CreateZero(TypeDesc type)
     {
         return type.StackType switch {
             StackType.Int or StackType.Long
@@ -64,7 +64,7 @@ public class ConstString : Const
 /// </summary>
 public class Undef : Value
 {
-    public Undef(RType type)
+    public Undef(TypeDesc type)
     {
         ResultType = type;
     }

@@ -2,7 +2,7 @@
 
 public class BasicBlock : Value
 {
-    public Method Method { get; internal set; }
+    public MethodBody Method { get; internal set; }
 
     public List<BasicBlock> Preds { get; } = new();
     public List<BasicBlock> Succs { get; } = new();
@@ -26,7 +26,7 @@ public class BasicBlock : Value
     /// <summary> Whether <see cref="Instruction.Order" /> values are valid. </summary>
     public bool OrderValid { get; private set; }
 
-    internal BasicBlock(Method method)
+    internal BasicBlock(MethodBody method)
     {
         Method = method;
     }
@@ -139,7 +139,7 @@ public class BasicBlock : Value
         Method.InvalidateSlots();
     }
 
-    public PhiInst AddPhi(RType resultType)
+    public PhiInst AddPhi(TypeDesc resultType)
     {
         var phi = new PhiInst(resultType);
         InsertBefore(FirstNonPhi, phi);

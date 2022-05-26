@@ -5,22 +5,22 @@ using System.Text;
 public class NewObjInst : Instruction
 {
     /// <summary> The `.ctor` method. Note that the first argument (`this`) is ignored. </summary>
-    public Callsite Constructor {
-        get => (Callsite)Operands[0];
+    public MethodDesc Constructor {
+        get => (MethodDesc)Operands[0];
         set => ReplaceOperand(0, value);
     }
     public ReadOnlySpan<Value> Args => Operands.AsSpan(1);
-
+    
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     public int NumArgs => Operands.Length - 1;
 
     public override bool HasSideEffects => true;
     public override string InstName => "newobj";
 
-    public NewObjInst(Callsite ctor, Value[] args)
+    public NewObjInst(MethodDesc ctor, Value[] args)
         : base(args.Prepend(ctor).ToArray())
     {
-        ResultType = ctor.ArgTypes[0];
+        ResultType = ctor.DeclaringType;
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
@@ -28,13 +28,13 @@ public class NewObjInst : Instruction
     protected override void PrintOperands(StringBuilder sb, SlotTracker slotTracker)
     {
         sb.Append(" ");
-        ResultType.Print(sb);
+        ResultType.Print(sb, slotTracker);
         sb.Append("(");
 
         for (int i = 0; i < NumArgs; i++) {
             sb.Append(i == 0 ? " " : ", ");
 
-            Constructor.ArgTypes[i + 1].Print(sb);
+            Constructor.Params[i + 1].Type.Print(sb, slotTracker);
             sb.Append(": ");
             Args[i].PrintAsOperand(sb, slotTracker);
         }

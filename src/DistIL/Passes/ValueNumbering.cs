@@ -4,7 +4,7 @@ using DistIL.IR;
 
 public class ValueNumbering : MethodPass
 {
-    public override void Transform(Method method)
+    public override void Transform(MethodBody method)
     {
         foreach (var block in method) {
             TransformBlock(block);

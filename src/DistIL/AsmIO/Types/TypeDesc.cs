@@ -1,39 +1,32 @@
-﻿namespace DistIL.IR;
+﻿namespace DistIL.AsmIO;
 
-//The "R" prefix doesn't mean anything in particular, but it can be thought as "Representation" or "Result".
-//It's only to prevent the conflict with System.Type.
-public abstract class RType : IEquatable<RType>
+using DistIL.IR;
+
+/// <summary> The base class of all types. </summary>
+public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
 {
     public abstract TypeKind Kind { get; }
     public abstract StackType StackType { get; }
 
+    public abstract string? Namespace { get; }
+
+    public abstract TypeDesc? BaseType { get; }
+
     /// <summary> Element type of the array, pointer or byref type. </summary>
-    public virtual RType? ElemType => null;
+    public virtual TypeDesc? ElemType => null;
+    
     public virtual bool IsValueType => false;
+    public virtual bool IsEnum => false;
+    public virtual bool IsInterface => false;
     public virtual bool IsGeneric => false;
 
-    public abstract string? Namespace { get; }
-    public abstract string Name { get; }
-
-    public virtual void Print(StringBuilder sb)
-    {
-        var ns = Namespace;
-        if (ns != null) {
-            sb.Append(ns);
-            sb.Append(".");
-        }
-        sb.Append(Name);
-    }
-
-    public override string ToString()
-    {
-        var sb = new StringBuilder();
-        Print(sb);
-        return sb.ToString();
-    }
+    static readonly List<MethodDesc> s_EmptyMethodList = new();
+    static readonly List<FieldDesc> s_EmptyFieldList = new();
+    public virtual IReadOnlyList<MethodDesc> Methods { get; } = s_EmptyMethodList;
+    public virtual IReadOnlyList<FieldDesc> Fields { get; } = s_EmptyFieldList;
 
     /// <summary> Checks whether this type can be assigned to a variable of type `assigneeType`, assuming they are values on the evaluation stack. </summary>
-    public bool IsStackAssignableTo(RType assigneeType)
+    public bool IsStackAssignableTo(TypeDesc assigneeType)
     {
         var t1 = StackType;
         var t2 = assigneeType.StackType;
@@ -45,13 +38,57 @@ public abstract class RType : IEquatable<RType>
                (t2 == StackType.NInt || t2 == StackType.ByRef);
     }
 
-    public abstract bool Equals(RType? other);
+    public virtual TypeDesc GetSpec(GenericContext context)
+    {
+        return this;
+    }
 
-    public override bool Equals(object? obj) => obj is RType o && Equals(o);
+    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    {
+        var ns = Namespace;
+        if (ns != null) {
+            sb.Append(ns);
+            sb.Append(".");
+        }
+        sb.Append(Name);
+    }
+    public override void PrintAsOperand(StringBuilder sb, SlotTracker slotTracker)
+    {
+        sb.Append("typeof(");
+        Print(sb, slotTracker);
+        sb.Append(")");
+    }
+
+    public abstract bool Equals(TypeDesc? other);
+
+    public override bool Equals(object? obj) => obj is TypeDesc o && Equals(o);
     public override int GetHashCode() => HashCode.Combine(Kind, Name);
 
-    public static bool operator ==(RType? a, RType? b) => object.ReferenceEquals(a, b) || (a is not null && a.Equals(b));
-    public static bool operator !=(RType? a, RType? b) => !(a == b);
+    public static bool operator ==(TypeDesc? a, TypeDesc? b) => object.ReferenceEquals(a, b) || (a is not null && a.Equals(b));
+    public static bool operator !=(TypeDesc? a, TypeDesc? b) => !(a == b);
+}
+
+public struct GenericContext
+{
+    public ImmutableArray<TypeDesc> TypeArgs { get; }
+    public ImmutableArray<TypeDesc> MethodArgs { get; }
+
+    public GenericContext(ImmutableArray<TypeDesc> typeArgs = default, ImmutableArray<TypeDesc> methodArgs = default)
+    {
+        Ensure(!typeArgs.IsDefault || !methodArgs.IsDefault);
+        TypeArgs = typeArgs;
+        MethodArgs = methodArgs;
+    }
+    public GenericContext(TypeDefOrSpec type)
+    {
+        TypeArgs = type.GenericParams;
+        MethodArgs = default;
+    }
+    public GenericContext(MethodDefOrSpec method)
+    {
+        TypeArgs = method.DeclaringType.GenericParams;
+        MethodArgs = method.GenericParams;
+    }
 }
 
 public enum TypeKind

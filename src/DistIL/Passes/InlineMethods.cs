@@ -4,12 +4,12 @@ using DistIL.IR;
 
 public class InlineMethods : MethodPass
 {
-    public override void Transform(Method method)
+    public override void Transform(MethodBody method)
     {
         var inlineableCalls = new List<CallInst>();
 
         foreach (var inst in method.Instructions()) {
-            if (inst is CallInst call && CanInline(method, call)) {
+            if (inst is CallInst call && CanInline(method.Method, call)) {
                 inlineableCalls.Add(call);
             }
         }
@@ -19,28 +19,29 @@ public class InlineMethods : MethodPass
         }
     }
 
-    private static bool CanInline(Method caller, CallInst callInst)
+    private static bool CanInline(MethodDef caller, CallInst callInst)
     {
-        if (callInst.Method is Method callee) {
+        if (callInst.Method is MethodDef callee) {
             //TODO: better inlining heuristics
             //FIXME: block inlining for methods with accesses to private members of different classes
-            return caller != callee && callee.CodeAvailable && callee.NumBlocks <= 8;
+            return caller != callee && callee.Body?.NumBlocks <= 8;
         }
         return false;
     }
 
-    private static void Inline(Method caller, CallInst callInst)
+    private static void Inline(MethodBody caller, CallInst callInst)
     {
-        var callee = (Method)callInst.Method;
+        var callee = ((MethodDef)callInst.Method).Body!;
         var cloner = new Cloner(caller);
 
         //Add argument mappings
-        for (int i = 0; i < callee.NumArgs; i++) {
+        var args = callee.Args;
+        for (int i = 0; i < args.Count; i++) {
             //Create temp variables because this transform happens before SSA
-            var tempVar = new Variable(callee.ArgTypes[i]);
+            var tempVar = new Variable(args[i].Type);
             var store = new StoreVarInst(tempVar, callInst.GetArg(i));
             store.InsertBefore(callInst);
-            cloner.AddMapping(callee.Args[i], tempVar);
+            cloner.AddMapping(args[i], tempVar);
         }
         var newBlocks = cloner.CloneBlocks(callee);
 

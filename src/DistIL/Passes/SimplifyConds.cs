@@ -6,7 +6,7 @@ using DistIL.IR;
 
 public class SimplifyConds : MethodPass
 {
-    public override void Transform(Method method)
+    public override void Transform(MethodBody method)
     {
         foreach (var block in method) {
             while (TransformSelect(block) || InvertIf(block));

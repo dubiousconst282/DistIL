@@ -242,9 +242,9 @@ public enum ILCode : ushort
     // If you add more opcodes here, modify Name to handle them correctly
 }
 
-public static partial class ILCodeEx
+public static partial class ILCodes
 {
-    static ILCodeEx()
+    static ILCodes()
     {
         Reg(ILCode.Nop,
             ((int)OT.None) |

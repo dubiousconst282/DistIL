@@ -1,3 +1,4 @@
+using DistIL.AsmIO;
 using DistIL.IR;
 
 public class ConstTests

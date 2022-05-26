@@ -16,7 +16,7 @@ internal class ModuleWriter
     private BlobBuilder? _managedResourceStream;
     private MethodDefinitionHandle _entryPoint;
 
-    private Dictionary<EntityDef, EntityHandle> _handleMap = new();
+    private Dictionary<ModuleEntity, EntityHandle> _handleMap = new();
 
     public ModuleWriter(ModuleDef mod)
     {
@@ -28,25 +28,22 @@ internal class ModuleWriter
     public void Emit(BlobBuilder peBlob)
     {
         //https://github.com/dotnet/runtime/blob/main/src/libraries/System.Reflection.Metadata/tests/PortableExecutable/PEBuilderTests.cs
-        var reader = _mod.Reader;
-
-        var modDef = reader.GetModuleDefinition();
         var mainModHandle = _builder.AddModule(
-            modDef.Generation, 
-            AddString(reader.GetString(modDef.Name)), 
-            _builder.GetOrAddGuid(reader.GetGuid(modDef.Mvid)),
-            _builder.GetOrAddGuid(reader.GetGuid(modDef.GenerationId)),
-            _builder.GetOrAddGuid(reader.GetGuid(modDef.BaseGenerationId))
+            0, 
+            AddString(_mod.Name), 
+            _builder.GetOrAddGuid(default),
+            _builder.GetOrAddGuid(default),
+            _builder.GetOrAddGuid(default)
         );
 
-        var name = _mod.AsmName;
+        var asmName = _mod.AsmName;
         var mainAsmHandle = _builder.AddAssembly(
-            AddString(name.Name!),
-            name.Version!,
-            AddString(name.CultureName),
-            AddBlob(name.GetPublicKey()),
-            (AssemblyFlags)name.Flags,
-            (AssemblyHashAlgorithm)name.HashAlgorithm
+            AddString(asmName.Name!),
+            asmName.Version!,
+            AddString(asmName.CultureName),
+            AddBlob(asmName.GetPublicKey()),
+            (AssemblyFlags)asmName.Flags,
+            (AssemblyHashAlgorithm)asmName.HashAlgorithm
         );
         _handleMap.Add(_mod, mainAsmHandle);
 
@@ -60,7 +57,7 @@ internal class ModuleWriter
     {
         int typeIdx = 1, fieldIdx = 1, methodIdx = 1;
 
-        foreach (var type in _mod.GetDefinedTypes()) {
+        foreach (var type in _mod.TypeDefs) {
             _handleMap.Add(type, MetadataTokens.TypeDefinitionHandle(typeIdx++));
 
             foreach (var field in type.Fields) {
@@ -74,12 +71,12 @@ internal class ModuleWriter
 
     private void EmitTypes()
     {
-        foreach (var type in _mod.GetDefinedTypes()) {
+        foreach (var type in _mod.TypeDefs) {
             EmitType(type);
         }
     }
 
-    private EntityHandle GetEntityHandle(EntityDef entity)
+    private EntityHandle GetEntityHandle(ModuleEntity entity)
     {
         if (_handleMap.TryGetValue(entity, out var handle)) {
             return handle;
@@ -90,18 +87,16 @@ internal class ModuleWriter
             ModuleDef mod   => AddAsmRef(mod),
             TypeDef type    => AddTypeRef(type),
             MethodDef meth  => AddMethodRef(meth),
-            FieldDef field  => AddFieldRef(field),
-            _ => throw new NotImplementedException()
+            FieldDef field  => AddFieldRef(field)
         };
         _handleMap[entity] = handle;
         return handle;
     }
 
-    private EntityHandle GetTypeHandle(RType type)
+    private EntityHandle GetTypeHandle(TypeDesc type)
     {
         return type switch {
-            TypeDef def => GetEntityHandle(def),
-            _ => throw new NotImplementedException()
+            TypeDef def => GetEntityHandle(def)
         };
     }
 
@@ -120,8 +115,9 @@ internal class ModuleWriter
 
     private EntityHandle AddTypeRef(TypeDef type)
     {
+        var rootAsm = _mod._typeRefRoots.GetValueOrDefault(type, type.Module);
         return _builder.AddTypeReference(
-            GetEntityHandle(_mod.GetRefAssembly(type)),
+            GetEntityHandle(rootAsm),
             AddString(type.Namespace),
             AddString(type.Name)
         );
@@ -147,7 +143,7 @@ internal class ModuleWriter
         );
     }
 
-    private void AssertHandleAllocated(EntityDef def, EntityHandle handle)
+    private void AssertHandleAllocated(ModuleEntity def, EntityHandle handle)
     {
         Assert(_handleMap[def] == handle);
     }
@@ -207,12 +203,14 @@ internal class ModuleWriter
     private void EmitMethod(MethodDef method)
     {
         var signature = EmitMethodSig(method);
-        int bodyOffset = EmitBody(method.Body);
+        int bodyOffset = EmitBody(method.ILBody);
         var firstParamHandle = MetadataTokens.ParameterHandle(_builder.GetRowCount(TableIndex.Param) + 1);
 
-        foreach (var arg in method.StaticArgs) {
-            if (arg.Name != null) {
-                _builder.AddParameter(ParameterAttributes.None, AddString(arg.Name), arg.Index + 1);
+        var pars = method.StaticParams;
+        for (int i = 0; i < pars.Length; i++) {
+            var par = pars[i];
+            if (par.Name != null) {
+                _builder.AddParameter(ParameterAttributes.None, AddString(par.Name), i + 1);
             }
         }
 
@@ -225,7 +223,7 @@ internal class ModuleWriter
         AssertHandleAllocated(method, handle);
     }
 
-    private int EmitBody(MethodBody? body)
+    private int EmitBody(ILMethodBody? body)
     {
         if (body == null) {
             return -1;
@@ -269,7 +267,7 @@ internal class ModuleWriter
         return enc.Offset;
     }
 
-    private BlobBuilder EncodeInsts(MethodBody body)
+    private BlobBuilder EncodeInsts(ILMethodBody body)
     {
         var blob = new BlobBuilder();
         foreach (ref var inst in body.Instructions.AsSpan()) {
@@ -295,7 +293,7 @@ internal class ModuleWriter
             case ILOperandType.Method:
             case ILOperandType.Sig:
             case ILOperandType.Tok: {
-                var handle = GetEntityHandle((EntityDef)inst.Operand!);
+                var handle = GetEntityHandle((ModuleEntity)inst.Operand!);
                 bb.WriteInt32(MetadataTokens.GetToken(handle));
                 break;
             }
@@ -374,14 +372,14 @@ internal class ModuleWriter
     {
         return EmitSig(b => {
             //TODO: callconv, genericParamCount
-            var args = method.StaticArgs;
+            var pars = method.StaticParams;
             b.MethodSignature(isInstanceMethod: method.IsInstance)
                 .Parameters(
-                    args.Length,
+                    pars.Length,
                     out var retTypeEnc, out var parsEnc
                 );
-            EncodeType(retTypeEnc.Type(), method.RetType);
-            foreach (var arg in method.StaticArgs) {
+            EncodeType(retTypeEnc.Type(), method.ReturnType);
+            foreach (var arg in pars) {
                 var parEnc = parsEnc.AddParameter();
                 EncodeType(parEnc.Type(), arg.Type);
             }
@@ -393,7 +391,7 @@ internal class ModuleWriter
         return EmitSig(b => EncodeType(b.FieldSignature(), field.Type));
     }
 
-    private void EncodeType(SignatureTypeEncoder enc, RType type)
+    private void EncodeType(SignatureTypeEncoder enc, TypeDesc type)
     {
         //Bypassing the encoder api because it's kinda weird and inconsistent.
         //https://github.com/dotnet/runtime/blob/1ba0394d71a4ea6bee7f6b28a22d666b7b56f913/src/libraries/System.Reflection.Metadata/src/System/Reflection/Metadata/Ecma335/Encoding/BlobEncoders.cs#L809
@@ -456,7 +454,7 @@ internal class ModuleWriter
                 var sigEnc = enc.FunctionPointer((SignatureCallingConvention)t.CallConv, attrs);
                 sigEnc.Parameters(t.ArgTypes.Length, out var retTypeEnc, out var paramsEnc);
 
-                EncodeType(retTypeEnc.Type(), t.RetType);
+                EncodeType(retTypeEnc.Type(), t.ReturnType);
 
                 foreach (var argType in t.ArgTypes) {
                     var paramEnc = paramsEnc.AddParameter();
@@ -486,7 +484,7 @@ internal class ModuleWriter
     }
 
     private void SerializePE(BlobBuilder peBlob)
-    {
+    {/*
         var hdrs = _mod.PE.PEHeaders;
         var peHdr = hdrs.PEHeader!;
         var coffHdr = hdrs.CoffHeader;
@@ -514,7 +512,7 @@ internal class ModuleWriter
             sizeOfHeapCommit: peHdr.SizeOfHeapCommit
         );
 
-        var entryPoint = _mod.GetEntryPoint();
+        var entryPoint = _mod.EntryPoint;
 
         var peBuilder = new ManagedPEBuilder(
             header: header,
@@ -524,6 +522,6 @@ internal class ModuleWriter
             managedResources: _managedResourceStream,
             entryPoint: entryPoint == null ? default : (MethodDefinitionHandle)_handleMap[entryPoint]
         );
-        peBuilder.Serialize(peBlob);
+        peBuilder.Serialize(peBlob);*/
     }
 }

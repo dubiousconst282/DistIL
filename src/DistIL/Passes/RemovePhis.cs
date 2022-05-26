@@ -4,7 +4,7 @@ using DistIL.IR;
 
 public class RemovePhis : MethodPass
 {
-    public override void Transform(Method method)
+    public override void Transform(MethodBody method)
     {
         var phis = new List<PhiInst>();
         foreach (var block in method) {

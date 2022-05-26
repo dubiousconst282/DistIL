@@ -5,7 +5,7 @@ public class SlotTracker
 {
     private Dictionary<Value, int> _slots = new();
 
-    public void Update(Method method)
+    public void Update(MethodBody method)
     {
         _slots.Clear();
 

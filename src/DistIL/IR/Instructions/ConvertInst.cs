@@ -14,7 +14,7 @@ public class ConvertInst : Instruction
     public override bool MayThrow => CheckOverflow;
     public override string InstName => "conv" + (CheckOverflow ? ".ovf" : "") + (SrcUnsigned ? ".un" : "");
 
-    public ConvertInst(Value srcValue, RType dstType, bool checkOverflow = false, bool srcUnsigned = false)
+    public ConvertInst(Value srcValue, TypeDesc dstType, bool checkOverflow = false, bool srcUnsigned = false)
         : base(srcValue)
     {
         Ensure(dstType.Kind.IsFloat() ? !checkOverflow : true);
@@ -30,6 +30,6 @@ public class ConvertInst : Instruction
     {
         base.Print(sb, slotTracker);
         sb.Append(" -> ");
-        sb.Append(ResultType);
+        ResultType.Print(sb, slotTracker);
     }
 }

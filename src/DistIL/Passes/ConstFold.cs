@@ -5,7 +5,7 @@ using DistIL.IR;
 /// <summary> Implements constant folding, and operand sorting for commutative instructions. </summary>
 public class ConstFold : MethodPass
 {
-    public override void Transform(Method method)
+    public override void Transform(MethodBody method)
     {
         bool changed = true;
         while (changed) {
@@ -121,7 +121,7 @@ public class ConstFold : MethodPass
         return null;
     }
 
-    public static Value? FoldConvert(Value srcValue, RType dstType, bool srcUnsigned)
+    public static Value? FoldConvert(Value srcValue, TypeDesc dstType, bool srcUnsigned)
     {
         var simpleDstType = dstType.StackType;
         if (simpleDstType == StackType.Long) {

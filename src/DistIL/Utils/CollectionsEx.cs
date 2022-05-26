@@ -1,11 +1,13 @@
 ﻿namespace DistIL.Util;
 
 using System.Collections.Immutable;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 public static class CollectionsEx
 {
+    public static ImmutableArray<T> EmptyIfDefault<T>(this ImmutableArray<T> array)
+        => array.IsDefault ? ImmutableArray<T>.Empty : array;
+
     public static ref V? GetOrAddRef<K, V>(this Dictionary<K, V> dict, K key, out bool exists)
         where K : notnull
     {

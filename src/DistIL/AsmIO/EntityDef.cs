@@ -1,34 +1,25 @@
 namespace DistIL.AsmIO;
 
-using System.Reflection.Metadata;
+using DistIL.IR;
 
-public interface EntityDef
+public interface Entity
+{
+    string Name { get; }
+    ImmutableArray<CustomAttrib> CustomAttribs { get; set; }
+}
+/// <summary> Represents an entity defined in a module. </summary>
+public interface ModuleEntity : Entity
 {
     ModuleDef Module { get; }
-    EntityHandle Handle { get; } //TODO: Maybe replace with ModuleDef.GetHandle()
+}
+/// <summary> Represents an entity referenced or defined in a module. </summary>
+public abstract class EntityDesc : Value, Entity
+{
+    public abstract string Name { get; }
+    public ImmutableArray<CustomAttrib> CustomAttribs { get; set; } = ImmutableArray<CustomAttrib>.Empty;
 }
 
-public interface MemberDef : EntityDef
+public abstract class MemberDesc : EntityDesc
 {
-    TypeDef DeclaringType { get; }
-    string Name { get; }
-}
-
-public class ExportedType : EntityDef
-{
-    public ModuleDef Module { get; }
-    public EntityHandle Handle { get; }
-    /// <summary> The entity declaring the type implementation. Either a ModuleDef, or TypeDef if impl is a nested type. </summary>
-    public EntityDef Scope { get; }
-    public TypeDef Implementation { get; }
-
-    public ExportedType(ModuleDef mod, EntityHandle handle, EntityDef scope, TypeDef impl)
-    {
-        Module = mod;
-        Handle = handle;
-        Scope = scope;
-        Implementation = impl;
-    }
-
-    public override string ToString() => "-> " + Implementation;
+    public abstract TypeDesc DeclaringType { get; }
 }

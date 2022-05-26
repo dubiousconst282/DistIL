@@ -10,7 +10,7 @@ public class SsaTransform : MethodPass
     readonly HashSet<BasicBlock> _sealedBlocks = new();
     readonly List<(PhiInst, Variable)> _incompletePhis = new();
 
-    public override void Transform(Method method)
+    public override void Transform(MethodBody method)
     {
         var entryBlock = method.EntryBlock;
         var blocks = new List<BasicBlock>();

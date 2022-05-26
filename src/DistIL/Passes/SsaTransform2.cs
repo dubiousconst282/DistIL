@@ -5,11 +5,11 @@ using DistIL.IR;
 //SSA transform implementation based on the standard dominance frontier algorithm.
 public class SsaTransform2 : MethodPass
 {
-    Method _method = null!;
+    MethodBody _method = null!;
     DominatorTree _domTree = null!;
     Dictionary<PhiInst, Variable> _phiDefs = new(); //phi -> variable
 
-    public override void Transform(Method method)
+    public override void Transform(MethodBody method)
     {
         _method = method;
         _domTree = new DominatorTree(_method);

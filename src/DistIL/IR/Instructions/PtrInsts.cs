@@ -8,7 +8,7 @@ public abstract class PtrAccessInst : Instruction
     }
     public override bool MayThrow => true;
 
-    public abstract RType ElemType { get; set; }
+    public abstract TypeDesc ElemType { get; set; }
     public PointerFlags Flags { get; set; }
 
     public bool Unaligned => (Flags & PointerFlags.Unaligned) != 0;
@@ -22,13 +22,13 @@ public abstract class PtrAccessInst : Instruction
 }
 public class LoadPtrInst : PtrAccessInst
 {
-    public override RType ElemType {
+    public override TypeDesc ElemType {
         get => ResultType;
         set => ResultType = value;
     }
     public override string InstName => "ldptr" + (Unaligned ? ".un" : "") + (Volatile ? ".volatile" : "");
 
-    public LoadPtrInst(Value addr, RType elemType, PointerFlags flags = PointerFlags.None)
+    public LoadPtrInst(Value addr, TypeDesc elemType, PointerFlags flags = PointerFlags.None)
         : base(flags, addr)
     {
         ElemType = elemType;
@@ -42,12 +42,12 @@ public class StorePtrInst : PtrAccessInst
         get => Operands[1];
         set => ReplaceOperand(1, value);
     }
-    public override RType ElemType { get; set; }
+    public override TypeDesc ElemType { get; set; }
 
     public override string InstName => "stptr" + (Unaligned ? ".un" : "") + (Volatile ? ".volatile" : "");
     public override bool HasSideEffects => true;
 
-    public StorePtrInst(Value addr, Value value, RType elemType, PointerFlags flags = PointerFlags.Volatile)
+    public StorePtrInst(Value addr, Value value, TypeDesc elemType, PointerFlags flags = PointerFlags.Volatile)
         : base(flags, addr, value)
     {
         ElemType = elemType;

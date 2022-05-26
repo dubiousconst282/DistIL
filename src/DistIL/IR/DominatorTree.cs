@@ -5,10 +5,10 @@ public class DominatorTree
     readonly Dictionary<BasicBlock, Node> _block2node = new();
     readonly Node _root;
 
-    public Method Method { get; }
+    public MethodBody Method { get; }
     public bool IsPostDom { get; }
 
-    public DominatorTree(Method method, bool isPostDom = false)
+    public DominatorTree(MethodBody method, bool isPostDom = false)
     {
         Method = method;
         IsPostDom = isPostDom;

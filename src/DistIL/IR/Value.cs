@@ -2,7 +2,7 @@ namespace DistIL.IR;
 
 public abstract class Value
 {
-    public RType ResultType { get; protected set; } = PrimType.Void;
+    public TypeDesc ResultType { get; protected set; } = PrimType.Void;
     /// <summary> Whether this value's result type is not void. </summary>
     public bool HasResult => ResultType.Kind != TypeKind.Void;
 
@@ -72,7 +72,7 @@ public abstract class Value
     }
 
     /// <summary> Returns the instruction using this value at the specified use index. Equivalent to `Uses[index].Inst` </summary>
-    public Instruction GetUse(int index)
+    public Instruction GetUser(int index)
     {
         return Uses[index].Inst;
     }

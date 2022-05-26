@@ -1,6 +1,6 @@
 namespace DistIL.AsmIO;
 
-public partial class ILCodeEx
+public partial class ILCodes
 {
     // Use packed bitfield for flags to avoid code bloat
     const int

@@ -17,7 +17,7 @@ public class ConstFloat : Const
     public static ConstFloat CreateS(float value) => Create(PrimType.Single, value);
     public static ConstFloat CreateD(double value) => Create(PrimType.Double, value);
 
-    public static ConstFloat Create(RType type, double value)
+    public static ConstFloat Create(TypeDesc type, double value)
     {
         Ensure(type.StackType == StackType.Float);
         return new ConstFloat() { ResultType = type, Value = value };

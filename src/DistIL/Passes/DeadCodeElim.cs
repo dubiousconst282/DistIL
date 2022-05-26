@@ -4,7 +4,7 @@ using DistIL.IR;
 
 public class DeadCodeElim : MethodPass
 {
-    public override void Transform(Method method)
+    public override void Transform(MethodBody method)
     {
         var visitedBlocks = new HashSet<BasicBlock>();
         var pendingBlocks = new ArrayStack<BasicBlock>();

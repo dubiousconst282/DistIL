@@ -2,11 +2,11 @@ namespace DistIL.IR;
 
 public class Cloner
 {
-    readonly Method _targetMethod;
+    readonly MethodBody _targetMethod;
     readonly Dictionary<Value, Value> _mappings = new(); //mapping from old to new (clonned) values
     readonly InstCloner _instCloner;
 
-    public Cloner(Method targetMethod)
+    public Cloner(MethodBody targetMethod)
     {
         _targetMethod = targetMethod;
         _instCloner = new(this);
@@ -18,7 +18,7 @@ public class Cloner
     }
 
     //TODO: Streaming API
-    public List<BasicBlock> CloneBlocks(Method method)
+    public List<BasicBlock> CloneBlocks(MethodBody method)
     {
         var newBlocks = new List<BasicBlock>();
         //List of instructions that need to be remapped last (they may depend on a instruction in a unvisited pred block)

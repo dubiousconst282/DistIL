@@ -6,7 +6,7 @@
 /// </summary>
 public class Variable : Value
 {
-    public RType Type => ResultType;
+    public TypeDesc Type => ResultType;
     public string? Name { get; set; }
     public bool IsPinned { get; set; }
     /// <summary>
@@ -15,7 +15,7 @@ public class Variable : Value
     /// </summary>
     public bool IsExposed { get; set; }
 
-    public Variable(RType type, bool isPinned = false, string? name = null)
+    public Variable(TypeDesc type, bool isPinned = false, string? name = null)
     {
         ResultType = type;
         Name = name;
@@ -34,7 +34,7 @@ public class Variable : Value
 
     protected override SlotTracker GetDefaultSlotTracker()
     {
-        var parentMethod = Uses.Count > 0 ? GetUse(0).Block.Method : null;
+        var parentMethod = Uses.Count > 0 ? GetUser(0).Block.Method : null;
         return parentMethod?.GetSlotTracker() ?? base.GetDefaultSlotTracker();
     }
 }
@@ -47,7 +47,7 @@ public class Argument : Variable
 {
     public int Index { get; }
 
-    public Argument(RType type, int index, string? name = null)
+    public Argument(TypeDesc type, int index, string? name = null)
         : base(type, false, name)
     {
         Index = index;

@@ -2,18 +2,39 @@ namespace DistIL.AsmIO;
 
 using System.Reflection;
 using System.Reflection.Metadata;
+using System.Text;
 
 using DistIL.IR;
 
-public class FieldDef : Field, MemberDef
+/// <summary> Base class for all field entities. </summary>
+public abstract class FieldDesc : MemberDesc
 {
+    public TypeDesc Type { get; set; } = null!;
+    public abstract FieldAttributes Attribs { get; set; }
+
+    public bool IsStatic => (Attribs & FieldAttributes.Static) != 0;
+    public bool IsInstance => !IsStatic;
+
+    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    {
+        sb.Append($"{Type} {DeclaringType}::{Name}");
+    }
+}
+public abstract class FieldDefOrSpec : FieldDesc, ModuleEntity
+{
+    public abstract FieldDef Definition { get; }
+    public ModuleDef Module => Definition.DeclaringType.Module;
+}
+
+public class FieldDef : FieldDefOrSpec
+{
+    public override FieldDef Definition => this;
     public override TypeDef DeclaringType { get; }
-    public ModuleDef Module => DeclaringType.Module;
-    public EntityHandle Handle { get; }
+    public override FieldAttributes Attribs { get; set; }
+    public override string Name { get; }
 
-    public FieldAttributes Attribs { get; }
-
-    public object? DefaultValue { get; }
+    public object? DefaultValue { get; set; }
+    public bool HasDefaultValue => (Attribs & FieldAttributes.HasDefault) != 0;
 
     /// <summary> The field layout offset (e.g. x in [FieldOffset(x)]), or -1 if not available. </summary>
     public int LayoutOffset { get; set; }
@@ -21,36 +42,33 @@ public class FieldDef : Field, MemberDef
     /// <summary> Static data associated with the field. Attribs must have HasFieldRVA, and array length must be equal to the type layout size. </summary>
     public byte[]? MappedData { get; set; }
 
-    public override bool IsStatic => Attribs.HasFlag(FieldAttributes.Static);
-
-    public FieldDef(ModuleDef mod, FieldDefinitionHandle handle)
+    public FieldDef(
+        TypeDef declaringType, TypeDesc type, string name, 
+        FieldAttributes attribs = default, object? defaultValue = null,
+        int layoutOffset = -1, byte[]? mappedData = null)
     {
-        Handle = handle;
-        
-        var reader = mod.Reader;
-        var def = reader.GetFieldDefinition(handle);
-
-        Attribs = def.Attributes;
-        Type = def.DecodeSignature(mod.TypeProvider, default);
-        Name = reader.GetString(def.Name);
-
-        DeclaringType = mod.GetType(def.GetDeclaringType());
-
-        if (Attribs.HasFlag(FieldAttributes.HasFieldRVA)) {
-            int rva = def.GetRelativeVirtualAddress();
-            var data = mod.PE.GetSectionData(rva);
-            unsafe { MappedData = new Span<byte>(data.Pointer, GetMappedDataSize(Type)).ToArray(); }
-        }
-        if (Attribs.HasFlag(FieldAttributes.HasDefault)) {
-            DefaultValue = DecodeConst(reader, def.GetDefaultValue());
-        }
-        LayoutOffset = def.GetOffset();
-
-        Ensure(def.GetMarshallingDescriptor().IsNil); //not impl
-        Ensure(def.GetCustomAttributes().Count == 0);
+        DeclaringType = declaringType;
+        Type = type;
+        Name = name;
+        Attribs = attribs;
+        DefaultValue = defaultValue;
+        LayoutOffset = layoutOffset;
+        MappedData = mappedData;
     }
 
-    private static int GetMappedDataSize(RType type)
+    internal void Load(ModuleLoader loader, FieldDefinition info)
+    {
+        if (Attribs.HasFlag(FieldAttributes.HasFieldRVA)) {
+            int rva = info.GetRelativeVirtualAddress();
+            var data = loader._pe.GetSectionData(rva);
+            int size = FieldDef.GetMappedDataSize(Type);
+            unsafe { MappedData = new Span<byte>(data.Pointer, size).ToArray(); }
+        }
+        CustomAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
+        //TODO: info.GetMarshallingDescriptor()
+    }
+
+    public static int GetMappedDataSize(TypeDesc type)
     {
         switch (type.Kind) {
             case TypeKind.Bool:
@@ -71,37 +89,28 @@ public class FieldDef : Field, MemberDef
                 return 8;
             default:
                 if (type is TypeDef def) {
-                    var layout = def.Layout;
-                    Ensure(!layout.IsDefault); //not impl
-                    return layout.Size;
+                    return def.LayoutSize;
                 }
                 return 0;
         }
     }
+}
+public class FieldSpec : FieldDefOrSpec
+{
+    public override FieldDef Definition { get; }
+    public override TypeSpec DeclaringType { get; }
 
-    private static object? DecodeConst(MetadataReader reader, ConstantHandle handle)
+    public override FieldAttributes Attribs {
+        get => Definition.Attribs;
+        set => Definition.Attribs = value;
+    }
+    public override string Name => Definition.Name;
+
+    public FieldSpec(TypeSpec declaringType, FieldDef def)
     {
-        var cst = reader.GetConstant(handle);
-        var blob = reader.GetBlobReader(cst.Value);
-
-        #pragma warning disable format
-        return cst.TypeCode switch {
-            ConstantTypeCode.Boolean    => blob.ReadBoolean(),
-            ConstantTypeCode.Char       => blob.ReadChar(),
-            ConstantTypeCode.SByte      => blob.ReadSByte(),
-            ConstantTypeCode.Byte       => blob.ReadByte(),
-            ConstantTypeCode.Int16      => blob.ReadInt16(),
-            ConstantTypeCode.UInt16     => blob.ReadUInt16(),
-            ConstantTypeCode.Int32      => blob.ReadInt32(),
-            ConstantTypeCode.UInt32     => blob.ReadUInt32(),
-            ConstantTypeCode.Int64      => blob.ReadInt64(),
-            ConstantTypeCode.UInt64     => blob.ReadUInt64(),
-            ConstantTypeCode.Single     => blob.ReadSingle(),
-            ConstantTypeCode.Double     => blob.ReadDouble(),
-            ConstantTypeCode.String     => blob.ReadSerializedString(),
-            ConstantTypeCode.NullReference => null,
-            _ => throw new NotSupportedException()
-        };
-        #pragma warning restore format
+        DeclaringType = declaringType;
+        Definition = def;
+        Type = def.Type.GetSpec(new GenericContext(declaringType));
+        Attribs = def.Attribs;
     }
 }

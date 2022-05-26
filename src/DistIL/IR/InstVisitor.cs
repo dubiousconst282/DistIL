@@ -24,6 +24,7 @@ public interface InstVisitor
 
     void Visit(CallInst inst) => VisitDefault(inst);
     void Visit(NewObjInst inst) => VisitDefault(inst);
+    void Visit(IntrinsicInst inst) => VisitDefault(inst);
 
     void Visit(ReturnInst inst) => VisitDefault(inst);
     void Visit(BranchInst inst) => VisitDefault(inst);

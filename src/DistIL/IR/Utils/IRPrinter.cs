@@ -4,13 +4,13 @@ using System.IO;
 
 public class IRPrinter
 {
-    public static void ExportDot(Method method, string filename)
+    public static void ExportDot(MethodBody method, string filename)
     {
         using var tw = new StreamWriter(filename);
         ExportDot(method, tw);
     }
     /// <summary> Renders the method's CFG into a dot to the specified TextWriter. </summary>
-    public static void ExportDot(Method method, TextWriter tw)
+    public static void ExportDot(MethodBody method, TextWriter tw)
     {
         var instSb = new StringBuilder();
         var slotTracker = method.GetSlotTracker();
@@ -83,12 +83,12 @@ public class IRPrinter
         tw.Write("}\n");
     }
 
-    public static void ExportPlain(Method method, string filename)
+    public static void ExportPlain(MethodBody method, string filename)
     {
         using var tw = new StreamWriter(filename);
         ExportPlain(method, tw);
     }
-    public static void ExportPlain(Method method, TextWriter tw)
+    public static void ExportPlain(MethodBody method, TextWriter tw)
     {
         var tmpSb = new StringBuilder();
         var slotTracker = method.GetSlotTracker();

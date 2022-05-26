@@ -2,8 +2,8 @@ namespace DistIL.IR;
 
 public abstract class FieldAccessInst : Instruction
 {
-    public Field Field {
-        get => (Field)Operands[0];
+    public FieldDesc Field {
+        get => (FieldDesc)Operands[0];
         set => ReplaceOperand(0, value);
     }
     public Value? Obj {
@@ -31,7 +31,7 @@ public class LoadFieldInst : FieldAccessInst
 {
     public override string InstName => "ldfld";
 
-    public LoadFieldInst(Field field, Value? obj)
+    public LoadFieldInst(FieldDesc field, Value? obj)
         : base(obj == null ? new[] { field } : new[] { field, obj })
     {
         Ensure(field.IsStatic == (obj == null));
@@ -50,7 +50,7 @@ public class StoreFieldInst : FieldAccessInst
 
     public override string InstName => "stfld";
 
-    public StoreFieldInst(Field field, Value? obj, Value value)
+    public StoreFieldInst(FieldDesc field, Value? obj, Value value)
         : base(obj == null ? new[] { field, value } : new[] { field, obj, value })
     {
         Ensure((field.IsStatic == (obj == null)) && value.ResultType.IsStackAssignableTo(field.Type));

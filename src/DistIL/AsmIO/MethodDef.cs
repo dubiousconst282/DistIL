@@ -6,79 +6,133 @@ using System.Reflection.Metadata.Ecma335;
 
 using DistIL.IR;
 
-public class MethodDef : Method, MemberDef
+/// <summary> Base class for all method entities. </summary>
+public abstract class MethodDesc : MemberDesc
 {
-    public ModuleDef Module { get; }
-    public EntityHandle Handle { get; }
+    public MethodAttributes Attribs { get; protected set; }
+    public MethodImplAttributes ImplAttribs { get; protected set; }
 
-    public TypeDef DeclaringType { get; }
+    public bool IsStatic => (Attribs & MethodAttributes.Static) != 0;
+    public bool IsInstance => !IsStatic;
 
-    public MethodAttributes Attribs { get; }
-    public MethodImplAttributes ImplAttribs { get; }
+    public ImmutableArray<TypeDesc> GenericParams { get; protected set; } = ImmutableArray<TypeDesc>.Empty;
+    public bool IsGeneric => GenericParams.Length > 0;
+    public bool IsGenericSpec => this is MethodSpec;
 
-    private int _bodyRVA;
-    private MethodBody? _body;
+    public TypeDesc ReturnType { get; protected set; } = null!;
+    public ImmutableArray<ParamDef> Params { get; protected set; }
+    public ReadOnlySpan<ParamDef> StaticParams => Params.AsSpan().Slice(IsStatic ? 0 : 1);
 
-    public MethodBody? Body {
-        get {
-            if (_body == null && _bodyRVA != 0) {
-                _body = new MethodBody(Module, _bodyRVA);
-                _bodyRVA = 0;
-            }
-            return _body;
+    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    {
+        sb.Append($"{(IsStatic ? "static " : "")}{ReturnType} {DeclaringType}::{Name}");
+        if (IsGeneric) {
+            sb.AppendSequence("<", ">", GenericParams, p => p.Print(sb, slotTracker));
         }
-        set => _body = value;
+        sb.AppendSequence("(", ")", Params, p => p.Type.Print(sb, slotTracker));
+    }
+}
+public class ParamDef
+{
+    public TypeDesc Type { get; set; }
+    public string? Name { get; set; }
+    public ParameterAttributes Attribs { get; set; }
+    public ImmutableArray<CustomAttrib> CustomAttribs { get; set; }
+
+    public ParamDef(TypeDesc type, string? name = null, ParameterAttributes attribs = default)
+    {
+        Type = type;
+        Name = name;
+        Attribs = attribs;
+        CustomAttribs = ImmutableArray<CustomAttrib>.Empty;
     }
 
-    public MethodDef(ModuleDef mod, MethodDefinitionHandle handle)
+    public override string ToString() => Type.ToString();
+}
+
+public abstract class MethodDefOrSpec : MethodDesc, ModuleEntity
+{
+    /// <summary> Returns the parent definition if this is a MethodSpec, or itself if it is already a MethodDef. </summary>
+    public abstract MethodDef Definition { get; }
+    public ModuleDef Module => Definition.DeclaringType.Module;
+
+    public abstract override TypeDefOrSpec DeclaringType { get; }
+}
+public class MethodDef : MethodDefOrSpec
+{
+    public override MethodDef Definition => this;
+    public override TypeDef DeclaringType { get; }
+
+    private string _name;
+    public override string Name => _name;
+
+    public ILMethodBody? ILBody { get; set; }
+    public IR.MethodBody? Body { get; set; }
+
+    public MethodDef(
+        TypeDef declaringType, TypeDesc retType, 
+        ImmutableArray<ParamDef> pars, string name,
+        MethodAttributes attribs = default, MethodImplAttributes implAttribs = default,
+        ImmutableArray<TypeDesc> genericParams = default)
     {
-        Module = mod;
-        Handle = handle;
+        DeclaringType = declaringType;
+        ReturnType = retType;
+        Params = pars;
+        _name = name;
+        Attribs = attribs;
+        ImplAttribs = ImplAttribs;
+        GenericParams = genericParams.EmptyIfDefault();
+    }
 
-        var reader = mod.Reader;
-        var entity = reader.GetMethodDefinition(handle);
+    internal void Load(ModuleLoader loader, MethodDefinition info)
+    {
+        var reader = loader._reader;
+        foreach (var parHandle in info.GetParameters()) {
+            var parInfo = reader.GetParameter(parHandle);
 
-        Attribs = entity.Attributes;
-        ImplAttribs = entity.ImplAttributes;
-        DeclaringType = mod.GetType(entity.GetDeclaringType());
-        Name = reader.GetString(entity.Name);
-
-        IsStatic = (Attribs & MethodAttributes.Static) != 0;
-        var sig = entity.DecodeSignature(mod.TypeProvider, default);
-
-        RetType = sig.ReturnType;
-        Args = new List<Argument>(sig.RequiredParameterCount + (IsStatic ? 0 : 1));
-
-        if (!IsStatic) {
-            RType thisType = DeclaringType;
-            if (thisType.IsValueType) {
-                thisType = new ByrefType(thisType);
-            }
-            Args.Add(new Argument(thisType, 0, "this"));
-        }
-        foreach (var paramType in sig.ParameterTypes) {
-            string? name = null;
-            Args.Add(new Argument(paramType, Args.Count, name));
-        }
-        foreach (var paramHandle in entity.GetParameters()) {
-            var info = reader.GetParameter(paramHandle);
-
-            Ensure(info.GetMarshallingDescriptor().IsNil); //not impl
-            //Ensure(info.Attributes == ParameterAttributes.None);
-
-            int index = info.SequenceNumber - 1;
-
-            if (index >= 0 && index < Args.Count) {
-                Args[index].Name = reader.GetString(info.Name);
+            int index = parInfo.SequenceNumber - 1;
+            if (index >= 0 && index < Params.Length) {
+                var par = Params[index];
+                par.Name = reader.GetString(info.Name);
+                par.Attribs = parInfo.Attributes;
+                par.CustomAttribs = loader.DecodeCustomAttribs(parInfo.GetCustomAttributes());
             }
         }
-        ArgTypes = Args.Select(a => a.Type).ToImmutableArray();
+        if (info.RelativeVirtualAddress != 0) {
+            ILBody = new ILMethodBody(loader, info.RelativeVirtualAddress);
+        }
+        GenericParams = loader.DecodeGenericParams(info.GetGenericParameters());
+        CustomAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
+    }
 
-        _bodyRVA = entity.RelativeVirtualAddress;
+    public void SetName(string value) => _name = value;
+}
+
+/// <summary> Represents a generic method instantiation. </summary>
+public class MethodSpec : MethodDefOrSpec
+{
+    public override MethodDef Definition { get; }
+
+    public override TypeDefOrSpec DeclaringType { get; }
+    public override string Name => Definition.Name;
+
+    public MethodSpec(TypeDefOrSpec declaringType, MethodDef def, ImmutableArray<TypeDesc> args = default)
+    {
+        Definition = def;
+        Attribs = def.Attribs;
+        ImplAttribs = def.ImplAttribs;
+
+        DeclaringType = declaringType;
+        Ensure(args.IsDefaultOrEmpty || def.IsGeneric);
+        GenericParams = args.IsDefault ? def.GenericParams : args;
+
+        var genCtx = new GenericContext(this);
+        ReturnType = def.ReturnType.GetSpec(genCtx);
+        Params = def.Params.Select(p => new ParamDef(p.Type.GetSpec(genCtx), p.Name, p.Attribs)).ToImmutableArray();
     }
 }
 
-public class MethodBody
+public class ILMethodBody
 {
     public List<ExceptionRegion> ExceptionRegions { get; set; }
     public List<ILInstruction> Instructions { get; set; }
@@ -86,28 +140,28 @@ public class MethodBody
     public bool InitLocals { get; set; }
     public List<Variable> Locals { get; set; }
 
-    internal MethodBody(ModuleDef mod, int rva)
+    internal ILMethodBody(ModuleLoader loader, int rva)
     {
-        var block = mod.PE.GetMethodBody(rva);
+        var block = loader._pe.GetMethodBody(rva);
 
-        ExceptionRegions = DecodeExceptionRegions(mod, block);
-        Instructions = DecodeInsts(mod, block.GetILReader());
+        ExceptionRegions = DecodeExceptionRegions(loader, block);
+        Instructions = DecodeInsts(loader, block.GetILReader());
         MaxStack = block.MaxStack;
         InitLocals = block.LocalVariablesInitialized;
-        Locals = DecodeLocals(mod, block);
+        Locals = DecodeLocals(loader, block);
     }
 
-    private List<ILInstruction> DecodeInsts(ModuleDef mod, BlobReader reader)
+    private List<ILInstruction> DecodeInsts(ModuleLoader loader, BlobReader reader)
     {
         var list = new List<ILInstruction>(reader.Length / 2);
         while (reader.Offset < reader.Length) {
-            var inst = DecodeInst(mod, ref reader);
+            var inst = DecodeInst(loader, ref reader);
             list.Add(inst);
         }
         return list;
     }
 
-    private static ILInstruction DecodeInst(ModuleDef mod, ref BlobReader reader)
+    private static ILInstruction DecodeInst(ModuleLoader loader, ref BlobReader reader)
     {
         int baseOffset = reader.Offset;
         int code = reader.ReadByte();
@@ -119,11 +173,15 @@ public class MethodBody
             ILOperandType.BrTarget => reader.ReadInt32() + reader.Offset,
             ILOperandType.Field or
             ILOperandType.Method or
-            ILOperandType.Sig or
             ILOperandType.Tok or
             ILOperandType.Type 
-                => DecodeEntity(mod, reader.ReadInt32()),
-            ILOperandType.String => mod.Reader.GetUserString(MetadataTokens.UserStringHandle(reader.ReadInt32())),
+                => loader.GetEntity(MetadataTokens.EntityHandle(reader.ReadInt32())),
+            ILOperandType.Sig
+                //We convert "StandaloneSignature" into "FuncPtrType" because it's only used by calli
+                //and it'd be inconvinient to have another obscure class.
+                //TODO: fix generic context?
+                => loader.DecodeMethodSig(MetadataTokens.StandaloneSignatureHandle(reader.ReadInt32())),
+            ILOperandType.String => loader._reader.GetUserString(MetadataTokens.UserStringHandle(reader.ReadInt32())),
             ILOperandType.I => reader.ReadInt32(),
             ILOperandType.I8 => reader.ReadInt64(),
             ILOperandType.R => reader.ReadDouble(),
@@ -141,23 +199,6 @@ public class MethodBody
             Operand = operand
         };
 
-        static object DecodeEntity(ModuleDef mod, int token)
-        {
-            var handle = MetadataTokens.EntityHandle(token);
-            return handle.Kind switch {
-                HandleKind.TypeDefinition or 
-                HandleKind.TypeReference or 
-                HandleKind.TypeSpecification
-                    => mod.GetType(handle),
-                HandleKind.MethodDefinition
-                    => mod.GetMethod(handle),
-                HandleKind.FieldDefinition
-                    => mod.GetField(handle),
-                HandleKind.MemberReference
-                    => mod.GetMember((MemberReferenceHandle)handle),
-                _ => throw new InvalidOperationException()
-            };
-        }
         static int[] ReadJumpTable(ref BlobReader reader)
         {
             int count = reader.ReadInt32();
@@ -171,13 +212,13 @@ public class MethodBody
         }
     }
 
-    private static List<ExceptionRegion> DecodeExceptionRegions(ModuleDef mod, MethodBodyBlock block)
+    private static List<ExceptionRegion> DecodeExceptionRegions(ModuleLoader loader, MethodBodyBlock block)
     {
         var list = new List<ExceptionRegion>(block.ExceptionRegions.Length);
         foreach (var region in block.ExceptionRegions) {
             list.Add(new() {
                 Kind = region.Kind,
-                CatchType = region.CatchType.IsNil ? null : mod.GetType(region.CatchType),
+                CatchType = region.CatchType.IsNil ? null : (TypeDesc)loader.GetEntity(region.CatchType),
                 HandlerStart = region.HandlerOffset,
                 HandlerEnd = region.HandlerOffset + region.HandlerLength,
                 TryStart = region.TryOffset,
@@ -188,13 +229,13 @@ public class MethodBody
         return list;
     }
 
-    private static List<Variable> DecodeLocals(ModuleDef mod, MethodBodyBlock block)
+    private static List<Variable> DecodeLocals(ModuleLoader loader, MethodBodyBlock block)
     {
         if (block.LocalSignature.IsNil) {
             return new List<Variable>();
         }
-        var sig = mod.Reader.GetStandaloneSignature(block.LocalSignature);
-        var types = sig.DecodeLocalSignature(mod.TypeProvider, default);
+        var sig = loader._reader.GetStandaloneSignature(block.LocalSignature);
+        var types = sig.DecodeLocalSignature(loader._typeProvider, default);
         var vars = new List<Variable>(types.Length);
 
         for (int i = 0; i < types.Length; i++) {
@@ -214,7 +255,7 @@ public struct ExceptionRegion
     public ExceptionRegionKind Kind { get; set; }
 
     /// <summary> The catch type if the region represents a catch, or null otherwise. </summary>
-    public RType? CatchType { get; set; }
+    public TypeDesc? CatchType { get; set; }
 
     /// <summary> Gets the starting IL offset of the exception handler. </summary>
     public int HandlerStart { get; set; }

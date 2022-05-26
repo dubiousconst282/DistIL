@@ -14,11 +14,11 @@ public partial class ILGenerator : InstVisitor
 
     public void EmitMethod(MethodDef method)
     {
-        foreach (var block in method) {
+        foreach (var block in method.Body!) {
             _asm.MarkLabel(GetLabel(block));
             EmitBlock(block);
         }
-        var body = method.Body!;
+        var body = method.ILBody!;
         var bakedAsm = _asm.Bake();
         body.Instructions = bakedAsm.Code.ToList();
         body.Locals = _varTable.Keys.ToList();
@@ -53,7 +53,7 @@ public partial class ILGenerator : InstVisitor
     {
         if (def.Uses.Count >= 2) return true;
 
-        var use = def.GetUse(0);
+        var use = def.GetUser(0);
         //Check if they are in the same block
         if (use.Block != def.Block) return true;
         
@@ -217,7 +217,7 @@ public partial class ILGenerator : InstVisitor
         if (inst.Volatile) _asm.Emit(ILCode.Volatile_);
         if (inst.Unaligned) _asm.Emit(ILCode.Unaligned_, 1); //TODO: keep alignment in IR
 
-        var addrType = inst.Address.ResultType;
+        var addTypeDesc = inst.Address.ResultType;
         var interpType = inst.ElemType;
         var codes = GetCodeForPtrAcc(interpType);
 
@@ -225,7 +225,7 @@ public partial class ILGenerator : InstVisitor
         var objCode = isLoad ? ILCode.Ldobj : ILCode.Stobj;
         var code = isLoad ? codes.Ld : codes.St;
 
-        if (!interpType.IsValueType && addrType.ElemType == interpType) {
+        if (!interpType.IsValueType && addTypeDesc.ElemType == interpType) {
             _asm.Emit(refCode);
         } else {
             _asm.Emit(code, code == objCode ? interpType : null);

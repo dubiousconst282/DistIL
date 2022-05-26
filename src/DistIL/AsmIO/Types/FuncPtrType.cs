@@ -1,11 +1,14 @@
-namespace DistIL.IR;
+namespace DistIL.AsmIO;
 
+using System.Reflection.Metadata;
 using System.Text;
 
-public class FuncPtrType : RType
+using DistIL.IR;
+
+public class FuncPtrType : TypeDesc
 {
-    public RType RetType { get; }
-    public ImmutableArray<RType> ArgTypes { get; }
+    public TypeDesc ReturnType { get; }
+    public ImmutableArray<TypeDesc> ArgTypes { get; }
     public CallConvention CallConv { get; }
 
     public bool IsInstance { get; }
@@ -13,28 +16,41 @@ public class FuncPtrType : RType
 
     public override TypeKind Kind => TypeKind.Pointer;
     public override StackType StackType => StackType.NInt;
+    public override TypeDesc? BaseType => PrimType.ValueType;
+    public override bool IsValueType => true;
 
     public override string? Namespace => "";
     public override string Name => ToString();
 
-    public FuncPtrType(RType retType, ImmutableArray<RType> argTypes, CallConvention callConv, bool isInstance = false, bool explicitThis = false)
+    public FuncPtrType(TypeDesc retType, ImmutableArray<TypeDesc> argTypes, CallConvention callConv, bool isInstance = false, bool explicitThis = false)
     {
-        RetType = retType;
+        ReturnType = retType;
         ArgTypes = argTypes;
         CallConv = callConv;
         IsInstance = isInstance;
         HasExplicitThis = explicitThis;
     }
 
-    public override void Print(StringBuilder sb)
+    internal FuncPtrType(MethodSignature<TypeDesc> sig)
+    {
+        Ensure(sig.GenericParameterCount == 0);
+        var header = sig.Header;
+        ReturnType = sig.ReturnType;
+        ArgTypes = sig.ParameterTypes;
+        CallConv = (CallConvention)header.CallingConvention;
+        IsInstance = header.IsInstance;
+        HasExplicitThis = header.HasExplicitThis;
+    }
+
+    public override void Print(StringBuilder sb, SlotTracker slotTracker)
     {
         sb.Append($"delegate* {CallConv.ToString().ToLower()}<");
-        sb.AppendJoin(", ", ArgTypes.Append(RetType));
+        sb.AppendJoin(", ", ArgTypes.Append(ReturnType));
         sb.Append(">");
     }
 
-    public override bool Equals(RType? other)
-        => other is FuncPtrType o && o.RetType == RetType && o.CallConv == CallConv &&
+    public override bool Equals(TypeDesc? other)
+        => other is FuncPtrType o && o.ReturnType == ReturnType && o.CallConv == CallConv &&
            o.IsInstance == IsInstance && o.IsGeneric == IsGeneric &&
            o.ArgTypes.SequenceEqual(ArgTypes);
 }

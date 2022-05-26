@@ -8,23 +8,27 @@ using ExceptionRegionKind = System.Reflection.Metadata.ExceptionRegionKind;
 public class ILImporter
 {
     public MethodDef Method { get; }
-    readonly Dictionary<int, BlockState> _blocks = new();
+
+    internal MethodBody _body;
     //used to discover variables crossing try blocks/exposed address
     internal VarFlags[] _varFlags;
+
+    readonly Dictionary<int, BlockState> _blocks = new();
 
     public ILImporter(MethodDef method)
     {
         Method = method;
-        if (method.Body == null) {
+        if (method.ILBody == null) {
             throw new ArgumentException("Method has no body to import");
         }
-        int numVars = method.Args.Count + method.Body.Locals.Count;
+        int numVars = method.Params.Length + method.ILBody.Locals.Count;
         _varFlags = new VarFlags[numVars];
+        _body = new MethodBody(method);
     }
 
-    public void ImportCode()
+    public MethodBody ImportCode()
     {
-        var body = Method.Body!;
+        var body = Method.ILBody!;
         var code = body.Instructions.AsSpan();
         var ehRegions = body.ExceptionRegions;
         var leaders = FindLeaders(code, ehRegions);
@@ -32,13 +36,14 @@ public class ILImporter
         CreateBlocks(leaders);
         GuardRegions(leaders, ehRegions);
         ImportBlocks(code, leaders);
+        return _body;
     }
 
     private void CreateBlocks(BitSet leaders)
     {
         //Remove 0th label to avoid creating 2 blocks
         bool firstHasPred = leaders.Remove(0);
-        var entryBlock = firstHasPred ? Method.CreateBlock() : null!;
+        var entryBlock = firstHasPred ? _body.CreateBlock() : null!;
 
         int startOffset = 0;
         foreach (int endOffset in leaders) {

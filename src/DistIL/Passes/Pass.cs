@@ -12,5 +12,5 @@ public abstract class ModulePass : Pass
 }
 public abstract class MethodPass : Pass
 {
-    public abstract void Transform(Method method);
+    public abstract void Transform(MethodBody method);
 }

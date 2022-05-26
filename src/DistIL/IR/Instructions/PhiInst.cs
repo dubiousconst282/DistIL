@@ -10,7 +10,7 @@ public class PhiInst : Instruction
     public int NumArgs => Operands.Length / 2;
     public override string InstName => "phi";
 
-    public PhiInst(RType type)
+    public PhiInst(TypeDesc type)
     {
         ResultType = type;
     }

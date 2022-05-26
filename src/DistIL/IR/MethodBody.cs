@@ -1,21 +1,32 @@
 namespace DistIL.IR;
 
-public abstract class Method : Callsite
+using DistIL.AsmIO;
+
+public class MethodBody
 {
+    public MethodDef Method { get; }
     private SlotTracker? _slotTracker = null;
     private bool _slotsDirty = true;
 
-    public List<Argument> Args { get; init; } = null!;
+    public List<Argument> Args { get; }
     /// <summary> Gets a view over `Args` excluding the first argument (`this`) if this is an instance method. </summary>
-    public ReadOnlySpan<Argument> StaticArgs => Args.AsSpan(IsStatic ? 0 : 1);
+    public ReadOnlySpan<Argument> StaticArgs => Args.AsSpan(Method.IsStatic ? 0 : 1);
+
+    public TypeDesc ReturnType => Method.ReturnType;
 
     /// <summary> The entry block of this method. Should not have predecessors. </summary>
     public BasicBlock EntryBlock { get; private set; } = null!;
     public int NumBlocks { get; private set; } = 0;
     private BasicBlock? _lastBlock; //Last block in the list
 
-    /// <summary> Whether IR is available for this method (was sucessfully imported). </summary>
-    public bool CodeAvailable => EntryBlock != null;
+    public MethodBody(MethodDef def)
+    {
+        Method = def;
+        Args = new List<Argument>(def.Params.Length);
+        foreach (var par in def.Params) {
+            Args.Add(new Argument(par.Type, Args.Count, par.Name));
+        }
+    }
 
     /// <summary> Creates and adds an empty block to this method. If the method is empty, this block will be set as the entry block. </summary>
     public BasicBlock CreateBlock()
@@ -52,13 +63,6 @@ public abstract class Method : Callsite
         return false;
     }
 
-    public void ClearBlocks()
-    {
-        EntryBlock = _lastBlock = null!;
-        NumBlocks = 0;
-        InvalidateBlocks();
-    }
-
     public SlotTracker GetSlotTracker()
     {
         _slotTracker ??= new();
@@ -68,7 +72,7 @@ public abstract class Method : Callsite
         }
         return _slotTracker;
     }
-    public void InvalidateSlots()
+    internal void InvalidateSlots()
     {
         _slotsDirty = true;
     }

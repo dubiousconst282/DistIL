@@ -2,10 +2,10 @@ namespace DistIL.IR.Utils;
 
 public class IRVerifier
 {
-    readonly Method _method;
+    readonly MethodBody _method;
     readonly List<Diagnostic> _diags = new();
 
-    public IRVerifier(Method method)
+    public IRVerifier(MethodBody method)
     {
         _method = method;
     }

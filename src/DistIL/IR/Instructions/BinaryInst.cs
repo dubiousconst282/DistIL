@@ -28,7 +28,7 @@ public class BinaryInst : Instruction
         Op = op;
     }
 
-    private static RType? GetResultType(BinaryOp op, RType a, RType b)
+    private static TypeDesc? GetResultType(BinaryOp op, TypeDesc a, TypeDesc b)
     {
         //ECMA335 III.1.5
         var sa = a.StackType;

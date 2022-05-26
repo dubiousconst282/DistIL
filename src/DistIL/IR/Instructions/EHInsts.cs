@@ -24,13 +24,13 @@ public class GuardInst : Instruction
     [MemberNotNullWhen(true, nameof(FilterBlock))]
     public bool HasFilter => Kind == GuardKind.Catch && Operands.Length >= 2;
 
-    public RType? CatchType => ResultType;
+    public TypeDesc? CatchType => ResultType;
     public GuardKind Kind { get; set; }
 
     public override string InstName => "try";
     public override bool SafeToRemove => false;
 
-    public GuardInst(GuardKind kind, BasicBlock handlerBlock, RType? catchType = null, BasicBlock? filterBlock = null)
+    public GuardInst(GuardKind kind, BasicBlock handlerBlock, TypeDesc? catchType = null, BasicBlock? filterBlock = null)
         : base(filterBlock == null ? new Value[] { handlerBlock } : new Value[] { handlerBlock, filterBlock })
     {
         Kind = kind;

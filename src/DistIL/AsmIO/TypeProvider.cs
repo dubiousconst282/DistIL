@@ -2,18 +2,17 @@ namespace DistIL.AsmIO;
 
 using System.Collections.Immutable;
 using System.Reflection.Metadata;
-using DistIL.IR;
 
-public class TypeProvider : ISignatureTypeProvider<RType, GenericContext>
+internal class TypeProvider : ISignatureTypeProvider<TypeDesc, GenericContext>, ICustomAttributeTypeProvider<TypeDesc>
 {
-    public ModuleDef Module { get; }
+    readonly ModuleLoader _loader;
 
-    public TypeProvider(ModuleDef mod)
+    public TypeProvider(ModuleLoader loader)
     {
-        Module = mod;
+        _loader = loader;
     }
 
-    public RType GetPrimitiveType(PrimitiveTypeCode typeCode)
+    public TypeDesc GetPrimitiveType(PrimitiveTypeCode typeCode)
     {
         return typeCode switch {
             PrimitiveTypeCode.Void    => PrimType.Void,
@@ -33,95 +32,105 @@ public class TypeProvider : ISignatureTypeProvider<RType, GenericContext>
             PrimitiveTypeCode.UIntPtr => PrimType.UIntPtr,
             PrimitiveTypeCode.String  => PrimType.String,
             PrimitiveTypeCode.Object  => PrimType.Object,
+            PrimitiveTypeCode.TypedReference => PrimType.TypedRef,
             _ => throw new NotSupportedException()
         };
     }
 
-    public RType GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind)
+    public TypeDesc GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind)
     {
-        Assert(reader == Module.Reader);
-        return Module.GetType(handle);
+        return (TypeDesc)_loader.GetType(handle);
     }
 
-    public RType GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind)
+    public TypeDesc GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind)
     {
-        Assert(reader == Module.Reader);
-        return Module.GetType(handle);
+        return (TypeDesc)_loader.GetEntity(handle);
     }
 
-    public RType GetTypeFromSpecification(MetadataReader reader, GenericContext context, TypeSpecificationHandle handle, byte rawTypeKind)
+    public TypeDesc GetTypeFromSpecification(MetadataReader reader, GenericContext context, TypeSpecificationHandle handle, byte rawTypeKind)
     {
-        Assert(reader == Module.Reader);
-        return Module.GetType(handle);
+        return (TypeDesc)_loader.GetEntity(handle);
     }
 
-    public RType GetSZArrayType(RType elementType)
+    public TypeDesc GetSZArrayType(TypeDesc elementType)
     {
         return new ArrayType(elementType);
     }
-    public RType GetArrayType(RType elementType, ArrayShape shape)
+    public TypeDesc GetArrayType(TypeDesc elementType, ArrayShape shape)
     {
         return new MDArrayType(elementType, shape.Rank, shape.LowerBounds, shape.Sizes);
     }
 
-    public RType GetByReferenceType(RType elementType)
+    public TypeDesc GetByReferenceType(TypeDesc elementType)
     {
         return new ByrefType(elementType);
     }
-    public RType GetPointerType(RType elementType)
+    public TypeDesc GetPointerType(TypeDesc elementType)
     {
         return new PointerType(elementType);
     }
 
-    public RType GetPinnedType(RType elementType)
+    public TypeDesc GetPinnedType(TypeDesc elementType)
     {
         return new PinnedType_(elementType);
     }
 
-    public RType GetFunctionPointerType(MethodSignature<RType> signature)
+    public TypeDesc GetFunctionPointerType(MethodSignature<TypeDesc> signature)
     {
-        Ensure(signature.GenericParameterCount == 0); //not impl
-        var header = signature.Header;
-        return new FuncPtrType(
-            signature.ReturnType, signature.ParameterTypes,
-            (CallConvention)header.CallingConvention, 
-            header.IsInstance, header.HasExplicitThis
-        );
+        return new FuncPtrType(signature);
     }
 
-    public RType GetGenericInstantiation(RType genericType, ImmutableArray<RType> typeArguments)
+    public TypeDesc GetGenericInstantiation(TypeDesc genericType, ImmutableArray<TypeDesc> typeArguments)
     {
-        return new TypeSpec((TypeDef)genericType, typeArguments);
+        return genericType.GetSpec(new GenericContext(typeArguments));
     }
 
-    public RType GetGenericMethodParameter(GenericContext context, int index)
+    public TypeDesc GetGenericMethodParameter(GenericContext context, int index)
     {
-        return context.GetMethodArg(index);
+        return new GenericParamType(index, true);
     }
-    public RType GetGenericTypeParameter(GenericContext context, int index)
+    public TypeDesc GetGenericTypeParameter(GenericContext context, int index)
     {
-        return context.GetTypeArg(index);
+        return new GenericParamType(index, false);
     }
 
-    public RType GetModifiedType(RType modifier, RType unmodifiedType, bool isRequired)
+    public TypeDesc GetModifiedType(TypeDesc modifier, TypeDesc unmodifiedType, bool isRequired)
     {
         return unmodifiedType; //FIXME: implement this thing
     }
-}
 
-/// <summary> Represents the type of a local variable that holds a pinned GC reference. It should never be used directly. </summary>
-public class PinnedType_ : CompoundType
-{
-    public override TypeKind Kind => ElemType.Kind;
-    public override StackType StackType => ElemType.StackType;
-
-    protected override string Postfix => "^";
-
-    public PinnedType_(RType elemType)
-        : base(elemType)
+    public TypeDesc GetSystemType()
     {
+        return _loader._mod.SysTypes.Type;
+    }
+    public bool IsSystemType(TypeDesc type)
+    {
+        return type == _loader._mod.SysTypes.Type;
     }
 
-    public override bool Equals(RType? other) 
-        => other is PinnedType_ o && o.ElemType == ElemType;
+    public TypeDesc GetTypeFromSerializedName(string name)
+    {
+        throw new NotImplementedException();
+    }
+    public PrimitiveTypeCode GetUnderlyingEnumType(TypeDesc type)
+    {
+        var underlyingType = ((TypeDefOrSpec)type).UnderlyingEnumType!;
+        return underlyingType.Kind switch {
+            TypeKind.Bool    => PrimitiveTypeCode.Boolean,
+            TypeKind.Char    => PrimitiveTypeCode.Char,
+            TypeKind.SByte   => PrimitiveTypeCode.SByte,
+            TypeKind.Byte    => PrimitiveTypeCode.Byte,
+            TypeKind.Int16   => PrimitiveTypeCode.Int16,
+            TypeKind.UInt16  => PrimitiveTypeCode.UInt16,
+            TypeKind.Int32   => PrimitiveTypeCode.Int32,
+            TypeKind.UInt32  => PrimitiveTypeCode.UInt32,
+            TypeKind.Int64   => PrimitiveTypeCode.Int64,
+            TypeKind.UInt64  => PrimitiveTypeCode.UInt64,
+            TypeKind.Single  => PrimitiveTypeCode.Single,
+            TypeKind.Double  => PrimitiveTypeCode.Double,
+            TypeKind.IntPtr  => PrimitiveTypeCode.IntPtr,
+            TypeKind.UIntPtr => PrimitiveTypeCode.UIntPtr,
+            _ => throw new NotSupportedException()
+        };
+    }
 }

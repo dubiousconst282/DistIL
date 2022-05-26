@@ -142,7 +142,7 @@ public partial class ILGenerator
         };
     }
 
-    private static (ILCode Ld, ILCode St) GetCodeForPtrAcc(RType type)
+    private static (ILCode Ld, ILCode St) GetCodeForPtrAcc(TypeDesc type)
     {
         return type.Kind switch {
             TypeKind.Bool or TypeKind.Byte      => (ILCode.Ldind_U1, ILCode.Stind_I1),

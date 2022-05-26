@@ -41,7 +41,7 @@ public class ConstInt : Const
     public static ConstInt CreateI(int value) => Create(PrimType.Int32, value);
     public static ConstInt CreateL(long value) => Create(PrimType.Int64, value);
 
-    public static ConstInt Create(RType type, long value)
+    public static ConstInt Create(TypeDesc type, long value)
     {
         Ensure(type.Kind.IsInt());
         return new() { ResultType = type, Value = value };

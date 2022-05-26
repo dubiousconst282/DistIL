@@ -3,238 +3,42 @@ namespace DistIL.AsmIO;
 using System.IO;
 using System.Reflection;
 using System.Reflection.Metadata;
-using System.Reflection.Metadata.Ecma335;
-using System.Reflection.PortableExecutable;
 
-using DistIL.IR;
-
-public class ModuleDef : EntityDef
+public class ModuleDef : ModuleEntity
 {
-    public PEReader PE { get; }
-    public MetadataReader Reader { get; }
-    public TypeProvider TypeProvider { get; }
-    public ModuleResolver Resolver { get; }
+    public string Name { get; set; } = null!;
+    public AssemblyName AsmName { get; set; } = null!;
+    public AssemblyFlags AsmFlags { get; set; }
+    public ImmutableArray<CustomAttrib> CustomAttribs { get; set; } = ImmutableArray<CustomAttrib>.Empty;
 
-    public AssemblyName AsmName { get; }
+    public MethodDef? EntryPoint { get; set; }
+    public List<ModuleDef> AssemblyRefs { get; } = new();
+    public List<TypeDef> TypeDefs { get; } = new();
+    public List<TypeDef> ExportedTypes { get; } = new();
 
-    private TypeDef?[] _typeDefs;
+    internal Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); //root assemblies for references of forwarded types
 
-    private MethodDef?[] _methodDefs;
-    private FieldDef?[] _fieldDefs;
-    //resolved reference cache
-    private ModuleDef?[] _resolvedAsmRefs;
-    private TypeDef?[] _resolvedTypeRefs;
-    private MemberDef?[] _resolvedMemberRefs;
+    /// <summary> The resolved `System.Runtime` or `System.Private.CoreLib` module reference. </summary>
+    public ModuleDef CoreLib { get; internal set; } = null!;
+    public SystemTypes SysTypes { get; internal set; } = null!;
 
-    private ExportedType?[] _exportedTypes;
+    ModuleDef ModuleEntity.Module => this;
 
-    private Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); //root assemblies for references of forwarded types
-    private Dictionary<(AssemblyReferenceHandle, string? Ns, string Name), TypeDef> _importCache = new();
-
-    ModuleDef EntityDef.Module => this;
-    EntityHandle EntityDef.Handle => default;
-
-    public ModuleDef(PEReader pe, ModuleResolver resolver)
+    internal TypeDef? FindType(string? ns, string name, bool includeExports = true, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
     {
-        PE = pe;
-        Reader = pe.GetMetadataReader();
-        TypeProvider = new TypeProvider(this);
-        Resolver = resolver;
-
-        AsmName = Reader.GetAssemblyDefinition().GetAssemblyName();
-
-        _typeDefs = new TypeDef[Reader.TypeDefinitions.Count];
-        _methodDefs = new MethodDef[Reader.MethodDefinitions.Count];
-        _fieldDefs = new FieldDef[Reader.FieldDefinitions.Count];
-
-        _resolvedAsmRefs = new ModuleDef[Reader.AssemblyReferences.Count];
-        _resolvedTypeRefs = new TypeDef[Reader.TypeReferences.Count];
-        _resolvedMemberRefs = new MemberDef[Reader.MemberReferences.Count];
-
-        _exportedTypes = new ExportedType[Reader.ExportedTypes.Count];
-    }
-
-    public RType GetType(EntityHandle handle)
-    {
-        return handle.Kind switch {
-            HandleKind.TypeDefinition => GetType((TypeDefinitionHandle)handle),
-            HandleKind.TypeReference => GetOrResolveType((TypeReferenceHandle)handle),
-            HandleKind.TypeSpecification => GetTypeSpec((TypeSpecificationHandle)handle),
-            _ => throw new NotSupportedException()
-        };
-    }
-
-    public TypeDef GetType(TypeDefinitionHandle handle)
-    {
-        return GetEntity(_typeDefs, handle) ??= new TypeDef(this, handle);
-    }
-
-    private RType GetTypeSpec(TypeSpecificationHandle handle)
-    {
-        //TODO: SpecializedType cache
-        var info = Reader.GetTypeSpecification(handle);
-        return info.DecodeSignature(TypeProvider, default);
-    }
-
-    public MethodDef GetMethod(EntityHandle handle)
-    {
-        return handle.Kind switch {
-            HandleKind.MethodDefinition => GetEntity(_methodDefs, handle) ??= new MethodDef(this, (MethodDefinitionHandle)handle),
-            HandleKind.MemberReference => (MethodDef)GetMember((MemberReferenceHandle)handle),
-            _ => throw new NotSupportedException()
-        };
-    }
-
-    public FieldDef GetField(EntityHandle handle)
-    {
-        return handle.Kind switch {
-            HandleKind.FieldDefinition => GetEntity(_fieldDefs, handle) ??= new FieldDef(this, (FieldDefinitionHandle)handle),
-            HandleKind.MemberReference => (FieldDef)GetMember((MemberReferenceHandle)handle),
-            _ => throw new NotSupportedException()
-        };
-    }
-
-    public MemberDef GetMember(MemberReferenceHandle handle)
-    {
-        ref var entity = ref GetEntity(_resolvedMemberRefs, handle);
-        if (entity != null) {
-            return entity;
-        }
-        var info = Reader.GetMemberReference(handle);
-        return entity = info.GetKind() switch {
-            MemberReferenceKind.Field => ResolveField(info),
-            MemberReferenceKind.Method => ResolveMethod(info),
-            _ => throw new InvalidOperationException()
-        };
-    }
-
-    private ModuleDef GetOrResolveAsm(AssemblyReferenceHandle handle)
-    {
-        ref var entity = ref GetEntity(_resolvedAsmRefs, handle);
-        if (entity != null) {
-            return entity;
-        }
-        var info = Reader.GetAssemblyReference(handle);
-        return entity = Resolver.Resolve(info.GetAssemblyName());
-    }
-
-    private TypeDef GetOrResolveType(TypeReferenceHandle handle)
-    {
-        ref var entity = ref GetEntity(_resolvedTypeRefs, handle);
-        if (entity != null) {
-            return entity;
-        }
-        var info = Reader.GetTypeReference(handle);
-        string typeName = Reader.GetString(info.Name);
-        string? typeNs = Reader.GetOptString(info.Namespace);
-        var scope = (AssemblyReferenceHandle)info.ResolutionScope;
-        entity = ResolveType(scope, typeNs, typeName);
-        
-        if (entity != null) {
-            return entity;
-        }
-        throw new InvalidOperationException($"Could not resolve referenced type '{typeName}'");
-    }
-
-    private MethodDef ResolveMethod(MemberReference info)
-    {
-        var parent = GetOrResolveType((TypeReferenceHandle)info.Parent);
-
-        string name = Reader.GetString(info.Name);
-        var signature = info.DecodeMethodSignature(TypeProvider, default);
-
-        foreach (var method in parent.Methods) {
-            if (method.Name == name && ArgTypesEqual(method, signature.ParameterTypes)) {
-                return method;
-            }
-            //TODO: check base types
-        }
-        throw new InvalidOperationException($"Could not resolve referenced method '{parent}::{name}'");
-    }
-
-    private bool ArgTypesEqual(MethodDef method, ImmutableArray<RType> types)
-    {
-        var args1 = method.ArgTypes.AsSpan();
-        if (method.IsInstance) {
-            args1 = args1.Slice(1); //exclude this
-        }
-        return args1.SequenceEqual(types.AsSpan());
-    }
-
-    private FieldDef ResolveField(MemberReference info)
-    {
-        var parent = GetOrResolveType((TypeReferenceHandle)info.Parent);
-
-        string name = Reader.GetString(info.Name);
-        var type = info.DecodeFieldSignature(TypeProvider, default);
-
-        foreach (var field in parent.Fields) {
-            if (field.Name == name && field.Type == type) {
-                return field;
-            }
-        }
-        throw new InvalidOperationException($"Could not resolve referenced field '{parent}::{name}'");
-    }
-
-    private ExportedType GetExportedType(ExportedTypeHandle handle)
-    {
-        ref var entity = ref GetEntity(_exportedTypes, handle);
-        if (entity != null) {
-            return entity;
-        }
-        var info = Reader.GetExportedType(handle);
-        string name = Reader.GetString(info.Name);
-        string? ns = Reader.GetOptString(info.Namespace);
-        var impl = default(TypeDef);
-        var scope = default(EntityDef);
-
-        if (info.Implementation.Kind == HandleKind.ExportedType) {
-            var parent = GetExportedType((ExportedTypeHandle)info.Implementation).Implementation;
-            impl = parent.GetNestedType(name);
-            scope = parent;
-        } else {
-            var asm = GetOrResolveAsm((AssemblyReferenceHandle)info.Implementation);
-            impl = asm.FindType(ns, name);
-            scope = asm;
-        }
-        impl = impl ?? throw new InvalidOperationException("Could not find forwarded type");
-        return entity = new ExportedType(this, handle, scope, impl);
-    }
-
-    private TypeDef? ResolveType(AssemblyReferenceHandle scopeHandle, string? ns, string name)
-    {
-        ref var type = ref _importCache.GetOrAddRef((scopeHandle, ns, name));
-        if (type != null) {
-            return type;
-        }
-        var scope = GetOrResolveAsm(scopeHandle);
-        type = scope.FindType(ns, name);
-        if (type != null) {
-            SetRefAssembly(type, scope);
-        }
-        return type;
-    }
-
-    private TypeDef? FindType(string? ns, string name)
-    {
-        foreach (var type in GetTypes()) {
+        var availableTypes = includeExports ? TypeDefs.Concat(ExportedTypes) : TypeDefs;
+        foreach (var type in availableTypes) {
             if (type.Name == name && type.Namespace == ns) {
                 return type;
             }
         }
+        if (throwIfNotFound) {
+            throw new InvalidOperationException($"Type {ns}.{name} not found");
+        }
         return null;
     }
 
-    private static ref T? GetEntity<T>(T?[] arr, EntityHandle handle)
-    {
-        return ref arr[MetadataTokens.GetRowNumber(handle) - 1];
-    }
-    private static T GetEntity<T>(T?[] arr, EntityHandle handle, Func<T> factory)
-    {
-        return GetEntity(arr, handle) ??= factory();
-    }
-
-    public RType Import(Type type)
+    public TypeDesc Import(Type type)
     {
         //TODO: add new references
         return FindReferencedType(type) ?? throw new NotImplementedException();
@@ -242,67 +46,13 @@ public class ModuleDef : EntityDef
 
     private TypeDef? FindReferencedType(Type type)
     {
-        var queryName = type.Assembly.GetName();
-        foreach (var mod in GetReferencedAssemblies()) {
-            if (mod.AsmName.Name == queryName.Name) {
+        var asmName = type.Assembly.GetName().Name;
+        foreach (var mod in AssemblyRefs) {
+            if (mod.AsmName.Name == asmName) {
                 return mod.FindType(type.Namespace, type.Name);
             }
         }
         return null;
-    }
-
-    public IEnumerable<TypeDef> GetDefinedTypes()
-    {
-        foreach (var handle in Reader.TypeDefinitions) {
-            yield return GetType(handle);
-        }
-    }
-
-    public IEnumerable<MethodDef> GetDefinedMethods()
-    {
-        foreach (var handle in Reader.MethodDefinitions) {
-            yield return GetMethod(handle);
-        }
-    }
-
-    public IEnumerable<TypeDef> GetTypes()
-    {
-        foreach (var handle in Reader.TypeDefinitions) {
-            yield return GetType(handle);
-        }
-        foreach (var handle in Reader.ExportedTypes) {
-            yield return GetExportedType(handle).Implementation;
-        }
-    }
-
-    public IEnumerable<ModuleDef> GetReferencedAssemblies()
-    {
-        foreach (var asmHandle in Reader.AssemblyReferences) {
-            yield return GetOrResolveAsm(asmHandle);
-        }
-    }
-
-    public MethodDef? GetEntryPoint()
-    {
-        int entryPointToken = PE.PEHeaders.CorHeader?.EntryPointTokenOrRelativeVirtualAddress ?? 0;
-        if (entryPointToken == 0) {
-            return null;
-        }
-        return GetMethod(MetadataTokens.EntityHandle(entryPointToken));
-    }
-
-
-    private void SetRefAssembly(TypeDef type, ModuleDef root)
-    {
-        if (type.Module != root) {
-            _typeRefRoots.Add(type, root);
-        }
-    }
-
-    /// <summary> Returns the root referenced assembly in which `type` can be found. </summary>
-    public ModuleDef GetRefAssembly(TypeDef type)
-    {
-        return _typeRefRoots.GetValueOrDefault(type, type.Module);
     }
 
     public void Save(Stream stream)

@@ -4,7 +4,7 @@ using DistIL.IR;
 
 public class MergeBlocks : MethodPass
 {
-    public override void Transform(Method method)
+    public override void Transform(MethodBody method)
     {
         bool changed = true;
         while (changed) {
@@ -119,7 +119,7 @@ public class MergeBlocks : MethodPass
         if (!(block.Succs.Count == 1)) return false;
         if (!(block.First is PhiInst { Uses.Count: 1 } phi && phi.Next is BranchInst br)) return false;
         var succ = block.Succs[0]; 
-        if (!(phi.GetUse(0) is PhiInst userPhi && userPhi.Block == succ)) return false;
+        if (!(phi.GetUser(0) is PhiInst userPhi && userPhi.Block == succ)) return false;
 
         userPhi.RemoveArg(block, false);
 

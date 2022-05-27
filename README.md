@@ -60,8 +60,13 @@ class Bar {
   </tr>
 </table>
 
+Overview of the optimizations made above:
+- The call to MoveNext() was inlined.
+- The field reload near `xor` was replaced with the register from the latest known value (value numbering)
+- The code `a[i++] < 0 ? -1 : +1` was transformed into a branchless equivalent `icmp.slt(a[i++], 0) * 2 - 1`
+The inlining pass generates several redundant blocks and phis like `int rX = phi [BB_X -> 1, BB_Y -> 0]`, they were eliminated and are not shown above.
 
-An example demonstrating how exception handlers are represented:
+Another simple example demonstrating how exception handlers are represented:
 <table>
     <tr>
         <td>

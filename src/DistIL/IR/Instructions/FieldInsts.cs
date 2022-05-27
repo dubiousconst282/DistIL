@@ -58,3 +58,17 @@ public class StoreFieldInst : FieldAccessInst
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }
+
+public class FieldAddrInst : FieldAccessInst
+{
+    public override string InstName => "fldaddr";
+
+    public FieldAddrInst(FieldDesc field, Value? obj)
+        : base(obj == null ? new[] { field } : new[] { field, obj })
+    {
+        Ensure(field.IsStatic == (obj == null));
+        ResultType = new ByrefType(field.Type);
+    }
+
+    public override void Accept(InstVisitor visitor) => visitor.Visit(this);
+}

@@ -249,6 +249,14 @@ public partial class ILGenerator : InstVisitor
         var code = inst.IsStatic ? ILCode.Stsfld : ILCode.Stfld;
         _asm.Emit(code, inst.Field);
     }
+    public void Visit(FieldAddrInst inst)
+    {
+        if (!inst.IsStatic) {
+            Push(inst.Obj);
+        }
+        var code = inst.IsStatic ? ILCode.Ldsflda : ILCode.Ldflda;
+        _asm.Emit(code, inst.Field);
+    }
 
     public void Visit(ArrayLenInst inst)
     {

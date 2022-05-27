@@ -21,6 +21,7 @@ public interface InstVisitor
 
     void Visit(LoadFieldInst inst) => VisitDefault(inst);
     void Visit(StoreFieldInst inst) => VisitDefault(inst);
+    void Visit(FieldAddrInst inst) => VisitDefault(inst);
 
     void Visit(CallInst inst) => VisitDefault(inst);
     void Visit(NewObjInst inst) => VisitDefault(inst);

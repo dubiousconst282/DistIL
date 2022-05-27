@@ -371,6 +371,11 @@ internal class BlockState
                 case ILCode.Stsfld:
                     ImportStoreField((FieldDesc)inst.Operand!, opcode == ILCode.Stsfld);
                     break;
+                
+                case ILCode.Ldflda:
+                case ILCode.Ldsflda:
+                    ImportFieldAddr((FieldDesc)inst.Operand!, opcode == ILCode.Ldsflda);
+                    break;
                 #endregion
 
                 #region Prefixes
@@ -671,6 +676,11 @@ internal class BlockState
         var value = Pop();
         var obj = field.IsStatic ? null : Pop();
         Emit(new StoreFieldInst(field, obj, value));
+    }
+    private void ImportFieldAddr(FieldDesc field, bool isStatic)
+    {
+        var obj = field.IsStatic ? null : Pop();
+        Push(new FieldAddrInst(field, obj));
     }
 
     private void ImportCall(MethodDesc method, bool isVirt)

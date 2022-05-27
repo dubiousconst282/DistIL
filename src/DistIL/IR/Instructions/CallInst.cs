@@ -34,12 +34,18 @@ public class CallInst : Instruction
 
     protected override void PrintOperands(StringBuilder sb, SlotTracker slotTracker)
     {
-        sb.Append($" {Method.DeclaringType}::{Method.Name}(");
+        sb.Append(" ");
+        Method.DeclaringType.Print(sb, slotTracker, false);
+        sb.Append($"::{Method.Name}(");
         for (int i = 0; i < NumArgs; i++) {
             if (i != 0) sb.Append(", ");
             
-            Method.Params[i].Type.Print(sb, slotTracker);
-            sb.Append(": ");
+            if (i == 0 && Method.IsInstance) {
+                sb.Append("this: ");
+            } else {
+                Method.Params[i].Type.Print(sb, slotTracker, false);
+                sb.Append(": ");
+            }
             Args[i].PrintAsOperand(sb, slotTracker);
         }
         sb.Append(")");

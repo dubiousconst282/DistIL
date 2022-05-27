@@ -134,14 +134,14 @@ public class TypeDef : TypeDefOrSpec
         return null;
     }
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)
     {
         if (DeclaringType != null) {
-            DeclaringType.Print(sb, slotTracker);
+            DeclaringType.Print(sb, slotTracker, includeNs);
             sb.Append("+");
             sb.Append(Name);
         } else {
-            base.Print(sb, slotTracker);
+            base.Print(sb, slotTracker, includeNs);
         }
     }
 }
@@ -174,9 +174,9 @@ public class TypeSpec : TypeDefOrSpec
         GenericParams = args;
     }
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)
     {
-        base.Print(sb, slotTracker);
+        base.Print(sb, slotTracker, includeNs);
         sb.AppendSequence("[", "]", GenericParams, v => v.Print(sb, slotTracker));
     }
 

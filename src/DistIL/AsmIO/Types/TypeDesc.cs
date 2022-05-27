@@ -43,10 +43,14 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
         return this;
     }
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public sealed override void Print(StringBuilder sb, SlotTracker slotTracker)
+    {
+        Print(sb, slotTracker);
+    }
+    public virtual void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)
     {
         var ns = Namespace;
-        if (ns != null) {
+        if (ns != null && includeNs) {
             sb.Append(ns);
             sb.Append(".");
         }

@@ -141,7 +141,7 @@ public abstract class Instruction : Value
     protected virtual void PrintPrefix(StringBuilder sb, SlotTracker slotTracker)
     {
         if (HasResult) {
-            sb.Append(ResultType);
+            ResultType.Print(sb, slotTracker, false);
             sb.Append(" ");
             PrintAsOperand(sb, slotTracker);
             sb.Append(" = ");

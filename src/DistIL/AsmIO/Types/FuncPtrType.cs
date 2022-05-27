@@ -42,11 +42,10 @@ public class FuncPtrType : TypeDesc
         HasExplicitThis = header.HasExplicitThis;
     }
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)
     {
-        sb.Append($"delegate* {CallConv.ToString().ToLower()}<");
-        sb.AppendJoin(", ", ArgTypes.Append(ReturnType));
-        sb.Append(">");
+        sb.Append($"delegate* {CallConv.ToString().ToLower()}");
+        sb.AppendSequence("<", ">", ArgTypes, p => p.Print(sb, slotTracker, includeNs));
     }
 
     public override bool Equals(TypeDesc? other)

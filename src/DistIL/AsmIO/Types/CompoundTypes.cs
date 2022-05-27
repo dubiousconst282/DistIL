@@ -30,9 +30,9 @@ public abstract class CompoundType : TypeDesc
     }
     protected abstract CompoundType New(TypeDesc elemType);
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)
     {
-        ElemType.Print(sb, slotTracker);
+        ElemType.Print(sb, slotTracker, includeNs);
         sb.Append(Postfix);
     }
 

@@ -24,9 +24,9 @@ public class PrimType : TypeDesc
         UIntPtr = new(TypeKind.UIntPtr, StackType.NInt,     "UIntPtr",   "nuint"),
         String  = new(TypeKind.String,  StackType.Object,   "String",    "string"),
         Object  = new(TypeKind.Object,  StackType.Object,   "Object",    "object"),
-        Array   = new(TypeKind.Array,   StackType.Object,   "Array",     "System.Array"),
-        ValueType=new(TypeKind.Struct,  StackType.Struct,   "ValueType", "System.ValueType"),
-        TypedRef= new(TypeKind.TypedRef, StackType.Struct,  "TypedReference", "System.TypedReference");
+        Array   = new(TypeKind.Array,   StackType.Object,   "Array",     null),
+        ValueType=new(TypeKind.Struct,  StackType.Struct,   "ValueType", null),
+        TypedRef= new(TypeKind.TypedRef, StackType.Struct,  "TypedReference", null);
 #pragma warning restore format
 
     public override TypeKind Kind { get; }
@@ -38,9 +38,9 @@ public class PrimType : TypeDesc
 
     public override bool IsValueType => StackType != StackType.Object;
 
-    public string Alias { get; }
+    public string? Alias { get; }
 
-    private PrimType(TypeKind kind, StackType stackType, string name, string alias)
+    private PrimType(TypeKind kind, StackType stackType, string name, string? alias)
     {
         Kind = kind;
         StackType = stackType;
@@ -50,7 +50,14 @@ public class PrimType : TypeDesc
 
     public TypeDef GetDefinition(ModuleDef module) => module.SysTypes.GetPrimitiveDef(Kind);
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker) => sb.Append(Alias);
+    public override void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)
+    {
+        if (Alias != null) {
+            sb.Append(Alias);
+        } else {
+            base.Print(sb, slotTracker, includeNs);
+        }
+    }
 
     public override bool Equals(TypeDesc? other)
         => other is PrimType o && o.Kind == Kind;

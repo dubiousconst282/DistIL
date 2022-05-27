@@ -93,7 +93,7 @@ public class MethodDef : MethodDefOrSpec
             int index = parInfo.SequenceNumber - 1;
             if (index >= 0 && index < Params.Length) {
                 var par = Params[index];
-                par.Name = reader.GetString(info.Name);
+                par.Name = reader.GetString(parInfo.Name);
                 par.Attribs = parInfo.Attributes;
                 par.CustomAttribs = loader.DecodeCustomAttribs(parInfo.GetCustomAttributes());
             }

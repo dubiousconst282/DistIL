@@ -33,7 +33,7 @@ public partial class ILGenerator : InstVisitor
         //Instructions that don't satisfy this are copied into a temp variable,
         //and loaded when needed.
         foreach (var inst in block) {
-            if (!inst.HasResult || inst.Uses.Count == 0) {
+            if (!inst.HasResult || inst.NumUses == 0) {
                 inst.Accept(this);
                 if (inst.HasResult) {
                     _asm.Emit(ILCode.Pop);
@@ -51,14 +51,14 @@ public partial class ILGenerator : InstVisitor
 
     private bool NeedsTemp(Instruction def)
     {
-        if (def.Uses.Count >= 2) return true;
+        if (def.NumUses >= 2) return true;
 
-        var use = def.GetUser(0);
+        var user = def.GetFirstUser()!;
         //Check if they are in the same block
-        if (use.Block != def.Block) return true;
+        if (user.Block != def.Block) return true;
         
         //Check if there are side effects between def and use
-        for (var inst = def.Next!; inst != use; inst = inst.Next!) {
+        for (var inst = def.Next!; inst != user; inst = inst.Next!) {
             if (inst.HasSideEffects) {
                 return true;
             }

@@ -18,7 +18,7 @@ public class DeadCodeElim : MethodPass
             while (pendingBlocks.TryPop(out var block)) {
                 //Remove unused instructions
                 foreach (var inst in block.Reversed()) {
-                    if (inst.Uses.Count == 0 && inst.SafeToRemove) {
+                    if (inst.NumUses == 0 && inst.SafeToRemove) {
                         inst.Remove();
                         changed = true;
                     }
@@ -34,15 +34,13 @@ public class DeadCodeElim : MethodPass
             foreach (var block in method) {
                 if (block == method.EntryBlock || visitedBlocks.Contains(block)) continue;
 
-                //Rewrite phi
-                foreach (var use in block.Uses.ToArray()) {
-                    if (use.Inst is PhiInst phi) {
+                //Rewrite phis
+                foreach (var succ in block.Succs) {
+                    foreach (var phi in succ.Phis()) {
                         phi.RemoveArg(block, removeTrivialPhi: true);
-                    } else {
-                        Assert(!visitedBlocks.Contains(use.Inst.Block)); //must be a branch in another unreachable block
                     }
                 }
-                block.Uses.Clear();
+                Assert(block.NumUses == 0);
                 block.Remove();
             }
             visitedBlocks.Clear();

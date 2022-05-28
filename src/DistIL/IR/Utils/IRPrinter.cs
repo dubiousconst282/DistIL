@@ -101,10 +101,10 @@ public class IRPrinter
                 tmpSb.Append("entry");
             }
 
-            foreach (var use in block.Uses) {
-                if (use.Inst is GuardInst tryInst) {
+            foreach (var user in block.Users()) {
+                if (user is GuardInst tryInst) {
                     tmpSb.Append(block == tryInst.FilterBlock ? " filter <- " : $" {tryInst.Kind.ToString().ToLower()} <- ");
-                    use.Inst.PrintAsOperand(tmpSb, slotTracker);
+                    user.PrintAsOperand(tmpSb, slotTracker);
                 }
             }
 

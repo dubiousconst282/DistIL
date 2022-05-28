@@ -111,13 +111,12 @@ public class SsaTransform : MethodPass
             //self referencing phis are unreachable or in the start block, replace it with undef
             same = new Undef(phi.ResultType);
         }
-        var uses = phi.Uses.ToArray();
+        var users = phi.Users();
         if (same != phi) {
-            phi.ReplaceUses(same);
-            phi.Remove();
+            phi.ReplaceWith(same, insertIfInst: false);
         }
-        foreach (var use in uses) {
-            if (use.Inst is PhiInst otherPhi && otherPhi != phi) {
+        foreach (var user in users) {
+            if (user is PhiInst otherPhi && otherPhi != phi) {
                 TryRemoveTrivialPhi(otherPhi);
             }
         }

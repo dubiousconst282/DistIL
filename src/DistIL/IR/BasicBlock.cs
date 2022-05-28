@@ -218,7 +218,7 @@ public class BasicBlock : Value
     /// </summary>
     public void Remove()
     {
-        Ensure(Uses.Count == 0);
+        Ensure(NumUsers == 0);
 
         foreach (var inst in this) {
             inst.RemoveOperandUses();

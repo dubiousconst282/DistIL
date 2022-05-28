@@ -34,7 +34,7 @@ public class Variable : Value
 
     protected override SlotTracker GetDefaultSlotTracker()
     {
-        var parentMethod = Uses.Count > 0 ? GetUser(0).Block.Method : null;
+        var parentMethod = GetFirstUser()?.Block.Method;
         return parentMethod?.GetSlotTracker() ?? base.GetDefaultSlotTracker();
     }
 }

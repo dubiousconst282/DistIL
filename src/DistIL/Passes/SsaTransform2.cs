@@ -192,8 +192,8 @@ public class SsaTransform2 : MethodPass
         }
         static bool HasStrongDependencies(PhiInst phi)
         {
-            foreach (var use in phi.Uses) {
-                if (use.Inst is not PhiInst) {
+            foreach (var user in phi.Users()) {
+                if (user is not PhiInst) {
                     return true;
                 }
             }

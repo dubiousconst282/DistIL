@@ -65,7 +65,7 @@ public abstract class Instruction : Value
     internal void RemoveOperandUses()
     {
         for (int i = 0; i < Operands.Length; i++) {
-            Operands[i].RemoveUse(this, i);
+            Operands[i].RemoveUse(this, i, removeEvenIfStillBeingUsed: true);
         }
     }
 
@@ -85,8 +85,8 @@ public abstract class Instruction : Value
     {
         var prevOper = Operands[operIndex];
         if (newOper != prevOper) {
-            prevOper?.RemoveUse(this, operIndex);
             Operands[operIndex] = newOper;
+            prevOper?.RemoveUse(this, operIndex);
             newOper.AddUse(this, operIndex);
         }
     }
@@ -109,20 +109,20 @@ public abstract class Instruction : Value
     {
         Assert(startIndex >= 0 && startIndex + count <= Operands.Length);
 
-        var oldArr = Operands;
-        var newArr = new Value[Operands.Length - count];
+        var oldOpers = Operands;
+        var newOpers = new Value[Operands.Length - count];
 
         if (startIndex > 0) {
-            Array.Copy(oldArr, 0, newArr, 0, startIndex);
+            Array.Copy(oldOpers, 0, newOpers, 0, startIndex);
         }
         for (int i = startIndex; i < startIndex + count; i++) {
-            oldArr[i].RemoveUse(this, i);
+            oldOpers[i].RemoveUse(this, i);
         }
-        for (int i = startIndex + count; i < oldArr.Length; i++) {
-            oldArr[i].RelocUse(this, i, i - count);
-            newArr[i - count] = oldArr[i];
+        for (int i = startIndex + count; i < oldOpers.Length; i++) {
+            oldOpers[i].RelocUse(this, i, i - count);
+            newOpers[i - count] = oldOpers[i];
         }
-        Operands = newArr;
+        Operands = newOpers;
     }
 
     public abstract void Accept(InstVisitor visitor);

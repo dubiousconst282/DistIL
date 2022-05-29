@@ -1,6 +1,6 @@
 ﻿namespace DistIL.IR;
 
-public class BasicBlock : Value
+public class BasicBlock : TrackedValue
 {
     public MethodBody Method { get; internal set; }
 

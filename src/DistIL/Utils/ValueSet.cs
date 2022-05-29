@@ -3,12 +3,12 @@ namespace DistIL.Util;
 using DistIL.IR;
 
 /// <summary>
-/// A compact hash set where keys are <see cref="Value"/> object references.
+/// A compact hash set where keys are <see cref="TrackedValue"/> object references.
 /// 
 /// The implementation uses a linear probing hash set, with load threshold of `0.75`.
 /// Insertion order is not preserved.
 /// </summary>
-public class ValueSet<TValue> where TValue : Value
+public class ValueSet<TValue> where TValue : TrackedValue
 {
     internal TValue?[] _slots = new TValue[4];
     internal int _count;

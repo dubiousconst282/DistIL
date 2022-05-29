@@ -4,7 +4,7 @@
 /// Represents a local method variable. They should not be used directly as operands,
 /// except with VarLoadInst and VarStoreInst.
 /// </summary>
-public class Variable : Value
+public class Variable : TrackedValue
 {
     public TypeDesc Type => ResultType;
     public string? Name { get; set; }

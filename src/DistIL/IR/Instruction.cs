@@ -1,6 +1,6 @@
-namespace DistIL.IR;
+﻿namespace DistIL.IR;
 
-public abstract class Instruction : Value
+public abstract class Instruction : TrackedValue
 {
     public BasicBlock Block { get; set; } = null!;
 

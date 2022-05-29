@@ -7,19 +7,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/src/DistIL/DistIL.csproj",
-                "/property:GenerateFullPaths=true",
-                "/consoleloggerparameters:NoSummary"
-            ],
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "publish",
-            "command": "dotnet",
-            "type": "process",
-            "args": [
-                "publish",
-                "${workspaceFolder}/src/DistIL/DistIL.csproj",
+                "${workspaceFolder}/src/DistIL.Playground/DistIL.Playground.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
@@ -33,7 +21,7 @@
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/src/DistIL/DistIL.csproj"
+                "${workspaceFolder}/src/DistIL.Playground/DistIL.Playground.csproj"
             ],
             "problemMatcher": "$msCompile"
         }

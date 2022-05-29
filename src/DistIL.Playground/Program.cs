@@ -1,5 +1,4 @@
-using System.IO;
-using DistIL.AsmIO;
+﻿using DistIL.AsmIO;
 using DistIL.Frontend;
 using DistIL.IR.Utils;
 using DistIL.CodeGen.Cil;

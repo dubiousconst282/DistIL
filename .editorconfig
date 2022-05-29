@@ -77,6 +77,10 @@ dotnet_remove_unnecessary_suppression_exclusions = none
 #### C# Coding Conventions ####
 [*.cs]
 
+# Non-exhaustive switch expressions
+dotnet_diagnostic.CS8524.severity = suggestion
+dotnet_diagnostic.CS8509.severity = suggestion
+
 # var preferences
 csharp_style_var_elsewhere = false:silent
 csharp_style_var_for_built_in_types = false:silent

@@ -299,8 +299,6 @@ public partial class ILGenerator : InstVisitor
         foreach (var arg in inst.Args) {
             Push(arg);
         }
-        if (inst.Method is not MethodDef) throw null!;
-        Assert(inst.Method is MethodDef);
         var code = inst.IsVirtual ? ILCode.Callvirt : ILCode.Call;
         _asm.Emit(code, inst.Method);
     }

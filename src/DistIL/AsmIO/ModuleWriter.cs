@@ -13,8 +13,6 @@ internal class ModuleWriter
     readonly MetadataBuilder _builder;
     readonly MethodBodyStreamEncoder _bodyEncoder;
     private BlobBuilder? _fieldDataStream;
-    private BlobBuilder? _managedResourceStream;
-    private MethodDefinitionHandle _entryPoint;
 
     private Dictionary<ModuleEntity, EntityHandle> _handleMap = new();
 
@@ -23,6 +21,7 @@ internal class ModuleWriter
         _mod = mod;
         _builder = new MetadataBuilder();
         _bodyEncoder = new MethodBodyStreamEncoder(new BlobBuilder());
+
     }
 
     public void Emit(BlobBuilder peBlob)
@@ -67,6 +66,19 @@ internal class ModuleWriter
                 _handleMap.Add(method, MetadataTokens.MethodDefinitionHandle(methodIdx++));
             }
         }
+
+        foreach (var mod in _mod.AssemblyRefs) {
+            var name = mod.AsmName;
+            var handle = _builder.AddAssemblyReference(
+                AddString(name.Name),
+                name.Version!,
+                AddString(name.CultureName),
+                AddBlob(name.GetPublicKey() ?? name.GetPublicKeyToken()),
+                (AssemblyFlags)name.Flags,
+                default
+            );
+            _handleMap.Add(mod, handle);
+        }
     }
 
     private void EmitTypes()
@@ -76,71 +88,48 @@ internal class ModuleWriter
         }
     }
 
-    private EntityHandle GetEntityHandle(ModuleEntity entity)
+    private EntityHandle GetHandle(ModuleEntity entity)
     {
-        if (_handleMap.TryGetValue(entity, out var handle)) {
-            return handle;
+        if (!_handleMap.TryGetValue(entity, out var handle)) {
+            Assert(entity.Module != _mod); //all handles in _mod must be allocated first
+            _handleMap[entity] = handle = CreateRef(entity);
         }
-        Assert(entity.Module != _mod); //all handles in _mod must be allocated first
-
-        handle = entity switch {
-            ModuleDef mod   => AddAsmRef(mod),
-            TypeDef type    => AddTypeRef(type),
-            MethodDef meth  => AddMethodRef(meth),
-            FieldDef field  => AddFieldRef(field)
-        };
-        _handleMap[entity] = handle;
         return handle;
-    }
 
-    private EntityHandle GetTypeHandle(TypeDesc type)
-    {
-        return type switch {
-            TypeDef def => GetEntityHandle(def)
-        };
+        EntityHandle CreateRef(ModuleEntity entity)
+        {
+            switch (entity) {
+                case TypeDef val: {
+                    var rootAsm = _mod._typeRefRoots.GetValueOrDefault(val, val.Module);
+                    return _builder.AddTypeReference(
+                        GetHandle(rootAsm),
+                        AddString(val.Namespace),
+                        AddString(val.Name)
+                    );
+                }
+                case MethodDef val: {
+                    var declType = GetHandle(val.DeclaringType);
+                    return _builder.AddMemberReference(
+                        declType,
+                        AddString(val.Name),
+                        EmitMethodSig(val)
+                    );
+                }
+                case FieldDef val: {
+                    var declType = GetHandle(val.DeclaringType);
+                    return _builder.AddMemberReference(
+                        declType,
+                        AddString(val.Name),
+                        EmitFieldSig(val)
+                    );
+                }
+                default: throw new NotImplementedException();
+            }
+        }
     }
-
-    private EntityHandle AddAsmRef(ModuleDef module)
+    private StandaloneSignatureHandle GetStandaloneSig(FuncPtrType type)
     {
-        var name = module.AsmName;
-        return _builder.AddAssemblyReference(
-            AddString(name.Name),
-            name.Version!,
-            AddString(name.CultureName),
-            AddBlob(name.GetPublicKey() ?? name.GetPublicKeyToken()),
-            (AssemblyFlags)name.Flags,
-            default
-        );
-    }
-
-    private EntityHandle AddTypeRef(TypeDef type)
-    {
-        var rootAsm = _mod._typeRefRoots.GetValueOrDefault(type, type.Module);
-        return _builder.AddTypeReference(
-            GetEntityHandle(rootAsm),
-            AddString(type.Namespace),
-            AddString(type.Name)
-        );
-    }
-
-    private EntityHandle AddMethodRef(MethodDef meth)
-    {
-        var declType = GetEntityHandle(meth.DeclaringType);
-        return _builder.AddMemberReference(
-            declType,
-            AddString(meth.Name),
-            EmitMethodSig(meth)
-        );
-    }
-
-    private EntityHandle AddFieldRef(FieldDef field)
-    {
-        var declType = GetEntityHandle(field.DeclaringType);
-        return _builder.AddMemberReference(
-            declType,
-            AddString(field.Name),
-            EmitFieldSig(field)
-        );
+        throw new NotImplementedException();
     }
 
     private void AssertHandleAllocated(ModuleEntity def, EntityHandle handle)
@@ -157,7 +146,7 @@ internal class ModuleWriter
             type.Attribs,
             AddString(type.Namespace),
             AddString(type.Name),
-            type.BaseType == null ? default : GetTypeHandle(type.BaseType),
+            type.BaseType == null ? default : GetHandle(type.BaseType),
             firstFieldHandle,
             firstMethodHandle
         );
@@ -166,7 +155,7 @@ internal class ModuleWriter
         Assert(type.Methods.Count == 0 || _handleMap[type.Methods[0]] == firstMethodHandle);
 
         if (type.IsNested) {
-            _builder.AddNestedType(handle, (TypeDefinitionHandle)GetTypeHandle(type.DeclaringType));
+            _builder.AddNestedType(handle, (TypeDefinitionHandle)GetHandle(type.DeclaringType));
         }
         foreach (var field in type.Fields) {
             EmitField(field);
@@ -260,7 +249,7 @@ internal class ModuleWriter
                 tryLength: ehr.TryEnd - ehr.TryStart,
                 handlerOffset: ehr.HandlerStart,
                 handlerLength: ehr.HandlerEnd - ehr.HandlerStart,
-                catchType: ehr.CatchType == null ? default : GetTypeHandle(ehr.CatchType),
+                catchType: ehr.CatchType == null ? default : GetHandle(ehr.CatchType),
                 filterOffset: ehr.FilterStart
             );
         }
@@ -291,14 +280,18 @@ internal class ModuleWriter
             }
             case ILOperandType.Field:
             case ILOperandType.Method:
-            case ILOperandType.Sig:
             case ILOperandType.Tok: {
-                var handle = GetEntityHandle((ModuleEntity)inst.Operand!);
+                var handle = GetHandle((ModuleEntity)inst.Operand!);
+                bb.WriteInt32(MetadataTokens.GetToken(handle));
+                break;
+            }
+            case ILOperandType.Sig: {
+                var handle = GetStandaloneSig((FuncPtrType)inst.Operand!);
                 bb.WriteInt32(MetadataTokens.GetToken(handle));
                 break;
             }
             case ILOperandType.Type: {
-                var handle = AddTypeRef((TypeDef)inst.Operand!);
+                var handle = GetHandle((TypeDef)inst.Operand!);
                 bb.WriteInt32(MetadataTokens.GetToken(handle));
                 break;
             }
@@ -443,7 +436,14 @@ internal class ModuleWriter
                 break;
             }
             case TypeDef t: {
-                enc.Type(GetEntityHandle(t), t.IsValueType);
+                enc.Type(GetHandle(t), t.IsValueType);
+                break;
+            }
+            case TypeSpec t: {
+                var argEnc = enc.GenericInstantiation(GetHandle(t.Definition), t.GenericParams.Length, t.IsValueType);
+                foreach (var arg in t.GenericParams) {
+                    EncodeType(argEnc.AddArgument(), arg);
+                }
                 break;
             }
             case FuncPtrType t: {

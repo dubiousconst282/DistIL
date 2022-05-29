@@ -4,7 +4,7 @@ public class DomTreeTests
 {
     private static TestItem GetData1()
     {
-        var method = new MethodBody(null!);
+        var method = Utils.CreateDummyMethodBody();
         var b1 = method.CreateBlock();
         var b2 = method.CreateBlock();
         var b3 = method.CreateBlock();
@@ -57,9 +57,9 @@ public class DomTreeTests
 
     public class TestItem
     {
-        public MethodBody Method { get; init; }
-        public BasicBlock[] Blocks { get; init; }
-        public BasicBlock[] ExpDom { get; init; }
-        public BasicBlock[] ExpPostDom { get; init; }
+        public MethodBody Method { get; init; } = null!;
+        public BasicBlock[] Blocks { get; init; } = null!;
+        public BasicBlock[] ExpDom { get; init; } = null!;
+        public BasicBlock[] ExpPostDom { get; init; } = null!;
     }
 }

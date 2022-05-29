@@ -6,23 +6,23 @@ public class ValueSetTests
 {
     [Theory]
     [MemberData(nameof(GetDummyValues))]
-    public void Test_AddContains(Value[] values)
+    public void Test_AddContains(TrackedValue[] values)
     {
-        var set = new ValueSet<Value>();
+        var set = new ValueSet<TrackedValue>();
         int i = 0;
 
         foreach (var value in values) {
             Assert.True(set.Add(value));
             Assert.True(set.Contains(value));
             Assert.False(set.Add(value));
-            Assert.Equal(i++, set.Count);
+            Assert.Equal(++i, set.Count);
         }
     }
     [Theory]
     [MemberData(nameof(GetDummyValues))]
-    public void Test_Remove(Value[] values)
+    public void Test_Remove(TrackedValue[] values)
     {
-        var set = new ValueSet<Value>();
+        var set = new ValueSet<TrackedValue>();
         foreach (var value in values) {
             Assert.True(set.Add(value));
             Assert.True(set.Remove(value));
@@ -34,9 +34,9 @@ public class ValueSetTests
 
     [Theory]
     [MemberData(nameof(GetDummyValues))]
-    public void Test_Enumerator(Value[] values)
+    public void Test_Enumerator(TrackedValue[] values)
     {
-        var set = new ValueSet<Value>();
+        var set = new ValueSet<TrackedValue>();
         foreach (var value in values) {
             Assert.True(set.Add(value));
         }
@@ -63,13 +63,13 @@ public class ValueSetTests
     {
         yield return new object[] {
             new Value[] {
-                ConstInt.CreateI(0)
+                new DummyValue(0)
             }
         };
         yield return new object[] { 
             new Value[] {
-                ConstInt.CreateI(123), ConstInt.CreateI(456),
-                ConstInt.CreateI(789), ConstInt.CreateI(101),
+                new DummyValue(123), new DummyValue(456),
+                new DummyValue(789), new DummyValue(101),
             }
         };
     }

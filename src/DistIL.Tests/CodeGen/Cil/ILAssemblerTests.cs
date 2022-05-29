@@ -18,7 +18,7 @@ public class ILAssemblerTests
         var (code, maxStack) = asm.Bake();
         var genInsts = code.Select(v => (v.Offset, v.OpCode, v.Operand));
 
-        var expInsts = new (int, ILCode, object)[] {
+        var expInsts = new (int, ILCode, object?)[] {
             (0,  ILCode.Ldarg_0, null),
             (1,  ILCode.Ldarg_1, null),
             (2,  ILCode.Ldc_R8,  2.0),
@@ -55,7 +55,7 @@ public class ILAssemblerTests
         var (code, maxStack) = asm.Bake();
         var genInsts = code.Select(v => (v.Offset, v.OpCode, v.Operand));
 
-        var expInsts = new (int, ILCode, object)[] {
+        var expInsts = new (int, ILCode, object?)[] {
             (0, ILCode.Ldarg_1, null),
             (1, ILCode.Ldarg_0, null),
             (2, ILCode.Bgt_S,   7),

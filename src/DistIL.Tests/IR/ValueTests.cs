@@ -1,3 +1,5 @@
+using System.Text;
+
 using DistIL.IR;
 
 public class ValueTests
@@ -5,7 +7,7 @@ public class ValueTests
     [Fact]
     public void Test_UseList_SingleUser()
     {
-        var value = ConstInt.CreateI(123);
+        var value = new DummyValue(123);
         var inst1 = new BinaryInst(BinaryOp.Add, value, value);
 
         CheckUses(
@@ -18,7 +20,7 @@ public class ValueTests
     [Fact]
     public void Test_UseList_MultipleUsers()
     {
-        var value = ConstInt.CreateI(123);
+        var value = new DummyValue(123);
         var inst1 = new BinaryInst(BinaryOp.Add, value, value);
         var inst2 = new BinaryInst(BinaryOp.Sub, value, value);
         var inst3 = new BinaryInst(BinaryOp.Mul, value, value);
@@ -37,9 +39,9 @@ public class ValueTests
     [Fact]
     public void Test_UseList_Replace()
     {
-        var value1 = ConstInt.CreateI(123);
-        var value2 = ConstInt.CreateI(456);
-        var value3 = ConstInt.CreateI(789);
+        var value1 = new DummyValue(123);
+        var value2 = new DummyValue(456);
+        var value3 = new DummyValue(789);
         var inst1 = new BinaryInst(BinaryOp.Add, value2, value1);
         var inst2 = new BinaryInst(BinaryOp.Mul, value1, value2);
 
@@ -52,7 +54,7 @@ public class ValueTests
         );
     }
 
-    private void CheckUses(Value value, Instruction[] expUsers, (Instruction, int)[] expUses)
+    private void CheckUses(TrackedValue value, Instruction[] expUsers, (Instruction, int)[] expUses)
     {
         Assert.Equal(expUsers.Length, value.NumUsers);
         Assert.True(value.NumUses == expUses.Length);

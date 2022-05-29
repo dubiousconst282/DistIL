@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 using DistIL.AsmIO;
 using DistIL.IR;
 
@@ -6,7 +8,7 @@ public class BasicBlockTests
     [Fact]
     public void TestInstInserts()
     {
-        var method = new MethodBody(null!);
+        var method = Utils.CreateDummyMethodBody();
         var block = method.CreateBlock();
 
         Assert.Null(block.First);
@@ -42,7 +44,7 @@ public class BasicBlockTests
     [Fact]
     public void TestEnumerate()
     {
-        var method = new MethodBody(null!);
+        var method = Utils.CreateDummyMethodBody();
         var block = method.CreateBlock();
         var inst1 = new PhiInst(PrimType.Int32);
         var inst2 = new PhiInst(PrimType.Int32);
@@ -68,7 +70,7 @@ public class BasicBlockTests
     [Fact]
     public void TestSplit()
     {
-        var method = new MethodBody(null!);
+        var method = Utils.CreateDummyMethodBody();
         var block1 = method.CreateBlock();
         var block2 = method.CreateBlock();
         var block3 = method.CreateBlock();
@@ -118,7 +120,7 @@ public class BasicBlockTests
     [Fact]
     public void TestInsertRange()
     {
-        var method = new MethodBody(null!);
+        var method = Utils.CreateDummyMethodBody();
         var block = method.CreateBlock();
 
         var insts = GetDummyInsts(8);
@@ -138,7 +140,7 @@ public class BasicBlockTests
     [Fact]
     public void TestRemove()
     {
-        var method = new MethodBody(null!);
+        var method = Utils.CreateDummyMethodBody();
         var block = method.CreateBlock();
 
         var insts = GetDummyInsts(8);

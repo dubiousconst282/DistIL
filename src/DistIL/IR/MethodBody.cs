@@ -4,15 +4,15 @@ using DistIL.AsmIO;
 
 public class MethodBody
 {
-    public MethodDef Method { get; }
+    public MethodDef Definition { get; }
     private SlotTracker? _slotTracker = null;
     private bool _slotsDirty = true;
 
     public List<Argument> Args { get; }
     /// <summary> Gets a view over `Args` excluding the first argument (`this`) if this is an instance method. </summary>
-    public ReadOnlySpan<Argument> StaticArgs => Args.AsSpan(Method.IsStatic ? 0 : 1);
+    public ReadOnlySpan<Argument> StaticArgs => Args.AsSpan(Definition.IsStatic ? 0 : 1);
 
-    public TypeDesc ReturnType => Method.ReturnType;
+    public TypeDesc ReturnType => Definition.ReturnType;
 
     /// <summary> The entry block of this method. Should not have predecessors. </summary>
     public BasicBlock EntryBlock { get; private set; } = null!;
@@ -21,7 +21,7 @@ public class MethodBody
 
     public MethodBody(MethodDef def)
     {
-        Method = def;
+        Definition = def;
         Args = new List<Argument>(def.Params.Length);
         foreach (var par in def.Params) {
             Args.Add(new Argument(par.Type, Args.Count, par.Name));

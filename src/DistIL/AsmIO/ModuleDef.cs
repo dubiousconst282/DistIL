@@ -55,6 +55,37 @@ public class ModuleDef : ModuleEntity
         return null;
     }
 
+    public IEnumerable<MethodDef> AllMethods()
+    {
+        foreach (var type in AllTypes()) {
+            foreach (var method in type.Methods) {
+                yield return method;
+            }
+        }
+    }
+    public IEnumerable<TypeDef> AllTypes()
+    {
+        var worklist = default(ArrayStack<TypeDef>);
+
+        foreach (var type in TypeDefs) {
+            yield return type;
+
+            if (type.NestedTypes.Count == 0) continue;
+
+            worklist ??= new();
+            worklist.Push(type);
+            while (worklist.TryPop(out var parent)) {
+                foreach (var child in parent.NestedTypes) {
+                    yield return child;
+
+                    if (child.NestedTypes.Count > 0) {
+                        worklist.Push(child);
+                    }
+                }
+            }
+        }
+    }
+
     public void Save(Stream stream)
     {
         var builder = new BlobBuilder();

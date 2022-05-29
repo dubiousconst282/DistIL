@@ -1,4 +1,4 @@
-namespace DistIL.IR;
+namespace DistIL.IR.Utils;
 
 public class Cloner
 {
@@ -137,7 +137,7 @@ public class Cloner
 
         public void Visit(LoadPtrInst inst) => Out(new LoadPtrInst(Remap(inst.Address), inst.ElemType, inst.Flags));
         public void Visit(StorePtrInst inst) => Out(new StorePtrInst(Remap(inst.Address), Remap(inst.Value), inst.ElemType, inst.Flags));
-        
+
         public void Visit(ArrayLenInst inst) => Out(new ArrayLenInst(Remap(inst.Array)));
         public void Visit(LoadArrayInst inst) => Out(new LoadArrayInst(Remap(inst.Array), Remap(inst.Index), inst.ElemType, inst.Flags));
         public void Visit(StoreArrayInst inst) => Out(new StoreArrayInst(Remap(inst.Array), Remap(inst.Index), Remap(inst.Value), inst.ElemType, inst.Flags));

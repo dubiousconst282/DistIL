@@ -22,7 +22,6 @@ public abstract class Value
         return sb.ToString();
     }
 
-    //Implementing these as virtual methods because it's probably cheaper than isinst.
     internal virtual void AddUse(User user, int operIdx) { }
     internal virtual void RemoveUse(User user, int operIdx, bool removeEvenIfStillBeingUsed = false) { }
 }
@@ -183,7 +182,7 @@ public abstract class TrackedValue : Value
 
     /// <summary> Returns an enumerator containing the instructions using this value. </summary>
     public ValueUserEnumerator Users() => new() { _slots = GetRawUserSlots() };
-    /// <summary> Returns an enumerator containing the operand using this value. </summary>
+    /// <summary> Returns an enumerator containing the operands using this value. </summary>
     public ValueUseEnumerator Uses() => new() { _value = this, _slots = GetRawUserSlots() };
 
     private object? GetRawUserSlots() => _users?.GetType() == typeof(UserSet) ? _userSet._slots : _users;

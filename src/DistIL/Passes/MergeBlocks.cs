@@ -4,13 +4,13 @@ using DistIL.IR;
 
 public class MergeBlocks : MethodPass
 {
-    public override void Transform(MethodBody method)
+    public override void Run(MethodTransformContext ctx)
     {
         bool changed = true;
         while (changed) {
             changed = false;
 
-            foreach (var block in method) {
+            foreach (var block in ctx.Method) {
                 changed |= MergeSingleSucc(block);
             }
         }

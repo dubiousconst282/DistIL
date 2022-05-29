@@ -5,12 +5,12 @@ using DistIL.IR;
 /// <summary> Inline object/structs into local variables. aka "Scalar Replacement of Aggregates" </summary>
 public class ScalarReplacement : MethodPass
 {
-    public override void Transform(MethodBody method)
+    public override void Run(MethodTransformContext ctx)
     {
         var objs = new Dictionary<Value, ObjectInfo>();
 
         //Analyze method (collect accesses and whether object escapes)
-        foreach (var rawInst in method.Instructions()) {
+        foreach (var rawInst in ctx.Method.Instructions()) {
             switch (rawInst) {
                 //Collect new objects
                 case NewObjInst inst: {

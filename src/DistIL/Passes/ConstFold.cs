@@ -5,13 +5,13 @@ using DistIL.IR;
 /// <summary> Implements constant folding, and operand sorting for commutative instructions. </summary>
 public class ConstFold : MethodPass
 {
-    public override void Transform(MethodBody method)
+    public override void Run(MethodTransformContext ctx)
     {
-        bool changed = true;
-        while (changed) {
-            changed = false;
+        bool needsAnotherPass = true;
+        while (needsAnotherPass) {
+            needsAnotherPass = false;
 
-            foreach (var block in method) {
+            foreach (var block in ctx.Method) {
                 foreach (var inst in block) {
                     //swap opers of `const <op> value` if op is commutative
                     if (inst is BinaryInst { Left: Const, Right: not Const, IsCommutative: true } b) {
@@ -22,8 +22,8 @@ public class ConstFold : MethodPass
                         inst.ReplaceWith(newValue);
                     }
                 }
-                //FoldBranch() may change phis, so we need another pass to propagate constants.
-                changed |= FoldBranch(block);
+                //We need another pass if we fold a branch and a phi into a const.
+                needsAnotherPass |= FoldBranch(block, ctx);
             }
         }
     }
@@ -40,9 +40,10 @@ public class ConstFold : MethodPass
             _ => null
         };
     }
-    private bool FoldBranch(BasicBlock block)
+
+    private bool FoldBranch(BasicBlock block, MethodTransformContext ctx)
     {
-        bool phiChanged = false;
+        bool phiFolded = false;
 
         if (block.Last is BranchInst br && br.Cond is ConstInt c) {
             bool cond = c.Value != 0;
@@ -51,10 +52,11 @@ public class ConstFold : MethodPass
 
             foreach (var phi in removedBlock.Phis()) {
                 phi.RemoveArg(block, true);
-                phiChanged = true;
+                phiFolded = true; //TODO: only do this if phi was replaced by a const
             }
+            ctx.InvalidateAll();
         }
-        return phiChanged;
+        return phiFolded;
     }
 
     public static Value? FoldBinary(BinaryOp op, Value left, Value right)

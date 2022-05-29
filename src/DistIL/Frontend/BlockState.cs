@@ -7,7 +7,7 @@ internal class BlockState
 {
     readonly ILImporter _importer;
     readonly MethodBody _body;
-    private ModuleDef _mod => _body.Method.Module;
+    private ModuleDef _mod => _body.Definition.Module;
 
     public BasicBlock Block { get; }
     private ArrayStack<Value> _stack;
@@ -24,7 +24,7 @@ internal class BlockState
         _importer = importer;
         _body = importer._body;
         Block = _body.CreateBlock();
-        _stack = new ArrayStack<Value>(_body.Method.ILBody!.MaxStack);
+        _stack = new ArrayStack<Value>(_body.Definition.ILBody!.MaxStack);
     }
 
     public void Emit(Instruction inst)
@@ -486,7 +486,7 @@ internal class BlockState
     }
     private Variable GetVar(int index, bool isArg, VarFlags flagsToAdd)
     {
-        var variable = isArg ? _body.Args[index] : _body.Method.ILBody!.Locals[index];
+        var variable = isArg ? _body.Args[index] : _body.Definition.ILBody!.Locals[index];
         ref var flags = ref _importer._varFlags[index + (isArg ? 0 : _body.Args.Count)];
         flags |= flagsToAdd | (_activeGuard != null ? VarFlags.UsedInsideTry : VarFlags.UsedOutsideTry);
 

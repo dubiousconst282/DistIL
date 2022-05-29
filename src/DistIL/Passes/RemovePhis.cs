@@ -4,10 +4,10 @@ using DistIL.IR;
 
 public class RemovePhis : MethodPass
 {
-    public override void Transform(MethodBody method)
+    public override void Run(MethodTransformContext ctx)
     {
         var phis = new List<PhiInst>();
-        foreach (var block in method) {
+        foreach (var block in ctx.Method) {
             foreach (var phi in block.Phis()) {
                 phis.Add(phi);
             }

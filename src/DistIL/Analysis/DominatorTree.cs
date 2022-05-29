@@ -1,6 +1,8 @@
-namespace DistIL.IR;
+namespace DistIL.Analysis;
 
-public class DominatorTree
+using DistIL.IR;
+
+public class DominatorTree : IMethodAnalysis
 {
     readonly Dictionary<BasicBlock, Node> _block2node = new();
     readonly Node _root;
@@ -17,6 +19,11 @@ public class DominatorTree
         _root = nodes[^1];
         ComputeDom(nodes);
         ComputeChildren(nodes);
+    }
+
+    public static IMethodAnalysis Create(IMethodAnalysisManager mgr)
+    {
+        return new DominatorTree(mgr.Method);
     }
 
     /// <summary> 
@@ -69,7 +76,7 @@ public class DominatorTree
         var entryBlock = Method.EntryBlock;
 
         Assert(!entryBlock.Succs.Contains(entryBlock));
-        
+
         if (IsPostDom) {
             //TODO: avoid creating temp block for inverted graph dfs
             entryBlock = new BasicBlock(Method);
@@ -180,10 +187,10 @@ public class DominatorTree
     }
 }
 
-public class DominanceFrontier
+public class DominanceFrontier : IMethodAnalysis
 {
-    private static HashSet<BasicBlock> _emptySet = new();
-    private Dictionary<BasicBlock, HashSet<BasicBlock>> _df = new();
+    private static ValueSet<BasicBlock> _emptySet = new();
+    private Dictionary<BasicBlock, ValueSet<BasicBlock>> _df = new();
 
     public DominanceFrontier(DominatorTree domTree)
     {
@@ -204,6 +211,11 @@ public class DominanceFrontier
         }
     }
 
-    public IReadOnlySet<BasicBlock> Of(BasicBlock block)
+    public static IMethodAnalysis Create(IMethodAnalysisManager mgr)
+    {
+        return new DominanceFrontier(mgr.GetAnalysis<DominatorTree>(preserve: true));
+    }
+
+    public ValueSet<BasicBlock> Of(BasicBlock block)
         => _df.GetValueOrDefault(block, _emptySet);
 }

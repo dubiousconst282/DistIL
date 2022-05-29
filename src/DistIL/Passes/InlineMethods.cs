@@ -1,15 +1,17 @@
 namespace DistIL.Passes;
 
 using DistIL.IR;
+using DistIL.IR.Utils;
 
 public class InlineMethods : MethodPass
 {
-    public override void Transform(MethodBody method)
+    public override void Run(MethodTransformContext ctx)
     {
         var inlineableCalls = new List<CallInst>();
+        var method = ctx.Method;
 
         foreach (var inst in method.Instructions()) {
-            if (inst is CallInst call && CanInline(method.Method, call)) {
+            if (inst is CallInst call && CanInline(method.Definition, call)) {
                 inlineableCalls.Add(call);
             }
         }

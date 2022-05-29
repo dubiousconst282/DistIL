@@ -10,8 +10,9 @@ public class SsaTransform : MethodPass
     readonly HashSet<BasicBlock> _sealedBlocks = new();
     readonly List<(PhiInst, Variable)> _incompletePhis = new();
 
-    public override void Transform(MethodBody method)
+    public override void Run(MethodTransformContext ctx)
     {
+        var method = ctx.Method;
         var entryBlock = method.EntryBlock;
         var blocks = new List<BasicBlock>();
         GraphTraversal.DepthFirst(

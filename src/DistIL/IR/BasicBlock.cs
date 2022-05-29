@@ -213,13 +213,10 @@ public class BasicBlock : TrackedValue
     }
 
     /// <summary> 
-    /// Removes this block from the parent method, and clear edges, and uses from child instruction operands. 
-    /// Will throw if the use list is not empty.
+    /// Removes this block from the parent method, clear edges, and uses from child instruction operands.
     /// </summary>
     public void Remove()
     {
-        Ensure(NumUsers == 0);
-
         foreach (var inst in this) {
             inst.RemoveOperandUses();
         }

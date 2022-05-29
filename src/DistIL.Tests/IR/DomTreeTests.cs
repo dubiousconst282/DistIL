@@ -1,4 +1,5 @@
 using DistIL.IR;
+using DistIL.Analysis;
 
 public class DomTreeTests
 {

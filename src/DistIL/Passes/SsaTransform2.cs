@@ -1,6 +1,7 @@
 namespace DistIL.Passes;
 
 using DistIL.IR;
+using DistIL.Analysis;
 
 //SSA transform implementation based on the standard dominance frontier algorithm.
 public class SsaTransform2 : MethodPass
@@ -9,19 +10,20 @@ public class SsaTransform2 : MethodPass
     DominatorTree _domTree = null!;
     Dictionary<PhiInst, Variable> _phiDefs = new(); //phi -> variable
 
-    public override void Transform(MethodBody method)
+    public override void Run(MethodTransformContext ctx)
     {
-        _method = method;
-        _domTree = new DominatorTree(_method);
+        _method = ctx.Method;
+        _domTree = ctx.GetAnalysis<DominatorTree>(preserve: true);
+        var domFrontier = ctx.GetAnalysis<DominanceFrontier>(preserve: true);
 
-        InsertPhis();
+        InsertPhis(domFrontier);
         RenameDefs();
         PrunePhis();
 
         _phiDefs.Clear();
     }
 
-    private void InsertPhis()
+    private void InsertPhis(DominanceFrontier domFrontier)
     {
         var varDefs = new Dictionary<Variable, ArrayStack<BasicBlock>>(); //var -> blocks assigning to var
 
@@ -38,7 +40,6 @@ public class SsaTransform2 : MethodPass
 
         var phiAdded = new HashSet<BasicBlock>(); //blocks where a phi has been added
         var processed = new HashSet<BasicBlock>(); //blocks already visited in worklist
-        var domFrontier = new DominanceFrontier(_domTree);
 
         //Insert phis
         foreach (var (variable, worklist) in varDefs) {

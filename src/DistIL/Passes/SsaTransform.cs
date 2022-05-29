@@ -37,8 +37,6 @@ public class SsaTransform : MethodPass
                     inst.ReplaceWith(currVal);
                     continue;
                 }
-                //we only handle variables read/written with LdVar or StVar
-                Assert(inst.Operands.All(v => v is not Variable || v is Argument));
             }
             _sealedBlocks.Add(block);
         }

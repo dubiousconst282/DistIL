@@ -3,7 +3,7 @@ namespace DistIL.IR;
 public class IntrinsicInst : Instruction
 {
     public IntrinsicId Id { get; set; }
-    public ReadOnlySpan<Value> Args => Operands.AsSpan();
+    public ReadOnlySpan<Value> Args => Operands;
 
     public override bool HasSideEffects => true;
     public override bool MayThrow => true;

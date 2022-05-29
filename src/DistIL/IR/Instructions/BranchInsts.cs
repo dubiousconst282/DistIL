@@ -81,7 +81,7 @@ public class SwitchInst : Instruction
     }
 
     public BasicBlock GetTarget(int index) => (BasicBlock)Operands[index + 2];
-    public void SetTarget(int index, BasicBlock block) => Operands[index + 2] = block;
+    public void SetTarget(int index, BasicBlock block) => ReplaceOperand(index + 2, block);
 
     /// <summary> Returns all target blocks in this switch, including the default (first element). </summary>
     public IEnumerable<BasicBlock> GetTargets()

@@ -1,4 +1,4 @@
-﻿namespace DistIL.IR;
+namespace DistIL.IR;
 
 public abstract class Instruction : Value
 {
@@ -9,7 +9,9 @@ public abstract class Instruction : Value
     /// <summary> The next instruction in the block. </summary>
     public Instruction? Next { get; set; }
 
-    public Value[] Operands { get; set; }
+    /// <remarks> Note: Use ReplaceOperand() to change operands. </remarks>
+    internal Value[] _operands;
+    public ReadOnlySpan<Value> Operands => _operands;
 
     public abstract string InstName { get; }
 
@@ -23,11 +25,11 @@ public abstract class Instruction : Value
 
     protected Instruction()
     {
-        Operands = Array.Empty<Value>();
+        _operands = Array.Empty<Value>();
     }
     protected Instruction(params Value[] opers)
     {
-        Operands = opers;
+        _operands = opers;
 
         for (int i = 0; i < opers.Length; i++) {
             opers[i].AddUse(this, i);
@@ -55,7 +57,11 @@ public abstract class Instruction : Value
         Remove();
     }
 
-    /// <summary> Removes this instruction from the parent basic block. Operand uses are removed. </summary>
+    /// <summary> Removes this instruction from the parent basic block. </summary>
+    /// <remarks> 
+    /// This method will remove uses from operands, while keeping the references (Operands array) intact.
+    /// It should not be added in a block again after calling this.
+    /// </remarks>
     public void Remove()
     {
         Block?.Remove(this);
@@ -64,16 +70,16 @@ public abstract class Instruction : Value
 
     internal void RemoveOperandUses()
     {
-        for (int i = 0; i < Operands.Length; i++) {
-            Operands[i].RemoveUse(this, i, removeEvenIfStillBeingUsed: true);
+        for (int i = 0; i < _operands.Length; i++) {
+            _operands[i].RemoveUse(this, i, removeEvenIfStillBeingUsed: true);
         }
     }
 
     /// <summary> Replaces the operand `prevOper` with `newOper`. </summary>
     public bool ReplaceOperand(Value prevOper, Value newOper)
     {
-        for (int i = 0; i < Operands.Length; i++) {
-            if (Operands[i] == prevOper) {
+        for (int i = 0; i < _operands.Length; i++) {
+            if (_operands[i] == prevOper) {
                 ReplaceOperand(i, newOper);
                 return true;
             }
@@ -83,9 +89,9 @@ public abstract class Instruction : Value
     /// <summary> Replaces the operand at `operIndex` with `newOper`. </summary>
     public void ReplaceOperand(int operIndex, Value newOper)
     {
-        var prevOper = Operands[operIndex];
+        var prevOper = _operands[operIndex];
         if (newOper != prevOper) {
-            Operands[operIndex] = newOper;
+            _operands[operIndex] = newOper;
             prevOper?.RemoveUse(this, operIndex);
             newOper.AddUse(this, operIndex);
         }
@@ -93,24 +99,24 @@ public abstract class Instruction : Value
 
     /// <summary> 
     /// Extends the operand array by `amount` and returns the index of the first new element. 
-    /// Newly allocated elements are set to null, they should be initialized immediately after calling this. 
+    /// Newly allocated elements are set to null, they should be initialized immediately after calling this,
+    /// using ReplaceOperand(). 
     /// </summary>
     protected int GrowOperands(int amount)
     {
-        var arr = Operands;
-        int arrLen = arr.Length;
-        Array.Resize(ref arr, arrLen + amount);
-        Operands = arr;
+        int oldLen = _operands.Length;
+        Array.Resize(ref _operands, oldLen + amount);
 
-        return arrLen;
+        return oldLen;
     }
     /// <summary> Removes operands in the specified range. </summary>
     protected void RemoveOperands(int startIndex, int count)
     {
-        Assert(startIndex >= 0 && startIndex + count <= Operands.Length);
+        Assert(startIndex >= 0 && startIndex + count <= _operands.Length);
 
-        var oldOpers = Operands;
-        var newOpers = new Value[Operands.Length - count];
+        var oldOpers = _operands;
+        var newOpers = new Value[oldOpers.Length - count];
+        _operands = newOpers;
 
         if (startIndex > 0) {
             Array.Copy(oldOpers, 0, newOpers, 0, startIndex);
@@ -119,10 +125,8 @@ public abstract class Instruction : Value
             oldOpers[i].RemoveUse(this, i);
         }
         for (int i = startIndex + count; i < oldOpers.Length; i++) {
-            oldOpers[i].RelocUse(this, i, i - count);
             newOpers[i - count] = oldOpers[i];
         }
-        Operands = newOpers;
     }
 
     public abstract void Accept(InstVisitor visitor);
@@ -151,9 +155,9 @@ public abstract class Instruction : Value
     /// <summary> Prints the instruction operands. </summary>
     protected virtual void PrintOperands(StringBuilder sb, SlotTracker slotTracker)
     {
-        for (int i = 0; i < Operands.Length; i++) {
+        for (int i = 0; i < _operands.Length; i++) {
             sb.Append(i == 0 ? " " : ", ");
-            Operands[i].PrintAsOperand(sb, slotTracker);
+            _operands[i].PrintAsOperand(sb, slotTracker);
         }
     }
     protected override SlotTracker GetDefaultSlotTracker()

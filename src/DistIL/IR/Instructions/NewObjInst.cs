@@ -9,8 +9,8 @@ public class NewObjInst : Instruction
         get => (MethodDesc)Operands[0];
         set => ReplaceOperand(0, value);
     }
-    public ReadOnlySpan<Value> Args => Operands.AsSpan(1);
-    
+    public ReadOnlySpan<Value> Args => Operands.Slice(1);
+
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     public int NumArgs => Operands.Length - 1;
 

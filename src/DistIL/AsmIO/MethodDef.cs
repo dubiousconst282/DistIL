@@ -49,6 +49,40 @@ public class ParamDef
 
     public override string ToString() => Type.ToString();
 }
+public readonly struct MethodSig
+{
+    public TypeDesc ReturnType { get; }
+    public ImmutableArray<TypeDesc> ParamTypes { get; }
+    public int NumGenericParams { get; }
+
+    public MethodSig(in MethodSignature<TypeDesc> srmSig)
+    {
+        ReturnType = srmSig.ReturnType;
+        ParamTypes = srmSig.ParameterTypes;
+        NumGenericParams = srmSig.GenericParameterCount;
+    }
+
+    public bool Equals(MethodDesc method)
+    {
+        if (method.ReturnType != ReturnType) {
+            return false;
+        }
+        if (NumGenericParams != method.GenericParams.Length) {
+            return false;
+        }
+        var p1 = method.StaticParams;
+        var p2 = ParamTypes;
+        if (p1.Length != p2.Length) {
+            return false;
+        }
+        for (int i = 0; i < p1.Length; i++) {
+            if (p1[i].Type != p2[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
 
 public abstract class MethodDefOrSpec : MethodDesc, ModuleEntity
 {

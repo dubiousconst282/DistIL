@@ -39,14 +39,31 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     }
 
     public virtual TypeDesc GetSpec(GenericContext context)
+        => this;
+
+    public virtual MethodDesc? FindMethod(string name, in MethodSig sig)
     {
-        return this;
+        foreach (var method in Methods) {
+            if (method.Name == name && sig.Equals(method)) {
+                return method;
+            }
+        }
+        return null;
+    }
+
+    public virtual FieldDesc? FindField(string name, TypeDesc? type = null)
+    {
+        foreach (var field in Fields) {
+            if (field.Name == name && (type == null || field.Type == type)) {
+                return field;
+            }
+        }
+        return null;
     }
 
     public sealed override void Print(StringBuilder sb, SlotTracker slotTracker)
-    {
-        Print(sb, slotTracker);
-    }
+        => Print(sb, slotTracker);
+
     public virtual void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)
     {
         var ns = Namespace;

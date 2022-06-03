@@ -41,7 +41,7 @@ public class ModuleResolver
     public ModuleDef Load(string path)
     {
         Console.WriteLine("LoadModule: " + path);
-        using var pe = new PEReader(File.OpenRead(path));
+        using var pe = new PEReader(File.OpenRead(path), PEStreamOptions.PrefetchEntireImage);
         var module = new ModuleDef();
         var loader = new ModuleLoader(pe, this, module);
         _cache.Add(module.AsmName.FullName, module);

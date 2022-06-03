@@ -161,6 +161,7 @@ public class TypeSpec : TypeDefOrSpec
     public override string Name => Definition.Name;
 
     //TypeSpec members cannot be changed because they reflect the parent def
+    //TODO: find a way to cache TypeSpec members
     public override IReadOnlyList<FieldSpec> Fields {
         get => Definition.Fields.Select(f => new FieldSpec(this, f)).ToList();
     }
@@ -172,6 +173,18 @@ public class TypeSpec : TypeDefOrSpec
     {
         Definition = def;
         GenericParams = args;
+    }
+
+    public override MethodDesc? FindMethod(string name, in MethodSig sig)
+    {
+        var method = Definition.FindMethod(name, sig);
+        return method != null ? new MethodSpec(this, (MethodDef)method) : null;
+    }
+
+    public override FieldDesc? FindField(string name, TypeDesc? type = null)
+    {
+        var field = Definition.FindField(name, type);
+        return field != null ? new FieldSpec(this, (FieldDef)field) : null;
     }
 
     public override void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)

@@ -243,7 +243,7 @@ internal class ModuleLoader
         } else {
             var asm = (ModuleDef)GetEntity(info.Implementation);
             impl = asm.FindType(ns, name, includeExports: false) 
-                ?? throw new NotImplementedException(); //FIXME: resolve exported types from other modules
+                ?? throw new NotImplementedException(); //FIXME: resolve recursive type exports
         }
         return impl ?? throw new InvalidOperationException($"Could not resolve forwarded type '{ns}.{name}'");
     }
@@ -252,39 +252,15 @@ internal class ModuleLoader
     {
         var rootParent = (TypeDesc)GetEntity(info.Parent);
         string name = _reader.GetString(info.Name);
-        var signature = info.DecodeMethodSignature(_typeProvider, default);
+        var signature = new MethodSig(info.DecodeMethodSignature(_typeProvider, default));
 
         for (var parent = rootParent; parent != null; parent = parent.BaseType) {
-            foreach (var method in parent.Methods) {
-                //FIXME: can we compare with the generic def or do we need a full spec?
-                var template = (method as MethodSpec)?.Definition ?? method;
-                if (method.Name == name && SignatureEqual(template, signature)) {
-                    return method;
-                }
+            var method = parent.FindMethod(name, signature);
+            if (method != null) {
+                return method;
             }
         }
         throw new InvalidOperationException($"Could not resolve referenced method '{rootParent}::{name}'");
-
-        static bool SignatureEqual(MethodDesc method, MethodSignature<TypeDesc> sig)
-        {
-            if (method.ReturnType != sig.ReturnType) {
-                return false;
-            }
-            if (method.GenericParams.Length != sig.GenericParameterCount) {
-                return false;
-            }
-            var pars1 = method.StaticParams;
-            var pars2 = sig.ParameterTypes;
-            if (pars1.Length != pars2.Length) {
-                return false;
-            }
-            for (int i = 0; i < pars1.Length; i++) {
-                if (pars1[i].Type != pars2[i]) {
-                    return false;
-                }
-            }
-            return true;
-        }
     }
     private FieldDesc ResolveField(MemberReference info)
     {
@@ -293,11 +269,9 @@ internal class ModuleLoader
         var type = info.DecodeFieldSignature(_typeProvider, default);
 
         for (var parent = rootParent; parent != null; parent = parent.BaseType) {
-            foreach (var field in parent.Fields) {
-                var template = (field as FieldSpec)?.Definition ?? field;
-                if (template.Name == name && template.Type == type) {
-                    return field;
-                }
+            var field = parent.FindField(name, type);
+            if (field != null) {
+                return field;
             }
         }
         throw new InvalidOperationException($"Could not resolve referenced field '{rootParent}::{name}'");

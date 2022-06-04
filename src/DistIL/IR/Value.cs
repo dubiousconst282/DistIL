@@ -33,7 +33,6 @@ public abstract class TrackedValue : Value
     //In the future, we could also track the first 32 operand indices with an int bit set,
     //but since most instructions have 1-2 operands, it may not be worth the extra complexity/overhead.
     internal object _users = null!;
-    int _numUses;
 
     //The value hash is calculated based on the object address on the constructor.
     //It should help a bit since object.GetHashCode() is a virtual call to a runtime
@@ -60,21 +59,18 @@ public abstract class TrackedValue : Value
     public int NumUsers =>
         _users == null ? 0 :
         _users.GetType() == typeof(UserSet) ? _userSet.Count : 1;
-    public int NumUses => _numUses;
 
     public TrackedValue()
     {
-        _hash = StaticHash(this);
+        _hash = GetAddrHash(this);
     }
 
     /// <summary> Registers an use of this value. </summary>
-    /// <remarks> `NumUses` will be incremented regardless if this method was called with the same operand before. </remarks>
     internal override void AddUse(User user, int operIdx)
     {
         Assert(GetType() != typeof(Variable) || user is LoadVarInst or StoreVarInst or VarAddrInst);
         Assert(user.Operands[operIdx] == this);
-        TryAddUse(user);
-        _numUses++;
+        AddUser(user);
     }
 
     /// <summary> Deletes an use of this value. </summary>
@@ -86,10 +82,8 @@ public abstract class TrackedValue : Value
 
         if (_users == user) {
             _users = null!;
-            _numUses = 0;
-        } else if (_users != null) {
+        } else if (_users?.GetType() == typeof(UserSet)) {
             _userSet.Remove(user);
-            _numUses--;
         }
     }
     private bool IsBeingUsedBy(User user)
@@ -109,10 +103,26 @@ public abstract class TrackedValue : Value
                 foreach (var user in _userSet) {
                     return user;
                 }
+            } else {
+                return _singleUser;
             }
-            return _singleUser;
         }
         return null;
+    }
+
+    /// <summary> Checks if the number of operands using this value is `>= numTimes` </summary>
+    public bool IsUsedAtLeast(int numTimes)
+    {
+        return NumUsers >= numTimes || GetNumUses(numTimes) >= numTimes;
+    }
+    /// <summary> Calculates the number of operands using this value. </summary>
+    public int GetNumUses(int stopAt = int.MaxValue)
+    {
+        int count = 0;
+        foreach (var use in Uses()) {
+            if (++count >= stopAt) break;
+        }
+        return count;
     }
 
     /// <summary> Replace uses of this value with `newValue`. Use list is cleared on return. </summary>
@@ -120,30 +130,25 @@ public abstract class TrackedValue : Value
     {
         if (newValue == this || _users == null) return;
 
+        //Transfer slots to newValue if it's empty, to avoid copying.
         var newTrackedValue = newValue as TrackedValue;
-        if (newTrackedValue != null) {
-            newTrackedValue._numUses += _numUses;
-
-            //Transfer slots to newValue if it's empty, to avoid copying.
-            if (newTrackedValue._users == null) {
-                newTrackedValue._users = _users;
-                newTrackedValue = null; //don't add individual uses while replacing operands
-            }
+        if (newTrackedValue != null && newTrackedValue._users == null) {
+            newTrackedValue._users = _users;
+            newTrackedValue = null; //don't add individual uses while replacing operands
         }
 
         if (_users.GetType() == typeof(UserSet)) {
             foreach (var user in _userSet._slots) {
                 if (user != null) {
                     ReplaceOpers(user, newValue);
-                    newTrackedValue?.TryAddUse(user);
+                    newTrackedValue?.AddUser(user);
                 }
             }
         } else {
             ReplaceOpers(_singleUser, newValue);
-            newTrackedValue?.TryAddUse(_singleUser);
+            newTrackedValue?.AddUser(_singleUser);
         }
         _users = null!;
-        _numUses = 0;
     }
     private void ReplaceOpers(User user, Value newValue)
     {
@@ -155,7 +160,7 @@ public abstract class TrackedValue : Value
         }
     }
 
-    private void TryAddUse(User user)
+    private void AddUser(User user)
     {
         if (_users == null) {
             _users = user;
@@ -174,7 +179,7 @@ public abstract class TrackedValue : Value
     }
 
     public override int GetHashCode() => _hash;
-    private static int StaticHash(object obj)
+    private static int GetAddrHash(object obj)
     {
         //This is a Fibonacci hash. It's very fast, compact, and generates satisfactory results.
         //The result must be cached, because it will change when the GC compacts the heap.

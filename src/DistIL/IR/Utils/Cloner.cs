@@ -1,5 +1,7 @@
 namespace DistIL.IR.Utils;
 
+using DistIL.Passes;
+
 public class Cloner
 {
     readonly MethodBody _targetMethod;
@@ -43,14 +45,15 @@ public class Cloner
             }
             //Clone instructions
             foreach (var inst in oldBlock) {
-                var (newInst, fullyMapped) = _instCloner.Clone(inst);
-                newBlock.InsertLast(newInst);
-
-                if (inst.HasResult) {
-                    _mappings.Add(inst, newInst);
+                var (newVal, fullyMapped) = _instCloner.Clone(inst);
+                if (newVal is Instruction newInst) {
+                    newBlock.InsertLast(newInst);
+                    if (!fullyMapped) {
+                        pendingInsts.Add(newInst);
+                    }
                 }
-                if (!fullyMapped) {
-                    pendingInsts.Add(newInst);
+                if (newVal.HasResult) {
+                    _mappings.Add(inst, newVal);
                 }
             }
         }
@@ -93,21 +96,21 @@ public class Cloner
     class InstCloner : InstVisitor
     {
         readonly Cloner _ctx;
-        Instruction _newInst = null!;
+        Value _newValue = null!;
         bool _fullyRemapped;
 
         public InstCloner(Cloner ctx) => _ctx = ctx;
 
-        public (Instruction NewInst, bool FullyRemapped) Clone(Instruction inst)
+        public (Value NewValue, bool FullyRemapped) Clone(Instruction inst)
         {
             _fullyRemapped = false;
             inst.Accept(this);
-            return (_newInst, _fullyRemapped);
+            return (_newValue, _fullyRemapped);
         }
 
-        private void Out(Instruction inst)
+        private void Out(Value val)
         {
-            _newInst = inst;
+            _newValue = val;
         }
         private Value Remap(Value val)
         {
@@ -126,10 +129,32 @@ public class Cloner
             return newArgs;
         }
 
-        public void Visit(BinaryInst inst) => Out(new BinaryInst(inst.Op, Remap(inst.Left), Remap(inst.Right)));
-        public void Visit(UnaryInst inst) => Out(new UnaryInst(inst.Op, Remap(inst.Value)));
-        public void Visit(CompareInst inst) => Out(new CompareInst(inst.Op, Remap(inst.Left), Remap(inst.Right)));
-        public void Visit(ConvertInst inst) => Out(new ConvertInst(Remap(inst.Value), inst.ResultType, inst.CheckOverflow, inst.SrcUnsigned));
+        public void Visit(BinaryInst inst)
+        {
+            var left = Remap(inst.Left);
+            var right = Remap(inst.Right);
+            Out(ConstFold.FoldBinary(inst.Op, left, right)
+                ?? new BinaryInst(inst.Op, left, right));
+        }
+        public void Visit(UnaryInst inst)
+        {
+            var value = Remap(inst.Value);
+            Out(ConstFold.FoldUnary(inst.Op, value)
+                ?? new UnaryInst(inst.Op, value));
+        }
+        public void Visit(CompareInst inst)
+        {
+            var left = Remap(inst.Left);
+            var right = Remap(inst.Right);
+            Out(ConstFold.FoldCompare(inst.Op, left, right)
+                ?? new CompareInst(inst.Op, left, right));
+        }
+        public void Visit(ConvertInst inst)
+        {
+            var value = Remap(inst.Value);
+            Out(ConstFold.FoldConvert(value, inst.ResultType, inst.CheckOverflow, inst.SrcUnsigned)
+                ?? new ConvertInst(value, inst.ResultType, inst.CheckOverflow, inst.SrcUnsigned));
+        }
 
         public void Visit(LoadVarInst inst) => Out(new LoadVarInst(Remap(inst.Source)));
         public void Visit(StoreVarInst inst) => Out(new StoreVarInst(Remap(inst.Dest), Remap(inst.Value)));

@@ -31,12 +31,10 @@ public class ConstFold : MethodPass
     public static Value? Fold(Instruction inst)
     {
         return inst switch {
-            BinaryInst b 
-                => FoldBinary(b.Op, b.Left, b.Right),
-            ConvertInst c when !c.CheckOverflow
-                => FoldConvert(c.Value, c.ResultType, c.SrcUnsigned),
-            CompareInst c
-                => FoldCompare(c.Op, c.Left, c.Right),
+            BinaryInst b  => FoldBinary(b.Op, b.Left, b.Right),
+            UnaryInst u   => FoldUnary(u.Op, u.Value),
+            ConvertInst c => FoldConvert(c.Value, c.ResultType, c.CheckOverflow, c.SrcUnsigned),
+            CompareInst c => FoldCompare(c.Op, c.Left, c.Right),
             _ => null
         };
     }
@@ -123,8 +121,21 @@ public class ConstFold : MethodPass
         return null;
     }
 
-    public static Value? FoldConvert(Value srcValue, TypeDesc dstType, bool srcUnsigned)
+    public static Value? FoldUnary(UnaryOp op, Value value)
     {
+        return (op, value) switch {
+            (UnaryOp.Neg, ConstInt v)   => ConstInt.Create(v.ResultType, -v.Value),
+            (UnaryOp.Not, ConstInt v)   => ConstInt.Create(v.ResultType, ~v.Value),
+            (UnaryOp.FNeg, ConstFloat v) => ConstFloat.Create(v.ResultType, -v.Value),
+            _ => null
+        };
+    }
+
+    public static Value? FoldConvert(Value srcValue, TypeDesc dstType, bool chkOverflow, bool srcUnsigned)
+    {
+        if (chkOverflow) {
+            return null; //TODO
+        }
         var simpleDstType = dstType.StackType;
         if (simpleDstType == StackType.Long) {
             simpleDstType = StackType.Int;

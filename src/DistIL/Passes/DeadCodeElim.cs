@@ -43,7 +43,7 @@ public class DeadCodeElim : MethodPass
 
                 //Rewrite phis of reachable blocks
                 foreach (var succ in block.Succs) {
-                    if (!visitedBlocks.Contains(block)) continue;
+                    if (!visitedBlocks.Contains(succ)) continue;
 
                     foreach (var phi in succ.Phis()) {
                         phi.RemoveArg(block, removeTrivialPhi: true);

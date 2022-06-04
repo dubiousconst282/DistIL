@@ -36,14 +36,10 @@ public class InlineMethods : MethodPass
         var callee = ((MethodDef)callInst.Method).Body!;
         var cloner = new Cloner(caller);
 
-        //Add argument mappings
-        var args = callee.Args;
-        for (int i = 0; i < args.Count; i++) {
-            //Create temp variables because this transform happens before SSA
-            var tempVar = new Variable(args[i].Type);
-            var store = new StoreVarInst(tempVar, callInst.GetArg(i));
-            store.InsertBefore(callInst);
-            cloner.AddMapping(args[i], tempVar);
+        //Add argument mappings.
+        //SSA transform guarantees that arguments are readonly, not address exposed, and inlined/not used in LoadVarInst.
+        for (int i = 0; i < callee.Args.Count; i++) {
+            cloner.AddMapping(callee.Args[i], callInst.GetArg(i));
         }
         var newBlocks = cloner.CloneBlocks(callee);
 
@@ -81,7 +77,6 @@ public class InlineMethods : MethodPass
         foreach (var block in blocks) {
             if (block == blocks[0]) { //entry block
                 startBlock.SetBranch(block);
-                MergeBlocks.MergeSingleSucc(startBlock);
             }
             if (block.Last is ReturnInst ret) {
                 if (callInst.HasResult) {
@@ -97,7 +92,6 @@ public class InlineMethods : MethodPass
         } else if (returnedVals.Count == 1) {
             var (exitBlock, retValue) = returnedVals[0];
             callInst.ReplaceWith(retValue);
-            MergeBlocks.MergeSingleSucc(exitBlock);
         } else {
             callInst.Remove();
         }

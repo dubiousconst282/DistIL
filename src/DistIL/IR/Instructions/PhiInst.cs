@@ -9,6 +9,7 @@ public class PhiInst : Instruction
 {
     public int NumArgs => Operands.Length / 2;
     public override string InstName => "phi";
+    public override bool IsHeader => true;
 
     public PhiInst(TypeDesc type)
     {
@@ -19,11 +20,6 @@ public class PhiInst : Instruction
     {
         ResultType = args[0].Value.ResultType;
         Assert(args.All(a => a.Value.ResultType == ResultType));
-    }
-    private PhiInst(PhiInst inst)
-        : base(inst.Operands.ToArray())
-    {
-        ResultType = inst.ResultType;
     }
     
     public PhiArg GetArg(int index)

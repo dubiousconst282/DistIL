@@ -29,6 +29,7 @@ public class GuardInst : Instruction
 
     public override string InstName => "try";
     public override bool SafeToRemove => false;
+    public override bool IsHeader => true;
 
     public GuardInst(GuardKind kind, BasicBlock handlerBlock, TypeDesc? catchType = null, BasicBlock? filterBlock = null)
         : base(filterBlock == null ? new Value[] { handlerBlock } : new Value[] { handlerBlock, filterBlock })

@@ -23,8 +23,8 @@ public class BasicBlock : TrackedValue
         }
     }
 
-    /// <summary> Whether <see cref="Instruction.Order" /> values are valid. </summary>
-    public bool OrderValid { get; private set; }
+    /// <summary> Whether the block starts with a `PhiInst` or `GuardInst`. </summary>
+    public bool HasHeader => First is PhiInst or GuardInst;
 
     internal BasicBlock(MethodBody method)
     {
@@ -53,6 +53,34 @@ public class BasicBlock : TrackedValue
     {
         Disconnect(prevSucc);
         Connect(newSucc);
+    }
+
+    /// <summary> Remove edges from the branch targets. </summary>
+    /// <param name="redirectPhisTo"> If not null, incomming blocks for phis of branch successors will be replaced with this block; otherwise, the argument will be removed. </param>
+    public void DisconnectBranch(Instruction branch, BasicBlock? redirectPhisTo = null)
+    {
+        foreach (var oper in branch.Operands) {
+            if (oper is not BasicBlock succ) continue;
+
+            Disconnect(succ);
+
+            foreach (var phi in succ.Phis()) {
+                if (redirectPhisTo != null) {
+                    phi.ReplaceOperand(this, redirectPhisTo);
+                } else {
+                    phi.RemoveArg(this, true);
+                }
+            }
+        }
+    }
+    /// <summary> Create edges to the branch targets. </summary>
+    public void ConnectBranch(Instruction branch)
+    {
+        foreach (var oper in branch.Operands) {
+            if (oper is not BasicBlock succ) continue;
+
+            Connect(succ);
+        }
     }
 
     /// <summary> Inserts `newInst` before the first instruction in this block. </summary>
@@ -135,7 +163,6 @@ public class BasicBlock : TrackedValue
 
     private void OnCodeChanged()
     {
-        OrderValid = false;
         Method.InvalidateSlots();
     }
 
@@ -161,11 +188,11 @@ public class BasicBlock : TrackedValue
     /// <summary>
     /// Splits this block, moving instructions starting from `pos` to the new block,
     /// and adds a unconditional branch to the new block.
-    /// Note that `pos` cannot be a PhiInst and it must be in this block.
+    /// Note that `pos` cannot be a PhiInst/GuardInst and it must be in this block.
     /// </summary>
     public BasicBlock Split(Instruction pos)
     {
-        Ensure(pos.Block == this && pos is not PhiInst);
+        Ensure(pos.Block == this && !pos.IsHeader);
 
         var newBlock = Method.CreateBlock();
         MoveRange(newBlock, null, pos, Last);
@@ -183,29 +210,22 @@ public class BasicBlock : TrackedValue
 
     /// <summary> 
     /// Removes the last branch instruction from the block (if it exists),
-    /// then adds `br` and update successors accordingly.
+    /// then adds `newBranch` (assumming it is a Branch/Switch/Return), and update edges accordingly.
     /// </summary>
-    public void SetBranch(BranchInst br)
+    public void SetBranch(Instruction newBranch)
     {
+        Ensure(newBranch.IsBranch);
+
         if (Last != null && Last.IsBranch) {
-            //Disconnect successors
-            foreach (var oper in Last.Operands) {
-                if (oper is BasicBlock target) {
-                    Disconnect(target);
-                } 
-            }
+            DisconnectBranch(Last);
             Last.Remove();
         }
-        InsertLast(br);
-        //Connect new branch targets
-        Connect(br.Then);
-        if (br.IsConditional) {
-            Connect(br.Else);
-        }
+        ConnectBranch(newBranch);
+        InsertLast(newBranch);
     }
     /// <summary> 
-    /// Replaces the last instruction in the block with a unconditional branch to `target`
-    /// and update successors accordingly. 
+    /// Replaces the last instruction in the block with a unconditional branch to `target`, 
+    /// and update edges accordingly. 
     /// </summary>
     public void SetBranch(BasicBlock target)
     {

@@ -97,4 +97,6 @@ public class MethodBody
             }
         }
     }
+
+    public override string ToString() => Definition.ToString();
 }

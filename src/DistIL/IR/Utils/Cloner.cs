@@ -6,6 +6,7 @@ public class Cloner
 {
     readonly MethodBody _targetMethod;
     readonly Dictionary<Value, Value> _mappings = new(); //mapping from old to new (clonned) values
+    readonly RefSet<Value> _valuesPendingRemap = new(); //values needing remap bc they weren't at first
     readonly InstCloner _instCloner;
 
     public Cloner(MethodBody targetMethod)
@@ -45,10 +46,10 @@ public class Cloner
             }
             //Clone instructions
             foreach (var inst in oldBlock) {
-                var (newVal, fullyMapped) = _instCloner.Clone(inst);
+                var (newVal, fullyRemapped) = _instCloner.Clone(inst);
                 if (newVal is Instruction newInst) {
                     newBlock.InsertLast(newInst);
-                    if (!fullyMapped) {
+                    if (!fullyRemapped) {
                         pendingInsts.Add(newInst);
                     }
                 }
@@ -59,9 +60,11 @@ public class Cloner
         }
         //Remap pending instructions
         foreach (var inst in pendingInsts) {
-            for (int i = 0; i < inst.Operands.Length; i++) {
-                if (!Remap(inst.Operands[i], out var newValue)) {
-                    throw new InvalidOperationException("No mapping for value " + inst.Operands[i]);
+            var opers = inst.Operands;
+            for (int i = 0; i < opers.Length; i++) {
+                if (!_valuesPendingRemap.Contains(opers[i])) continue;
+                if (!Remap(opers[i], out var newValue)) {
+                    throw new InvalidOperationException("No mapping for value " + opers[i]);
                 }
                 inst.ReplaceOperand(i, newValue);
             }
@@ -83,6 +86,7 @@ public class Cloner
             newValue = value;
             return true;
         }
+        _valuesPendingRemap.Add(value);
         return false;
     }
     private BasicBlock Remap(BasicBlock block)
@@ -103,7 +107,7 @@ public class Cloner
 
         public (Value NewValue, bool FullyRemapped) Clone(Instruction inst)
         {
-            _fullyRemapped = false;
+            _fullyRemapped = true;
             inst.Accept(this);
             return (_newValue, _fullyRemapped);
         }
@@ -114,7 +118,7 @@ public class Cloner
         }
         private Value Remap(Value val)
         {
-            _fullyRemapped |= _ctx.Remap(val, out var newVal);
+            _fullyRemapped &= _ctx.Remap(val, out var newVal);
             return newVal ?? val;
         }
         private Variable Remap(Variable var) => (Variable)Remap((Value)var);

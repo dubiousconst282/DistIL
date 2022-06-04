@@ -7,17 +7,16 @@ using DistIL.Analysis;
 public class SsaTransform2 : MethodPass
 {
     MethodBody _method = null!;
-    DominatorTree _domTree = null!;
     Dictionary<PhiInst, Variable> _phiDefs = new(); //phi -> variable
 
     public override void Run(MethodTransformContext ctx)
     {
         _method = ctx.Method;
-        _domTree = ctx.GetAnalysis<DominatorTree>(preserve: true);
+        var domTree = ctx.GetAnalysis<DominatorTree>(preserve: true);
         var domFrontier = ctx.GetAnalysis<DominanceFrontier>(preserve: true);
 
         InsertPhis(domFrontier);
-        RenameDefs();
+        RenameDefs(domTree);
         PrunePhis();
 
         _phiDefs.Clear();
@@ -38,8 +37,8 @@ public class SsaTransform2 : MethodPass
             }
         }
 
-        var phiAdded = new HashSet<BasicBlock>(); //blocks where a phi has been added
-        var processed = new HashSet<BasicBlock>(); //blocks already visited in worklist
+        var phiAdded = new ValueSet<BasicBlock>(); //blocks where a phi has been added
+        var processed = new ValueSet<BasicBlock>(); //blocks already visited in worklist
 
         //Insert phis
         foreach (var (variable, worklist) in varDefs) {
@@ -68,7 +67,7 @@ public class SsaTransform2 : MethodPass
         }
     }
 
-    private void RenameDefs()
+    private void RenameDefs(DominatorTree domTree)
     {
         //TODO: Push once per block (would need another dictionary, may not be worth)
         var defStacks = new Dictionary<Variable, ArrayStack<Value>>();
@@ -83,7 +82,7 @@ public class SsaTransform2 : MethodPass
         }
         defDeltas.Push((null!, null!)); //dummy element so we don't need to check IsEmpty in RestoreDefs
 
-        _domTree.Traverse(
+        domTree.Traverse(
             preVisit: RenameBlock,
             postVisit: RestoreDefs
         );
@@ -146,7 +145,7 @@ public class SsaTransform2 : MethodPass
     private void PrunePhis()
     {
         //Algorithm from the SSABook
-        var usefulPhis = new HashSet<PhiInst>();
+        var usefulPhis = new ValueSet<PhiInst>();
         var propagationStack = new ArrayStack<PhiInst>();
         var pruneablePhis = new List<PhiInst>();
         //Initial marking phase

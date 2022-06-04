@@ -7,7 +7,7 @@ using DistIL.IR;
 public class SsaTransform : MethodPass
 {
     readonly Dictionary<(BasicBlock, Variable), Value> _currDefs = new();
-    readonly HashSet<BasicBlock> _sealedBlocks = new();
+    readonly ValueSet<BasicBlock> _sealedBlocks = new();
     readonly List<(PhiInst, Variable)> _incompletePhis = new();
 
     public override void Run(MethodTransformContext ctx)

@@ -1,32 +1,46 @@
 namespace DistIL.Util;
 
-using DistIL.IR;
+using System.Runtime.CompilerServices;
 
 /// <summary>
-/// A compact hash set where keys are <see cref="TrackedValue"/> object references.
+/// Implements a compact unordered hash set of object references.
+/// The implementation is uses linear probing, and the internal array grows when the load factor reaches 3/4.
 /// 
-/// The implementation uses a linear probing hash set, with load threshold of `0.75`.
-/// Insertion order is not preserved.
+/// Modifiying the set during enumeration is not supported, and may cause entries to be enumerated multiple times. (TODO)
 /// </summary>
-public class ValueSet<TValue> where TValue : TrackedValue
+public class RefSet<T, H>
+    where T : class
+    where H : struct, Hasher<T>
 {
-    internal TValue?[] _slots = new TValue[4];
+    internal T?[] _slots = new T[4];
     internal int _count;
 
     public int Count => _count;
 
-    public bool Add(TValue value)
+    //JIT can't inline static interface methods atm, so that's why we're doing it this way.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int Hash(T obj)
+    {
+        Unsafe.SkipInit(out H h);
+        return h.Hash(obj);
+    }
+
+    public bool Add(T value)
     {
         var slots = _slots;
         for (int hash = Hash(value); ; hash++) {
             int index = hash & (slots.Length - 1);
             var slot = slots[index];
 
-            if (slot == value) return false;
+            if (slot == value) {
+                return false;
+            }
             if (slot == null) {
                 slots[index] = value;
-                //expand when load factor reaches 3/4 (0.75)
-                if (++_count >= slots.Length * 3 / 4) {
+                _count++;
+                //Expand when load factor reaches 3/4
+                //Casting to uint avoids extra sign calcs in the resulting asm.
+                if ((uint)_count >= (uint)slots.Length * 3 / 4) {
                     Expand();
                 }
                 return true;
@@ -34,7 +48,7 @@ public class ValueSet<TValue> where TValue : TrackedValue
         }
     }
 
-    public bool Contains(TValue value)
+    public bool Contains(T value)
     {
         var slots = _slots;
         for (int hash = Hash(value); ; hash++) {
@@ -50,7 +64,7 @@ public class ValueSet<TValue> where TValue : TrackedValue
         }
     }
 
-    public bool Remove(TValue value)
+    public bool Remove(T value)
     {
         var slots = _slots;
         for (int hash = Hash(value); ; hash++) {
@@ -93,14 +107,14 @@ public class ValueSet<TValue> where TValue : TrackedValue
 
     public void Clear()
     {
-        _slots = new TValue[4];
+        _slots = new T[4];
         _count = 0;
     }
 
     private void Expand()
     {
         var oldSlots = _slots;
-        var newSlots = new TValue[oldSlots.Length * 2];
+        var newSlots = new T[oldSlots.Length * 2];
         _slots = newSlots;
 
         foreach (var value in oldSlots) {
@@ -112,24 +126,33 @@ public class ValueSet<TValue> where TValue : TrackedValue
                     newSlots[index] = value;
                     break;
                 }
-                Assert(newSlots[index] != value); //slots can't have dupes
+                Assert(newSlots[index] != value); //slots shouldn't have dupes
             }
         }
     }
 
-    private static int Hash(TValue user) => user._hash;
-
-    public Enumerator GetEnumerator() => new() { _slots = _slots };
+    public Enumerator GetEnumerator() => new(this);
 
     public struct Enumerator
     {
-        internal TValue?[] _slots;
+        T?[] _slots;
         int _index;
 
-        public TValue Current { get; private set; }
+        public T Current { get; private set; } = null!;
+
+#if DEBUG
+        RefSet<T, H> _set;
+        int _prevCount;
+        internal Enumerator(RefSet<T, H> set) => (_slots, _set, _prevCount) = (set._slots, set, set._count);
+#else
+        internal Enumerator(RefSet<T, H> set) => _slots = set._slots;
+#endif
 
         public bool MoveNext()
         {
+#if DEBUG
+            Assert(_set._count == _prevCount, "Set cannot be modified during enumeration");
+#endif
             while (_index < _slots.Length) {
                 Current = _slots[_index++]!;
                 if (Current != null) {
@@ -139,4 +162,29 @@ public class ValueSet<TValue> where TValue : TrackedValue
             return false;
         }
     }
+}
+/// <summary> A compact unordered hash set of object references. </summary>
+public class RefSet<T> : RefSet<T, IdentityHasher>
+    where T : class
+{
+}
+
+/// <summary> A specialization of <see cref="RefSet{T, H}"/> for <see cref="IR.TrackedValue"/> objects. </summary>
+public class ValueSet<T> : RefSet<T, IRValueHasher>
+    where T : IR.TrackedValue
+{
+}
+
+public interface Hasher<in T>
+{
+    int Hash(T obj);
+}
+
+public struct IdentityHasher : Hasher<object>
+{
+    public int Hash(object obj) => RuntimeHelpers.GetHashCode(obj);
+}
+public struct IRValueHasher : Hasher<IR.TrackedValue>
+{
+    public int Hash(IR.TrackedValue obj) => obj._hash;
 }

@@ -10,7 +10,7 @@ public class GraphTraversal
     ) where TNode : class
     {
         var pending = new ArrayStack<(TNode Node, int Index)>();
-        var visited = new HashSet<TNode>();
+        var visited = new RefSet<TNode>();
 
         visited.Add(entry);
         pending.Push((entry, 0));

@@ -107,25 +107,41 @@ internal class ModuleWriter
                         AddString(val.Name)
                     );
                 }
-                case MethodDef val: {
-                    var declType = GetHandle(val.DeclaringType);
+                case TypeSpec val: {
+                    return _builder.AddTypeSpecification(
+                        EncodeSig(b => EncodeType(b.TypeSpecificationSignature(), val))
+                    );
+                }
+                case MethodSpec { GenericParams.Length: > 0 } val: {
+                    return _builder.AddMethodSpecification(
+                        GetHandle(val.Definition),
+                        EncodeSpecSig(val)
+                    );
+                }
+                case MethodDefOrSpec val: {
                     return _builder.AddMemberReference(
-                        declType,
+                        GetHandle(val.DeclaringType),
                         AddString(val.Name),
-                        EmitMethodSig(val)
+                        EncodeMethodSig(val.Definition)
                     );
                 }
                 case FieldDef val: {
-                    var declType = GetHandle(val.DeclaringType);
                     return _builder.AddMemberReference(
-                        declType,
+                        GetHandle(val.DeclaringType),
                         AddString(val.Name),
-                        EmitFieldSig(val)
+                        EncodeFieldSig(val)
                     );
                 }
                 default: throw new NotImplementedException();
             }
         }
+    }
+    private EntityHandle GetTypeHandle(TypeDesc type)
+    {
+        if (type is PrimType primType) {
+            type = primType.GetDefinition(_mod);
+        }
+        return GetHandle((ModuleEntity)type);
     }
     private StandaloneSignatureHandle GetStandaloneSig(FuncPtrType type)
     {
@@ -170,7 +186,7 @@ internal class ModuleWriter
         var handle = _builder.AddFieldDefinition(
             field.Attribs,
             AddString(field.Name),
-            EmitFieldSig(field)
+            EncodeFieldSig(field)
         );
         AssertHandleAllocated(field, handle);
 
@@ -191,7 +207,7 @@ internal class ModuleWriter
 
     private void EmitMethod(MethodDef method)
     {
-        var signature = EmitMethodSig(method);
+        var signature = EncodeMethodSig(method);
         int bodyOffset = EmitBody(method.ILBody);
         var firstParamHandle = MetadataTokens.ParameterHandle(_builder.GetRowCount(TableIndex.Param) + 1);
 
@@ -221,7 +237,7 @@ internal class ModuleWriter
         var attribs = body.InitLocals ? MethodBodyAttributes.InitLocals : 0;
 
         if (body.Locals.Count > 0) {
-            var sigBlobHandle = EmitSig(b => {
+            var sigBlobHandle = EncodeSig(b => {
                 var sigEnc = b.LocalVariableSignature(body.Locals.Count);
                 foreach (var localVar in body.Locals) {
                     var typeEnc = sigEnc.AddVariable().Type(false, localVar.IsPinned);
@@ -291,7 +307,7 @@ internal class ModuleWriter
                 break;
             }
             case ILOperandType.Type: {
-                var handle = GetHandle((TypeDef)inst.Operand!);
+                var handle = GetTypeHandle((TypeDesc)inst.Operand!);
                 bb.WriteInt32(MetadataTokens.GetToken(handle));
                 break;
             }
@@ -361,27 +377,38 @@ internal class ModuleWriter
         }
     }
 
-    private BlobHandle EmitMethodSig(MethodDef method)
+    private BlobHandle EncodeMethodSig(MethodDef method)
     {
-        return EmitSig(b => {
+        return EncodeSig(b => {
             //TODO: callconv, genericParamCount
             var pars = method.StaticParams;
-            b.MethodSignature(isInstanceMethod: method.IsInstance)
+            b.MethodSignature(default, method.GenericParams.Length, method.IsInstance)
                 .Parameters(
                     pars.Length,
                     out var retTypeEnc, out var parsEnc
                 );
             EncodeType(retTypeEnc.Type(), method.ReturnType);
-            foreach (var arg in pars) {
+            foreach (var par in pars) {
                 var parEnc = parsEnc.AddParameter();
-                EncodeType(parEnc.Type(), arg.Type);
+                EncodeType(parEnc.Type(), par.Type);
             }
         });
     }
 
-    private BlobHandle EmitFieldSig(FieldDef field)
+    private BlobHandle EncodeSpecSig(MethodSpec method)
     {
-        return EmitSig(b => EncodeType(b.FieldSignature(), field.Type));
+        return EncodeSig(b => {
+            var genArgEnc = b.MethodSpecificationSignature(method.GenericParams.Length);
+            foreach (var par in method.GenericParams) {
+                var parEnc = genArgEnc.AddArgument();
+                EncodeType(parEnc, par);
+            }
+        });
+    }
+
+    private BlobHandle EncodeFieldSig(FieldDef field)
+    {
+        return EncodeSig(b => EncodeType(b.FieldSignature(), field.Type));
     }
 
     private void EncodeType(SignatureTypeEncoder enc, TypeDesc type)
@@ -462,11 +489,19 @@ internal class ModuleWriter
                 }
                 break;
             }
+            case GenericParamType t: {
+                if (t.IsMethodParam) {
+                    enc.GenericMethodTypeParameter(t.Index);
+                } else {
+                    enc.GenericTypeParameter(t.Index);
+                }
+                break;
+            }
             default: throw new NotImplementedException();
         }
     }
 
-    private BlobHandle EmitSig(Action<BlobEncoder> encode)
+    private BlobHandle EncodeSig(Action<BlobEncoder> encode)
     {
         var builder = new BlobBuilder();
         var encoder = new BlobEncoder(builder);
@@ -484,33 +519,8 @@ internal class ModuleWriter
     }
 
     private void SerializePE(BlobBuilder peBlob)
-    {/*
-        var hdrs = _mod.PE.PEHeaders;
-        var peHdr = hdrs.PEHeader!;
-        var coffHdr = hdrs.CoffHeader;
-        var corHdr = hdrs.CorHeader;
-
-        var header = new PEHeaderBuilder(
-            machine: coffHdr.Machine,
-            sectionAlignment: peHdr.SectionAlignment,
-            fileAlignment: peHdr.FileAlignment,
-            imageBase: peHdr.ImageBase,
-            majorLinkerVersion: peHdr.MajorLinkerVersion,
-            minorLinkerVersion: peHdr.MinorLinkerVersion,
-            majorOperatingSystemVersion: peHdr.MajorOperatingSystemVersion,
-            minorOperatingSystemVersion: peHdr.MinorOperatingSystemVersion,
-            majorImageVersion: peHdr.MajorImageVersion,
-            minorImageVersion: peHdr.MinorImageVersion,
-            majorSubsystemVersion: peHdr.MajorSubsystemVersion,
-            minorSubsystemVersion: peHdr.MinorSubsystemVersion,
-            subsystem: peHdr.Subsystem,
-            dllCharacteristics: peHdr.DllCharacteristics,
-            imageCharacteristics: coffHdr.Characteristics,
-            sizeOfStackReserve: peHdr.SizeOfStackReserve,
-            sizeOfStackCommit: peHdr.SizeOfStackCommit,
-            sizeOfHeapReserve: peHdr.SizeOfHeapReserve,
-            sizeOfHeapCommit: peHdr.SizeOfHeapCommit
-        );
+    {
+        var header = new PEHeaderBuilder();
 
         var entryPoint = _mod.EntryPoint;
 
@@ -519,9 +529,8 @@ internal class ModuleWriter
             metadataRootBuilder: new MetadataRootBuilder(_builder),
             ilStream: _bodyEncoder.Builder,
             mappedFieldData: _fieldDataStream,
-            managedResources: _managedResourceStream,
             entryPoint: entryPoint == null ? default : (MethodDefinitionHandle)_handleMap[entryPoint]
         );
-        peBuilder.Serialize(peBlob);*/
+        peBuilder.Serialize(peBlob);
     }
 }

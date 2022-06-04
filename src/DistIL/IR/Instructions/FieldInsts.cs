@@ -25,6 +25,18 @@ public abstract class FieldAccessInst : Instruction
         : base(args)
     {
     }
+
+    protected override void PrintOperands(StringBuilder sb, SlotTracker slotTracker)
+    {
+        sb.Append(" ");
+        Field.DeclaringType.Print(sb, slotTracker, false);
+        sb.Append($"::{Field.Name}");
+
+        foreach (var oper in Operands[1..]) {
+            sb.Append(", ");
+            oper.PrintAsOperand(sb, slotTracker);
+        }
+    }
 }
 
 public class LoadFieldInst : FieldAccessInst

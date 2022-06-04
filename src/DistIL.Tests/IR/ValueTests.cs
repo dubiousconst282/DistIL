@@ -1,5 +1,3 @@
-using System.Text;
-
 using DistIL.IR;
 
 public class ValueTests
@@ -42,6 +40,7 @@ public class ValueTests
         var value1 = new DummyValue(123);
         var value2 = new DummyValue(456);
         var value3 = new DummyValue(789);
+        var value4 = ConstInt.CreateI(111);
         var inst1 = new BinaryInst(BinaryOp.Add, value2, value1);
         var inst2 = new BinaryInst(BinaryOp.Mul, value1, value2);
 
@@ -52,6 +51,14 @@ public class ValueTests
             new Instruction[] { inst1, inst2 },
             new (Instruction, int)[] { (inst1, 0), (inst2, 1) }
         );
+        Assert.Equal(value3, inst1.Left);
+        Assert.Equal(value3, inst2.Right);
+
+        //Also check untracked values
+        value1.ReplaceUses(value4);
+        CheckUses(value1, new Instruction[0], new (Instruction, int)[0]);
+        Assert.Equal(value4, inst1.Right);
+        Assert.Equal(value4, inst2.Left);
     }
 
     private void CheckUses(TrackedValue value, Instruction[] expUsers, (Instruction, int)[] expUses)

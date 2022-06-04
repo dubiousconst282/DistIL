@@ -120,36 +120,38 @@ public abstract class TrackedValue : Value
     {
         if (newValue == this || _users == null) return;
 
-        if (newValue is TrackedValue newTrackedValue) {
-            if (_users.GetType() == typeof(UserSet)) {
-                foreach (var user in _userSet._slots) {
-                    if (user != null) {
-                        ReplaceUse(newTrackedValue, user);
-                    }
-                }
-            } else {
-                ReplaceUse(newTrackedValue, _singleUser);
-            }
-            //Transfer the user slots to the newValue to avoid copying.
-            //ReplaceUse() already handles this.
+        var newTrackedValue = newValue as TrackedValue;
+        if (newTrackedValue != null) {
+            newTrackedValue._numUses += _numUses;
+
+            //Transfer slots to newValue if it's empty, to avoid copying.
             if (newTrackedValue._users == null) {
                 newTrackedValue._users = _users;
+                newTrackedValue = null; //don't add individual uses while replacing operands
             }
-            newTrackedValue._numUses += _numUses;
+        }
+
+        if (_users.GetType() == typeof(UserSet)) {
+            foreach (var user in _userSet._slots) {
+                if (user != null) {
+                    ReplaceOpers(user, newValue);
+                    newTrackedValue?.TryAddUse(user);
+                }
+            }
+        } else {
+            ReplaceOpers(_singleUser, newValue);
+            newTrackedValue?.TryAddUse(_singleUser);
         }
         _users = null!;
         _numUses = 0;
     }
-    private void ReplaceUse(TrackedValue newValue, User user)
+    private void ReplaceOpers(User user, Value newValue)
     {
         var opers = user._operands;
         for (int i = 0; i < opers.Length; i++) {
             if (opers[i] == this) {
                 opers[i] = newValue;
             }
-        }
-        if (newValue._users != null) {
-            newValue.TryAddUse(user);
         }
     }
 

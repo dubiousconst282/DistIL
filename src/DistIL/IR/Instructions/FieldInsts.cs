@@ -61,6 +61,7 @@ public class StoreFieldInst : FieldAccessInst
     }
 
     public override string InstName => "stfld";
+    public override bool SafeToRemove => false;
 
     public StoreFieldInst(FieldDesc field, Value? obj, Value value)
         : base(obj == null ? new[] { field, value } : new[] { field, obj, value })

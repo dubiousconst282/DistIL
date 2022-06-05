@@ -86,3 +86,30 @@ public class NewObjInst : Instruction
     protected override void PrintOperands(StringBuilder sb, SlotTracker slotTracker)
         => CallInst.PrintOperands(sb, slotTracker, Constructor, Args, true);
 }
+
+public class FuncAddrInst : Instruction
+{
+    public MethodDesc Method {
+        get => (MethodDesc)Operands[0];
+        set => ReplaceOperand(0, value);
+    }
+    public Value? Object {
+        get => IsVirtual ? Operands[1] : null;
+        set {
+            Ensure(IsVirtual && value != null);
+            ReplaceOperand(1, value);
+        }
+    }
+    [MemberNotNullWhen(true, nameof(Object))]
+    public bool IsVirtual => Operands.Length >= 2;
+
+    public override string InstName => IsVirtual ? "virtfuncaddr" : "funcaddr";
+
+    public FuncAddrInst(MethodDesc method, Value? obj = null)
+        : base(obj == null ? new Value[] { method } : new Value[] { method, obj })
+    {
+        ResultType = new FuncPtrType(method);
+    }
+
+    public override void Accept(InstVisitor visitor) => visitor.Visit(this);
+}

@@ -297,6 +297,8 @@ internal class BlockState
                 case ILCode.Blt_Un:
                     ImportBinaryBranch(ref inst, CompareOp.Ult, CompareOp.FUlt);
                     break;
+
+                case ILCode.Switch: ImportSwitch(ref inst); break;
                 #endregion
 
                 #region Comparison
@@ -406,6 +408,19 @@ internal class BlockState
                     break;
                 #endregion
 
+                #region Call
+                case ILCode.Call:
+                case ILCode.Callvirt:
+                    ImportCall((MethodDesc)inst.Operand!, opcode == ILCode.Callvirt);
+                    break;
+                case ILCode.Ldftn:
+                case ILCode.Ldvirtftn:
+                    ImportLoadFuncPtr((MethodDesc)inst.Operand!, opcode == ILCode.Ldvirtftn);
+                    break;
+
+                case ILCode.Newobj: ImportNewObj((MethodDesc)inst.Operand!); break;
+                #endregion
+
                 #region Intrinsics
                 case ILCode.Newarr:
                     ImportNewArray((TypeDesc)inst.Operand!);
@@ -420,15 +435,6 @@ internal class BlockState
                 case ILCode.Ret: ImportRet(); break;
                 case ILCode.Dup: ImportDup(); break;
                 case ILCode.Pop: ImportPop(); break;
-
-                case ILCode.Call:
-                case ILCode.Callvirt:
-                    ImportCall((MethodDesc)inst.Operand!, opcode == ILCode.Callvirt);
-                    break;
-
-                case ILCode.Newobj:     ImportNewObj((MethodDesc)inst.Operand!); break;
-
-                case ILCode.Switch:     ImportSwitch(ref inst); break;
 
                 case ILCode.Nop:
                 case ILCode.Break:
@@ -694,6 +700,12 @@ internal class BlockState
             Push(inst);
         }
     }
+    private void ImportLoadFuncPtr(MethodDesc method, bool isVirt)
+    {
+        var obj = isVirt ? Pop() : null;
+        Push(new FuncAddrInst(method, obj));
+    }
+
     private void ImportNewObj(MethodDesc ctor)
     {
         var args = PopCallArgs(ctor, true);

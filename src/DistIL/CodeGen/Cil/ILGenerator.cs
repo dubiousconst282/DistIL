@@ -302,12 +302,16 @@ public partial class ILGenerator : InstVisitor
         var code = inst.IsVirtual ? ILCode.Callvirt : ILCode.Call;
         _asm.Emit(code, inst.Method);
     }
+    public void Visit(FuncAddrInst inst)
+    {
+        var code = inst.IsVirtual ? ILCode.Ldvirtftn : ILCode.Ldftn;
+        _asm.Emit(code, inst.Method);
+    }
     public void Visit(NewObjInst inst)
     {
         foreach (var arg in inst.Args) {
             Push(arg);
         }
-        Assert(inst.Constructor is MethodDef);
         _asm.Emit(ILCode.Newobj, inst.Constructor);
     }
 

@@ -31,6 +31,14 @@ public class FuncPtrType : TypeDesc
         HasExplicitThis = explicitThis;
     }
 
+    public FuncPtrType(MethodDesc desc, CallConvention callConv = CallConvention.Managed)
+    {
+        ReturnType = desc.ReturnType;
+        ArgTypes = desc.Params.Select(p => p.Type).ToImmutableArray();
+        CallConv = callConv;
+        IsInstance = desc.IsInstance;
+    }
+
     internal FuncPtrType(MethodSignature<TypeDesc> sig)
     {
         Ensure(sig.GenericParameterCount == 0);

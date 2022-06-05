@@ -1,5 +1,7 @@
 namespace DistIL.IR;
 
+using System.Text;
+
 public class IntrinsicInst : Instruction
 {
     public IntrinsicId Id { get; set; }
@@ -7,7 +9,7 @@ public class IntrinsicInst : Instruction
 
     public override bool HasSideEffects => true;
     public override bool MayThrow => true;
-    public override string InstName => "intrin." + Id.ToString();
+    public override string InstName => "intrinsic";
 
     public IntrinsicInst(IntrinsicId intrinsic, TypeDesc resultType, params Value[] args)
         : base(args)
@@ -20,11 +22,29 @@ public class IntrinsicInst : Instruction
     public void SetArg(int index, Value newValue) => ReplaceOperand(index, newValue);
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
+
+    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    {
+        if (Id == IntrinsicId.Marker && Operands is [ConstString str]) {
+            sb.Append("//" + str.Value);
+        } else {
+            base.Print(sb, slotTracker);
+        }
+    }
+
+    protected override void PrintOperands(StringBuilder sb, SlotTracker slotTracker)
+    {
+        sb.Append($" {Id}");
+        int pos = sb.Length;
+        base.PrintOperands(sb, slotTracker);
+        sb[pos] = '('; //PrintOperands will prepend a space
+        sb.Append(")");
+    }
 }
 
 public enum IntrinsicId
 {
-    None,           //not a real intrinsic
+    Marker,         //nop, used for debugging
 
     NewArray,       //T[] newarr<T[]>(int|nint length)
 

@@ -166,24 +166,16 @@ public class BasicBlock : TrackedValue
         Method.InvalidateSlots();
     }
 
-    public PhiInst AddPhi(TypeDesc resultType)
+    public PhiInst AddPhi(PhiInst phi)
     {
-        var phi = new PhiInst(resultType);
-        InsertBefore(FirstNonPhi, phi);
+        if (First != null) {
+            InsertBefore(FirstNonPhi, phi);
+        } else {
+            InsertFirst(phi);
+        }
         return phi;
     }
-    public PhiInst AddPhi(params PhiArg[] args)
-    {
-        var phi = new PhiInst(args);
-        InsertBefore(FirstNonPhi, phi);
-        return phi;
-    }
-    public PhiInst AddPhi(IEnumerable<PhiArg> args)
-    {
-        var phi = new PhiInst(args.ToArray());
-        InsertBefore(FirstNonPhi, phi);
-        return phi;
-    }
+    public PhiInst AddPhi(TypeDesc resultType) => AddPhi(new PhiInst(resultType));
 
     /// <summary>
     /// Splits this block, moving instructions starting from `pos` to the new block,

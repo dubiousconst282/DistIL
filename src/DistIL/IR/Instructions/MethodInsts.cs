@@ -23,6 +23,7 @@ public class CallInst : Instruction
     public CallInst(MethodDesc method, Value[] args, bool isVirtual = false)
         : base(args.Prepend(method).ToArray())
     {
+        Ensure(args.Length == method.Params.Length);
         ResultType = method.ReturnType;
         IsVirtual = isVirtual;
     }
@@ -78,6 +79,7 @@ public class NewObjInst : Instruction
     public NewObjInst(MethodDesc ctor, Value[] args)
         : base(args.Prepend(ctor).ToArray())
     {
+        Ensure(args.Length == ctor.StaticParams.Length);
         ResultType = ctor.DeclaringType;
     }
 

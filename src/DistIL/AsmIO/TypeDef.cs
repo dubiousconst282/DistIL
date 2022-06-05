@@ -115,8 +115,10 @@ public class TypeDef : TypeDefOrSpec
         if (!IsGeneric) {
             return this;
         }
-        Ensure(context.TypeArgs.Length == GenericParams.Length);
-        return new TypeSpec(this, context.TypeArgs);
+        var genArgs = GenericParams
+            .Select(p => p.GetSpec(context))
+            .ToImmutableArray();
+        return new TypeSpec(this, genArgs);
     }
 
     //overriden props can't have setter
@@ -185,6 +187,14 @@ public class TypeSpec : TypeDefOrSpec
     {
         var field = Definition.FindField(name, type);
         return field != null ? new FieldSpec(this, (FieldDef)field) : null;
+    }
+
+    public override TypeDesc GetSpec(GenericContext context)
+    {
+        var genArgs = GenericParams
+            .Select(p => p.GetSpec(context))
+            .ToImmutableArray();
+        return new TypeSpec(Definition, genArgs);
     }
 
     public override void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)

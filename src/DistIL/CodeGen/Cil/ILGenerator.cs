@@ -314,6 +314,18 @@ public partial class ILGenerator : InstVisitor
         }
         _asm.Emit(ILCode.Newobj, inst.Constructor);
     }
+    public void Visit(IntrinsicInst inst)
+    {
+        switch (inst.Id) {
+            case IntrinsicId.Marker: break;
+            case IntrinsicId.NewArray: {
+                Push(inst.Args[0]);
+                _asm.Emit(ILCode.Newarr, (inst.ResultType as ArrayType)!.ElemType);
+                break;
+            }
+            default: throw new NotSupportedException($"Intrinsic {inst.Id}");
+        }
+    }
 
     public void Visit(BranchInst inst)
     {

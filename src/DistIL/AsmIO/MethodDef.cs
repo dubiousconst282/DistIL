@@ -62,6 +62,13 @@ public readonly struct MethodSig
         NumGenericParams = srmSig.GenericParameterCount;
     }
 
+    public MethodSig(TypeDesc retType, params TypeDesc[] paramTypes)
+    {
+        ReturnType = retType;
+        ParamTypes = ImmutableArray.Create(paramTypes);
+        NumGenericParams = 0;
+    }
+
     public bool Equals(MethodDesc method)
     {
         if (method.ReturnType != ReturnType) {

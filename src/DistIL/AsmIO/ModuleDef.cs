@@ -44,12 +44,27 @@ public class ModuleDef : ModuleEntity
         return FindReferencedType(type) ?? throw new NotImplementedException();
     }
 
+    public TypeDesc? GetImport(Type type)
+    {
+        return FindReferencedType(type);
+    }
+
     private TypeDef? FindReferencedType(Type type)
     {
         var asmName = type.Assembly.GetName().Name;
+        bool isCoreLib = type.Assembly == typeof(int).Assembly;
+        
         foreach (var mod in AssemblyRefs) {
             if (mod.AsmName.Name == asmName) {
                 return mod.FindType(type.Namespace, type.Name);
+            }
+            //TODO: find a prettier way to handle aliasing between System.Runtime and System.Private.CoreLib
+            if (mod.ExportedTypes.Count > 0) {
+                foreach (var expMod in mod.AssemblyRefs) {
+                    if (expMod.AsmName.Name == asmName) {
+                        return expMod.FindType(type.Namespace, type.Name);
+                    }
+                }
             }
         }
         return null;

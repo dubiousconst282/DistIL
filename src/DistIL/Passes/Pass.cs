@@ -58,6 +58,9 @@ public class MethodPassManager : ModulePass
 public class MethodTransformContext : IMethodAnalysisManager
 {
     public MethodBody Method { get; }
+    public MethodDef Definition => Method.Definition;
+    public ModuleDef Module => Method.Definition.Module;
+    
     private Dictionary<Type, (IMethodAnalysis Analysis, bool Valid)> _analysis = new();
 
     public MethodTransformContext(MethodBody method)

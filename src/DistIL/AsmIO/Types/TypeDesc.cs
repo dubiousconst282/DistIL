@@ -61,6 +61,18 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
         return null;
     }
 
+    /// <summary> Checks if this type inherits or implements the specified type. </summary>
+    public bool Inherits(TypeDesc baseType)
+    {
+        Assert(!baseType.IsInterface); //not implemented
+        for (var parent = BaseType; parent != null; parent = parent.BaseType) {
+            if (parent == baseType) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public sealed override void Print(StringBuilder sb, SlotTracker slotTracker)
         => Print(sb, slotTracker);
 

@@ -68,7 +68,7 @@ public class MethodBody
         _slotTracker ??= new();
         if (_slotsDirty) {
             _slotsDirty = false;
-            _slotTracker.Update(this);
+            _slotTracker.UpdateSlots(this);
         }
         return _slotTracker;
     }

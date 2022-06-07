@@ -1,4 +1,4 @@
-﻿namespace DistIL.IR;
+namespace DistIL.IR;
 
 public abstract class Instruction : TrackedValue
 {
@@ -135,8 +135,7 @@ public abstract class Instruction : TrackedValue
 
     public override void PrintAsOperand(StringBuilder sb, SlotTracker slotTracker)
     {
-        int? id = slotTracker.GetId(this);
-        sb.Append(id == null ? "r?" : "r" + id);
+        sb.Append(slotTracker.GetName(this));
     }
     public override void Print(StringBuilder sb, SlotTracker slotTracker)
     {

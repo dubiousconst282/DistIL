@@ -1,4 +1,4 @@
-﻿namespace DistIL.IR;
+namespace DistIL.IR;
 
 public class BasicBlock : TrackedValue
 {
@@ -246,7 +246,7 @@ public class BasicBlock : TrackedValue
 
     public override void Print(StringBuilder sb, SlotTracker slotTracker)
     {
-        sb.Append($"BB_{slotTracker.GetId(this):00}");
+        sb.Append(slotTracker.GetName(this));
     }
     protected override SlotTracker GetDefaultSlotTracker()
     {

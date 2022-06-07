@@ -25,11 +25,7 @@ public class Variable : TrackedValue
     public override void Print(StringBuilder sb, SlotTracker slotTracker)
     {
         sb.Append("$");
-        if (Name != null) {
-            sb.Append(Name);
-        } else {
-            sb.Append(slotTracker.GetId(this));
-        }
+        sb.Append(Name ?? slotTracker.GetName(this));
     }
 
     protected override SlotTracker GetDefaultSlotTracker()
@@ -56,10 +52,6 @@ public class Argument : Variable
     public override void Print(StringBuilder sb, SlotTracker slotTracker)
     {
         sb.Append("#");
-        if (Name != null) {
-            sb.Append(Name);
-        } else {
-            sb.Append($"arg{Index}");
-        }
+        sb.Append(Name ?? $"arg{Index}");
     }
 }

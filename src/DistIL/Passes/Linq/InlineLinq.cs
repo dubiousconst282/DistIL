@@ -16,7 +16,7 @@ public class InlineLinq : MethodPass
         if (t_Enumerable == null) return; //Module doesn't reference linq.
 
         //Find root queries
-        var roots = default(List<Stage>);
+        var roots = default(List<QueryStage>);
 
         foreach (var inst in ctx.Method.Instructions()) {
             var stage = CreateStage(inst, onlyIfRoot: true);
@@ -34,17 +34,19 @@ public class InlineLinq : MethodPass
                 Console.WriteLine($"Failed to create query pipeline: {ctx.Method} for start stage {startStage}");
                 continue;
             }
-            QuerySynthesizer.Replace(ctx.Method, startStage, endStage);
+            var synther = new QuerySynthesizer(ctx.Method, startStage, endStage);
+            synther.Synth();
+            synther.Replace();
         }
     }
 
-    private Stage? CreateStage(Instruction inst, bool onlyIfRoot = false)
+    private QueryStage? CreateStage(Instruction inst, bool onlyIfRoot = false)
     {
         if (!(inst is CallInst call && call.Method.DeclaringType == t_Enumerable)) return null;
         if (!(call.IsStatic && call.NumArgs > 0)) return null;
         if (onlyIfRoot && !IsRoot(call)) return null;
 
-        return Stage.Create(call);
+        return QueryStage.Create(call);
     }
     private bool IsRoot(CallInst call)
     {
@@ -56,7 +58,7 @@ public class InlineLinq : MethodPass
     }
 
     /// <summary> Create links to the entire pipeline, and return the exit stage, or null on failure. </summary>
-    private Stage? CreatePipeline(Stage root)
+    private QueryStage? CreatePipeline(QueryStage root)
     {
         var currStage = root;
         while (true) {

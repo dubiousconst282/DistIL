@@ -84,7 +84,7 @@ public class IRBuilder
     public CompareInst CreateNe(Value left, Value right) => CreateCmp(CompareOp.Ne, left, right);
     public CompareInst CreateSlt(Value left, Value right) => CreateCmp(CompareOp.Slt, left, right);
 
-    public void AddMarker(string text)
+    public void CreateMarker(string text)
         => Add(new IntrinsicInst(IntrinsicId.Marker, PrimType.Void, ConstString.Create(text)));
 
     /// <summary> Adds the specified instruction into the basic block. </summary>

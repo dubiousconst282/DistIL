@@ -5,20 +5,19 @@ using DistIL.IR;
 public class QuerySynthesizer
 {
     public readonly MethodBody Method;
-    public readonly Stage StartStage, EndStage;
+    public readonly QueryStage StartStage, EndStage;
 
     //Blocks for the main loop
-    public readonly IRBuilder PreHeader, Header, Latch, Exit;
+    public readonly IRBuilder PreHeader, Header, Latch, PreExit, Exit;
     public readonly PhiInst CurrIndex;
-    public readonly Value InputLen, HeaderItem;
+    public readonly Instruction InputLen, OrigItem;
 
     public Value CurrItem = null!;
     public IRBuilder CurrBody;
 
     private Value? _result;
-    private BasicBlock? _resultBlock;
 
-    public QuerySynthesizer(MethodBody method, Stage startStage, Stage endStage)
+    public QuerySynthesizer(MethodBody method, QueryStage startStage, QueryStage endStage)
     {
         Method = method;
         StartStage = startStage;
@@ -27,64 +26,101 @@ public class QuerySynthesizer
         PreHeader = NewBlock("PreHeader");
         Header = NewBlock("Header");
         Latch = NewBlock("Latch");
+        PreExit = NewBlock("PreExit");
         Exit = NewBlock("Exit");
         CurrBody = GetBody(true);
 
-        //PreHeader: 
+        //The main look looks like this:
+        //PreHeader:
         //  int inputLen = arrlen input
+        //  ...
         //  goto Header
-        //Header: 
+        //Header:
         //  int currIdx = phi [PreHeader -> 0, Latch -> nextIdx]
+        //  bool hasNext = icmp.slt currIdx
+        //  goto hasNext ? Body1 : PreExit
+        //Body1:
         //  T currItem = ldarr input, currIdx
-        //  goto Body1
+        //  ...
+        //BodyN:
+        //  goto Latch
         //Latch:
         //  int nextIdx = add currIdx, 1
-        //  bool cond = icmp.slt nextIdx, inputLen
-        //  goto cond ? Header : Exit
+        //  goto Header
+        //PreExit:
+        //  ...
+        //  goto Exit   added by the last reduction stage
+        //Exit:
+        //  T result = phi [PreExit -> ??], [PreHeader -> ??]
         var input = startStage.GetInput();
 
-        CurrIndex = Header.CreatePhi(PrimType.Int32);
+        CurrIndex = Header.CreatePhi(PrimType.Int32).SetName("currIdx");
         
         switch (input.ResultType) {
             case ArrayType:
                 InputLen = PreHeader.CreateConvert(PreHeader.CreateArrayLen(input), PrimType.Int32);
-                HeaderItem = Header.CreateArrayLoad(input, CurrIndex);
+                OrigItem = CurrBody.CreateArrayLoad(input, CurrIndex);
                 break;
             default: throw new NotSupportedException();
         }
-        PreHeader.SetBranch(Header.Block);
-        Header.SetBranch(CurrBody.Block);
+        InputLen.SetName("inputLen");
+        OrigItem.SetName("currItem");
 
-        var nextIdx = Latch.CreateAdd(CurrIndex, ConstInt.CreateI(1));
-        var cond = Latch.CreateSlt(nextIdx, InputLen);
-        Latch.SetBranch(cond, Header.Block, Exit.Block);
+        PreHeader.SetBranch(Header.Block);
+
+        var nextIdx = Latch.CreateAdd(CurrIndex, ConstInt.CreateI(1)).SetName("nextIdx");
+        Latch.SetBranch(Header.Block);
+
+        var hasNext = Header.CreateSlt(CurrIndex, InputLen).SetName("hasNext");
+        Header.SetBranch(hasNext, CurrBody.Block, PreExit.Block);
 
         CurrIndex.AddArg((PreHeader.Block, ConstInt.CreateI(0)), (Latch.Block, nextIdx));
     }
 
-    private IRBuilder NewBlock(string? marker = null)
+    public void Synth()
     {
-        var block = Method.CreateBlock();
-        var ib = new IRBuilder(block);
-        if (marker != null) {
-            ib.AddMarker(marker);
+        CurrItem = OrigItem;
+        for (var stage = StartStage; stage != null; stage = stage.Next) {
+            CurrBody.CreateMarker(stage.ToString());
+            stage.Synth(this);
         }
+    }
+    public void Replace()
+    {
+        Assert(_result != null);
+
+        var startBlock = EndStage.Call.Block;
+        var endBlock = startBlock.Split(EndStage.Call);
+
+        startBlock.SetBranch(PreHeader.Block);
+        Exit.SetBranch(endBlock);
+        EndStage.Call.ReplaceWith(_result, insertIfInst: false);
+
+        //Delete old query
+        for (var stage = StartStage; stage != null; stage = stage.Next) {
+            stage.Call.Remove();
+        }
+    }
+
+    public IRBuilder NewBlock(string name)
+    {
+        var block = Method.CreateBlock().SetName("Query_" + name);
+        var ib = new IRBuilder(block);
         return ib;
     }
 
     public IRBuilder GetBody(bool createNew = false)
     {
         if (createNew) {
-            CurrBody = NewBlock();
+            CurrBody = NewBlock("Body");
         }
         return CurrBody;
     }
 
-    public void SetResult(BasicBlock exitBlock, Value value)
+    public void SetResult(Value value)
     {
         Assert(_result == null);
         _result = value;
-        _resultBlock = exitBlock;
     }
 
     //Note: we assume that lambda types are all System.Func<>
@@ -102,39 +138,5 @@ public class QuerySynthesizer
             ? new Value[] { lambda, CurrItem, CurrIndex }
             : new Value[] { lambda, CurrItem };
         return ib.CreateVirtualCall(invoker, args);
-    }
-
-    private void Synth()
-    {
-        CurrItem = HeaderItem;
-        for (var stage = StartStage; stage != null; stage = stage.Next) {
-            CurrBody.AddMarker(stage.ToString());
-            stage.Synth(this);
-        }
-        CurrBody.SetBranch(Exit.Block);
-    }
-
-    private void Replace()
-    {
-        Assert(_result != null);
-
-        var startBlock = EndStage.Call.Block;
-        var endBlock = startBlock.Split(EndStage.Call);
-
-        startBlock.SetBranch(PreHeader.Block);
-        _resultBlock!.SetBranch(endBlock);
-        EndStage.Call.ReplaceWith(_result, insertIfInst: false);
-
-        //Delete old query
-        for (var stage = StartStage; stage != null; stage = stage.Next) {
-            stage.Call.Remove();
-        }
-    }
-
-    public static void Replace(MethodBody method, Stage startStage, Stage endStage)
-    {
-        var synther = new QuerySynthesizer(method, startStage, endStage);
-        synther.Synth();
-        synther.Replace();
     }
 }

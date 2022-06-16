@@ -50,6 +50,11 @@ public class SlotTracker
         }
         _names[value] = name;
     }
+    
+    public bool HasCustomName(TrackedValue value)
+    {
+        return _names.ContainsKey(value);
+    }
 
     public string GetName(Instruction inst)
         => GetName(inst, slot => $"r{slot}", unkName: "r?");

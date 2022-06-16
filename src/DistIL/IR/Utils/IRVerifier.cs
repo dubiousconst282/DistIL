@@ -1,21 +1,25 @@
 namespace DistIL.IR.Utils;
 
+using DistIL.Analysis;
+
 public class IRVerifier
 {
     readonly MethodBody _method;
     readonly List<Diagnostic> _diags = new();
 
-    public IRVerifier(MethodBody method)
+    private IRVerifier(MethodBody method)
     {
         _method = method;
     }
 
     /// <summary> Verifies the method body and returns a list of diagnostics. </summary>
-    public List<Diagnostic> GetDiagnostics()
+    public static List<Diagnostic> Diagnose(MethodBody method)
     {
-        VerifyEdges();
-        VerifyPhis();
-        return _diags;
+        var v = new IRVerifier(method);
+        v.VerifyEdges();
+        v.VerifyPhis();
+        v.VerifyUses();
+        return v._diags;
     }
 
     private void VerifyEdges()
@@ -29,7 +33,7 @@ public class IRVerifier
             var succs = CalculateSuccs(block);
 
             if (!AreSetsEqual(succs, block.Succs)) {
-                Error(block, "Unexpected successor edge");
+                Error(block, "Invalid successor list");
             }
             foreach (var succ in succs) {
                 var preds = expPreds.GetOrAddRef(succ) ??= new();
@@ -39,18 +43,42 @@ public class IRVerifier
         //Verify preds
         foreach (var (block, preds) in expPreds) {
             if (!AreSetsEqual(preds, block.Preds)) {
-                Error(block, "Unexpected predecessor edge");
+                Error(block, "Invalid predecessor list");
             }
         }
 
-        BasicBlock[] CalculateSuccs(BasicBlock block)
+        List<BasicBlock> CalculateSuccs(BasicBlock block)
         {
-            return block.Last switch {
-                BranchInst br => br.IsConditional ? new[] { br.Then, br.Else } : new[] { br.Then },
-                SwitchInst sw => sw.GetTargets().ToArray(),
-                ReturnInst rt => new BasicBlock[0],
-                _ => (new BasicBlock[0], Error(block, "Invalid block terminator")).Item1
-            };
+            var succs = new List<BasicBlock>();
+            foreach (var guard in block.Guards()) {
+                succs.Add(guard.HandlerBlock);
+                if (guard.HasFilter) {
+                    succs.Add(guard.FilterBlock);
+                }
+            }
+
+            switch (block.Last) {
+                case BranchInst br: {
+                    succs.Add(br.Then);
+                    if (br.IsConditional) {
+                        succs.Add(br.Else);
+                    }
+                    break;
+                }
+                case SwitchInst sw: {
+                    succs.AddRange(sw.GetTargets());
+                    break;
+                }
+                case LeaveInst lv: {
+                    succs.Add(lv.Target);
+                    break;
+                }
+                case ReturnInst or ContinueInst: break;
+                default:
+                    Error(block, "Invalid block terminator");
+                    break;
+            }
+            return succs;
         }
     }
 
@@ -61,14 +89,70 @@ public class IRVerifier
         foreach (var block in _method) {
             foreach (var phi in block.Phis()) {
                 foreach (var arg in phi) {
-                    phiPreds.Add(arg.Block);
+                    if (!phiPreds.Add(arg.Block)) {
+                        Error(phi, "Phi should not have duplicated block arguments");
+                    }
                 }
                 phiPreds.SymmetricExceptWith(block.Preds);
                 if (phiPreds.Count != 0) {
-                    Error(phi, "Phi must have one argument for each predecessor");
+                    Error(phi, "Phi must have one argument for each predecessor in the parent block");
                 }
                 phiPreds.Clear();
             }
+        }
+    }
+
+    private void VerifyUses()
+    {
+        var values = new Dictionary<TrackedValue, HashSet<Instruction>>();
+        var blockIndices = new Dictionary<TrackedValue, int>();
+        var domTree = new DominatorTree(_method);
+
+        foreach (var block in _method) {
+            int index = 0;
+            foreach (var inst in block) {
+                foreach (var oper in inst.Operands) {
+                    if (oper is TrackedValue trackedOper) {
+                        var expUsers = values.GetOrAddRef(trackedOper) ??= new();
+                        expUsers.Add(inst);
+                    }
+                }
+                blockIndices[inst] = index++;
+            }
+        }
+        foreach (var (val, expUsers) in values) {
+            //Check use list correctness
+            var actUsers = new HashSet<Instruction>();
+            foreach (var user in val.Users()) {
+                actUsers.Add(user);
+            }
+            actUsers.SymmetricExceptWith(expUsers);
+            if (actUsers.Count != 0) {
+                Error(val, "Invalid value user set");
+            }
+            //Check dominance
+            if (val is Instruction defInst) {
+                foreach (var user in defInst.Users()) {
+                    if (user is Instruction userInst && !IsDominatedByDef(defInst, userInst)) {
+                        Error(user, "Using non-dominating instruction");
+                    }
+                }
+            }
+        }
+        bool IsDominatedByDef(Instruction def, Instruction user)
+        {
+            if (user is PhiInst phi) {
+                foreach (var (pred, value) in phi) {
+                    if (value == def && !domTree.Dominates(def.Block, pred)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            if (user.Block == def.Block && blockIndices[def] >= blockIndices[user]) {
+                return false;
+            }
+            return domTree.Dominates(def.Block, user.Block);
         }
     }
 
@@ -96,8 +180,14 @@ public struct Diagnostic
     /// <summary> The BasicBlock or Instruction originating this diagnostic. </summary>
     public Value Location { get; init; }
     public string? Message { get; init; }
+
+    public override string ToString()
+    {
+        return $"[{Kind}] {Message} ({Location})";
+    }
 }
 public enum DiagnosticKind
 {
-    Error
+    Warn,
+    Error,
 }

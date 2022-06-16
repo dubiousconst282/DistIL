@@ -1,4 +1,4 @@
-namespace DistIL.IR;
+﻿namespace DistIL.IR;
 
 public class BasicBlock : TrackedValue
 {
@@ -281,6 +281,14 @@ public class BasicBlock : TrackedValue
         var inst = First;
         while (inst is PhiInst phi) {
             yield return phi;
+            inst = inst.Next!;
+        }
+    }
+    public IEnumerable<GuardInst> Guards()
+    {
+        var inst = FirstNonPhi;
+        while (inst is GuardInst guard) {
+            yield return guard;
             inst = inst.Next!;
         }
     }

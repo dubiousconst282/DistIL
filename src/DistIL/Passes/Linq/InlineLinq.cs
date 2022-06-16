@@ -62,11 +62,11 @@ public class InlineLinq : MethodPass
     {
         var currStage = root;
         while (true) {
-            int numUsers = currStage.Call.NumUsers;
-            if (numUsers == 0 || currStage.IsExit()) {
+            int numUses = currStage.Call.NumUses;
+            if (numUses == 0 || currStage.IsExit()) {
                 return currStage;
             }
-            if (numUsers >= 2) {
+            if (numUses >= 2) {
                 return null; //We can't handle _forking_ queries
             }
             var nextStage = CreateStage(currStage.Call.GetFirstUser()!);

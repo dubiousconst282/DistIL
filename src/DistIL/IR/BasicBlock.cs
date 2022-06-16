@@ -66,7 +66,7 @@ public class BasicBlock : TrackedValue
 
             foreach (var phi in succ.Phis()) {
                 if (redirectPhisTo != null) {
-                    phi.ReplaceOperand(this, redirectPhisTo);
+                    phi.ReplaceOperands(this, redirectPhisTo);
                 } else {
                     phi.RemoveArg(this, true);
                 }

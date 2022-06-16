@@ -63,10 +63,7 @@ public class ValueTests
 
     private void CheckUses(TrackedValue value, Instruction[] expUsers, (Instruction, int)[] expUses)
     {
-        Assert.Equal(expUsers.Length, value.NumUsers);
-        Assert.True(value.GetNumUses() == expUses.Length);
-        Assert.True(value.IsUsedAtLeast(expUses.Length));
-        Assert.False(value.IsUsedAtLeast(expUses.Length + 1));
+        Assert.Equal(expUses.Length, value.NumUses);
 
         var userSet = new HashSet<Instruction>();
         foreach (var user in value.Users()) {

@@ -27,7 +27,7 @@ public class DeadCodeElim : MethodPass
                 //Remove unused instructions in reverse order, to handle uses by dead instructions.
                 //Multiple passes will handle global dead instructions, although probably inefficiently.
                 foreach (var inst in block.Reversed()) {
-                    if (inst.NumUsers == 0 && inst.SafeToRemove) {
+                    if (inst.NumUses == 0 && inst.SafeToRemove) {
                         inst.Remove();
                         changed = true;
                     }

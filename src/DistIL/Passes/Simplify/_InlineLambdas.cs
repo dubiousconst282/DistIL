@@ -35,14 +35,14 @@ partial class SimplifyInsts : MethodPass
             if (allocInst == null || cacheLoad == null || !InlineWithCtorArgs(call, allocInst)) return false;
 
             //Last lambda to be inlined is responsible for cleanup
-            if (phi.NumUsers == 0) {
+            if (phi.NumUses == 0) {
                 DeleteCache(phi, allocInst, cacheLoad);
             }
             return true;
         } else if (lambdaInstance is NewObjInst immAlloc) {
             if (!InlineWithCtorArgs(call, immAlloc)) return false;
             
-            if (immAlloc.NumUsers == 0) {
+            if (immAlloc.NumUses == 0) {
                 immAlloc.Remove();
             }
             return true;
@@ -70,7 +70,7 @@ partial class SimplifyInsts : MethodPass
                     br.Else == allocInst.Block &&
                     condCache == cacheLoad &&
                 //BB_CacheLoad must store to the cache field
-                allocInst.NumUsers == 2 && //phi and next store
+                allocInst.NumUses == 2 && //phi and next store
                 allocInst.Next is StoreFieldInst cacheStore &&
                 cacheStore.Field == cacheLoad.Field
             )) return false;

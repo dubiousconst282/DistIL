@@ -48,7 +48,7 @@ public class InlineMethods : MethodPass
         } else {
             //Optimization: avoid creating new blocks for callees with one block
             InlineOneBlock(callInst, newBlocks[0]);
-            caller.RemoveBlock(newBlocks[0]);
+            newBlocks[0].Remove();
         }
     }
 

@@ -14,6 +14,10 @@ public class RefSet<T, H>
 {
     internal T?[] _slots = new T[4];
     internal int _count;
+    //Used to invalidate the enumerator when the set is changed.
+    //Add()/Remove() will set it to true, and GetEnumerator() to false.
+    //This approach could fail if GetEnumerator() is called on multiple threads, but we don't care about that.
+    bool _changed;
 
     public int Count => _count;
 
@@ -43,6 +47,7 @@ public class RefSet<T, H>
                 if ((uint)_count >= (uint)slots.Length * 3 / 4) {
                     Expand();
                 }
+                _changed = true;
                 return true;
             }
         }
@@ -74,6 +79,7 @@ public class RefSet<T, H>
             if (slot == value) {
                 RemoveEntryAndShiftCluster(index);
                 _count--;
+                _changed = true;
                 return true;
             }
             if (slot == null) {
@@ -107,7 +113,7 @@ public class RefSet<T, H>
 
     public void Clear()
     {
-        _slots = new T[4];
+        Array.Clear(_slots);
         _count = 0;
     }
 
@@ -137,22 +143,16 @@ public class RefSet<T, H>
     {
         T?[] _slots;
         int _index;
+        RefSet<T, H> _owner;
 
         public T Current { get; private set; } = null!;
 
-#if DEBUG
-        RefSet<T, H> _set;
-        int _prevCount;
-        internal Enumerator(RefSet<T, H> set) => (_slots, _set, _prevCount) = (set._slots, set, set._count);
-#else
-        internal Enumerator(RefSet<T, H> set) => _slots = set._slots;
-#endif
+        internal Enumerator(RefSet<T, H> owner) 
+            => (_slots, _owner, owner._changed) = (owner._slots, owner, false);
 
         public bool MoveNext()
         {
-#if DEBUG
-            Assert(_set._count == _prevCount, "Set cannot be modified during enumeration");
-#endif
+            Assert(!_owner._changed, "RefSet cannot be modified during enumeration");
             while (_index < _slots.Length) {
                 Current = _slots[_index++]!;
                 if (Current != null) {

@@ -51,6 +51,7 @@ public class BinaryInst : Instruction
             (StackType.Long,    StackType.Long, _)  => PrimType.Int64,
             (StackType.Float,   StackType.Float, _) => a == PrimType.Double ? a : b, //pick double over float
             (StackType.NInt,    StackType.NInt, _)  => a == b ? a : PrimType.IntPtr, //pick pointer over nint
+            (StackType.Int,     StackType.NInt, _)  => a,
             (StackType.ByRef,   StackType.ByRef, BinaryOp.Sub) => PrimType.IntPtr,   //& - & = nint
             //& + int/nint = &
             (StackType.ByRef,   StackType.Int or StackType.NInt, BinaryOp.Add or BinaryOp.AddOvf)

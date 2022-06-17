@@ -1,9 +1,8 @@
 namespace DistIL.IR;
 
 /// <summary>
-/// Represents the SSA Phi instruction. The result is one of the arguments, selected based on the incomming predecessor block.
-/// Arguments are interleaved in `Operands`, e.g. `[block1, value1, block2, value2, ...]`.
-/// Use GetArg() and NumArgs to access them.
+/// The Phi instruction maps the incomming predecessor block into the value of the argument with the same block.
+/// Arguments should not have duplicated blocks.
 /// </summary>
 public class PhiInst : Instruction
 {
@@ -22,23 +21,28 @@ public class PhiInst : Instruction
         Assert(args.All(a => a.Value.ResultType == ResultType));
     }
     
+    public BasicBlock GetBlock(int index) => (BasicBlock)Operands[index * 2 + 0];
+    public Value GetValue(int index) => Operands[index * 2 + 1];
+
+    /// <summary> Returns the incomming value for the given predecessor block. If it doesn't exist, an exception is thrown. </summary>
+    public Value GetValue(BasicBlock block) => GetValue(FindArgIndex(block));
+
+    /// <summary> Sets the incomming value for the given predecessor block. If it doesn't exist, an exception is thrown. </summary>
+    public void SetValue(BasicBlock block, Value newValue)
+    {
+        int index = FindArgIndex(block);
+        ReplaceOperand(index * 2 + 1, newValue);
+    }
+    public void SetValue(int index, Value newValue)
+    {
+        ReplaceOperand(index * 2 + 1, newValue);
+    }
+
     public PhiArg GetArg(int index)
     {
         var block = Operands[index * 2 + 0];
         var value = Operands[index * 2 + 1];
-        return ((BasicBlock)block, value);
-    }
-    public BasicBlock GetBlock(int index) => (BasicBlock)Operands[index * 2 + 0];
-    public Value GetValue(int index) => Operands[index * 2 + 1];
-
-    /// <summary> Returns the value for the given incomming block. If it doesn't exist, an exception is thrown. </summary>
-    public Value GetValue(BasicBlock block) => GetValue(FindArgIndex(block));
-
-    public void SetArg(int index, BasicBlock block, Value value)
-    {
-        Ensure(index >= 0 && index < NumArgs);
-        ReplaceOperand(index * 2 + 0, block);
-        ReplaceOperand(index * 2 + 1, block);
+        return new PhiArg((BasicBlock)block, value);
     }
 
     public void AddArg(BasicBlock block, Value value)
@@ -60,11 +64,11 @@ public class PhiInst : Instruction
 
     public void RemoveArg(int index, bool removeTrivialPhi)
     {
+        Ensure(index >= 0 && index < NumArgs);
         if (removeTrivialPhi && NumArgs == 2) {
             ReplaceWith(GetValue(1 - index), false);
             return;
         }
-        Ensure(index >= 0 && index < NumArgs);
         RemoveOperands(index * 2, 2);
     }
 
@@ -73,9 +77,9 @@ public class PhiInst : Instruction
 
     private int FindArgIndex(BasicBlock block)
     {
-        for (int i = 0; i < NumArgs; i++) {
-            if (GetBlock(i) == block) {
-                return i;
+        for (int i = 0; i < Operands.Length; i += 2) {
+            if (Operands[i] == block) {
+                return i / 2;
             }
         }
         throw new KeyNotFoundException("Phi doesn't have a mapping for the specified block");

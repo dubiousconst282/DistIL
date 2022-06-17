@@ -29,24 +29,35 @@ public class MethodBody
     }
 
     /// <summary> Creates and adds an empty block to this method. If the method is empty, this block will be set as the entry block. </summary>
-    public BasicBlock CreateBlock()
+    public BasicBlock CreateBlock(BasicBlock? insertAfter = null)
     {
         var block = new BasicBlock(this);
 
-        EntryBlock ??= block;
-
-        if (_lastBlock != null) {
-            block.Prev = _lastBlock;
-            _lastBlock.Next = block;
+        if (EntryBlock == null) {
+            EntryBlock = _lastBlock = block;
+        } else {
+            InsertBlock(insertAfter ?? _lastBlock!, block);
         }
-        _lastBlock = block;
-
         NumBlocks++;
         InvalidateBlocks();
         return block;
     }
 
-    public bool RemoveBlock(BasicBlock block)
+    private void InsertBlock(BasicBlock after, BasicBlock block)
+    {
+        block.Prev = after;
+        block.Next = after.Next;
+
+        if (after.Next != null) {
+            after.Next.Prev = block;
+        } else {
+            _lastBlock = block;
+        }
+        after.Next = block;
+    }
+
+    /// <summary> Removes a block from the method without cleanup. </summary>
+    internal bool RemoveBlock(BasicBlock block)
     {
         Ensure(block.Method == this && block != EntryBlock);
 

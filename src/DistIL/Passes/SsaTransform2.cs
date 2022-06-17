@@ -24,41 +24,50 @@ public class SsaTransform2 : MethodPass
 
     private void InsertPhis(DominanceFrontier domFrontier)
     {
-        var varDefs = new Dictionary<Variable, ArrayStack<BasicBlock>>(); //var -> blocks assigning to var
+        var varDefs = new Dictionary<Variable, (bool Global, ArrayStack<BasicBlock> Wl)>(); //var -> blocks assigning to var
+        var killedVars = new ValueSet<Variable>();
 
         //Find variable definitions
-        foreach (var inst in _method.Instructions()) {
-            if (inst is StoreVarInst store && !store.Dest.IsExposed) {
-                var worklist = varDefs.GetOrAddRef(store.Dest) ??= new();
-                //Add parent block to the worklist, avoiding dupes
-                if (worklist.Count == 0 || worklist.Top != store.Block) {
-                    worklist.Push(store.Block);
+        foreach (var block in _method) {
+            foreach (var inst in block) {
+                if (inst is StoreVarInst store && !store.Dest.IsExposed) {
+                    var worklist = varDefs.GetOrAddRef(store.Dest).Wl ??= new();
+                    //Add parent block to the worklist, avoiding dupes
+                    if (worklist.Count == 0 || worklist.Top != block) {
+                        worklist.Push(block);
+                    }
+                    killedVars.Add(store.Dest);
+                }
+                //If we are loading a variable that has not yet been assigned in this block, mark it as global
+                else if (inst is LoadVarInst load && !load.Source.IsExposed && !killedVars.Contains(load.Source)) {
+                    varDefs.GetOrAddRef(load.Source).Global = true;
                 }
             }
+            killedVars.Clear();
         }
 
         var phiAdded = new ValueSet<BasicBlock>(); //blocks where a phi has been added
         var processed = new ValueSet<BasicBlock>(); //blocks already visited in worklist
 
         //Insert phis
-        foreach (var (variable, worklist) in varDefs) {
-            //Avoid inserting phis for variables only assigned in a single block
-            if (worklist.Count == 1 && variable is not Argument) continue;
+        foreach (var (variable, (isGlobal, worklist)) in varDefs) {
+            //Avoid inserting phis for variables only alive in a single block (semi-pruned ssa)
+            if (worklist == null || !isGlobal) continue;
 
             //Initialize processed set (we do this to avoid keeping a whole HashSet for each variable)
             foreach (var def in worklist) {
                 processed.Add(def);
             }
-            //Insert phis on the DF of each block in the worklist
+            //Recursively insert phis on the DF of each block in the worklist
             while (worklist.TryPop(out var block)) {
                 foreach (var dom in domFrontier.Of(block)) {
-                    if (phiAdded.Add(dom)) {
-                        var phi = dom.AddPhi(variable.ResultType);
-                        _phiDefs.Add(phi, variable);
+                    if (!phiAdded.Add(dom)) continue;
+                    
+                    var phi = dom.AddPhi(variable.ResultType);
+                    _phiDefs.Add(phi, variable);
 
-                        if (processed.Add(dom)) {
-                            worklist.Push(dom);
-                        }
+                    if (processed.Add(dom)) {
+                        worklist.Push(dom);
                     }
                 }
             }

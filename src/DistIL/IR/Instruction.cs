@@ -75,9 +75,12 @@ public abstract class Instruction : TrackedValue
 
     internal void RemoveOperandUses()
     {
+        if (_operandUses == null) return;
+
         for (int i = 0; i < _operands.Length; i++) {
             _operands[i].RemoveUse(_operandUses[i]);
         }
+        _operandUses = null!;
     }
 
     /// <summary> Replaces operands set to `oldValue` with `oldValue`. </summary>

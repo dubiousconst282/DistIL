@@ -75,8 +75,10 @@ partial class SimplifyInsts : MethodPass
                 cacheStore.Field == cacheLoad.Field
             )) return false;
 
-            br.Cond = ConstInt.CreateI(1); //we can't change CFG. leave this for constant folding.
+            br.Cond = ConstInt.CreateI(0); //we can't change the CFG. leave this for constant folding.
             phi.Remove();
+            cacheStore.Remove();
+            allocInst.Remove();
             return true;
         }
     }

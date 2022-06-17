@@ -4,7 +4,7 @@ using DistIL.IR;
 using DistIL.Passes.Linq;
 
 //See docs/Linq-Optimization.md for some notes.
-public class InlineLinq : MethodPass
+public class ExpandLinq : MethodPass
 {
     TypeDesc? t_Enumerable;
 

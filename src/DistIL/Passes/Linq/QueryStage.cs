@@ -27,6 +27,7 @@ public abstract class QueryStage
             "Where"     => new WhereStage(),
             "Select"    => new SelectStage(),
             "ToArray"   => new ToArrayStage(),
+            "Count"     => new CountStage(),
             _ => null
         };
         #pragma warning restore format
@@ -61,13 +62,7 @@ public class WhereStage : QueryStage
 {
     public override void Synth(QuerySynthesizer synther)
     {
-        //Body:
-        //  bool cond = predicate(currItem)
-        //  goto cond ? NextBody : Latch
-        var body = synther.GetBody();
-        var nextBody = synther.GetBody(createNew: true);
-        var cond = synther.InvokeLambda_ItemAndIndex(body, Call.Args[1]);
-        body.SetBranch(cond, nextBody.Block, synther.Latch.Block);
+        synther.EmitPredTest(Call.Args[1]);
     }
 }
 
@@ -110,22 +105,10 @@ public class ToArrayStage : ReductionStage
         //  T[] actualResult = phi [Exit -> result, Resize -> resizedResult]
         var resultArray = synther.PreHeader.CreateNewArray(synther.CurrItem.ResultType, synther.InputLen).SetName("resultArr");
 
-        var latch = synther.Latch;
-        var nextResIdxPhi = latch.CreatePhi(PrimType.Int32).SetName("nextResIdx");
-        var resIdx = synther.Header.CreatePhi(
-            (synther.PreHeader.Block, ConstInt.CreateI(0)),
-            (latch.Block, nextResIdxPhi)
-        ).SetName("resIdx");
-
-        foreach (var pred in latch.Block.Preds) {
-            nextResIdxPhi.AddArg(pred, resIdx);
-        }
-        var body = synther.GetBody();
-        body.CreateArrayStore(resultArray, resIdx, synther.CurrItem);
-        var nextResIdxImm = body.CreateAdd(resIdx, ConstInt.CreateI(1)).SetName("nextResIdxImm");
-        body.SetBranch(latch.Block);
-        nextResIdxPhi.AddArg(body.Block, nextResIdxImm);
-
+        var resIdx = synther.EmitGlobalCounter(ConstInt.CreateI(0), (body, currIdx) => {
+            body.CreateArrayStore(resultArray, currIdx, synther.CurrItem);
+            return body.CreateAdd(currIdx, ConstInt.CreateI(1));
+        });
         var preExit = synther.PreExit;
         var exit = synther.Exit;
         var resizeBody = synther.NewBlock("Resize");
@@ -151,5 +134,48 @@ public class ToArrayStage : ReductionStage
         var copyMethod = t_Array.FindMethod("Copy", new MethodSig(PrimType.Void, t_Array, t_Array, PrimType.Int32));
         Ensure(copyMethod != null, "Missing Array.Copy() method");
         return copyMethod;
+    }
+}
+
+public class CountStage : ReductionStage
+{
+    public override void Synth(QuerySynthesizer synther)
+    {
+        if (Call.Args is [_, var predicate]) {
+            synther.EmitPredTest(predicate);
+        }
+        synther.SetResult(synther.EmitGlobalCounter());
+    }
+}
+
+public class SumStage : ReductionStage
+{
+    public override void Synth(QuerySynthesizer synther)
+    {
+        var type = Call.ResultType;
+        var startVal = default(Value);
+
+        if (type.Name == "Decimal") {
+            var field = type.FindField("Zero") ?? throw new NotImplementedException();
+            startVal = synther.PreHeader.CreateFieldLoad(field);
+        } else {
+            startVal = Const.CreateZero(type);
+        }
+
+        var inc = synther.CurrItem;
+        if (Call.Args is [_, var mapper]) {
+            //inc = synther.InvokeLambda(body, mapper, )
+        }
+
+        var sum = synther.EmitGlobalCounter(startVal, (body, currSum) => {
+            if (type.StackType is StackType.Float) {
+                return body.CreateBin(BinaryOp.FAdd, currSum, inc);
+            } else if (type.StackType is StackType.Int or StackType.Long) {
+                return body.CreateBin(BinaryOp.AddOvf, currSum, inc);
+            } else {
+                throw new NotImplementedException();
+            }
+        });
+        synther.SetResult(sum);
     }
 }

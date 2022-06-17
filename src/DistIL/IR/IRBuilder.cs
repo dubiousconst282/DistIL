@@ -67,6 +67,12 @@ public class IRBuilder
     public IntrinsicInst CreateNewArray(TypeDesc elemType, Value length)
         => Add(new IntrinsicInst(IntrinsicId.NewArray, new ArrayType(elemType), length));
 
+    public LoadFieldInst CreateFieldLoad(FieldDesc field, Value? obj = null)
+        => Add(new LoadFieldInst(field, obj));
+
+    public StoreFieldInst CreateFieldStore(FieldDesc field, Value? obj, Value value)
+        => Add(new StoreFieldInst(field, obj, value));
+
     public CallInst CreateCall(MethodDesc method, params Value[] args)
         => Add(new CallInst(method, args));
 

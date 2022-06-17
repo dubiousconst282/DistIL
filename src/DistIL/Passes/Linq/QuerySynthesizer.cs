@@ -121,6 +121,10 @@ public class QuerySynthesizer
     {
         Assert(_result == null);
         _result = value;
+
+        if (PreExit.Block.Last is not BranchInst) {
+            PreExit.SetBranch(Exit.Block);
+        }
     }
 
     //Note: we assume that lambda types are all System.Func<>
@@ -138,5 +142,47 @@ public class QuerySynthesizer
             ? new Value[] { lambda, CurrItem, CurrIndex }
             : new Value[] { lambda, CurrItem };
         return ib.CreateVirtualCall(invoker, args);
+    }
+
+    /// <summary> Emits `if !pred.Invoke(currItem) continue; <nextBody>` and returns `nextBody`. </summary>
+    public IRBuilder EmitPredTest(Value pred)
+    {
+        //Body:
+        //  bool cond = pred(currItem)
+        //  goto cond ? NextBody : Latch
+        var body = GetBody();
+        var nextBody = GetBody(createNew: true);
+        var cond = InvokeLambda_ItemAndIndex(body, pred);
+        body.SetBranch(cond, nextBody.Block, Latch.Block);
+        return nextBody;
+    }
+
+    public PhiInst EmitGlobalCounter()
+    {
+        return EmitGlobalCounter(ConstInt.CreateI(0), (body, curr) => body.CreateAdd(curr, ConstInt.CreateI(1)));
+    }
+    public PhiInst EmitGlobalCounter(Value startVal, Func<IRBuilder, Value, Instruction> emitUpdate)
+    {
+        //Header:
+        //  int count = phi [PreHeader -> 0, Latch -> nextCount]
+        //  ...
+        //BodyN:
+        //  int nextCountImm = add count, 1
+        //  goto Latch
+        //Latch:
+        //  int nextCount = phi [...], [BodyN -> nextCountImm]
+        //  ...
+        var nextCount = Latch.CreatePhi(startVal.ResultType).SetName("nextCount");
+        var count = Header.CreatePhi((PreHeader.Block, startVal), (Latch.Block, nextCount)).SetName("count");
+
+        foreach (var pred in Latch.Block.Preds) {
+            nextCount.AddArg(pred, count);
+        }
+        var body = GetBody();
+        var nextCountImm = emitUpdate(body, count).SetName("nextCountImm");
+        body.SetBranch(Latch.Block);
+
+        nextCount.AddArg(body.Block, nextCountImm);
+        return count;
     }
 }

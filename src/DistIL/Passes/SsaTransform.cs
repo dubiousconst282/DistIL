@@ -15,11 +15,7 @@ public class SsaTransform : MethodPass
         var method = ctx.Method;
         var entryBlock = method.EntryBlock;
         var blocks = new List<BasicBlock>();
-        GraphTraversal.DepthFirst(
-            entry: method.EntryBlock,
-            getChildren: b => b.Succs,
-            postVisit: blocks.Add
-        );
+        GraphTraversal.DepthFirst(method.EntryBlock, postVisit: blocks.Add);
 
         //Init the definition map for arguments (set values to themselves)
         foreach (var arg in method.Args) {

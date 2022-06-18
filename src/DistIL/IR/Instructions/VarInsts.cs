@@ -1,11 +1,19 @@
 namespace DistIL.IR;
 
-public class LoadVarInst : Instruction
+public abstract class VarAccessInst : Instruction
 {
-    public Variable Source {
+    public Variable Var {
         get => (Variable)Operands[0];
         set => ReplaceOperand(0, value);
     }
+
+    public VarAccessInst(params Value[] operands)
+        : base(operands)
+    {
+    }
+}
+public class LoadVarInst : VarAccessInst
+{
     public override string InstName => "ldvar";
 
     public LoadVarInst(Variable src)
@@ -16,12 +24,8 @@ public class LoadVarInst : Instruction
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }
-public class StoreVarInst : Instruction
+public class StoreVarInst : VarAccessInst
 {
-    public Variable Dest {
-        get => (Variable)Operands[0];
-        set => ReplaceOperand(0, value);
-    }
     public Value Value {
         get => Operands[1];
         set => ReplaceOperand(1, value);
@@ -37,12 +41,8 @@ public class StoreVarInst : Instruction
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }
-public class VarAddrInst : Instruction
+public class VarAddrInst : VarAccessInst
 {
-    public Variable Source {
-        get => (Variable)Operands[0];
-        set => ReplaceOperand(0, value);
-    }
     public override string InstName => "varaddr";
 
     public VarAddrInst(Variable src)

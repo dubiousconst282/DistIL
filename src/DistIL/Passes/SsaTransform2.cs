@@ -30,17 +30,17 @@ public class SsaTransform2 : MethodPass
         //Find variable definitions
         foreach (var block in _method) {
             foreach (var inst in block) {
-                if (inst is StoreVarInst store && !store.Dest.IsExposed) {
-                    var worklist = varDefs.GetOrAddRef(store.Dest).Wl ??= new();
+                if (inst is StoreVarInst store && CanEnreg(store)) {
+                    var worklist = varDefs.GetOrAddRef(store.Var).Wl ??= new();
                     //Add parent block to the worklist, avoiding dupes
                     if (worklist.Count == 0 || worklist.Top != block) {
                         worklist.Push(block);
                     }
-                    killedVars.Add(store.Dest);
+                    killedVars.Add(store.Var);
                 }
                 //If we are loading a variable that has not yet been assigned in this block, mark it as global
-                else if (inst is LoadVarInst load && !load.Source.IsExposed && !killedVars.Contains(load.Source)) {
-                    varDefs.GetOrAddRef(load.Source).Global = true;
+                else if (inst is LoadVarInst load && CanEnreg(load) && !killedVars.Contains(load.Var)) {
+                    varDefs.GetOrAddRef(load.Var).Global = true;
                 }
             }
             killedVars.Clear();
@@ -106,13 +106,13 @@ public class SsaTransform2 : MethodPass
             }
             foreach (var inst in block.NonPhis()) {
                 //Update latest def
-                if (inst is StoreVarInst store && !store.Dest.IsExposed) {
-                    PushDef(block, store.Dest, store.Value);
+                if (inst is StoreVarInst store && CanEnreg(store)) {
+                    PushDef(block, store.Var, store.Value);
                     store.Remove();
                 }
                 //Replace load with latest def
-                else if (inst is LoadVarInst load && !load.Source.IsExposed) {
-                    var currDef = ReadDef(load.Source);
+                else if (inst is LoadVarInst load && CanEnreg(load)) {
+                    var currDef = ReadDef(load.Var);
                     load.ReplaceWith(currDef);
                 }
             }
@@ -149,6 +149,12 @@ public class SsaTransform2 : MethodPass
                 ? stack.Top 
                 : new Undef(var.ResultType);
         }
+    }
+
+    private static bool CanEnreg(VarAccessInst inst)
+    {
+        //We don't have a way to represent metadata in the IR currently, so don't enreg pinned variables.
+        return inst.Var is { IsExposed: false, IsPinned: false };
     }
 
     private void PrunePhis()

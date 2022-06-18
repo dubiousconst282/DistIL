@@ -160,9 +160,9 @@ public class Cloner
                 ?? new ConvertInst(value, inst.ResultType, inst.CheckOverflow, inst.SrcUnsigned));
         }
 
-        public void Visit(LoadVarInst inst) => Out(new LoadVarInst(Remap(inst.Source)));
-        public void Visit(StoreVarInst inst) => Out(new StoreVarInst(Remap(inst.Dest), Remap(inst.Value)));
-        public void Visit(VarAddrInst inst) => Out(new VarAddrInst(Remap(inst.Source)));
+        public void Visit(LoadVarInst inst) => Out(new LoadVarInst(Remap(inst.Var)));
+        public void Visit(StoreVarInst inst) => Out(new StoreVarInst(Remap(inst.Var), Remap(inst.Value)));
+        public void Visit(VarAddrInst inst) => Out(new VarAddrInst(Remap(inst.Var)));
 
         public void Visit(LoadPtrInst inst) => Out(new LoadPtrInst(Remap(inst.Address), inst.ElemType, inst.Flags));
         public void Visit(StorePtrInst inst) => Out(new StorePtrInst(Remap(inst.Address), Remap(inst.Value), inst.ElemType, inst.Flags));

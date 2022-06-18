@@ -188,16 +188,16 @@ public partial class ILGenerator : InstVisitor
 
     public void Visit(LoadVarInst inst)
     {
-        EmitVarInst(inst.Source, VarOp.Load);
+        EmitVarInst(inst.Var, VarOp.Load);
     }
     public void Visit(StoreVarInst inst)
     {
         Push(inst.Value);
-        EmitVarInst(inst.Dest, VarOp.Store);
+        EmitVarInst(inst.Var, VarOp.Store);
     }
     public void Visit(VarAddrInst inst)
     {
-        EmitVarInst(inst.Source, VarOp.Addr);
+        EmitVarInst(inst.Var, VarOp.Addr);
     }
 
     public void Visit(LoadPtrInst inst)

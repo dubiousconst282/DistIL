@@ -18,8 +18,8 @@ public class ValueNumbering : MethodPass
         foreach (var inst in block) {
             #pragma warning disable format
             (TagKind kind, Value src, Value? newVal) info = inst switch {
-                LoadVarInst c       => (TagKind.Var,      c.Source, null),
-                StoreVarInst c      => (TagKind.Var,      c.Dest,   c.Value),
+                LoadVarInst c       => (TagKind.Var,      c.Var,    null),
+                StoreVarInst c      => (TagKind.Var,      c.Var,    c.Value),
                 LoadFieldInst c     => (TagKind.Field,    c.Field,  null),
                 StoreFieldInst c    => (TagKind.Field,    c.Field,  c.Value),
                 LoadArrayInst c     => (TagKind.Array,    c,        null),

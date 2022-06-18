@@ -25,12 +25,12 @@ public class SsaTransform : MethodPass
         foreach (var block in blocks.ReverseItr()) {
             foreach (var inst in block) {
                 if (inst is StoreVarInst store) {
-                    WriteVar(inst.Block, store.Dest, store.Value);
+                    WriteVar(inst.Block, store.Var, store.Value);
                     inst.Remove();
                     continue;
                 }
                 if (inst is LoadVarInst load) {
-                    var currVal = ReadVar(inst.Block, load.Source);
+                    var currVal = ReadVar(inst.Block, load.Var);
                     inst.ReplaceWith(currVal);
                     continue;
                 }

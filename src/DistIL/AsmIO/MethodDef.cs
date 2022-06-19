@@ -180,11 +180,11 @@ public class MethodSpec : MethodDefOrSpec
 
 public class ILMethodBody
 {
-    public List<ExceptionRegion> ExceptionRegions { get; set; }
-    public List<ILInstruction> Instructions { get; set; }
+    public List<ExceptionRegion> ExceptionRegions { get; set; } = null!;
+    public List<ILInstruction> Instructions { get; set; } = null!;
+    public List<Variable> Locals { get; set; } = null!;
     public int MaxStack { get; set; }
     public bool InitLocals { get; set; }
-    public List<Variable> Locals { get; set; }
 
     internal ILMethodBody(ModuleLoader loader, int rva)
     {
@@ -192,9 +192,14 @@ public class ILMethodBody
 
         ExceptionRegions = DecodeExceptionRegions(loader, block);
         Instructions = DecodeInsts(loader, block.GetILReader());
+        Locals = DecodeLocals(loader, block);
         MaxStack = block.MaxStack;
         InitLocals = block.LocalVariablesInitialized;
-        Locals = DecodeLocals(loader, block);
+    }
+
+    public ILMethodBody()
+    {
+        //TODO: use C#11 required properties
     }
 
     private List<ILInstruction> DecodeInsts(ModuleLoader loader, BlobReader reader)

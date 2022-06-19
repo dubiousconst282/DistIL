@@ -132,4 +132,60 @@ public class IRPrinter
             { PrintToner.Number,    "#b5cea8" },
         };
     }
+
+    public static void ExportForest(MethodBody method, string filename)
+    {
+        using var tw = new StreamWriter(filename);
+        ExportForest(method, tw);
+    }
+    public static void ExportForest(MethodBody method, TextWriter tw)
+    {
+        var sb = new StringBuilder();
+        var slotTracker = method.GetSlotTracker();
+        var forest = new Forestifier(method);
+
+        foreach (var block in method) {
+            tw.Write($"{block}:\n");
+
+            foreach (var inst in block) {
+                var (kind, slot) = forest.GetNode(inst);
+
+                if (kind == ExprKind.Leaf) continue;
+                if (slot != null) {
+                    sb.Append($"  {slot.ResultType} ${slot.Name} = ");
+                } else {
+                    sb.Append("  ");
+                }
+                PrintExpr(inst, 0);
+
+                tw.WriteLine(sb);
+                sb.Clear();
+            }
+        }
+
+        void PrintExpr(Value val, int depth)
+        {
+            if (val is Instruction inst) {
+                PrintExpr_I(inst, depth);
+            } else {
+                val.PrintAsOperand(sb, slotTracker);
+            }
+        }
+        void PrintExpr_I(Instruction inst, int depth)
+        {
+            var slot = forest.GetNode(inst).Slot;
+            if (depth > 0 && slot != null) {
+                sb.Append("$" + slot.Name);
+                return;
+            }
+            if (depth > 0) sb.Append("(");
+            sb.Append(inst.InstName);
+            int operIdx = 0;
+            foreach (var oper in inst.Operands) {
+                sb.Append(operIdx++ > 0 ? ", " : " ");
+                PrintExpr(oper, depth + 1);
+            }
+            if (depth > 0) sb.Append(")");
+        }
+    }
 }

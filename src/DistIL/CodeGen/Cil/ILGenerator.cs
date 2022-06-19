@@ -2,27 +2,35 @@ namespace DistIL.CodeGen.Cil;
 
 using DistIL.AsmIO;
 using DistIL.IR;
+using DistIL.IR.Utils;
 
 public partial class ILGenerator : InstVisitor
 {
+    MethodBody _method;
+    Forestifier _forest;
     ILAssembler _asm = new();
-
-    Dictionary<Instruction, Variable> _temps = new();
     Dictionary<BasicBlock, Label> _blockLabels = new();
-
     Dictionary<Variable, int> _varTable = new();
 
-    public void EmitMethod(MethodDef method)
+    public ILGenerator(MethodBody method)
     {
-        foreach (var block in method.Body!) {
+        _method = method;
+        _forest = new Forestifier(method);
+    }
+
+    public ILMethodBody Bake()
+    {
+        foreach (var block in _method) {
             _asm.MarkLabel(GetLabel(block));
             EmitBlock(block);
         }
-        var body = method.ILBody!;
         var bakedAsm = _asm.Bake();
-        body.Instructions = bakedAsm.Code.ToList();
-        body.Locals = _varTable.Keys.ToList();
-        body.MaxStack = bakedAsm.MaxStack;
+        return new ILMethodBody() {
+            ExceptionRegions = new(),
+            MaxStack = bakedAsm.MaxStack,
+            Instructions = bakedAsm.Code.ToList(),
+            Locals = _varTable.Keys.ToList()
+        };
     }
 
     private void EmitBlock(BasicBlock block)
@@ -33,43 +41,18 @@ public partial class ILGenerator : InstVisitor
         //Instructions that don't satisfy this are copied into a temp variable,
         //and loaded when needed.
         foreach (var inst in block) {
-            if (!inst.HasResult || inst.NumUses == 0) {
+            var (kind, slot) = _forest.GetNode(inst);
+
+            if (kind != ExprKind.Leaf) {
                 inst.Accept(this);
-                if (inst.HasResult) {
+
+                if (slot != null) {
+                    EmitVarInst(slot, VarOp.Store);
+                } else if (inst.HasResult) {
                     _asm.Emit(ILCode.Pop);
                 }
-            } else if (inst.HasResult && NeedsTemp(inst)) {
-                var tempVar = new Variable(inst.ResultType, false, $"tmp" + _temps.Count);
-                _temps.Add(inst, tempVar);
-
-                inst.Accept(this);
-                EmitVarInst(tempVar, VarOp.Store);
-            }
-            //else: this is a leaf
-        }
-    }
-
-    private bool NeedsTemp(Instruction def)
-    {
-        if (def.NumUses >= 2) return true;
-
-        var user = def.GetFirstUser()!;
-        //Check if they are in the same block
-        if (user.Block != def.Block) return true;
-        
-        //Check if there are side effects between def and use
-        for (var inst = def.Next!; inst != user; inst = inst.Next!) {
-            if (inst.HasSideEffects) {
-                return true;
             }
         }
-        return false;
-    }
-
-    /// <summary> Returns whether the instruction can be inlined / used as a subexpression. </summary>
-    private bool CanInline(Instruction inst)
-    {
-        return !_temps.ContainsKey(inst);
     }
 
     private Label GetLabel(BasicBlock block)
@@ -141,8 +124,8 @@ public partial class ILGenerator : InstVisitor
                 break;
             }
             case Instruction inst: {
-                if (_temps.TryGetValue(inst, out var tempVar)) {
-                    EmitVarInst(tempVar, VarOp.Load);
+                if (_forest.TryGetSlot(inst, out var slot)) {
+                    EmitVarInst(slot, VarOp.Load);
                 } else {
                     inst.Accept(this);
                 }
@@ -337,7 +320,7 @@ public partial class ILGenerator : InstVisitor
         var elseLabel = GetLabel(inst.Else);
         var cond = inst.Cond;
 
-        if (cond is CompareInst cmp && CanInline(cmp) &&
+        if (cond is CompareInst cmp && _forest.IsLeaf(cmp) &&
             GetCodeForBranch(cmp.Op, out var brCode, out bool invert))
         {
             Push(cmp.Left);

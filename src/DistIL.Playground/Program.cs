@@ -20,8 +20,9 @@ mp2.Add(new SimplifyCFG());
 mp2.Add(new DeadCodeElim());
 mp2.Add(new ValueNumbering());
 mp2.Add(new SimplifyCFG());
-mp2.Add(new PrintPass());
 mp2.Add(new RemovePhis());
+mp1.Add(new DistIL.Passes.Utils.NamifyIR());
+mp2.Add(new PrintPass());
 
 var modPm = new ModulePassManager();
 modPm.Add(new ImportPass());
@@ -39,9 +40,15 @@ class PrintPass : MethodPass
 {
     public override void Run(MethodTransformContext ctx)
     {
-        if (ctx.Method.Definition.Name == "ObjAccess") {
+        var diags = IRVerifier.Diagnose(ctx.Method);
+        if (diags.Count > 0) {
+            Console.WriteLine($"BadIR in {ctx.Method}: {string.Join(" | ", diags)}");
+        }
+        if (ctx.Method.Definition.Name == "SumAbsDiff") {
             IRPrinter.ExportPlain(ctx.Method, "../../logs/code.txt");
+            IRPrinter.ExportForest(ctx.Method, "../../logs/forest.txt");
             IRPrinter.ExportDot(ctx.Method, "../../logs/cfg.dot");
+            //File.WriteAllText("../../logs/il.txt", string.Join("\n", ctx.Method.Definition.ILBody.Instructions));
         }
     }
 }
@@ -69,7 +76,7 @@ class ExportPass : ModulePass
             if (method.Body == null) continue;
 
             try {
-                new ILGenerator().EmitMethod(method.Definition);
+                method.ILBody = new ILGenerator(method.Body).Bake();
             } catch (Exception ex) {
                 Console.WriteLine($"FailEmit: {method} {ex.Message}");
             }

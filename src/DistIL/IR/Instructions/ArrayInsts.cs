@@ -67,6 +67,7 @@ public class StoreArrayInst : ArrayAccessInst
 
     public override string InstName => "starr";
     public override bool HasSideEffects => true;
+    public override bool MayWriteToMemory => true;
 
     public StoreArrayInst(Value array, Value index, Value value, TypeDesc elemType, ArrayAccessFlags flags = 0)
         : base(flags, array, index, value)

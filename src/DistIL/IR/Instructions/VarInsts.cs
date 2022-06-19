@@ -30,8 +30,10 @@ public class StoreVarInst : VarAccessInst
         get => Operands[1];
         set => ReplaceOperand(1, value);
     }
-    public override string InstName => "stvar";
+
     public override bool HasSideEffects => true;
+    public override bool MayWriteToMemory => true;
+    public override string InstName => "stvar";
 
     public StoreVarInst(Variable dest, Value value)
         : base(dest, value)

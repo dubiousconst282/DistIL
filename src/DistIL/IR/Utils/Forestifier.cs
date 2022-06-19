@@ -34,16 +34,7 @@ public class Forestifier
         var use = def.GetFirstUser()!;
         if (use.Block != def.Block) return true;
 
-        int defIdx = interfs.GetIndex(def) + 1; //offset by one to ignore def when checking for interferences
-        int useIdx = interfs.GetIndex(use);
-
-        //Operands can't have interferes before use
-        foreach (var oper in def.Operands) {
-            if (interfs.IsInterferedBetween(oper, defIdx, useIdx)) {
-                return true;
-            }
-        }
-        return false;
+        return interfs.IsDefInterferedBeforeUse(def, use);
     }
 
     public (ExprKind Kind, Variable? Slot) GetNode(Instruction inst)
@@ -88,9 +79,8 @@ public class Forestifier
                 }
                 //Check whether this instruction may change a alias
                 //- StorePtrInst
-                //- Instructions that may throw could interfere with aliases/vars crossing protected regions
                 //- Calls with a ref/ptr argument (TODO)
-                else if (inst.MayThrow || inst is StorePtrInst or CallInst) {
+                else if (inst.MayWriteToMemory) {
                     _aliasInterfs.Add(index);
                 }
 
@@ -102,32 +92,37 @@ public class Forestifier
             }
         }
 
-        public int GetIndex(Instruction inst) => _indices[inst];
-
-        public bool IsInterferedBetween(Value oper, int start, int end)
+        public bool IsDefInterferedBeforeUse(Instruction def, Instruction use)
         {
-            if (oper is LoadVarInst load) {
-                oper = load.Var;
+            int defIdx = _indices[def] + 1; //offset by one to ignore def when checking for interferences
+            int useIdx = _indices[use];
+
+            if (def is LoadVarInst { Var: var var }) {
+                if (var.IsExposed && _aliasInterfs.ContainsRange(defIdx, useIdx)) {
+                    return true;
+                }
+                if (_varInterfs.TryGetValue(var, out var localInterfs)) {
+                    return localInterfs.ContainsRange(defIdx, useIdx);
+                }
+                return false;
             }
-            switch (oper) {
-                case Const: {
-                    //Constants are never interfered with
-                    return false;
-                }
-                case Variable var: {
-                    if (var.IsExposed && _aliasInterfs.ContainsRange(start, end)) {
-                        return true;
-                    }
-                    if (_varInterfs.TryGetValue(var, out var localInterfs)) {
-                        return localInterfs.ContainsRange(start, end);
-                    }
-                    return false;
-                }
-                default: {
-                    //Instructions with side-effects could intefere with anything (fields, pointers, ...)
-                    return _sideEffects.ContainsRange(start, end);
+            if (def is LoadArrayInst or LoadFieldInst or LoadPtrInst) {
+                return _aliasInterfs.ContainsRange(defIdx, useIdx);
+            }
+            //Check if operands may be interfered by instructions with side-effects
+            //(they could intefere with anything (fields, pointers, ...))
+            foreach (var oper in def.Operands) {
+                if (MayBeInterfered(oper) && _sideEffects.ContainsRange(defIdx, useIdx)) {
+                    return true;
                 }
             }
+            return false;
+        }
+
+        private bool MayBeInterfered(Value oper)
+        {
+            //Instructions with more than two uses always have a immutable slot
+            return !(oper is Const or Instruction { NumUses: >= 2 });
         }
     }
 }

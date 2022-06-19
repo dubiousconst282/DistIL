@@ -46,6 +46,7 @@ public class StorePtrInst : PtrAccessInst
 
     public override string InstName => "stptr" + (Unaligned ? ".un" : "") + (Volatile ? ".volatile" : "");
     public override bool HasSideEffects => true;
+    public override bool MayWriteToMemory => true;
 
     public StorePtrInst(Value addr, Value value, TypeDesc elemType, PointerFlags flags = PointerFlags.Volatile)
         : base(flags, addr, value)

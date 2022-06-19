@@ -59,8 +59,9 @@ public class StoreFieldInst : FieldAccessInst
         set => ReplaceOperand(IsStatic ? 1 : 2, value);
     }
 
-    public override string InstName => "stfld";
     public override bool SafeToRemove => false;
+    public override bool MayWriteToMemory => true;
+    public override string InstName => "stfld";
 
     public StoreFieldInst(FieldDesc field, Value? obj, Value value)
         : base(obj == null ? new[] { field, value } : new[] { field, obj, value })

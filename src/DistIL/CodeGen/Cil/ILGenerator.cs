@@ -11,6 +11,7 @@ public partial class ILGenerator : InstVisitor
     ILAssembler _asm = new();
     Dictionary<BasicBlock, Label> _blockLabels = new();
     Dictionary<Variable, int> _varTable = new();
+    Dictionary<Instruction, Variable> _slots = new();
 
     public ILGenerator(MethodBody method)
     {
@@ -35,22 +36,16 @@ public partial class ILGenerator : InstVisitor
 
     private void EmitBlock(BasicBlock block)
     {
-        //Generate code by treating instructions as trees:
-        //whenever a instruction has only one use, and no side effects between
-        //def and use we consider it as a leaf (won't emit it in this loop).
-        //Instructions that don't satisfy this are copied into a temp variable,
-        //and loaded when needed.
+        //Emit code for the rooted trees in the forest
         foreach (var inst in block) {
-            var (kind, slot) = _forest.GetNode(inst);
+            if (!_forest.IsRootedTree(inst)) continue;
 
-            if (kind != ExprKind.Leaf) {
-                inst.Accept(this);
+            inst.Accept(this);
 
-                if (slot != null) {
-                    EmitVarInst(slot, VarOp.Store);
-                } else if (inst.HasResult) {
-                    _asm.Emit(ILCode.Pop);
-                }
+            if (inst.NumUses > 0) {
+                EmitVarInst(GetSlot(inst), VarOp.Store);
+            } else if (inst.HasResult) {
+                _asm.Emit(ILCode.Pop); //unused result
             }
         }
     }
@@ -58,6 +53,10 @@ public partial class ILGenerator : InstVisitor
     private Label GetLabel(BasicBlock block)
     {
         return _blockLabels.GetOrAddRef(block) ??= new();
+    }
+    private Variable GetSlot(Instruction inst)
+    {
+        return _slots.GetOrAddRef(inst) ??= new(inst.ResultType, name: $"expr{_slots.Count}");
     }
 
     private void EmitVarInst(Variable var, VarOp op)
@@ -124,10 +123,10 @@ public partial class ILGenerator : InstVisitor
                 break;
             }
             case Instruction inst: {
-                if (_forest.TryGetSlot(inst, out var slot)) {
-                    EmitVarInst(slot, VarOp.Load);
-                } else {
+                if (_forest.IsLeaf(inst)) {
                     inst.Accept(this);
+                } else {
+                    EmitVarInst(GetSlot(inst), VarOp.Load);
                 }
                 break;
             }

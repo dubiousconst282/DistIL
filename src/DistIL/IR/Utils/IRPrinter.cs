@@ -148,11 +148,12 @@ public class IRPrinter
             tw.Write($"{block}:\n");
 
             foreach (var inst in block) {
-                var (kind, slot) = forest.GetNode(inst);
+                if (!forest.IsRootedTree(inst)) continue;
 
-                if (kind == ExprKind.Leaf) continue;
-                if (slot != null) {
-                    sb.Append($"  {slot.ResultType} ${slot.Name} = ");
+                if (inst.HasResult) {
+                    sb.Append($"  {inst.ResultType} $expr_");
+                    inst.PrintAsOperand(sb, slotTracker);
+                    sb.Append(" = ");
                 } else {
                     sb.Append("  ");
                 }
@@ -173,9 +174,9 @@ public class IRPrinter
         }
         void PrintExpr_I(Instruction inst, int depth)
         {
-            var slot = forest.GetNode(inst).Slot;
-            if (depth > 0 && slot != null) {
-                sb.Append("$" + slot.Name);
+            if (depth > 0 && forest.IsRootedTree(inst)) {
+                sb.Append("$expr_");
+                inst.PrintAsOperand(sb, slotTracker);
                 return;
             }
             if (depth > 0) sb.Append("(");

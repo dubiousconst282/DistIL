@@ -3,24 +3,20 @@ namespace DistIL.IR.Utils;
 /// <summary> Computes information to help build expression trees from the linear IR. </summary>
 public class Forestifier
 {
-    readonly MethodBody _method;
-    readonly Dictionary<Instruction, Variable?> _slots = new();
+    readonly ValueSet<Instruction> _trees = new(); //tree instructions / statements
 
     public Forestifier(MethodBody method)
     {
-        _method = method;
-
         var interfs = new BlockInterfs();
-        int slotId = 1;
 
         foreach (var block in method) {
             //Update block interferences and calculate instruction indices
             interfs.Update(block);
 
-            //Create instruction slots
+            //Find statements
             foreach (var inst in block) {
-                if (inst.HasResult && inst.NumUses > 0 && NeedsSlot(inst, interfs)) {
-                    _slots[inst] = new Variable(inst.ResultType, name: $"expr{slotId++}");
+                if (NeedsSlot(inst, interfs)) {
+                    _trees.Add(inst);
                 }
             }
         }
@@ -28,47 +24,34 @@ public class Forestifier
 
     private bool NeedsSlot(Instruction def, BlockInterfs interfs)
     {
+        //Void or unused insts don't need slots
+        if (!def.HasResult || def.NumUses == 0) return false;
+
         //Def must have one use in the same block
-        if (def.NumUses >= 2) return true;
+        if (def.NumUses >= 2 || def is PhiInst) return true;
 
         var use = def.GetFirstUser()!;
-        if (use.Block != def.Block) return true;
-
-        return interfs.IsDefInterferedBeforeUse(def, use);
+        return use.Block != def.Block || interfs.IsDefInterferedBeforeUse(def, use);
     }
 
-    public (ExprKind Kind, Variable? Slot) GetNode(Instruction inst)
-    {
-        var slot = _slots.GetValueOrDefault(inst);
-        var kind =
-            slot != null || !inst.HasResult ? ExprKind.Stmt :
-            inst.NumUses == 0 && inst.HasResult ? ExprKind.UnusedStmt :
-            ExprKind.Leaf;
-        return (kind, slot);
-    }
+    /// <summary> Returns whether the specified instruction is a rooted tree or statement (i.e. must be assigned into a temp variable). </summary>
+    public bool IsRootedTree(Instruction inst) => _trees.Contains(inst) || !inst.HasResult;
 
-    public bool TryGetSlot(Instruction inst, [MaybeNullWhen(false)] out Variable slot)
-    {
-        return _slots.TryGetValue(inst, out slot);
-    }
-
-    public bool IsLeaf(Instruction inst)
-    {
-        return !_slots.ContainsKey(inst);
-    }
+    /// <summary> Returns whether the specified instruction is a leaf (i.e. can be inlined into an operand). </summary>
+    public bool IsLeaf(Instruction inst) => !IsRootedTree(inst);
 
     class BlockInterfs
     {
         Dictionary<Instruction, int> _indices = new();
         Dictionary<Variable, BitSet> _varInterfs = new();
-        BitSet _aliasInterfs = new BitSet();
-        BitSet _sideEffects = new BitSet();
+        BitSet _memInterfs = new();
+        BitSet _sideEffects = new();
 
         public void Update(BasicBlock block)
         {
             _indices.Clear();
             _varInterfs.Clear();
-            _aliasInterfs.Clear();
+            _memInterfs.Clear();
             _sideEffects.Clear();
 
             int index = 0;
@@ -76,12 +59,8 @@ public class Forestifier
                 if (inst is StoreVarInst store) {
                     var set = _varInterfs.GetOrAddRef(store.Var) ??= new();
                     set.Add(index);
-                }
-                //Check whether this instruction may change a alias
-                //- StorePtrInst
-                //- Calls with a ref/ptr argument (TODO)
-                else if (inst.MayWriteToMemory) {
-                    _aliasInterfs.Add(index);
+                } else if (inst.MayWriteToMemory) {
+                    _memInterfs.Add(index);
                 }
 
                 if (inst.HasSideEffects) {
@@ -98,7 +77,9 @@ public class Forestifier
             int useIdx = _indices[use];
 
             if (def is LoadVarInst { Var: var var }) {
-                if (var.IsExposed && _aliasInterfs.ContainsRange(defIdx, useIdx)) {
+                //If this variable is exposed, any store can change its value.
+                //Otherwise, we can use precise interferences.
+                if (var.IsExposed && _memInterfs.ContainsRange(defIdx, useIdx)) {
                     return true;
                 }
                 if (_varInterfs.TryGetValue(var, out var localInterfs)) {
@@ -106,24 +87,26 @@ public class Forestifier
                 }
                 return false;
             }
+            //These can be aliased globally, so we can't have precise interferences,
+            //or at least not without more extensive tracking.
             if (def is LoadArrayInst or LoadFieldInst or LoadPtrInst) {
-                return _aliasInterfs.ContainsRange(defIdx, useIdx);
+                return _memInterfs.ContainsRange(defIdx, useIdx);
             }
-            //Check if operands may be interfered by instructions with side-effects
-            //(they could intefere with anything (fields, pointers, ...))
-            foreach (var oper in def.Operands) {
-                if (MayBeInterfered(oper) && _sideEffects.ContainsRange(defIdx, useIdx)) {
-                    return true;
+            //Assume that instructions with side-effects can interfere with anything else
+            if (_sideEffects.ContainsRange(defIdx, useIdx)) {
+                foreach (var oper in def.Operands) {
+                    if (!IsImmutable(oper)) {
+                        return true;
+                    }
                 }
             }
             return false;
         }
 
-        private bool MayBeInterfered(Value oper)
+        private bool IsImmutable(Value oper)
         {
-            //Instructions with more than two uses always have a immutable slot
-            return !(oper is Const or Instruction { NumUses: >= 2 });
+            //Instructions with more than two uses always have a immutable variable for its entire live range
+            return oper is Const or Instruction { NumUses: >= 2 };
         }
     }
 }
-public enum ExprKind { UnusedStmt, Stmt, Leaf }

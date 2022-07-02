@@ -105,10 +105,10 @@ public class SimplifyCFG : MethodPass
         var ib = new IRBuilder(delayed: true);
 
         foreach (var phi in block.Phis()) {
-            var a1 = phi.GetArg(0);
-            var a2 = phi.GetArg(1);
+            var trueVal = phi.GetValue(trueBlock);
+            var falseVal = phi.GetValue(falseBlock);
             Value? val =
-                SelectConstInt(ib, cond, a1.Value, a2.Value);
+                SelectConstInt(ib, cond, trueVal, falseVal);
 
             if (val == null) return false;
             repls.Add(val);

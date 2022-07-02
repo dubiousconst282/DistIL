@@ -6,14 +6,13 @@ public class DominatorTree : IMethodAnalysis
 {
     readonly Dictionary<BasicBlock, Node> _block2node = new();
     readonly Node _root;
+    bool _hasDfsIndices = false; //whether Node.{PreIndex, PostIndex} have been calculated
 
     public MethodBody Method { get; }
-    public bool IsPostDom { get; }
 
-    public DominatorTree(MethodBody method, bool isPostDom = false)
+    public DominatorTree(MethodBody method)
     {
         Method = method;
-        IsPostDom = isPostDom;
 
         var nodes = CreateNodes();
         _root = nodes[^1];
@@ -26,42 +25,47 @@ public class DominatorTree : IMethodAnalysis
         return new DominatorTree(mgr.Method);
     }
 
-    /// <summary> 
-    /// Returns the immediate dominator of `block` or itself if it's the entry block, 
-    /// or an exit block and this is a post dominator tree.
-    /// </summary>
+    /// <summary> Returns the immediate dominator of `block`, or itself if it's the entry block. </summary>
     public BasicBlock IDom(BasicBlock block)
     {
         return GetNode(block).IDom.Block;
     }
 
-    /// <summary> Checks if `parent` block dominates `child`. </summary>
+    /// <summary> Checks if `parent` dominates `child`, i.e. if all paths from the entry block must go through `parent` before entering `child`. </summary>
     public bool Dominates(BasicBlock parent, BasicBlock child)
     {
-        //TODO: this could be O(1) by using the pre and post dfs index of the dom tree
-        var node = GetNode(child);
-        while (true) {
-            if (node.Block == parent) {
-                return true;
-            }
-            if (node == node.IDom) {
-                return false; //reached entry node
-            }
-            node = node.IDom;
+        if (!_hasDfsIndices) {
+            ComputeDfsIndices();
         }
+        var parentNode = GetNode(parent);
+        var childNode = GetNode(child);
+
+        return childNode.PreIndex >= parentNode.PreIndex &&
+               childNode.PostIndex <= parentNode.PostIndex;
+    }
+
+    /// <summary> Same as <see cref="Dominates(BasicBlock, BasicBlock)"/>, but returns false if `parent` and `child` are the same block. </summary>
+    public bool StrictlyDominates(BasicBlock parent, BasicBlock child)
+    {
+        return parent != child && Dominates(parent, child);
     }
 
     /// <summary> Performs a depth first traversal over this dominator tree. </summary>
     public void Traverse(Action<BasicBlock>? preVisit = null, Action<BasicBlock>? postVisit = null)
     {
-        var emptyList = new List<Node>();
-
-        GraphTraversal.DepthFirst(
-            entry: _root,
-            getChildren: b => b.Children ?? emptyList,
-            preVisit: preVisit == null ? null : n => preVisit(n.Block),
-            postVisit: postVisit == null ? null : n => postVisit(n.Block)
+        TraverseNodes(
+            preVisit: node => preVisit?.Invoke(node.Block),
+            postVisit: node => postVisit?.Invoke(node.Block)
         );
+    }
+
+    /// <summary> Enumerates all blocks immediately dominated by `block`. </summary>
+    public IEnumerable<BasicBlock> GetChildren(BasicBlock block)
+    {
+        var node = GetNode(block).FirstChild;
+        for (; node != null; node = node.NextChild) {
+            yield return node.Block;
+        }
     }
 
     private Node GetNode(BasicBlock block)
@@ -70,40 +74,27 @@ public class DominatorTree : IMethodAnalysis
     }
 
     /// <summary> Creates the tree nodes and returns a list with them in DFS post order. </summary>
-    private List<Node> CreateNodes()
+    private Node[] CreateNodes()
     {
-        var blocks = new List<Node>();
-        var entryBlock = Method.EntryBlock;
+        Assert(Method.EntryBlock.Preds.Count == 0);
 
-        Assert(!entryBlock.Succs.Contains(entryBlock));
+        var nodes = new Node[Method.NumBlocks];
+        int index = 0;
 
-        if (IsPostDom) {
-            //TODO: avoid creating temp block for inverted graph dfs
-            entryBlock = new BasicBlock(Method);
-            foreach (var block in Method) {
-                if (IsExitBlock(block)) {
-                    entryBlock.Preds.Add(block);
-                }
-            }
-        }
-        GraphTraversal.DepthFirst(
-            entry: entryBlock,
-            getChildren: IsPostDom ? (b => b.Preds) : (b => b.Succs),
-            postVisit: b => {
-                var node = new Node() {
-                    Block = b,
-                    PostIndex = blocks.Count
-                };
-                _block2node.Add(b, node);
-                blocks.Add(node);
-            }
-        );
-        return blocks;
+        GraphTraversal.DepthFirst(Method.EntryBlock, postVisit: block => {
+            var node = new Node() {
+                Block = block,
+                PostIndex = index
+            };
+            _block2node.Add(block, node);
+            nodes[index++] = node;
+        });
+        return nodes;
     }
 
     //Algorithm from the paper "A Simple, Fast Dominance Algorithm"
     //https://www.cs.rice.edu/~keith/EMBED/dom.pdf
-    private void ComputeDom(List<Node> nodes)
+    private void ComputeDom(Node[] nodes)
     {
         var entry = nodes[^1];
         entry.IDom = entry; //entry block dominates itself
@@ -112,27 +103,18 @@ public class DominatorTree : IMethodAnalysis
         while (changed) {
             changed = false;
             //foreach block in reverse post order, except entry (at `len - 1`)
-            for (int i = nodes.Count - 2; i >= 0; i--) {
+            for (int i = nodes.Length - 2; i >= 0; i--) {
                 var node = nodes[i];
                 var block = node.Block;
                 var newDom = default(Node);
 
-                if (IsPostDom && IsExitBlock(block)) {
-                    //blocks aren't connected to our fake exit block
-                    //post_idom(n) of a exit block is itself
-                    Assert(block.Succs.Count == 0);
-                    newDom = entry;
-                } else {
-                    var predBlocks = IsPostDom ? block.Succs : block.Preds;
-                    foreach (var predBlock in predBlocks) {
-                        var pred = GetNode(predBlock);
+                foreach (var predBlock in block.Preds) {
+                    var pred = GetNode(predBlock);
 
-                        if (pred.IDom != null) {
-                            newDom = newDom == null ? pred : Intersect(pred, newDom);
-                        }
+                    if (pred.IDom != null) {
+                        newDom = newDom == null ? pred : Intersect(pred, newDom);
                     }
                 }
-
                 if (newDom != node.IDom) {
                     node.IDom = newDom!;
                     changed = true;
@@ -154,34 +136,62 @@ public class DominatorTree : IMethodAnalysis
         }
     }
 
-    private void ComputeChildren(List<Node> nodes)
+    private void ComputeChildren(Node[] nodes)
     {
-        var entryNode = nodes[^1];
-        //Ignore entry node to avoid cycles in the children list
-        for (int i = 0; i < nodes.Count - 1; i++) {
-            var node = nodes[i];
-
-            if (IsPostDom && node.IDom == entryNode) {
-                //Change idom of exit nodes to itself
-                node.IDom = node;
-                continue;
+        //Ignore entry node (^1) to avoid cycles in the children list
+        foreach (var node in nodes.AsSpan()[..^1]) {
+            var parent = node.IDom;
+            if (parent.FirstChild == null) {
+                parent.FirstChild = node;
+            } else {
+                Assert(node.NextChild == null);
+                node.NextChild = parent.FirstChild.NextChild;
+                parent.FirstChild.NextChild = node;
             }
-            var children = node.IDom.Children ??= new();
-            children.Add(node);
         }
     }
 
-    private bool IsExitBlock(BasicBlock block)
+    private void ComputeDfsIndices()
     {
-        return block.Last is ReturnInst;
+        int index = 0;
+        TraverseNodes(
+            preVisit: node => node.PreIndex = ++index,
+            postVisit: node => node.PostIndex = index
+        );
+        _hasDfsIndices = true;
     }
 
-    private class Node
+    private void TraverseNodes(Action<Node>? preVisit, Action<Node>? postVisit)
+    {
+        preVisit?.Invoke(_root);
+
+        var worklist = new ArrayStack<(Node Node, Node? NextChild)>();
+        worklist.Push((_root, _root.FirstChild));
+
+        while (!worklist.IsEmpty) {
+            ref var curr = ref worklist.Top;
+            var child = curr.NextChild;
+
+            if (child != null) {
+                curr.NextChild = child.NextChild;
+                worklist.Push((child, child.FirstChild));
+                preVisit?.Invoke(child);
+            } else {
+                postVisit?.Invoke(curr.Node);
+                worklist.Pop();
+            }
+        }
+    }
+
+    class Node
     {
         public Node IDom = null!;
-        public List<Node> Children = null!;
+        public Node? FirstChild, NextChild; //Links for the children list
         public BasicBlock Block = null!;
-        public int PostIndex;
+        //ComputeDom() assumes that PostIndex holds the post DFS index of each block.
+        //Once dominance is computed and when _hasDfsIndices is true, these contain
+        //the DFS indices of the actual dominance tree, used for O(1) dominance checks.
+        public int PreIndex, PostIndex;
 
         public override string ToString() => $"{Block} <- {IDom?.Block.ToString() ?? "?"}";
     }

@@ -192,6 +192,18 @@ public static class TypeKindEx
     private static bool HasFlag(TypeKind type, byte flags)
         => (_data[(int)type].Flags & flags) != 0;
 
+    public static StackType ToStackType(this TypeKind type)
+        => type switch {
+            TypeKind.Void => StackType.Void,
+            >= TypeKind.Bool and <= TypeKind.UInt32 => StackType.Int,
+            TypeKind.Int64 or TypeKind.UInt64 => StackType.Long,
+            TypeKind.Single or TypeKind.Double => StackType.Float,
+            TypeKind.IntPtr or TypeKind.UIntPtr or TypeKind.IntPtr => StackType.NInt,
+            TypeKind.ByRef => StackType.ByRef,
+            TypeKind.Struct or TypeKind.TypedRef => StackType.Struct,
+            _ => StackType.Object,
+        };
+
 }
 //I.12.1 Supported data types 
 //I.12.3.2.1 The evaluation stack

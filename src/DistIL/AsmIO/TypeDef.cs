@@ -49,9 +49,10 @@ public struct InterfaceImpl
 public class TypeDef : TypeDefOrSpec
 {
     public override ModuleDef Module { get; }
-    public override TypeKind Kind => IsValueType ? TypeKind.Struct : TypeKind.Object; //TODO: more specific type
-    public override StackType StackType => IsValueType ? StackType.Struct : StackType.Object;
+    public override TypeKind Kind => _kind;
+    public override StackType StackType => _kind.ToStackType();
 
+    private TypeKind _kind;
     private string? _namespace, _name;
     public override string? Namespace => _namespace;
     public override string Name => _name!;
@@ -108,6 +109,11 @@ public class TypeDef : TypeDefOrSpec
             Interfaces.Add(new InterfaceImpl(itf, attribs));
         }
         CustomAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
+
+        //FIXME: TypeDef.Kind for String/Array/... and maybe primitives?
+        _kind = IsEnum ? UnderlyingEnumType!.Kind :
+               IsValueType ? TypeKind.Struct : 
+               TypeKind.Object;
     }
 
     public override TypeDesc GetSpec(GenericContext context)

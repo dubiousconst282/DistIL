@@ -1,6 +1,7 @@
 namespace DistIL.IR;
 
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 public abstract class Value
 {
@@ -19,18 +20,19 @@ public abstract class Value
         return sb.ToString();
     }
 
-    internal virtual void AddUse(Use use) { }
-    internal virtual void RemoveUse(Use use) { }
+    internal virtual void AddUse(Instruction user, int operIdx) { }
+    internal virtual void RemoveUse(ref UseDef use) { }
 }
 /// <summary> The base class for a value that tracks it uses. </summary>
 public abstract class TrackedValue : Value
 {
-    //Using a linked list to track uses allows new uses to be added/removed during enumeration
-    internal Use? _firstUse;
+    //The use list is a doubly-linked list where nodes are keept in a array owned by
+    //user instructions. Nodes (defs) contains the actual refs for the prev/next links.
+    //References are represented as (Inst Owner, int Index).
+    UseRef _firstUse;
 
-    //The value hash is calculated based on the object address on the constructor.
-    //It should help a bit since object.GetHashCode() is a virtual call to a runtime
-    //function, which seems to be doing some quite expansive stuff the first time it's called.
+    //To avoid the overhead of getting the identity hash code (which is pretty small tbh),
+    //we calculate a random hash based on the object address on constructor.
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     internal readonly int _hash;
 
@@ -42,58 +44,62 @@ public abstract class TrackedValue : Value
         _hash = GetAddrHash(this);
     }
 
-    internal override void AddUse(Use use)
+    internal override void AddUse(Instruction user, int operIdx)
     {
-        Assert(GetType() != typeof(Variable) || use.User is LoadVarInst or StoreVarInst or VarAddrInst);
+        Assert(GetType() != typeof(Variable) || user is LoadVarInst or StoreVarInst or VarAddrInst);
 
-        if (_firstUse != null) {
+        var use = new UseRef() { Owner = user, Index = operIdx };
+        if (_firstUse.Exists) {
+            //Since we're inserting on the first node, we only need to update the prev link.
             _firstUse.Prev = use;
             use.Next = _firstUse;
         }
         _firstUse = use;
         NumUses++;
     }
-    internal override void RemoveUse(Use use)
+    internal override void RemoveUse(ref UseDef use)
     {
-        if (use.Prev != null) {
+        if (use.Prev.Exists) {
             use.Prev.Next = use.Next;
         } else {
             _firstUse = use.Next!;
         }
-        if (use.Next != null) {
+        if (use.Next.Exists) {
             use.Next.Prev = use.Prev;
         }
-        use.Prev = use.Next = null;
+        use = default; //clear prev/next links
         NumUses--;
     }
 
     public Instruction? GetFirstUser()
     {
-        return _firstUse?.User;
+        return _firstUse.Owner;
     }
 
     /// <summary> Replace all uses of this value with `newValue`. </summary>
     public void ReplaceUses(Value newValue)
     {
-        if (newValue == this || _firstUse == null) return;
+        if (newValue == this || !_firstUse.Exists) return;
 
         //Update user operands and find last use
         var use = _firstUse;
         while (true) {
-            use.User._operands[use.OperIdx] = newValue;
-            if (use.Next == null) break;
-            use = use.Next;
+            use.Owner._operands[use.Index] = newValue;
+
+            var next = use.Next;
+            if (!next.Exists) break;
+            use = next;
         }
         //Merge use lists
         if (newValue is TrackedValue n) {
-            if (n._firstUse != null) {
+            if (n._firstUse.Exists) {
                 use.Next = n._firstUse;
                 n._firstUse.Prev = use;
             }
             n._firstUse = _firstUse;
             n.NumUses += NumUses;
         }
-        _firstUse = null;
+        _firstUse = default;
         NumUses = 0;
     }
 
@@ -114,13 +120,13 @@ public abstract class TrackedValue : Value
 
 public struct ValueUserEnumerator
 {
-    internal Use? _use;
+    internal UseRef _use;
     public Instruction Current { get; private set; }
 
     public bool MoveNext()
     {
-        if (_use != null) {
-            Current = _use.User;
+        if (_use.Exists) {
+            Current = _use.Owner;
             _use = _use.Next;
             return true;
         }
@@ -131,13 +137,13 @@ public struct ValueUserEnumerator
 }
 public struct ValueUseEnumerator
 {
-    internal Use? _use;
+    internal UseRef _use;
     public (Instruction Inst, int OperIdx) Current { get; private set; }
 
     public bool MoveNext()
     {
-        if (_use != null) {
-            Current = (_use.User, _use.OperIdx);
+        if (_use.Exists) {
+            Current = (_use.Owner, _use.Index);
             _use = _use.Next;
             return true;
         }
@@ -146,12 +152,27 @@ public struct ValueUseEnumerator
 
     public ValueUseEnumerator GetEnumerator() => this;
 }
-internal class Use
+
+internal struct UseRef
 {
-    public Use? Prev, Next;
-    public Instruction User = null!;
-    public int OperIdx;
-    //24(obj hdr)+28(fields)+8(oper ref) = 60 bytes + GC stress
-    //Not that bad. If we need to optimize memory usage, we could use some kind of allocator/pool of use nodes
-    //addressed by ints, which would bring this down to 12+8+4(oper ref) = 24 bytes and reduce GC stress.
+    public Instruction Owner;
+    public int Index;
+
+    public bool Exists => Owner != null;
+
+    public ref UseRef Prev => ref Def.Prev;
+    public ref UseRef Next => ref Def.Next;
+
+    public ref UseDef Def {
+        get {
+            Assert((uint)Index < (uint)Owner._useDefs.Length);
+            return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(Owner._useDefs), (uint)Index);
+        }
+    }
+
+    public override string ToString() => Owner == null ? "<null>" : $"<{Owner}> at {Index}";
+}
+internal struct UseDef
+{
+    public UseRef Prev, Next;
 }

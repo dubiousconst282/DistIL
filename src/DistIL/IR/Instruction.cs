@@ -10,7 +10,7 @@ public abstract class Instruction : TrackedValue
     public Instruction? Next { get; set; }
 
     internal Value[] _operands;
-    internal Use[] _operandUses;
+    internal UseDef[] _useDefs;
     public ReadOnlySpan<Value> Operands => _operands;
 
     public abstract string InstName { get; }
@@ -28,16 +28,15 @@ public abstract class Instruction : TrackedValue
     protected Instruction()
     {
         _operands = Array.Empty<Value>();
-        _operandUses = Array.Empty<Use>();
+        _useDefs = Array.Empty<UseDef>();
     }
     protected Instruction(params Value[] opers)
     {
         _operands = opers;
-        _operandUses = new Use[opers.Length];
+        _useDefs = new UseDef[opers.Length];
 
         for (int i = 0; i < opers.Length; i++) {
-            _operandUses[i] = new Use() { User = this, OperIdx = i };
-            _operands[i].AddUse(_operandUses[i]);
+            _operands[i].AddUse(this, i);
         }
     }
 
@@ -75,12 +74,12 @@ public abstract class Instruction : TrackedValue
 
     internal void RemoveOperandUses()
     {
-        if (_operandUses == null) return;
+        if (_useDefs == null) return;
 
         for (int i = 0; i < _operands.Length; i++) {
-            _operands[i].RemoveUse(_operandUses[i]);
+            _operands[i].RemoveUse(ref _useDefs[i]);
         }
-        _operandUses = null!;
+        _useDefs = null!;
     }
 
     /// <summary> Replaces operands set to `oldValue` with `oldValue`. </summary>
@@ -90,22 +89,20 @@ public abstract class Instruction : TrackedValue
             if (_operands[i] == oldValue) {
                 _operands[i] = newValue;
 
-                var use = _operandUses[i];
-                oldValue.RemoveUse(use);
-                newValue.AddUse(use);
+                oldValue.RemoveUse(ref _useDefs[i]);
+                newValue.AddUse(this, i);
             }
         }
     }
-    /// <summary> Replaces the operand at `operIndex` with `newOper`. </summary>
-    public void ReplaceOperand(int operIndex, Value newOper)
+    /// <summary> Replaces the operand at `operIndex` with `newValue`. </summary>
+    public void ReplaceOperand(int operIndex, Value newValue)
     {
-        var prevOper = _operands[operIndex];
-        if (newOper != prevOper) {
-            _operands[operIndex] = newOper;
+        var prevValue = _operands[operIndex];
+        if (newValue != prevValue) {
+            _operands[operIndex] = newValue;
 
-            var use = _operandUses[operIndex];
-            prevOper?.RemoveUse(use);
-            newOper.AddUse(use);
+            prevValue?.RemoveUse(ref _useDefs[operIndex]);
+            newValue.AddUse(this, operIndex);
         }
     }
 
@@ -118,10 +115,7 @@ public abstract class Instruction : TrackedValue
     {
         int oldLen = _operands.Length;
         Array.Resize(ref _operands, oldLen + amount);
-        Array.Resize(ref _operandUses, oldLen + amount);
-        for (int i = oldLen; i < oldLen + amount; i++) {
-            _operandUses[i] = new Use() { User = this, OperIdx = i };
-        }
+        Array.Resize(ref _useDefs, oldLen + amount);
         return oldLen;
     }
     /// <summary> Removes operands in the specified range. </summary>
@@ -129,26 +123,28 @@ public abstract class Instruction : TrackedValue
     {
         Assert(startIndex >= 0 && startIndex + count <= _operands.Length);
 
-        var newOpers = new Value[_operands.Length - count];
-        var newUses = new Use[newOpers.Length];
+        var oldOpers = _operands;
+        var oldUses = _useDefs;
+
+        //Remove uses from middle and postfix (we'll relocate it later)
+        for (int i = startIndex; i < oldOpers.Length; i++) {
+            oldOpers[i].RemoveUse(ref oldUses[i]);
+        }
+
+        var newOpers = _operands = new Value[oldOpers.Length - count];
+        var newUses = _useDefs = new UseDef[newOpers.Length];
+
         //Copy prefix
         for (int i = 0; i < startIndex; i++) {
-            newOpers[i] = _operands[i];
-            newUses[i] = _operandUses[i];
-        }
-        //Drop middle
-        for (int i = startIndex; i < startIndex + count; i++) {
-            _operands[i].RemoveUse(_operandUses[i]);
+            newOpers[i] = oldOpers[i];
+            newUses[i] = oldUses[i];
         }
         //Shift postfix
-        for (int i = startIndex + count; i < _operands.Length; i++) {
+        for (int i = startIndex + count; i < oldOpers.Length; i++) {
             int j = i - count;
-            newOpers[j] = _operands[i];
-            newUses[j] = _operandUses[i];
-            newUses[j].OperIdx = j;
+            newOpers[j] = oldOpers[i];
+            oldOpers[i].AddUse(this, j); //Relocate use
         }
-        _operands = newOpers;
-        _operandUses = newUses;
     }
 
     public abstract void Accept(InstVisitor visitor);

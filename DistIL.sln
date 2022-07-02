@@ -3,9 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.31515.178
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistIL", "src/DistIL/DistIL.csproj", "{AACE5112-E6D4-494A-975A-662309F0936B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistIL", "src\DistIL\DistIL.csproj", "{AACE5112-E6D4-494A-975A-662309F0936B}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistIL.Tests", "src/DistIL.Tests/DistIL.Tests.csproj", "{38A8415B-D6E3-4953-9A9C-FD407B808922}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistIL.Tests", "src\DistIL.Tests\DistIL.Tests.csproj", "{38A8415B-D6E3-4953-9A9C-FD407B808922}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DistIL.Playground", "src\DistIL.Playground\DistIL.Playground.csproj", "{F962BBCC-78B5-4BF7-A142-64A27F353315}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,10 @@ Global
 		{38A8415B-D6E3-4953-9A9C-FD407B808922}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{38A8415B-D6E3-4953-9A9C-FD407B808922}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{38A8415B-D6E3-4953-9A9C-FD407B808922}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F962BBCC-78B5-4BF7-A142-64A27F353315}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F962BBCC-78B5-4BF7-A142-64A27F353315}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F962BBCC-78B5-4BF7-A142-64A27F353315}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F962BBCC-78B5-4BF7-A142-64A27F353315}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

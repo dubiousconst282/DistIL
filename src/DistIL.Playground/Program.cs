@@ -1,4 +1,4 @@
-using DistIL.AsmIO;
+﻿using DistIL.AsmIO;
 using DistIL.Frontend;
 using DistIL.IR.Utils;
 using DistIL.CodeGen.Cil;
@@ -12,7 +12,7 @@ mp1.Add(new SimplifyCFG());
 mp1.Add(new SsaTransform2());
 
 var mp2 = new MethodPassManager();
-mp2.Add(new LinqExpansion());
+mp2.Add(new ExpandLinq());
 mp2.Add(new SimplifyInsts());
 mp2.Add(new InlineMethods());
 mp2.Add(new ConstFold());

@@ -114,7 +114,7 @@ public class BasicBlockTests
 
         Assert.Equal(inst4, newBlock.First);
         Assert.Equal(inst4, newBlock.Last);
-        Assert.Equal(inst4.Prev, null);
+        Assert.Null(inst4.Prev);
     }
 
     [Fact]

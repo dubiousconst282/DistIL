@@ -52,7 +52,7 @@ public class RefSetTests
             }
             Assert.Equal(tmp.Count, set.Count);
             tmp.SymmetricExceptWith(slice);
-            Assert.Equal(tmp.Count, 0);
+            Assert.Empty(tmp);
         }
     }
 

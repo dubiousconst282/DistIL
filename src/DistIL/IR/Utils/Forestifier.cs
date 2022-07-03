@@ -106,7 +106,7 @@ public class Forestifier
         private bool IsImmutable(Value oper)
         {
             //Instructions with more than two uses always have a immutable variable for its entire live range
-            return oper is Const or Instruction { NumUses: >= 2 };
+            return oper is Const or Argument or Instruction { NumUses: >= 2 };
         }
     }
 }

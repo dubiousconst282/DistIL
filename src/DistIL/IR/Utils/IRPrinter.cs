@@ -140,28 +140,28 @@ public class IRPrinter
     }
     public static void ExportForest(MethodBody method, TextWriter tw)
     {
-        var sb = new StringBuilder();
-        var slotTracker = method.GetSlotTracker();
+        var pc = new PrintContext(tw, method.GetSymbolTable());
         var forest = new Forestifier(method);
 
         foreach (var block in method) {
-            tw.Write($"{block}:\n");
+            tw.Write($"{block}:");
+            pc.Push();
 
+            int i = 0;
             foreach (var inst in block) {
                 if (!forest.IsRootedTree(inst)) continue;
 
+                if (i++ > 0) pc.PrintLine();
+
                 if (inst.HasResult) {
-                    sb.Append($"  {inst.ResultType} $expr_");
-                    inst.PrintAsOperand(sb, slotTracker);
-                    sb.Append(" = ");
-                } else {
-                    sb.Append("  ");
+                    inst.ResultType.Print(pc);
+                    pc.Print(" ");
+                    inst.PrintAsOperand(pc);
+                    pc.Print(" = ");
                 }
                 PrintExpr(inst, 0);
-
-                tw.WriteLine(sb);
-                sb.Clear();
             }
+            pc.Pop();
         }
 
         void PrintExpr(Value val, int depth)
@@ -169,24 +169,23 @@ public class IRPrinter
             if (val is Instruction inst) {
                 PrintExpr_I(inst, depth);
             } else {
-                val.PrintAsOperand(sb, slotTracker);
+                val.PrintAsOperand(pc);
             }
         }
         void PrintExpr_I(Instruction inst, int depth)
         {
             if (depth > 0 && forest.IsRootedTree(inst)) {
-                sb.Append("$expr_");
-                inst.PrintAsOperand(sb, slotTracker);
+                inst.PrintAsOperand(pc);
                 return;
             }
-            if (depth > 0) sb.Append("(");
-            sb.Append(inst.InstName);
+            if (depth > 0) pc.Print("(");
+            pc.Print(inst.InstName);
             int operIdx = 0;
             foreach (var oper in inst.Operands) {
-                sb.Append(operIdx++ > 0 ? ", " : " ");
+                pc.Print(operIdx++ > 0 ? ", " : " ");
                 PrintExpr(oper, depth + 1);
             }
-            if (depth > 0) sb.Append(")");
+            if (depth > 0) pc.Print(")");
         }
     }
 }

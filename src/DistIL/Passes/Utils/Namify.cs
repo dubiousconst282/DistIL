@@ -13,7 +13,7 @@ public class NamifyIR : MethodPass
 
     public static void Run(MethodBody body)
     {
-        var symTable = body.GetSlotTracker();
+        var symTable = body.GetSymbolTable();
         int blockId = 0;
         int instId = 0;
 

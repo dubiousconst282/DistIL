@@ -1,5 +1,6 @@
 namespace DistIL.IR;
 
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -9,15 +10,15 @@ public abstract class Value
     /// <summary> Whether this value's result type is not void. </summary>
     public bool HasResult => ResultType.Kind != TypeKind.Void;
 
-    public abstract void Print(StringBuilder sb, SlotTracker slotTracker);
-    public virtual void PrintAsOperand(StringBuilder sb, SlotTracker slotTracker) => Print(sb, slotTracker);
-    protected virtual SlotTracker GetDefaultSlotTracker() => new();
+    public abstract void Print(PrintContext ctx);
+    public virtual void PrintAsOperand(PrintContext ctx) => Print(ctx);
+    protected virtual SymbolTable GetDefaultSymbolTable() => new();
 
     public override string ToString()
     {
-        var sb = new StringBuilder();
-        Print(sb, GetDefaultSlotTracker());
-        return sb.ToString();
+        var sw = new StringWriter();
+        Print(new PrintContext(sw, GetDefaultSymbolTable()));
+        return sw.ToString();
     }
 
     internal virtual void AddUse(Instruction user, int operIdx) { }

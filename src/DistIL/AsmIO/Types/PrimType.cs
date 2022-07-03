@@ -50,12 +50,12 @@ public class PrimType : TypeDesc
 
     public TypeDef GetDefinition(ModuleDef module) => module.SysTypes.GetPrimitiveDef(Kind);
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)
+    public override void Print(PrintContext ctx, bool includeNs = true)
     {
         if (Alias != null) {
-            sb.Append(Alias);
+            ctx.Print(Alias, PrintToner.Keyword);
         } else {
-            base.Print(sb, slotTracker, includeNs);
+            base.Print(ctx, includeNs);
         }
     }
 

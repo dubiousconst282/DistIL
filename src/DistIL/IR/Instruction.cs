@@ -149,36 +149,36 @@ public abstract class Instruction : TrackedValue
 
     public abstract void Accept(InstVisitor visitor);
 
-    public override void PrintAsOperand(StringBuilder sb, SlotTracker slotTracker)
+    public override void PrintAsOperand(PrintContext ctx)
     {
-        sb.Append(slotTracker.GetName(this));
+        ctx.Print(ctx.SymTable.GetName(this), PrintToner.VarName);
     }
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
-        PrintPrefix(sb, slotTracker);
-        PrintOperands(sb, slotTracker);
+        PrintPrefix(ctx);
+        PrintOperands(ctx);
     }
     /// <summary> Prints the result variable and instruction name: [resultType operandName = ] instName </summary>
-    protected virtual void PrintPrefix(StringBuilder sb, SlotTracker slotTracker)
+    protected virtual void PrintPrefix(PrintContext ctx)
     {
         if (HasResult) {
-            ResultType.Print(sb, slotTracker, false);
-            sb.Append(" ");
-            PrintAsOperand(sb, slotTracker);
-            sb.Append(" = ");
+            ResultType.Print(ctx, includeNs: false);
+            ctx.Print(" ");
+            PrintAsOperand(ctx);
+            ctx.Print(" = ");
         }
-        sb.Append(InstName);
+        ctx.Print(InstName, PrintToner.InstName);
     }
     /// <summary> Prints the instruction operands. </summary>
-    protected virtual void PrintOperands(StringBuilder sb, SlotTracker slotTracker)
+    protected virtual void PrintOperands(PrintContext ctx)
     {
         for (int i = 0; i < _operands.Length; i++) {
-            sb.Append(i == 0 ? " " : ", ");
-            _operands[i].PrintAsOperand(sb, slotTracker);
+            ctx.Print(i == 0 ? " " : ", ");
+            _operands[i].PrintAsOperand(ctx);
         }
     }
-    protected override SlotTracker GetDefaultSlotTracker()
+    protected override SymbolTable GetDefaultSymbolTable()
     {
-        return Block?.Method.GetSlotTracker() ?? base.GetDefaultSlotTracker();
+        return Block?.Method.GetSymbolTable() ?? base.GetDefaultSymbolTable();
     }
 }

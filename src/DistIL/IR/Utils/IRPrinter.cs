@@ -1,6 +1,7 @@
 namespace DistIL.IR.Utils;
 
 using System.IO;
+using System.Text.RegularExpressions;
 
 public class IRPrinter
 {
@@ -12,35 +13,29 @@ public class IRPrinter
     /// <summary> Renders the method's CFG into a dot to the specified TextWriter. </summary>
     public static void ExportDot(MethodBody method, TextWriter tw)
     {
-        var instSb = new StringBuilder();
-        var slotTracker = method.GetSlotTracker();
-
-        //var domTree = new DominatorTree(method);
-        //var postDomTree = new DominatorTree(method, true);
+        var pc = new GraphvizPrintContext(tw, method.GetSymbolTable());
 
         tw.WriteLine("digraph {");
-        tw.WriteLine("  node[shape=plaintext fontname=consolas fontsize=12]");
+        tw.WriteLine("  node[shape=plaintext fontname=consolas fontsize=12 fontcolor=\"#D4D4D4\"]");
         tw.WriteLine("  edge[fontname=consolas fontsize=10]");
+        tw.WriteLine("  bgcolor=\"#303031\"");
 
         foreach (var block in method) {
             tw.Write($"  {block}[label=<\n");
-            tw.Write("    <table border='0' cellborder='1' cellspacing='0' cellpadding='4'>\n");
+            tw.Write("    <table border='0' cellborder='1' cellspacing='0' cellpadding='4' bgcolor='#1E1E1E'>\n");
             tw.Write("      <tr><td colspan='2' balign='left'>\n");
 
-            tw.Write($"{block}: {(block == method.EntryBlock ? "//entry" : "")} <br/>\n");
+            tw.Write($"{block}:\n");
             int i = 0;
+
+            pc.Push();
             foreach (var inst in block) {
-                if (i++ != 0) tw.Write(" <br/>\n");
-                tw.Write("  ");
-                inst.Print(instSb, slotTracker);
-                instSb.Replace("&", "&amp;");
-                instSb.Replace("<", "&lt;");
-                instSb.Replace(">", "&gt;");
-                instSb.Replace("\n", "<br/>\n  ");
-                tw.Write(instSb);
-                instSb.Clear();
+                if (i++ != 0) pc.PrintLine();
+                inst.Print(pc);
             }
-            tw.Write("\n      </td></tr>\n");
+            pc.Pop();
+
+            tw.Write("</td></tr>\n");
             if (block.Last is BranchInst { IsConditional: true }) {
                 tw.Write("      <tr> <td port='T'>T</td> <td port='F'>F</td> </tr>\n");
             }
@@ -65,19 +60,6 @@ public class IRPrinter
                 }
                 tw.Write($"  {block}:{port} -> {succ}{style}\n");
             }
-
-            //var dom = domTree.IDom(block);
-            //var postDom = postDomTree.IDom(block);
-
-            //if (dom != null) {
-            //    tw.Write($"  {block}:nw -> {dom}[style=dashed color=red]\n");
-            //}
-            //if (postDom != null) {
-            //    tw.Write($"  {block}:nw -> {postDom}[style=dashed color=green]\n");
-            //}
-            //foreach (var frontier in block.DomFrontier) {
-            //    tw.Write($"  {block}:se -> {frontier}[style=dashed color=blue]\n");
-            //}
             tw.Write("\n");
         }
         tw.Write("}\n");
@@ -90,42 +72,64 @@ public class IRPrinter
     }
     public static void ExportPlain(MethodBody method, TextWriter tw)
     {
-        var tmpSb = new StringBuilder();
-        var slotTracker = method.GetSlotTracker();
+        var pc = new PrintContext(tw, method.GetSymbolTable());
 
         foreach (var block in method) {
-            tw.Write($"{block}:");
+            pc.Print($"{block}:");
             if (block.Preds.Count > 0) {
-                tmpSb.Append("preds: ").AppendJoin(" ", block.Preds);
-            } else if (block == method.EntryBlock) {
-                tmpSb.Append("entry");
+                pc.Print($" //preds: {string.Join(" ", block.Preds)}");
             }
+            pc.Push();
 
-            foreach (var user in block.Users()) {
-                if (user is GuardInst tryInst) {
-                    tmpSb.Append(block == tryInst.FilterBlock ? " filter <- " : $" {tryInst.Kind.ToString().ToLower()} <- ");
-                    user.PrintAsOperand(tmpSb, slotTracker);
-                }
-            }
-
-            if (tmpSb.Length > 0) {
-                tw.Write(" //");
-                if (tmpSb[0] == ' ') {
-                    tmpSb.Remove(0, 1);
-                }
-                tw.Write(tmpSb);
-                tmpSb.Clear();
-            }
-            tw.WriteLine();
-
+            int i = 0;
             foreach (var inst in block) {
-                tw.Write("  ");
-                inst.Print(tmpSb, slotTracker);
-                tmpSb.Replace("\n", "\n  ");
-
-                tw.WriteLine(tmpSb);
-                tmpSb.Clear();
+                if (i++ > 0) pc.PrintLine();
+                inst.Print(pc);
             }
+            pc.Pop();
         }
+    }
+
+    class GraphvizPrintContext : PrintContext
+    {
+        public GraphvizPrintContext(TextWriter output, SymbolTable symTable) 
+            : base(output, symTable)
+        {
+        }
+
+        public override void Print(string str, PrintToner toner = PrintToner.Default)
+        {
+            str = Regex.Replace(str, @"[&<>\n]| [^a-zA-Z_]", m => {
+                return m.ValueSpan switch {
+                    "&" => "&amp;",
+                    "<" => "&lt;",
+                    ">" => "&gt;",
+                    "\n" => "<br/>\n",
+                    [' ', char c] => $"<b> </b>{c}", //graphviz is buggy and won't render spaces between font tags correctly
+                    _ => m.Value
+                };
+            });
+
+            string? color = null;
+            if (toner != PrintToner.Default && _colors.TryGetValue(toner, out color)) {
+                Output.Write($"<font color=\"{color}\">");
+            }
+            Output.Write(str);
+            
+            if (color != null) Output.Write("</font>");
+        }
+
+        static readonly Dictionary<PrintToner, string> _colors = new() {
+            //VSCode Dark+ palette
+            { PrintToner.Keyword,   "#569cd6" },
+            { PrintToner.Comment,   "#6a9955" },
+            { PrintToner.VarName,   "#9cdcfe" },
+            { PrintToner.InstName,  "#c586c0" },
+            { PrintToner.TypeName,  "#4ec9b0" },
+            { PrintToner.MemberName,"#4fc1ff" },
+            { PrintToner.MethodName,"#dcdcaa" },
+            { PrintToner.String,    "#ce9178" },
+            { PrintToner.Number,    "#b5cea8" },
+        };
     }
 }

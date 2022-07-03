@@ -29,9 +29,9 @@ public class ConstNull : Const
 
     public static ConstNull Create() => new() { ResultType = PrimType.Object };
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
-        sb.Append("null");
+        ctx.Print("null", PrintToner.Keyword);
     }
 
     public override bool Equals(Const? other) => other is ConstNull;
@@ -46,11 +46,9 @@ public class ConstString : Const
 
     public static ConstString Create(string value) => new() { ResultType = PrimType.String, Value = value };
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
-        sb.Append('"');
-        sb.Append(Value.Replace("\"", "\\\""));
-        sb.Append('"');
+        ctx.Print($"\"{Value.Replace("\"", "\\\"")}\"", PrintToner.String);
     }
 
     public override bool Equals(Const? other) => other is ConstString o && o.Value == Value;
@@ -69,8 +67,9 @@ public class Undef : Value
         ResultType = type;
     }
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
-        sb.Append($"undef({ResultType})");
+        ctx.Print("undef", PrintToner.Keyword);
+        ctx.Print($"({ResultType})");
     }
 }

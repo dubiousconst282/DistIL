@@ -50,10 +50,11 @@ public class FuncPtrType : TypeDesc
         HasExplicitThis = header.HasExplicitThis;
     }
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)
+    public override void Print(PrintContext ctx, bool includeNs = true)
     {
-        sb.Append($"delegate* {CallConv.ToString().ToLower()}");
-        sb.AppendSequence("<", ">", ArgTypes, p => p.Print(sb, slotTracker, includeNs));
+        ctx.Print($"delegate* ", PrintToner.Keyword);
+        ctx.Print(CallConv.ToString().ToLower());
+        ctx.PrintSequence("<", ">", ArgTypes, p => p.Print(ctx, includeNs));
     }
 
     public override bool Equals(TypeDesc? other)

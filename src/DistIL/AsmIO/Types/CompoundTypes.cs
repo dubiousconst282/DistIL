@@ -30,10 +30,10 @@ public abstract class CompoundType : TypeDesc
     }
     protected abstract CompoundType New(TypeDesc elemType);
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)
+    public override void Print(PrintContext ctx, bool includeNs = true)
     {
-        ElemType.Print(sb, slotTracker, includeNs);
-        sb.Append(Postfix);
+        ElemType.Print(ctx, includeNs);
+        ctx.Print(Postfix);
     }
 
     public override int GetHashCode() => HashCode.Combine(Kind, ElemType);

@@ -83,18 +83,16 @@ public class PhiInst : Instruction
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
-    protected override void PrintOperands(StringBuilder sb, SlotTracker slotTracker)
+    protected override void PrintOperands(PrintContext ctx)
     {
         for (int i = 0; i < NumArgs; i++) {
             var (block, value) = GetArg(i);
 
-            sb.Append(i == 0 ? " " : ", ");
-
-            sb.Append("[");
-            block.PrintAsOperand(sb, slotTracker);
-            sb.Append(" -> ");
-            value.PrintAsOperand(sb, slotTracker);
-            sb.Append("]");
+            ctx.Print(i == 0 ? " [" : ", [");
+            block.PrintAsOperand(ctx);
+            ctx.Print(" -> ");
+            value.PrintAsOperand(ctx);
+            ctx.Print("]");
         }
     }
 

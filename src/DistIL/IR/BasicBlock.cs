@@ -244,13 +244,13 @@ public class BasicBlock : TrackedValue
         Method.RemoveBlock(this);
     }
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
-        sb.Append(slotTracker.GetName(this));
+        ctx.Print(ctx.SymTable.GetName(this));
     }
-    protected override SlotTracker GetDefaultSlotTracker()
+    protected override SymbolTable GetDefaultSymbolTable()
     {
-        return Method.GetSlotTracker();
+        return Method.GetSymbolTable();
     }
 
     public IEnumerator<Instruction> GetEnumerator()

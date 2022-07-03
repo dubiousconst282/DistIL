@@ -33,31 +33,32 @@ public class CallInst : Instruction
     
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
-    protected override void PrintOperands(StringBuilder sb, SlotTracker slotTracker)
-        => PrintOperands(sb, slotTracker, Method, Args);
+    protected override void PrintOperands(PrintContext ctx)
+        => PrintOperands(ctx, Method, Args);
 
-    internal static void PrintOperands(StringBuilder sb, SlotTracker slotTracker, MethodDesc method, ReadOnlySpan<Value> args, bool isCtor = false)
+    internal static void PrintOperands(PrintContext ctx, MethodDesc method, ReadOnlySpan<Value> args, bool isCtor = false)
     {
-        sb.Append(" ");
-        method.DeclaringType.Print(sb, slotTracker, false);
-        sb.Append($"::{method.Name}");
+        ctx.Print(" ");
+        method.DeclaringType.Print(ctx, includeNs: false);
+        ctx.Print("::");
+        ctx.Print(method.Name, PrintToner.MethodName);
         if (method is MethodSpec { GenericParams.Length: > 0 }) {
-            sb.AppendSequence("<", ">", method.GenericParams, p => p.Print(sb, slotTracker, false));
+            ctx.PrintSequence("<", ">", method.GenericParams, p => p.Print(ctx, false));
         }
-        sb.Append("(");
+        ctx.Print("(");
         for (int i = 0; i < args.Length; i++) {
-            if (i != 0) sb.Append(", ");
+            if (i != 0) ctx.Print(", ");
 
             if (i == 0 && method.IsInstance && !isCtor) {
-                sb.Append("this: ");
+                ctx.Print("this", PrintToner.Keyword);
             } else {
                 var paramType = method.Params[i + (isCtor ? 1 : 0)].Type;
-                paramType.Print(sb, slotTracker, false);
-                sb.Append(": ");
+                paramType.Print(ctx, false);
             }
-            args[i].PrintAsOperand(sb, slotTracker);
+            ctx.Print(": ");
+            args[i].PrintAsOperand(ctx);
         }
-        sb.Append(")");
+        ctx.Print(")");
     }
 }
 
@@ -85,8 +86,8 @@ public class NewObjInst : Instruction
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
-    protected override void PrintOperands(StringBuilder sb, SlotTracker slotTracker)
-        => CallInst.PrintOperands(sb, slotTracker, Constructor, Args, true);
+    protected override void PrintOperands(PrintContext ctx)
+        => CallInst.PrintOperands(ctx, Constructor, Args, true);
 }
 
 public class FuncAddrInst : Instruction

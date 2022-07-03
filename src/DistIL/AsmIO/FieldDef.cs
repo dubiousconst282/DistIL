@@ -2,7 +2,6 @@ namespace DistIL.AsmIO;
 
 using System.Reflection;
 using System.Reflection.Metadata;
-using System.Text;
 
 using DistIL.IR;
 
@@ -15,9 +14,17 @@ public abstract class FieldDesc : MemberDesc
     public bool IsStatic => (Attribs & FieldAttributes.Static) != 0;
     public bool IsInstance => !IsStatic;
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
-        sb.Append($"{Type} {DeclaringType}::{Name}");
+        Type.Print(ctx, includeNs: false);
+        ctx.Print(" ");
+        PrintAsOperand(ctx);
+    }
+    public override void PrintAsOperand(PrintContext ctx)
+    {
+        DeclaringType.Print(ctx, includeNs: false);
+        ctx.Print("::");
+        ctx.Print(Name, PrintToner.MemberName);
     }
 }
 public abstract class FieldDefOrSpec : FieldDesc, ModuleEntity

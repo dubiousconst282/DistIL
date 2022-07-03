@@ -22,16 +22,15 @@ public class Variable : TrackedValue
         IsPinned = isPinned;
     }
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
-        sb.Append("$");
-        sb.Append(Name ?? slotTracker.GetName(this));
+        ctx.Print("$" + (Name ?? ctx.SymTable.GetName(this)), PrintToner.VarName);
     }
 
-    protected override SlotTracker GetDefaultSlotTracker()
+    protected override SymbolTable GetDefaultSymbolTable()
     {
         var parentMethod = GetFirstUser()?.Block?.Method;
-        return parentMethod?.GetSlotTracker() ?? base.GetDefaultSlotTracker();
+        return parentMethod?.GetSymbolTable() ?? base.GetDefaultSymbolTable();
     }
 }
 
@@ -49,9 +48,8 @@ public class Argument : Variable
         Index = index;
     }
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
-        sb.Append("#");
-        sb.Append(Name ?? $"arg{Index}");
+        ctx.Print("#" + (Name ?? $"arg{Index}"), PrintToner.VarName);
     }
 }

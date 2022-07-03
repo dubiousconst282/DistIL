@@ -23,12 +23,13 @@ public class ConstFloat : Const
         return new ConstFloat() { ResultType = type, Value = value };
     }
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
         string str = Value.ToString(CultureInfo.InvariantCulture);
-        sb.Append(str);
-        if (!str.Contains('.')) sb.Append(".0");
-        if (IsSingle) sb.Append("f");
+        if (!str.Contains('.')) str += ".0";
+        if (IsSingle) str += "f";
+
+        ctx.Print(str, PrintToner.Number);
     }
 
     public override bool Equals(Const? other) => other is ConstFloat o && o.Value.Equals(Value) && o.ResultType == ResultType;

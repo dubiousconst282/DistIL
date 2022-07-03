@@ -26,10 +26,10 @@ public class ConvertInst : Instruction
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
-        base.Print(sb, slotTracker);
-        sb.Append(" -> ");
-        ResultType.Print(sb, slotTracker);
+        base.Print(ctx);
+        ctx.Print(" -> ");
+        ResultType.Print(ctx);
     }
 }

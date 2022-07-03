@@ -23,22 +23,25 @@ public class IntrinsicInst : Instruction
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
         if (Id == IntrinsicId.Marker && Operands is [ConstString str]) {
-            sb.Append("//" + str.Value);
+            ctx.Print("//" + str.Value, PrintToner.Comment);
         } else {
-            base.Print(sb, slotTracker);
+            base.Print(ctx);
         }
     }
 
-    protected override void PrintOperands(StringBuilder sb, SlotTracker slotTracker)
+    protected override void PrintOperands(PrintContext ctx)
     {
-        sb.Append($" {Id}");
-        int pos = sb.Length;
-        base.PrintOperands(sb, slotTracker);
-        sb[pos] = '('; //PrintOperands will prepend a space
-        sb.Append(")");
+        ctx.Print(" ");
+        ctx.Print(Id.ToString(), PrintToner.MethodName);
+        ctx.Print("(");
+        for (int i = 0; i < _operands.Length; i++) {
+            if (i > 0) ctx.Print(", ");
+            _operands[i].PrintAsOperand(ctx);
+        }
+        ctx.Print(")");
     }
 }
 

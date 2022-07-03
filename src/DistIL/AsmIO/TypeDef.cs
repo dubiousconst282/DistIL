@@ -142,14 +142,14 @@ public class TypeDef : TypeDefOrSpec
         return null;
     }
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)
+    public override void Print(PrintContext ctx, bool includeNs = true)
     {
         if (DeclaringType != null) {
-            DeclaringType.Print(sb, slotTracker, includeNs);
-            sb.Append("+");
-            sb.Append(Name);
+            DeclaringType.Print(ctx, includeNs);
+            ctx.Print("+");
+            ctx.Print(Name, PrintToner.TypeName);
         } else {
-            base.Print(sb, slotTracker, includeNs);
+            base.Print(ctx, includeNs);
         }
     }
 }
@@ -203,10 +203,10 @@ public class TypeSpec : TypeDefOrSpec
         return new TypeSpec(Definition, genArgs);
     }
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)
+    public override void Print(PrintContext ctx, bool includeNs = true)
     {
-        base.Print(sb, slotTracker, includeNs);
-        sb.AppendSequence("[", "]", GenericParams, v => v.Print(sb, slotTracker));
+        base.Print(ctx, includeNs);
+        ctx.PrintSequence("[", "]", GenericParams, v => v.Print(ctx, includeNs));
     }
 
     public override bool Equals(TypeDesc? other)

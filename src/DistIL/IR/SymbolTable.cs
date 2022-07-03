@@ -1,7 +1,7 @@
 namespace DistIL.IR;
 
 /// <summary> Tracks and provides names for values defined/used in a method. </summary>
-public class SlotTracker
+public class SymbolTable
 {
     Dictionary<TrackedValue, int> _slots = new();
     Dictionary<TrackedValue, string> _names = new();
@@ -84,13 +84,13 @@ public static class SlotTrackerEx
     /// <summary> Sets the instruction name on its parent method slot tracker. </summary>
     public static TInst SetName<TInst>(this TInst inst, string name) where TInst : Instruction
     {
-        inst.Block.Method.GetSlotTracker().SetName(inst, name);
+        inst.Block.Method.GetSymbolTable().SetName(inst, name);
         return inst;
     }
     /// <summary> Sets the block name on its parent method slot tracker. </summary>
     public static BasicBlock SetName(this BasicBlock block, string name)
     {
-        block.Method.GetSlotTracker().SetName(block, name);
+        block.Method.GetSymbolTable().SetName(block, name);
         return block;
     }
 }

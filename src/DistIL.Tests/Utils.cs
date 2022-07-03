@@ -19,5 +19,5 @@ class DummyValue : TrackedValue
         Id = id;
         ResultType = PrimType.Int32;
     }
-    public override void Print(StringBuilder sb, SlotTracker slotTracker) => sb.Append(Id);
+    public override void Print(PrintContext ctx) => ctx.Print(Id.ToString());
 }

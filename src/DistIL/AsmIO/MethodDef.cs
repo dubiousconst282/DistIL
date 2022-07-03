@@ -23,13 +23,18 @@ public abstract class MethodDesc : MemberDesc
     public ImmutableArray<ParamDef> Params { get; protected set; }
     public ReadOnlySpan<ParamDef> StaticParams => Params.AsSpan().Slice(IsStatic ? 0 : 1);
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
-        sb.Append($"{(IsStatic ? "static " : "")}{ReturnType} {DeclaringType}::{Name}");
+        if (IsStatic) ctx.Print("static ", PrintToner.Keyword);
+        ReturnType.Print(ctx, includeNs: false);
+        ctx.Print(" ");
+        DeclaringType.Print(ctx, includeNs: false);
+        ctx.Print("::");
+        ctx.Print(Name, PrintToner.MethodName);
         if (IsGeneric) {
-            sb.AppendSequence("<", ">", GenericParams, p => p.Print(sb, slotTracker));
+            ctx.PrintSequence("<", ">", GenericParams, p => p.Print(ctx));
         }
-        sb.AppendSequence("(", ")", Params, p => p.Type.Print(sb, slotTracker));
+        ctx.PrintSequence("(", ")", Params, p => p.Type.Print(ctx));
     }
 }
 public class ParamDef

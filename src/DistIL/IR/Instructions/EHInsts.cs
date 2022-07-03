@@ -40,15 +40,16 @@ public class GuardInst : Instruction
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
-    protected override void PrintOperands(StringBuilder sb, SlotTracker slotTracker)
+    protected override void PrintOperands(PrintContext ctx)
     {
-        sb.Append($" {Kind.ToString().ToLower()} -> ");
+        ctx.Print($" {Kind.ToString().ToLower()}", PrintToner.InstName);
+        ctx.Print(" -> ");
         if (HasFilter) {
-            sb.Append(" filter ");
-            FilterBlock.PrintAsOperand(sb, slotTracker);
-            sb.Append(" -> ");
+            ctx.Print(" filter ", PrintToner.InstName);
+            FilterBlock.Print(ctx);
+            ctx.Print(" -> ");
         }
-        HandlerBlock.PrintAsOperand(sb, slotTracker);
+        HandlerBlock.Print(ctx);
     }
 }
 public enum GuardKind

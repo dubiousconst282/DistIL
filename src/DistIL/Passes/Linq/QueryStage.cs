@@ -38,20 +38,7 @@ public abstract class QueryStage
         return stage;
     }
 
-    public override string ToString()
-    {
-        var sb = new StringBuilder();
-        var slotTracker = Call.Block.Method.GetSlotTracker();
-
-        sb.Append(GetType().Name.Replace("Stage", "("));
-        int i = 0;
-        foreach (var arg in Call.Args) {
-            if (i++ != 0) sb.Append(", ");
-            arg.PrintAsOperand(sb, slotTracker);
-        }
-        sb.Append(")");
-        return sb.ToString();
-    }
+    public override string ToString() => GetType().Name.Replace("Stage", "");
 }
 public abstract class ReductionStage : QueryStage
 {

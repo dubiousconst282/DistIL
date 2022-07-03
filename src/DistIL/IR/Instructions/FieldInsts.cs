@@ -26,15 +26,14 @@ public abstract class FieldAccessInst : Instruction
     {
     }
 
-    protected override void PrintOperands(StringBuilder sb, SlotTracker slotTracker)
+    protected override void PrintOperands(PrintContext ctx)
     {
-        sb.Append(" ");
-        Field.DeclaringType.Print(sb, slotTracker, false);
-        sb.Append($"::{Field.Name}");
+        ctx.Print(" ");
+        Field.PrintAsOperand(ctx);
 
         foreach (var oper in Operands[1..]) {
-            sb.Append(", ");
-            oper.PrintAsOperand(sb, slotTracker);
+            ctx.Print(", ");
+            oper.PrintAsOperand(ctx);
         }
     }
 }

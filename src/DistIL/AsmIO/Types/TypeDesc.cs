@@ -73,23 +73,24 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
         return false;
     }
 
-    public sealed override void Print(StringBuilder sb, SlotTracker slotTracker)
-        => Print(sb, slotTracker);
+    public sealed override void Print(PrintContext ctx)
+        => Print(ctx);
 
-    public virtual void Print(StringBuilder sb, SlotTracker slotTracker, bool includeNs = true)
+    public virtual void Print(PrintContext ctx, bool includeNs = true)
     {
         var ns = Namespace;
         if (ns != null && includeNs) {
-            sb.Append(ns);
-            sb.Append(".");
+            ctx.Print(ns, PrintToner.TypeName);
+            ctx.Print(".");
         }
-        sb.Append(Name);
+        ctx.Print(Name, PrintToner.TypeName);
     }
-    public override void PrintAsOperand(StringBuilder sb, SlotTracker slotTracker)
+    public override void PrintAsOperand(PrintContext ctx)
     {
-        sb.Append("typeof(");
-        Print(sb, slotTracker);
-        sb.Append(")");
+        ctx.Print("typeof", PrintToner.Keyword);
+        ctx.Print("(");
+        Print(ctx, false);
+        ctx.Print(")");
     }
 
     public abstract bool Equals(TypeDesc? other);

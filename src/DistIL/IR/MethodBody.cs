@@ -5,8 +5,8 @@ using DistIL.AsmIO;
 public class MethodBody
 {
     public MethodDef Definition { get; }
-    private SlotTracker? _slotTracker = null;
-    private bool _slotsDirty = true;
+    private SymbolTable? _symTable = null;
+    private bool _symsDirty = true;
 
     public List<Argument> Args { get; }
     /// <summary> Gets a view over `Args` excluding the first argument (`this`) if this is an instance method. </summary>
@@ -63,18 +63,18 @@ public class MethodBody
         return false;
     }
 
-    public SlotTracker GetSlotTracker()
+    public SymbolTable GetSymbolTable()
     {
-        _slotTracker ??= new();
-        if (_slotsDirty) {
-            _slotsDirty = false;
-            _slotTracker.UpdateSlots(this);
+        _symTable ??= new();
+        if (_symsDirty) {
+            _symsDirty = false;
+            _symTable.UpdateSlots(this);
         }
-        return _slotTracker;
+        return _symTable;
     }
     internal void InvalidateSlots()
     {
-        _slotsDirty = true;
+        _symsDirty = true;
     }
     //Called when a block is added/removed, to invalidate cached DFS lists and slots.
     internal void InvalidateBlocks()

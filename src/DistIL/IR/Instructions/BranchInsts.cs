@@ -40,18 +40,18 @@ public class BranchInst : Instruction
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
-        sb.Append("goto ");
+        ctx.Print("goto ", PrintToner.InstName);
 
         if (IsConditional) {
-            Cond.PrintAsOperand(sb, slotTracker);
-            sb.Append(" ? ");
-            Then.PrintAsOperand(sb, slotTracker);
-            sb.Append(" : ");
-            Else.PrintAsOperand(sb, slotTracker);
+            Cond.PrintAsOperand(ctx);
+            ctx.Print(" ? ");
+            Then.PrintAsOperand(ctx);
+            ctx.Print(" : ");
+            Else.PrintAsOperand(ctx);
         } else {
-            Then.PrintAsOperand(sb, slotTracker);
+            Then.PrintAsOperand(ctx);
         }
     }
 }
@@ -93,20 +93,21 @@ public class SwitchInst : Instruction
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
-        sb.Append("switch ");
-        Value.PrintAsOperand(sb, slotTracker);
-        sb.Append(", [\n");
-        sb.Append("  _: ");
-        DefaultTarget.PrintAsOperand(sb, slotTracker);
+        ctx.Print("switch ", PrintToner.InstName);
+        Value.PrintAsOperand(ctx);
+        ctx.Push(", [");
 
+        ctx.Print("_: ");
+        DefaultTarget.PrintAsOperand(ctx);
+        
         for (int i = 0; i < NumTargets; i++) {
-            sb.Append(",\n  ");
-            sb.Append(i + ": ");
-            GetTarget(i).PrintAsOperand(sb, slotTracker);
+            ctx.PrintLine(",");
+            ctx.Print(i + ": ");
+            GetTarget(i).PrintAsOperand(ctx);
         }
-        sb.Append("\n]");
+        ctx.Pop("]");
     }
 }
 

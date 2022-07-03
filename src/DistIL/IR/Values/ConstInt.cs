@@ -55,10 +55,9 @@ public class ConstInt : Const
         Value = _value; //setter will normalize value
     }
 
-    public override void Print(StringBuilder sb, SlotTracker slotTracker)
+    public override void Print(PrintContext ctx)
     {
-        sb.Append(Value);
-        if (IsLong) sb.Append('L');
+        ctx.Print(Value + (IsUnsigned ? "U" : "") + (IsLong ? "L" : ""), PrintToner.Number);
     }
 
     public override bool Equals(Const? other) => other is ConstInt o && o.Value.Equals(Value) && o.ResultType == ResultType;

@@ -47,11 +47,8 @@ public abstract class TrackedValue : Value
 
     internal override void AddUse(Instruction user, int operIdx)
     {
-        Assert(GetType() != typeof(Variable) || user is LoadVarInst or StoreVarInst or VarAddrInst);
-
         var use = new UseRef() { Owner = user, Index = operIdx };
         if (_firstUse.Exists) {
-            //Since we're inserting on the first node, we only need to update the prev link.
             _firstUse.Prev = use;
             use.Next = _firstUse;
         }

@@ -92,8 +92,8 @@ public partial class ILGenerator : InstVisitor
     private void Push(Value value)
     {
         switch (value) {
-            case Argument arg: {
-                EmitVarInst(arg, VarOp.Load);
+            case Variable var: {
+                EmitVarInst(var, VarOp.Load);
                 break;
             }
             case ConstInt cons: {

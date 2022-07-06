@@ -200,6 +200,33 @@ public class BasicBlock : TrackedValue
         return newBlock;
     }
 
+    /// <summary> Insert intermediate blocks between critical predecessor edges. </summary>
+    public void SplitCriticalEdges()
+    {
+        if (Preds.Count < 2) return;
+
+        for (int i = 0; i < Preds.Count; i++) {
+            var pred = Preds[i];
+            if (pred.Succs.Count < 2) continue;
+
+            //Create an intermediate block jumping to this
+            //(can't use SetBranch() because we're looping through the edges)
+            var intermBlock = Method.CreateBlock(insertAfter: pred).SetName("CritEdge");
+            intermBlock.InsertLast(new BranchInst(this));
+            //Create `interm<->block` edge
+            intermBlock.Succs.Add(this);
+            Preds[i] = intermBlock;
+            //Create `pred<->interm` edge
+            pred.Reconnect(this, intermBlock);
+
+            //Redirect branches/phis to the intermediate block
+            pred.Last.ReplaceOperands(this, intermBlock);
+            foreach (var phi in Phis()) {
+                phi.ReplaceOperands(pred, intermBlock);
+            }
+        }
+    }
+
     /// <summary> 
     /// Removes the last branch instruction from the block (if it exists),
     /// then adds `newBranch` (assumming it is a Branch/Switch/Return), and update edges accordingly.

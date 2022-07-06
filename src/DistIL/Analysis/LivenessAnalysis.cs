@@ -1,62 +1,61 @@
 namespace DistIL.Analysis;
 
 using DistIL.IR;
+using InstSet = ValueSet<IR.Instruction>;
 
+/// <summary>
+/// Liveness analysis for SSA definitions. The current implementation is based on the path exploration method.
+/// 
+/// See "Computing Liveness Sets for SSA-Form Programs" (https://hal.inria.fr/inria-00558509v2/document)
+/// and section 7.4 of the SSA book.
+/// </summary>
 public class LivenessAnalysis : IMethodAnalysis
 {
-    readonly Dictionary<Variable, int> _ids = new();
-    readonly Dictionary<BasicBlock, (BitSet LiveOutVars, BitSet GlobalVars, BitSet KilledVars)> _blockInfos;
+    readonly Dictionary<BasicBlock, (InstSet LiveIn, InstSet LiveOut)> _blockData = new();
 
     public LivenessAnalysis(MethodBody method)
     {
-        _blockInfos = new(method.NumBlocks);
+        //Init block sets
+        foreach (var block in method) {
+            _blockData[block] = (new InstSet(), new InstSet());
+        }
 
-        //Collect initial information
-        //By visiting blocks in post order, well get most predecessors first, so the other loop should converge quicker.
-        //(The BCL Dictionary preserves insertion order as long as we don't remove entries)
-        GraphTraversal.DepthFirst(method.EntryBlock, postVisit: block => {
-            //Global variables (aka "upward-exposed") is the set of variables that are used
-            //before any assignment in the block, and killed variables are variables which 
-            //were reassigned in the block.
-            var globalVars = new BitSet();
-            var killedVars = new BitSet();
+        var worklist = new ArrayStack<BasicBlock>();
 
-            foreach (var inst in block) {
-                if (inst is VarAccessInst acc) {
-                    int id = GetId(acc.Var);
+        //Visit all instructions defining a value
+        foreach (var inst in method.Instructions()) {
+            if (!inst.HasResult) continue;
 
-                    if (inst is StoreVarInst store) {
-                        killedVars.Add(id);
-                    } else if (!killedVars.Contains(id)) {
-                        globalVars.Add(id);
+            foreach (var user in inst.Users()) {
+                if (user is PhiInst phi) {
+                    //Enqueue predecessors for source blocks of this phi
+                    foreach (var (pred, val) in phi) {
+                        if (val == inst) {
+                            worklist.Push(pred);
+                            AddLiveOut(pred, inst);
+                            AddLiveIn(user.Block, inst);
+                        }
+                    }
+                } else {
+                    worklist.Push(user.Block);
+                }
+                //Traverse the CFG backwards to propagate liveness
+                while (worklist.TryPop(out var userBlock)) {
+                    if (inst.Block == userBlock) continue; //Reached the defining block
+                    if (!AddLiveIn(userBlock, inst)) continue; //Already propagated
+
+                    foreach (var pred in userBlock.Preds) {
+                        AddLiveOut(pred, inst);
+                        worklist.Push(pred);
                     }
                 }
             }
-            _blockInfos.Add(block, (new BitSet(), globalVars, killedVars));
-        });
-
-        //Compute the dataflow equation until we reach a fixed point
-        //  LiveOut[b] = ∪(s of b.Succs: Globals[s] ∪ (LiveOut[s] ∩ Killed[s]'))
-        bool changed = true;
-        while (changed) {
-            changed = false;
-
-            foreach (var (block, (liveOut, _, _)) in _blockInfos) {
-                foreach (var succ in block.Succs) {
-                    var (succLiveOut, succGlobals, succKilled) = _blockInfos[succ];
-
-                    changed |= liveOut.Union(succGlobals);
-                    changed |= liveOut.UnionDiffs(succLiveOut, succKilled);
-                }
-            }
         }
 
-        int GetId(Variable var)
-        {
-            ref int id = ref _ids.GetOrAddRef(var, out bool exists);
-            if (!exists) id = _ids.Count - 1;
-            return id;
-        }
+        //We could avoid set lookups by keeping the latest added block in _blockData,
+        //but that's not a huge deal.
+        bool AddLiveIn(BasicBlock block, Instruction inst) => _blockData[block].LiveIn.Add(inst);
+        bool AddLiveOut(BasicBlock block, Instruction inst) => _blockData[block].LiveOut.Add(inst);
     }
 
     public static IMethodAnalysis Create(IMethodAnalysisManager mgr)
@@ -64,48 +63,67 @@ public class LivenessAnalysis : IMethodAnalysis
         return new LivenessAnalysis(mgr.Method);
     }
 
-    public VarSet GetLiveOut(BasicBlock block)
-        => new() { _ids = _ids, _vars = _blockInfos.GetValueOrDefault(block).LiveOutVars };
+    /// <summary> Returns the live sets for `block`. </summary>
+    public (InstSet In, InstSet Out) GetLive(BasicBlock block) => _blockData[block];
 
-    public VarSet GetGlobals(BasicBlock block)
-        => new() { _ids = _ids, _vars = _blockInfos.GetValueOrDefault(block).GlobalVars };
+    /// <summary> Checks if `inst` is live at the start of `block`. </summary>
+    public bool IsLiveIn(BasicBlock block, Instruction inst) => _blockData[block].LiveIn.Contains(inst);
 
-    public VarSet GetKills(BasicBlock block)
-        => new() { _ids = _ids, _vars = _blockInfos.GetValueOrDefault(block).KilledVars };
+    /// <summary> Checks if `inst` is live when `block` exits. </summary>
+    public bool IsLiveOut(BasicBlock block, Instruction inst) => _blockData[block].LiveOut.Contains(inst);
+
+    /// <summary> Checks if `def` is live at `pos`. </summary>
+    public bool IsLiveAt(Instruction def, Instruction pos)
+    {
+        var (liveIn, liveOut) = GetLive(pos.Block);
+
+        if (liveOut.Contains(def)) {
+            return true; //`def` is definitely live at `pos` since it's on liveOut
+        }
+        //If `def` is on the same block as `pos`, or if it is live-in,
+        //we need to check if it is used after `pos`
+        if (def.Block == pos.Block || liveIn.Contains(def)) {
+            return IsUsedAfter(def, pos.Next!);
+        }
+        return false;
+    }
+
+    private bool IsUsedAfter(Instruction def, Instruction pos)
+    {
+        //TODO: keep instruction indices and traverse users instead of instructions
+        for (; pos != null; pos = pos.Next!) {
+            if (pos.Operands.ContainsRef(pos)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     public override string ToString()
     {
         var sb = new StringBuilder();
-        foreach (var block in _blockInfos.Keys.Reverse()) {
+        var pc = new PrintContext(new System.IO.StringWriter(sb), _blockData.First().Key.Method.GetSymbolTable());
+
+        foreach (var (block, (liveIn, liveOut)) in _blockData) {
+            if (liveIn.Count + liveOut.Count == 0) continue;
+            
             sb.Append($"{block}:\n");
-            sb.Append($"  LiveOut: {GetLiveOut(block)}\n");
-            sb.Append($"  Globals: {GetGlobals(block)}\n");
-            sb.Append($"  Kills:   {GetKills(block)}\n");
-        }
-        return sb.ToString();
-    }
-}
+            PrintSet("  In: [", liveIn);
+            PrintSet("  Out: [", liveOut);
 
-public struct VarSet
-{
-    internal Dictionary<Variable, int> _ids;
-    internal BitSet? _vars;
+            void PrintSet(string prefix, InstSet set)
+            {
+                if (set.Count == 0) return;
 
-    public readonly bool Contains(Variable var)
-        => _vars != null && _ids.TryGetValue(var, out var id) && _vars.Contains(id);
-
-    public override string ToString()
-    {
-        if (_vars == null) {
-            return "[]";
+                sb.Append(prefix);
+                foreach (var inst in set) {
+                    inst.PrintAsOperand(pc);
+                    sb.Append(", ");
+                }
+                sb.Length -= 2;
+                sb.Append("]\n");
+            }
         }
-        var sb = new StringBuilder("[");
-        foreach (var (var, id) in _ids) {
-            if (!_vars.Contains(id)) continue;
-            if (sb.Length > 1) sb.Append(", ");
-            sb.Append(var);
-        }
-        sb.Append("]");
         return sb.ToString();
     }
 }

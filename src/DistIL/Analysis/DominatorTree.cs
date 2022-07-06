@@ -68,6 +68,14 @@ public class DominatorTree : IMethodAnalysis
         }
     }
 
+    public int GetPreIndex(BasicBlock block)
+    {
+        if (!_hasDfsIndices) {
+            ComputeDfsIndices();
+        }
+        return GetNode(block).PreIndex;
+    }
+
     private Node GetNode(BasicBlock block)
     {
         return _block2node[block];

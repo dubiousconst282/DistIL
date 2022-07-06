@@ -48,6 +48,7 @@ public class IntrinsicInst : Instruction
 public enum IntrinsicId
 {
     Marker,         //nop, used for debugging
+    CopyDef,        //T copy<T>(T value);  Copies an SSA value. Used to split live ranges during out of SSA translation.
 
     NewArray,       //T[] newarr<T[]>(int|nint length)
 

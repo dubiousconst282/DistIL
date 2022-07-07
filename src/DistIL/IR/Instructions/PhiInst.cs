@@ -18,7 +18,7 @@ public class PhiInst : Instruction
         : base(InterleaveArgs(args))
     {
         ResultType = args[0].Value.ResultType;
-        Assert(args.All(a => a.Value.ResultType == ResultType));
+        Assert(args.All(a => a.Value.ResultType.IsStackAssignableTo(ResultType)));
     }
     
     public BasicBlock GetBlock(int index) => (BasicBlock)Operands[index * 2 + 0];

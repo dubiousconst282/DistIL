@@ -47,7 +47,9 @@ public class Cloner
             //Clone instructions
             foreach (var inst in oldBlock) {
                 var (newVal, fullyRemapped) = _instCloner.Clone(inst);
-                if (newVal is Instruction newInst) {
+                //Clone() may fold constants: "add r10, 0" -> "r10",
+                //so we can only insert if isn't already in a block.
+                if (newVal is Instruction newInst && newInst.Block == null) {
                     newBlock.InsertLast(newInst);
                     if (!fullyRemapped) {
                         pendingInsts.Add(newInst);
@@ -82,7 +84,7 @@ public class Cloner
             _mappings.Add(value, newValue);
             return true;
         }
-        if (value is Const) {
+        if (value is Const or EntityDesc) {
             newValue = value;
             return true;
         }
@@ -178,6 +180,8 @@ public class Cloner
 
         public void Visit(CallInst inst) => Out(new CallInst(inst.Method, RemapArgs(inst.Args), inst.IsVirtual));
         public void Visit(NewObjInst inst) => Out(new NewObjInst(inst.Constructor, RemapArgs(inst.Args)));
+        public void Visit(FuncAddrInst inst) => Out(new FuncAddrInst(inst.Method, inst.IsVirtual ? Remap(inst.Object) : null));
+        public void Visit(IntrinsicInst inst) => Out(new IntrinsicInst(inst.Id, inst.ResultType, RemapArgs(inst.Args)));
 
         public void Visit(ReturnInst inst) => Out(new ReturnInst(inst.HasValue ? Remap(inst.Value) : null));
         public void Visit(BranchInst inst) => Out(inst.IsJump ? new BranchInst(Remap(inst.Then)) : new BranchInst(Remap(inst.Cond), Remap(inst.Then), Remap(inst.Else)));
@@ -199,6 +203,13 @@ public class Cloner
             Out(new PhiInst(newArgs));
         }
 
-        protected void VisitDefault(Instruction inst) => Ensure(false, "Missing cloner for " + inst.GetType());
+        public void Visit(GuardInst inst) => Out(new GuardInst(inst.Kind, Remap(inst.HandlerBlock), inst.CatchType, inst.HasFilter ? Remap(inst.FilterBlock) : null));
+        public void Visit(ThrowInst inst) => Out(new ThrowInst(inst.IsRethrow ? null : Remap(inst.Exception)));
+        public void Visit(LeaveInst inst) => Out(new LeaveInst((GuardInst)Remap(inst.ParentGuard), Remap(inst.Target)));
+        public void Visit(ContinueInst inst) => Out(inst.IsFromFilter
+            ? new ContinueInst((GuardInst)Remap(inst.ParentGuard), inst.FilterResult)
+            : new ContinueInst((GuardInst)Remap(inst.ParentGuard)));
+
+        public void VisitDefault(Instruction inst) => Ensure(false, "Missing cloner for " + inst.GetType());
     }
 }

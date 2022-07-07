@@ -23,12 +23,15 @@ public class InlineMethods : MethodPass
 
     private static bool CanInline(MethodDef caller, CallInst callInst)
     {
-        if (callInst.Method is MethodDef callee) {
-            //TODO: better inlining heuristics
-            //FIXME: block inlining for methods with accesses to private members of different classes
-            return caller != callee && callee.Body?.NumBlocks <= 8;
+        if (callInst.Method is not MethodDef callee) {
+            return false;
         }
-        return false;
+        if (callInst.IsVirtual && (callee.Attribs & System.Reflection.MethodAttributes.Virtual) != 0) {
+            return false;
+        }
+        //TODO: better inlining heuristics
+        //FIXME: block inlining for methods with accesses to private members of different classes
+        return caller != callee && callee.Body?.NumBlocks <= 8;
     }
 
     private static void Inline(MethodBody caller, CallInst callInst)
@@ -36,19 +39,18 @@ public class InlineMethods : MethodPass
         var callee = ((MethodDef)callInst.Method).Body!;
         var cloner = new Cloner(caller);
 
-        //Add argument mappings.
-        //SSA transform guarantees that arguments are readonly, not address exposed, and inlined/not used in LoadVarInst.
+        //Add argument mappings
         for (int i = 0; i < callee.Args.Length; i++) {
             cloner.AddMapping(callee.Args[i], callInst.GetArg(i));
         }
         var newBlocks = cloner.CloneBlocks(callee);
 
-        if (newBlocks.Count > 1) {
-            InlineManyBlocks(callInst, newBlocks);
-        } else {
-            //Optimization: avoid creating new blocks for callees with one block
+        if (newBlocks is [{ Last: ReturnInst }]) {
+            //opt: avoid creating new blocks for callees with a single block ending with a return
             InlineOneBlock(callInst, newBlocks[0]);
             newBlocks[0].Remove();
+        } else {
+            InlineManyBlocks(callInst, newBlocks);
         }
     }
 
@@ -56,7 +58,7 @@ public class InlineMethods : MethodPass
     {
         //Move code (if not a single return)
         if (block.Last.Prev != null) {
-            block.MoveRange(callInst.Block, callInst, block.First, block.Last.Prev!);
+            block.MoveRange(callInst.Block, callInst, block.First, block.Last.Prev);
         }
         //Replace call value
         if (block.Last is ReturnInst ret && ret.HasValue) {

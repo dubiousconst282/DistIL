@@ -39,5 +39,5 @@ public interface InstVisitor
     void Visit(ContinueInst inst) => VisitDefault(inst);
     void Visit(ThrowInst inst) => VisitDefault(inst);
 
-    protected void VisitDefault(Instruction inst) { }
+    void VisitDefault(Instruction inst) { }
 }

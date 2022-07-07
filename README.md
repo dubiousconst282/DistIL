@@ -1,76 +1,52 @@
 # DistIL
 Optimization and transformation framework for the Common Intermediate Language (WIP)
 
-# Design/API
-The input assembly and its dependencies are loaded using the `System.Reflection.Metadata` APIs, into mutable `ModuleDef` objects, which provides access to the defined types and other properties.
-Special types (`Int32`, `String`, `Array`, and others) have singleton "references" defined in the `PrimType` class. The `GetDefinition()` method can be used to access the `System.Private.CoreLib` definition.
+---
 
-The intermediate representation (IR) consists of a control flow graph, where each node is a _basic block_ containing _instructions_ in static single assignment form. The IR design was influenced by LLVM.
+Currently, the most notable implemented features are:
+- Type system and module loader/writer based on System.Reflection.Metadata
+- Simple and consistent SSA based Intermediate Representation
+- Analyses: Dominator tree, Liveness
+- Optimizations:
+  - Method Inlining, Constant Folding, Dead Code Elimination, Local Value Numbering
+  - Linq Query Expansion: Convert reification/reduction queries (ToArray, Count, ...) into imperative code
+  - Delegate Concretization: Replace delegates invocations with direct calls (if they are known)
 
-Instructions are printed in the form of `[<result type> r<slot> =] <op> [operands]` (e.g. `int r1 = add #arg1, #arg2` or `call void Foo::Bar(int: #arg1)`). _Slots_ are sequential numbers which are lazily calculated for printing (they are not stored directly).
+# IR Details
+DistIL uses a SSA-based intermediate representation, which focus on being simple and suitable for general program optimizations. It is in fact very similar to LLVM's IR, the obvious difference being that it is based on CIL, so it has direct support for things like objects, fields, and such.
 
-Local variables are accessed using `LoadVarInst`, `StoreVarInst`, and `VarAddrInst` (the later disables SSA _enregistration_).
+## Variables
+Local variables are treated similarly as memory locations, they are accessed using the `LoadVarInst` and `StoreVarInst` instructions. They can also have their address exposed by `VarAddrInst`, but this operation prevents it from being transformed into an SSA _register_. They are currently not explicitly declared nor tracked in the IR.
 
-Argument are accessed in the same way as local variables, until the SSA transform is applied. After that, they are treated as read only - loads are inlined into operands, and address exposed arguments are copied into local variables.
+Arguments are always read only. The CIL importer (parser), copies them into local variables at the entry block, most of these copies are removed by the SSA transform pass.
 
-## Exceptions in the IR
-Due to the large number of instructions that may potentially throw exceptions (and because it's easier for now), protected regions are represented implicitly in the CFG. Protected regions begins with a block starting with one or more `GuardInst` instructions, which indicates the handler/filter blocks. Exit blocks end with a single `LeaveInst` or `ContinueInst` (for filter/finally handlers) instruction.
+## Exception Regions
+Due to the large number of instructions that may potentially throw exceptions, exception handlers are represented implicitly on the CFG (blocks don't end at instructions that may throw). Protected regions start with a single entry block, which contains one or more `GuardInst` instructions, each of which point to the handler/filter blocks. Exit blocks end with a single `LeaveInst` or `ContinueInst` (for filter/finally handlers) instruction.
 
-Variables used across protected and normal regions are not _enregistered_/SSA-ified, because control flow may be interrupted at any point inside the protected region, thus later uses could have a wrong value.
+Variables used across protected and normal regions are marked as exposed (to disable SSA registration), because control flow may be interrupted at any point inside the protected region, and phi instructions can only merge values at block edges.
 
+## Code Generation
+Once all phi instructions have been removed (we currently use the technique described in "Revisiting Out-of-SSA Translation" by Boissinot et al.), generating CIL code is quite straightforward.
 
-## IR Examples
-A simple example demonstrating a few basic optimizations:
+Because the IR forms a kind of DAG structure, we simply visit each instruction and recurse into operands if they can be inlined to form an deeper expression. An instruction can be inlined if it only has one use within the same block, and there are no interferences to its operands before the result is used. Otherwise, it must be placed into into a temporary variable.
+
+There's no register allocation pass yet, and while the result code is decent, it might have many temporary variables.
+
+## IR Dumps
+The IR can be easily dumped in plain text or graphviz forms, some examples are shown later in this section.
+
+In the text form of the IR, instructions are automatically assigned a _temporary variable_/_register_ for its result, they doesn't actually exist in the IR - the instruction itself _is_ the register, operands just refer to them directly.
+
+Blocks, instructions and variables are given sequential names by the `SymbolTable` class (e.g. `BB_01, BB_02, ...; r1, r2, ...`), but custom names can also be set. The `Namify` pass can be used to generate fixed names, which can be useful when generating diffs between passes.
+
+---
+
+Exception handlers:
 <table>
-  <tr>
-    <td style="display: flex; gap: 4px;">
-      <pre lang="csharp">
-static int ObjAccess(int[] arr1, int[] arr2, int startIndex, int seed) {
-  var bar = new Bar() { i = startIndex, seed = seed };
-  while (bar.MoveNext(arr1)) {
-    arr2[bar.j & 15] ^= bar.seed;
-  }
-  return bar.seed;
-}</pre>
-    </td>
-    <td>
-      <pre lang="csharp">
-class Bar {
-  public int i, j, seed;
-  public bool MoveNext(int[] a) {
-    if (i < 16) {
-      j += a[i++] < 0 ? -1 : +1;
-      seed = (seed * 8121 + 28411) % 134456;
-      return true;
-    }
-    return false;
-  }
-}</pre>
-    </td>
-  </tr>
+  <tr> <th>Original code</th> <th>CFG</th> </tr>
   <tr>
     <td>
-      Unoptimized CFG:
-      <img src="https://user-images.githubusercontent.com/87553666/170694612-56bd0a83-8539-4e01-943d-148d61e3ed9d.svg">
-    </td>
-    <td>
-      Optimized CFG:
-      <img src="https://user-images.githubusercontent.com/87553666/170694607-e321db19-9640-4332-acc0-3023c08971da.svg">
-    </td>
-  </tr>
-</table>
-
-Overview of the optimizations made above:
-- The call to MoveNext() was inlined.
-- The field reload near `xor` was replaced with the register from the latest known value (value numbering)
-- The code `a[i++] < 0 ? -1 : +1` was transformed into a branchless equivalent `icmp.slt(a[i++], 0) * 2 - 1`
-The inlining pass generates several redundant blocks and phis like `int rX = phi [BB_X -> 1, BB_Y -> 0]`, they were eliminated and are not shown above.
-
-Another simple example demonstrating how exception handlers are represented:
-<table>
-    <tr>
-        <td>
-            <pre lang="csharp">
+      <pre lang="csharp">
 static int Try2(string str) {
   int r = 0;
   try {
@@ -85,10 +61,64 @@ static int Try2(string str) {
   }
   return r;
 }
-            </pre>
-        </td>
-        <td>
-            <img src="https://user-images.githubusercontent.com/87553666/170693986-71b25b61-985a-49bd-819e-29dd5aa55725.svg">
-        </td>
-    </tr>
+      </pre>
+    </td>
+    <td>
+      <img src="https://user-images.githubusercontent.com/87553666/177763432-746541a7-9074-4f7c-aff9-c070cd4e6598.svg">
+    </td>
+  </tr>
 </table>
+
+---
+Linq expansion + delegate concretization + inlining:
+<table>
+  <tr> <th>Original code</th> <th>Optimized CFG</th> </tr>
+  <tr>
+    <td>
+      <pre lang="csharp">
+static int[] Linq1(int[] arr) {
+  return arr.Where(x => x > 0)
+            .Select(x => x * 2)
+            .ToArray();
+}
+      </pre>
+    </td>
+    <td>
+      <img src="https://user-images.githubusercontent.com/87553666/177763428-ab1b772e-145b-45a7-bc8e-4cb9c9f79a47.svg">
+    </td>
+  </tr>
+</table>
+
+<details>
+  <summary>Decompiled output</summary>
+Not looking pretty because the out of SSA pass isn't fully done yet. It will get there eventually :)
+
+```cs
+int[] Linq1(int[] arr) {
+    int num = arr.Length;
+    int[] array = new int[num];
+    int num2 = 0;
+    int num3 = 0;
+    int num4;
+    while (true) {
+        num4 = num3;
+        if (num2 >= num) break;
+        
+        int num5 = arr[num2];
+        num3 = num4;
+        if (num5 > 0) {
+            array[num4] = num5 * 2;
+            num3 = num4 + 1;
+        }
+        num2++;
+    }
+    int num6 = ((num4 != num) ? 1 : 0);
+    int[] array2 = array;
+    if (num6 != 0) {
+        array2 = new int[num4];
+        Array.Copy(array, array2, num4);
+    }
+    return array2;
+}
+```
+</details>

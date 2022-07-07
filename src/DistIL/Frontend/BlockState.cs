@@ -609,7 +609,6 @@ internal class BlockState
 
         if (type == null) {
             type = ((ArrayType)array.ResultType).ElemType; //ldelem_any
-            Assert(type.StackType == StackType.Object);
         }
         Push(new LoadArrayInst(array, index, type, PopArrayAccFlags()));
     }
@@ -621,7 +620,6 @@ internal class BlockState
 
         if (type == null) {
             type = ((ArrayType)array.ResultType).ElemType; //stelem_any
-            Assert(type.StackType == StackType.Object);
         }
         Emit(new StoreArrayInst(array, index, value, type, PopArrayAccFlags()));
     }
@@ -648,7 +646,6 @@ internal class BlockState
         if (type == null) {
             Ensure(addr.ResultType is PointerType or ByrefType);
             type = addr.ResultType.ElemType!; //ldind_ref
-            Assert(type.StackType == StackType.Object);
         }
         Push(new LoadPtrInst(addr, type, PopPointerFlags()));
     }
@@ -660,7 +657,6 @@ internal class BlockState
         if (type == null) {
             Ensure(addr.ResultType is PointerType or ByrefType);
             type = addr.ResultType.ElemType!; //stind_ref
-            Assert(type.StackType == StackType.Object);
         }
         Emit(new StorePtrInst(addr, value, type, PopPointerFlags()));
     }

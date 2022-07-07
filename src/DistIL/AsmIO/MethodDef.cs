@@ -138,9 +138,11 @@ public class MethodDef : MethodDefOrSpec
         foreach (var parHandle in info.GetParameters()) {
             var parInfo = reader.GetParameter(parHandle);
 
-            int index = parInfo.SequenceNumber - 1;
-            if (index >= 0 && index < Params.Length) {
-                var par = Params[index];
+            int index = parInfo.SequenceNumber;
+            if (index == 0) {
+                //TODO: return parameter
+            } else if (index <= Params.Length) {
+                var par = Params[index - (IsStatic ? 1 : 0)]; //`this` is always implicit
                 par.Name = reader.GetString(parInfo.Name);
                 par.Attribs = parInfo.Attributes;
                 par.CustomAttribs = loader.DecodeCustomAttribs(parInfo.GetCustomAttributes());

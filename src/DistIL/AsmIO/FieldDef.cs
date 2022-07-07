@@ -31,6 +31,8 @@ public abstract class FieldDefOrSpec : FieldDesc, ModuleEntity
 {
     public abstract FieldDef Definition { get; }
     public ModuleDef Module => Definition.DeclaringType.Module;
+
+    public abstract override TypeDefOrSpec DeclaringType { get; }
 }
 
 public class FieldDef : FieldDefOrSpec

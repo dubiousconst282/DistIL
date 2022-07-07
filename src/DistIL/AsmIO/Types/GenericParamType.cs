@@ -2,6 +2,8 @@ namespace DistIL.AsmIO;
 
 using System.Reflection;
 
+using DistIL.IR;
+
 /// <summary> Represents a placeholder for a generic type argument. </summary>
 public class GenericParamType : TypeDesc
 {
@@ -22,10 +24,16 @@ public class GenericParamType : TypeDesc
     {
         Index = index;
         IsMethodParam = isMethodParam;
-        Name = (isMethodParam ? "!!" : "!") + (name ?? Index.ToString());
+        Name = name ?? Index.ToString();
         if (!constraints.IsDefault) {
             Constraints = constraints;
         }
+    }
+
+    public override void Print(PrintContext ctx, bool includeNs = true)
+    {
+        base.Print(ctx, includeNs);
+        ctx.Print(IsMethodParam ? "!!" : "!");
     }
 
     public override TypeDesc GetSpec(GenericContext context)

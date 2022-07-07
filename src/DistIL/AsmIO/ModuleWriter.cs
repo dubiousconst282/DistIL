@@ -5,8 +5,6 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
-using DistIL.IR;
-
 internal class ModuleWriter
 {
     readonly ModuleDef _mod;
@@ -14,7 +12,9 @@ internal class ModuleWriter
     readonly MethodBodyStreamEncoder _bodyEncoder;
     private BlobBuilder? _fieldDataStream;
 
-    private Dictionary<ModuleEntity, EntityHandle> _handleMap = new();
+    private Dictionary<Entity, EntityHandle> _handleMap = new();
+    //We need to write generic parameters in a later pass, since they must be sorted
+    private List<EntityDesc> _genericDefs = new();
 
     public ModuleWriter(ModuleDef mod)
     {
@@ -47,7 +47,7 @@ internal class ModuleWriter
         _handleMap.Add(_mod, mainAsmHandle);
 
         AllocHandles();
-        EmitTypes();
+        EmitEntities();
 
         SerializePE(peBlob);
     }
@@ -66,70 +66,80 @@ internal class ModuleWriter
                 _handleMap.Add(method, MetadataTokens.MethodDefinitionHandle(methodIdx++));
             }
         }
-
-        foreach (var mod in _mod.AssemblyRefs) {
-            var name = mod.AsmName;
-            var handle = _builder.AddAssemblyReference(
-                AddString(name.Name),
-                name.Version!,
-                AddString(name.CultureName),
-                AddBlob(name.GetPublicKey() ?? name.GetPublicKeyToken()),
-                (AssemblyFlags)name.Flags,
-                default
-            );
-            _handleMap.Add(mod, handle);
-        }
     }
 
-    private void EmitTypes()
+    private void EmitEntities()
     {
         foreach (var type in _mod.TypeDefs) {
             EmitType(type);
         }
+
+        _genericDefs.Sort((a, b) => {
+            int ai = CodedIndex.TypeOrMethodDef(_handleMap[a]);
+            int bi = CodedIndex.TypeOrMethodDef(_handleMap[b]);
+            return ai - bi;
+        });
+        foreach (var entity in _genericDefs) {
+            var handle = _handleMap[entity];
+            var genPars = (entity as TypeDef)?.GenericParams ?? ((MethodDef)entity).GenericParams;
+            foreach (GenericParamType par in genPars) {
+                _builder.AddGenericParameter(handle, par.Attribs, AddString(par.Name), par.Index);
+            }
+        }
     }
 
-    private EntityHandle GetHandle(ModuleEntity entity)
+    private EntityHandle GetHandle(Entity entity)
     {
         if (!_handleMap.TryGetValue(entity, out var handle)) {
-            Assert(entity.Module != _mod); //all handles in _mod must be allocated first
             _handleMap[entity] = handle = CreateRef(entity);
         }
         return handle;
 
-        EntityHandle CreateRef(ModuleEntity entity)
+        EntityHandle CreateRef(Entity entity)
         {
             switch (entity) {
-                case TypeDef val: {
-                    var rootAsm = _mod._typeRefRoots.GetValueOrDefault(val, val.Module);
+                case TypeDef type: {
+                    var rootAsm = _mod._typeRefRoots.GetValueOrDefault(type, type.Module);
                     return _builder.AddTypeReference(
                         GetHandle(rootAsm),
-                        AddString(val.Namespace),
-                        AddString(val.Name)
+                        AddString(type.Namespace),
+                        AddString(type.Name)
                     );
                 }
-                case TypeSpec val: {
+                case TypeDesc type: {
                     return _builder.AddTypeSpecification(
-                        EncodeSig(b => EncodeType(b.TypeSpecificationSignature(), val))
+                        EncodeSig(b => EncodeType(b.TypeSpecificationSignature(), type))
                     );
                 }
-                case MethodSpec { GenericParams.Length: > 0 } val: {
+                case MethodSpec { GenericParams.Length: > 0 } method: {
                     return _builder.AddMethodSpecification(
-                        GetHandle(val.Definition),
-                        EncodeSpecSig(val)
+                        GetHandle(method.Definition),
+                        EncodeSpecSig(method)
                     );
                 }
-                case MethodDefOrSpec val: {
+                case MethodDefOrSpec method: {
                     return _builder.AddMemberReference(
-                        GetHandle(val.DeclaringType),
-                        AddString(val.Name),
-                        EncodeMethodSig(val.Definition)
+                        GetHandle(method.DeclaringType),
+                        AddString(method.Name),
+                        EncodeMethodSig(method.Definition)
                     );
                 }
-                case FieldDef val: {
+                case FieldDefOrSpec field: {
                     return _builder.AddMemberReference(
-                        GetHandle(val.DeclaringType),
-                        AddString(val.Name),
-                        EncodeFieldSig(val)
+                        GetHandle(field.DeclaringType),
+                        AddString(field.Name),
+                        EncodeFieldSig(field)
+                    );
+                }
+                case ModuleDef module: {
+                    var name = module.AsmName;
+                    return _builder.AddAssemblyReference(
+                        AddString(name.Name),
+                        name.Version!,
+                        AddString(name.CultureName),
+                        AddBlob(name.GetPublicKey() ?? name.GetPublicKeyToken()),
+                        (AssemblyFlags)name.Flags,
+                        default
                     );
                 }
                 default: throw new NotImplementedException();
@@ -141,7 +151,7 @@ internal class ModuleWriter
         if (type is PrimType primType) {
             type = primType.GetDefinition(_mod);
         }
-        return GetHandle((ModuleEntity)type);
+        return GetHandle((Entity)type);
     }
     private StandaloneSignatureHandle GetStandaloneSig(FuncPtrType type)
     {
@@ -178,6 +188,9 @@ internal class ModuleWriter
         }
         foreach (var method in type.Methods) {
             EmitMethod(method);
+        }
+        if (type.GenericParams.Length > 0) {
+            _genericDefs.Add(type);
         }
     }
 
@@ -226,6 +239,10 @@ internal class ModuleWriter
             signature, bodyOffset, firstParamHandle
         );
         AssertHandleAllocated(method, handle);
+
+        if (method.GenericParams.Length > 0) {
+            _genericDefs.Add(method);
+        }
     }
 
     private int EmitBody(ILMethodBody? body)
@@ -297,7 +314,7 @@ internal class ModuleWriter
             case ILOperandType.Field:
             case ILOperandType.Method:
             case ILOperandType.Tok: {
-                var handle = GetHandle((ModuleEntity)inst.Operand!);
+                var handle = GetHandle((Entity)inst.Operand!);
                 bb.WriteInt32(MetadataTokens.GetToken(handle));
                 break;
             }
@@ -406,7 +423,7 @@ internal class ModuleWriter
         });
     }
 
-    private BlobHandle EncodeFieldSig(FieldDef field)
+    private BlobHandle EncodeFieldSig(FieldDefOrSpec field)
     {
         return EncodeSig(b => EncodeType(b.FieldSignature(), field.Type));
     }

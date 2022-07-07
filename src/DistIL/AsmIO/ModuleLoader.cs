@@ -163,7 +163,7 @@ internal class ModuleLoader
         return new FieldDef(
             GetType(info.GetDeclaringType()), 
             type, _reader.GetString(info.Name), 
-            attribs, default, info.GetOffset()
+            attribs, defaultValue, info.GetOffset()
         );
     }
     private MethodDef CreateMethod(MethodDefinition info)

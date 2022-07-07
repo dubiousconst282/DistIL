@@ -13,15 +13,15 @@ public class ValueNumbering : MethodPass
 
     private void TransformBlock(BasicBlock block)
     {
-        var tags = new Dictionary<Tag, Value>();
+        var currDefs = new Dictionary<Tag, Value>();
 
         foreach (var inst in block) {
             #pragma warning disable format
             (TagKind kind, Value src, Value? newVal) info = inst switch {
                 LoadVarInst c       => (TagKind.Var,      c.Var,    null),
                 StoreVarInst c      => (TagKind.Var,      c.Var,    c.Value),
-                LoadFieldInst c     => (TagKind.Field,    c.Field,  null),
-                StoreFieldInst c    => (TagKind.Field,    c.Field,  c.Value),
+                LoadFieldInst c     => (TagKind.Field,    c,        null),
+                StoreFieldInst c    => (TagKind.Field,    c,        c.Value),
                 LoadArrayInst c     => (TagKind.Array,    c,        null),
                 StoreArrayInst c    => (TagKind.Array,    c,        c.Value),
                 BinaryInst c        => (TagKind.Binary,   c,        c),
@@ -33,14 +33,14 @@ public class ValueNumbering : MethodPass
 
             var tag = new Tag() { Kind = info.kind, Source = info.src };
 
-            if (info.newVal == null || info.kind is TagKind.Binary or TagKind.Unary) {
-                if (tags.TryGetValue(tag, out var currValue)) {
+            if (info.newVal == null || info.newVal == info.src) {
+                if (currDefs.TryGetValue(tag, out var currValue)) {
                     inst.ReplaceWith(currValue);
                 } else {
-                    tags[tag] = inst;
+                    currDefs[tag] = inst;
                 }
             } else {
-                tags[tag] = info.newVal;
+                currDefs[tag] = info.newVal;
             }
         }
     }
@@ -48,38 +48,62 @@ public class ValueNumbering : MethodPass
     struct Tag : IEquatable<Tag>
     {
         public TagKind Kind; //Kind of this value
-        public Value Source; //Value source (backing memory, or resulting instruction)
+        public Value Source; //Value source (var/ptr) or result instruction
 
         public bool Equals(Tag other)
         {
-            return other.Kind == Kind && Kind switch {
-                TagKind.Field or TagKind.Var => other.Source == Source,
-                TagKind.Array => ArrEq((ArrayAccessInst)Source, (ArrayAccessInst)other.Source),
-                TagKind.Binary => BinEq((BinaryInst)Source, (BinaryInst)other.Source),
-                TagKind.Unary => UnEq((UnaryInst)Source, (UnaryInst)other.Source),
-                _ => false
-            };
-            static bool ArrEq(ArrayAccessInst a, ArrayAccessInst b)
-                => a.Array == b.Array && a.Index == b.Index &&
-                   a.Flags == b.Flags && a.ElemType == b.ElemType;
-            static bool BinEq(BinaryInst a, BinaryInst b)
-                => a.Op == b.Op && a.Left.Equals(b.Left) && a.Right.Equals(b.Right);
-            static bool UnEq(UnaryInst a, UnaryInst b)
-                => a.Op == b.Op && a.Value.Equals(b.Value);
+            if (other.Kind != Kind) {
+                return false;
+            }
+            switch (Kind) {
+                case TagKind.Var: {
+                    return Source == other.Source;
+                }
+                case TagKind.Field: {
+                    var (a, b) = ((FieldAccessInst)Source, (FieldAccessInst)other.Source);
+                    return a.Field == b.Field && a.Obj == b.Obj;
+                }
+                case TagKind.Array: {
+                    var (a, b) = ((ArrayAccessInst)Source, (ArrayAccessInst)other.Source);
+                    return a.Array == b.Array && a.Index == b.Index &&
+                           a.Flags == b.Flags && a.ElemType == b.ElemType;
+                }
+                case TagKind.Binary: {
+                    var (a, b) = ((BinaryInst)Source, (BinaryInst)other.Source);
+                    return a.Op == b.Op && a.Left.Equals(b.Left) && a.Right.Equals(b.Right);
+                }
+                case TagKind.Unary: {
+                    var (a, b) = ((UnaryInst)Source, (UnaryInst)other.Source);
+                    return a.Op == b.Op && a.Value.Equals(b.Value);
+                }
+                default: return false;
+            }
         }
 
         public override int GetHashCode()
         {
-            return Kind switch {
-                TagKind.Field or TagKind.Var => Source.GetHashCode(),
-                TagKind.Array => ArrHash((ArrayAccessInst)Source),
-                TagKind.Binary => BinHash((BinaryInst)Source),
-                TagKind.Unary => UnHash((UnaryInst)Source),
-                _ => 0
-            };
-            static int ArrHash(ArrayAccessInst inst) => HashCode.Combine(inst.Array, inst.Index);
-            static int BinHash(BinaryInst inst) => HashCode.Combine(inst.Op, inst.Left, inst.Right);
-            static int UnHash(UnaryInst inst) => HashCode.Combine(inst.Op, inst.Value);
+            switch (Kind) {
+                case TagKind.Var: {
+                    return HashCode.Combine(Source);
+                }
+                case TagKind.Field: {
+                    var a = (FieldAccessInst)Source;
+                    return HashCode.Combine(a.Field, a.Obj);
+                }
+                case TagKind.Array: {
+                    var a = (ArrayAccessInst)Source;
+                    return HashCode.Combine(a.Array, a.Index);
+                }
+                case TagKind.Binary: {
+                    var a = (BinaryInst)Source;
+                    return HashCode.Combine(a.Op, a.Left, a.Right);
+                }
+                case TagKind.Unary: {
+                    var a = (UnaryInst)Source;
+                    return HashCode.Combine(a.Op, a.Value);
+                }
+                default: return 0;
+            }
         }
     }
     enum TagKind { None_, Var, Field, Array, Binary, Unary }

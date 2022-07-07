@@ -181,10 +181,10 @@ internal class ModuleLoader
             if (thisType.IsValueType) {
                 thisType = new ByrefType(thisType);
             }
-            pars.Add(new ParamDef(thisType, "this"));
+            pars.Add(new ParamDef(thisType, 0, "this"));
         }
         foreach (var paramType in sig.ParameterTypes) {
-            pars.Add(new ParamDef(paramType));
+            pars.Add(new ParamDef(paramType, pars.Count));
         }
         return new MethodDef(
             declaringType, 

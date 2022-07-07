@@ -33,23 +33,3 @@ public class Variable : TrackedValue
         return parentMethod?.GetSymbolTable() ?? base.GetDefaultSymbolTable();
     }
 }
-
-/// <summary>
-/// Represents the value of a method argument. Differently from variables,
-/// arguments are readonly (while in SSA), and can be used as operands in any instruction.
-/// </summary>
-public class Argument : Variable
-{
-    public int Index { get; }
-
-    public Argument(TypeDesc type, int index, string? name = null)
-        : base(type, false, name)
-    {
-        Index = index;
-    }
-
-    public override void Print(PrintContext ctx)
-    {
-        ctx.Print("#" + (Name ?? $"arg{Index}"), PrintToner.VarName);
-    }
-}

@@ -116,12 +116,12 @@ public class MDArrayMethod : MethodDesc
         ImmutableArray<ParamDef> CreateParams(int count, bool isSetter = false)
         {
             var b = ImmutableArray.CreateBuilder<ParamDef>(count + (isSetter ? 2 : 1));
-            b.Add(new ParamDef(type, "this"));
+            b.Add(new ParamDef(type, 0, "this"));
             for (int i = 0; i < count; i++) {
-                b.Add(new ParamDef(PrimType.Int32));
+                b.Add(new ParamDef(PrimType.Int32, i + 1));
             }
             if (isSetter) {
-                b.Add(new ParamDef(type.ElemType));
+                b.Add(new ParamDef(type.ElemType, count + 1));
             }
             return b.ToImmutable();
         }

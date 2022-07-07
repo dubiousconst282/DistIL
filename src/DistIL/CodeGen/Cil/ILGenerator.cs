@@ -59,13 +59,13 @@ public partial class ILGenerator : InstVisitor
         return _slots.GetOrAddRef(inst) ??= new(inst.ResultType, name: $"expr{_slots.Count}");
     }
 
-    private void EmitVarInst(Variable var, VarOp op)
+    private void EmitVarInst(Value var, VarOp op)
     {
         int index;
         if (var is Argument arg) {
             index = arg.Index;
-        } else if (!_varTable.TryGetValue(var, out index)) {
-            _varTable[var] = index = _varTable.Count;
+        } else if (!_varTable.TryGetValue((Variable)var, out index)) {
+            _varTable[(Variable)var] = index = _varTable.Count;
         }
         var codes = GetCodesForVar(op, var is Argument);
 
@@ -92,8 +92,8 @@ public partial class ILGenerator : InstVisitor
     private void Push(Value value)
     {
         switch (value) {
-            case Variable var: {
-                EmitVarInst(var, VarOp.Load);
+            case Variable or Argument: {
+                EmitVarInst(value, VarOp.Load);
                 break;
             }
             case ConstInt cons: {

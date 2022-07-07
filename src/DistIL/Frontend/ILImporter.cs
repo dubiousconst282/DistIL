@@ -10,8 +10,8 @@ public class ILImporter
     public MethodDef Method { get; }
 
     internal MethodBody _body;
-    //used to discover variables crossing try blocks/exposed address
-    internal VarFlags[] _varFlags;
+    internal VarFlags[] _varFlags; //Used to discover variables crossing try blocks/exposed address
+    internal Variable[] _argSlots; //Argument variables
 
     readonly Dictionary<int, BlockState> _blocks = new();
 
@@ -22,6 +22,7 @@ public class ILImporter
             throw new ArgumentException("Method has no body to import");
         }
         int numVars = method.Params.Length + method.ILBody.Locals.Count;
+        _argSlots = new Variable[method.Params.Length];
         _varFlags = new VarFlags[numVars];
         _body = new MethodBody(method);
     }
@@ -103,6 +104,16 @@ public class ILImporter
 
     private void ImportBlocks(Span<ILInstruction> code, BitSet leaders)
     {
+        //Insert arg stores on the entry block
+        var entryBlock = GetBlock(0);
+        var args = _body.Args;
+        for (int i = 0; i < args.Length; i++) {
+            var arg = args[i];
+            var slot = _argSlots[i] = new Variable(arg.ResultType, name: $"a_{arg.Name}");
+            entryBlock.Emit(new StoreVarInst(slot, arg));
+        }
+
+        //Import code
         int startIndex = 0;
         foreach (int endOffset in leaders) {
             var block = GetBlock(code[startIndex].Offset);

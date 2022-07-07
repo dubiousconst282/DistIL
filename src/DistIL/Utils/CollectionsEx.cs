@@ -54,6 +54,11 @@ public static class CollectionsEx
     {
         return CollectionsMarshal.AsSpan(list).Slice(start, length);
     }
+    
+    public static ReadOnlySpan<T> AsSpan<T>(this ImmutableArray<T> list, int start)
+    {
+        return list.AsSpan(start..);
+    }
 
     /// <summary> Checks if the specified span contains the specified object reference. </summary>
     public static bool ContainsRef<T>(this ReadOnlySpan<T> span, T? value) where T : class

@@ -492,8 +492,8 @@ internal class BlockState
     }
     private Variable GetVar(int index, bool isArg, VarFlags flagsToAdd)
     {
-        var variable = isArg ? _body.Args[index] : _body.Definition.ILBody!.Locals[index];
-        ref var flags = ref _importer._varFlags[index + (isArg ? 0 : _body.Args.Count)];
+        var variable = isArg ? _importer._argSlots[index] : _body.Definition.ILBody!.Locals[index];
+        ref var flags = ref _importer._varFlags[index + (isArg ? 0 : _body.Args.Length)];
         flags |= flagsToAdd | (_activeGuard != null ? VarFlags.UsedInsideTry : VarFlags.UsedOutsideTry);
 
         if ((flags & VarFlags.CrossesTry) == VarFlags.CrossesTry || (flags & VarFlags.AddrTaken) != 0) {

@@ -8,7 +8,7 @@ public class MethodBody
     private SymbolTable? _symTable = null;
     private bool _symsDirty = true;
 
-    public List<Argument> Args { get; }
+    public ImmutableArray<Argument> Args { get; }
     /// <summary> Gets a view over `Args` excluding the first argument (`this`) if this is an instance method. </summary>
     public ReadOnlySpan<Argument> StaticArgs => Args.AsSpan(Definition.IsStatic ? 0 : 1);
 
@@ -22,10 +22,7 @@ public class MethodBody
     public MethodBody(MethodDef def)
     {
         Definition = def;
-        Args = new List<Argument>(def.Params.Length);
-        foreach (var par in def.Params) {
-            Args.Add(new Argument(par.Type, Args.Count, par.Name));
-        }
+        Args = def.Params.Select(p => new Argument(p)).ToImmutableArray();
     }
 
     /// <summary> Creates and adds an empty block to this method. If the method is empty, this block will be set as the entry block. </summary>

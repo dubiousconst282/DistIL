@@ -4,7 +4,7 @@ using DistIL.IR;
 using DistIL.Analysis;
 
 //SSA transform implementation based on the standard dominance frontier algorithm.
-public class SsaTransform2 : MethodPass
+public class SsaTransform : MethodPass
 {
     MethodBody _method = null!;
     Dictionary<PhiInst, Variable> _phiDefs = new(); //phi -> variable
@@ -81,14 +81,6 @@ public class SsaTransform2 : MethodPass
         //TODO: Push once per block (would need another dictionary, may not be worth)
         var defStacks = new Dictionary<Variable, ArrayStack<Value>>();
         var defDeltas = new ArrayStack<(BasicBlock B, Variable V)>();
-
-        //Initialize argument defs to themselves: `Def(#a) = #a`
-        //After SSA, they are considered readonly and can be used as a operand in any instruction.
-        foreach (var arg in _method.Args) {
-            var stack = new ArrayStack<Value>(1);
-            stack.Push(arg);
-            defStacks[arg] = stack;
-        }
         defDeltas.Push((null!, null!)); //dummy element so we don't need to check IsEmpty in RestoreDefs
 
         domTree.Traverse(

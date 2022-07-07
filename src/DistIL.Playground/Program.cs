@@ -1,4 +1,4 @@
-﻿using DistIL.AsmIO;
+using DistIL.AsmIO;
 using DistIL.Frontend;
 using DistIL.IR.Utils;
 using DistIL.CodeGen.Cil;
@@ -9,7 +9,7 @@ var module = resolver.Load("../TestSamples/CsSamples/bin/Debug/IRTests.dll");
 
 var mp1 = new MethodPassManager();
 mp1.Add(new SimplifyCFG());
-mp1.Add(new SsaTransform2());
+mp1.Add(new SsaTransform());
 
 var mp2 = new MethodPassManager();
 mp2.Add(new ExpandLinq());

@@ -38,7 +38,7 @@ public class InlineMethods : MethodPass
 
         //Add argument mappings.
         //SSA transform guarantees that arguments are readonly, not address exposed, and inlined/not used in LoadVarInst.
-        for (int i = 0; i < callee.Args.Count; i++) {
+        for (int i = 0; i < callee.Args.Length; i++) {
             cloner.AddMapping(callee.Args[i], callInst.GetArg(i));
         }
         var newBlocks = cloner.CloneBlocks(callee);

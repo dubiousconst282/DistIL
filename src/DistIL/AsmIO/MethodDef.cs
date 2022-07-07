@@ -41,13 +41,15 @@ public class ParamDef
 {
     public TypeDesc Type { get; set; }
     public string? Name { get; set; }
+    public int Index { get; set; }
     public ParameterAttributes Attribs { get; set; }
     public ImmutableArray<CustomAttrib> CustomAttribs { get; set; }
 
-    public ParamDef(TypeDesc type, string? name = null, ParameterAttributes attribs = default)
+    public ParamDef(TypeDesc type, int index, string? name = null, ParameterAttributes attribs = default)
     {
         Type = type;
         Name = name;
+        Index = index;
         Attribs = attribs;
         CustomAttribs = ImmutableArray<CustomAttrib>.Empty;
     }
@@ -174,7 +176,7 @@ public class MethodSpec : MethodDefOrSpec
 
         var genCtx = new GenericContext(this);
         ReturnType = def.ReturnType.GetSpec(genCtx);
-        Params = def.Params.Select(p => new ParamDef(p.Type.GetSpec(genCtx), p.Name, p.Attribs)).ToImmutableArray();
+        Params = def.Params.Select(p => new ParamDef(p.Type.GetSpec(genCtx), p.Index, p.Name, p.Attribs)).ToImmutableArray();
     }
 }
 

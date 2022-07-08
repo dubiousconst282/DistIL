@@ -305,6 +305,10 @@ public partial class ILGenerator : InstVisitor
                 _asm.Emit(ILCode.Newarr, (inst.ResultType as ArrayType)!.ElemType);
                 break;
             }
+            case IntrinsicId.LoadToken: {
+                _asm.Emit(ILCode.Ldtoken, inst.Args[0]);
+                break;
+            }
             default: throw new NotSupportedException($"Intrinsic {inst.Id}");
         }
     }
@@ -325,9 +329,7 @@ public partial class ILGenerator : InstVisitor
             Push(cmp.Left);
 
             //simplify `x == [0|null]` to brfalse, `x != [0|null]` to brtrue
-            if (cmp.Op is CompareOp.Eq or CompareOp.Ne && 
-                cmp.Right is ConstInt { Value: 0 } or ConstNull)
-            {
+            if (cmp is { Op: CompareOp.Eq or CompareOp.Ne, Right: ConstInt { Value: 0 } or ConstNull }) {
                 brCode = cmp.Op == CompareOp.Eq ? ILCode.Brfalse : ILCode.Brtrue;
             } else {
                 Push(cmp.Right);
@@ -342,12 +344,31 @@ public partial class ILGenerator : InstVisitor
             _asm.Emit(ILCode.Br, elseLabel);
         }
     }
-
+    public void Visit(SwitchInst inst)
+    {
+        var labels = new Label[inst.NumTargets];
+        for (int i = 0; i < labels.Length; i++) {
+            labels[i] = GetLabel(inst.GetTarget(i));
+        }
+        Push(inst.Value);
+        _asm.Emit(ILCode.Switch, labels);
+        _asm.Emit(ILCode.Br, GetLabel(inst.DefaultTarget));
+    }
     public void Visit(ReturnInst inst)
     {
         if (inst.HasValue) {
             Push(inst.Value);
         }
         _asm.Emit(ILCode.Ret);
+    }
+
+    public void Visit(ThrowInst inst)
+    {
+        if (!inst.IsRethrow) {
+            Push(inst.Exception);
+            _asm.Emit(ILCode.Throw);
+        } else {
+            _asm.Emit(ILCode.Rethrow);
+        }
     }
 }

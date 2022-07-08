@@ -104,13 +104,16 @@ public class ILImporter
 
     private void ImportBlocks(Span<ILInstruction> code, BitSet leaders)
     {
-        //Insert arg stores on the entry block
-        var entryBlock = GetBlock(0);
+        //Insert argument copies to local vars on the entry block
+        var entryBlock = _body.EntryBlock ?? GetBlock(0).Block;
+        var firstInst = entryBlock.First?.Prev;
         var args = _body.Args;
         for (int i = 0; i < args.Length; i++) {
             var arg = args[i];
             var slot = _argSlots[i] = new Variable(arg.ResultType, name: $"a_{arg.Name}");
-            entryBlock.Emit(new StoreVarInst(slot, arg));
+            var store = new StoreVarInst(slot, arg);
+            entryBlock.InsertAfter(firstInst, store);
+            firstInst = store;
         }
 
         //Import code

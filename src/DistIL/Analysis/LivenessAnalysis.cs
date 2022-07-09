@@ -72,33 +72,6 @@ public class LivenessAnalysis : IMethodAnalysis
     /// <summary> Checks if `inst` is live when `block` exits. </summary>
     public bool IsLiveOut(BasicBlock block, Instruction inst) => _blockData[block].LiveOut.Contains(inst);
 
-    /// <summary> Checks if `def` is live at `pos`. </summary>
-    public bool IsLiveAt(Instruction def, Instruction pos)
-    {
-        var (liveIn, liveOut) = GetLive(pos.Block);
-
-        if (liveOut.Contains(def)) {
-            return true; //`def` is definitely live at `pos` since it's on liveOut
-        }
-        //If `def` is on the same block as `pos`, or if it is live-in,
-        //we need to check if it is used after `pos`
-        if (def.Block == pos.Block || liveIn.Contains(def)) {
-            return IsUsedAfter(def, pos.Next!);
-        }
-        return false;
-    }
-
-    private bool IsUsedAfter(Instruction def, Instruction pos)
-    {
-        //TODO: keep instruction indices and traverse users instead of instructions
-        for (; pos != null; pos = pos.Next!) {
-            if (pos.Operands.ContainsRef(pos)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     public override string ToString()
     {
         var sb = new StringBuilder();

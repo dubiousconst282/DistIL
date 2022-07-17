@@ -99,9 +99,8 @@ internal class ModuleWriter
         {
             switch (entity) {
                 case TypeDef type: {
-                    var rootAsm = _mod._typeRefRoots.GetValueOrDefault(type, type.Module);
                     return _builder.AddTypeReference(
-                        GetHandle(rootAsm),
+                        GetHandle((Entity?)type.DeclaringType ?? _mod._typeRefRoots.GetValueOrDefault(type, type.Module)),
                         AddString(type.Namespace),
                         AddString(type.Name)
                     );

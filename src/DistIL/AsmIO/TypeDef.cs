@@ -205,7 +205,7 @@ public class TypeSpec : TypeDefOrSpec
 
     public override void Print(PrintContext ctx, bool includeNs = true)
     {
-        base.Print(ctx, includeNs);
+        Definition.Print(ctx, includeNs);
         ctx.PrintSequence("[", "]", GenericParams, v => v.Print(ctx, includeNs));
     }
 

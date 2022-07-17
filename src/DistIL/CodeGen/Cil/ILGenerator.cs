@@ -30,7 +30,8 @@ public partial class ILGenerator : InstVisitor
             ExceptionRegions = new(),
             MaxStack = bakedAsm.MaxStack,
             Instructions = bakedAsm.Code.ToList(),
-            Locals = _varTable.Keys.ToList()
+            Locals = _varTable.Keys.ToList(),
+            InitLocals = true
         };
     }
 

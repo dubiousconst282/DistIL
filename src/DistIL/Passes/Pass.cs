@@ -61,7 +61,7 @@ public class MethodTransformContext : IMethodAnalysisManager
     public MethodDef Definition => Method.Definition;
     public ModuleDef Module => Method.Definition.Module;
     
-    private Dictionary<Type, (IMethodAnalysis Analysis, bool Valid)> _analysis = new();
+    private Dictionary<Type, (object/*IMethodAnalysis*/ Analysis, bool Valid)> _analysis = new();
 
     public MethodTransformContext(MethodBody method)
     {

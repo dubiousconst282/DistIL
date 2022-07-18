@@ -164,7 +164,7 @@ internal struct UseRef
     public ref UseDef Def {
         get {
             Assert((uint)Index < (uint)Owner._useDefs.Length);
-            return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(Owner._useDefs), (uint)Index);
+            return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(Owner._useDefs), Index);
         }
     }
 

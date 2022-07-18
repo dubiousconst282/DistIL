@@ -20,9 +20,11 @@ mp2.Add(new SimplifyCFG());
 mp2.Add(new DeadCodeElim());
 mp2.Add(new ValueNumbering());
 mp2.Add(new SimplifyCFG());
-mp2.Add(new RemovePhis());
-mp1.Add(new DistIL.Passes.Utils.NamifyIR());
+mp2.Add(new DeadCodeElim());
+//mp2.Add(new DistIL.Passes.Utils.NamifyIR());
 mp2.Add(new PrintPass());
+mp2.Add(new RemovePhis());
+
 
 var modPm = new ModulePassManager();
 modPm.Add(new ImportPass());
@@ -40,15 +42,14 @@ class PrintPass : MethodPass
 {
     public override void Run(MethodTransformContext ctx)
     {
-        var diags = IRVerifier.Diagnose(ctx.Method);
+        var diags = Verifier.Diagnose(ctx.Method);
         if (diags.Count > 0) {
             Console.WriteLine($"BadIR in {ctx.Method}: {string.Join(" | ", diags)}");
         }
-        if (ctx.Method.Definition.Name == "SumAbsDiff") {
+        if (ctx.Method.Definition.Name == "AppendSequence") {
             IRPrinter.ExportPlain(ctx.Method, "../../logs/code.txt");
-            IRPrinter.ExportForest(ctx.Method, "../../logs/forest.txt");
             IRPrinter.ExportDot(ctx.Method, "../../logs/cfg.dot");
-            //File.WriteAllText("../../logs/il.txt", string.Join("\n", ctx.Method.Definition.ILBody.Instructions));
+            IRPrinter.ExportForest(ctx.Method, "../../logs/forest.txt");
         }
     }
 }
@@ -58,8 +59,8 @@ class ImportPass : ModulePass
     public override void Run(ModuleTransformContext ctx)
     {
         foreach (var method in ctx.Module.AllMethods()) {
+            if (method.ILBody == null) continue;
             try {
-                //if (method.Body!.ExceptionRegions.Count > 0) continue;
                 var imp = new ILImporter(method);
                 method.Body = imp.ImportCode();
             } catch (Exception ex) {

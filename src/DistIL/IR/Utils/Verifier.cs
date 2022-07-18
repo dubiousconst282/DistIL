@@ -2,12 +2,12 @@ namespace DistIL.IR.Utils;
 
 using DistIL.Analysis;
 
-public class IRVerifier
+public class Verifier
 {
     readonly MethodBody _method;
     readonly List<Diagnostic> _diags = new();
 
-    private IRVerifier(MethodBody method)
+    private Verifier(MethodBody method)
     {
         _method = method;
     }
@@ -15,7 +15,7 @@ public class IRVerifier
     /// <summary> Verifies the method body and returns a list of diagnostics. </summary>
     public static List<Diagnostic> Diagnose(MethodBody method)
     {
-        var v = new IRVerifier(method);
+        var v = new Verifier(method);
         v.VerifyEdges();
         v.VerifyPhis();
         v.VerifyUses();

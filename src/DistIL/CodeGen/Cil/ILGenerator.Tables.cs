@@ -91,21 +91,20 @@ public partial class ILGenerator
         };
     }
 
-    private static bool GetCodeForBranch(CompareOp op, out ILCode code, out bool invert)
+    private static bool GetCodeForBranch(CompareOp op, out ILCode code)
     {
-        (code, invert) = op switch {
-            CompareOp.Eq  or CompareOp.FOeq => (ILCode.Beq,     F),
-            CompareOp.Ne  or CompareOp.FUne => (ILCode.Bne_Un,  F),
-            CompareOp.Slt or CompareOp.FOlt => (ILCode.Blt,     F),
-            CompareOp.Sgt or CompareOp.FOgt => (ILCode.Bgt,     F),
-            CompareOp.Sle or CompareOp.FOle => (ILCode.Ble,     F),
-            CompareOp.Sge or CompareOp.FOge => (ILCode.Bge,     F),
-            CompareOp.Ult or CompareOp.FUlt => (ILCode.Blt_Un,  F),
-            CompareOp.Ugt or CompareOp.FUgt => (ILCode.Bgt_Un,  F),
-            CompareOp.Ule or CompareOp.FUle => (ILCode.Ble_Un,  F),
-            CompareOp.Uge or CompareOp.FUge => (ILCode.Bge_Un,  F),
-            //TODO: FUeq/FOne
-            _ => (ILCode.Nop, F)
+        code = op switch {
+            CompareOp.Eq  or CompareOp.FOeq => ILCode.Beq,
+            CompareOp.Ne  or CompareOp.FUne => ILCode.Bne_Un,
+            CompareOp.Slt or CompareOp.FOlt => ILCode.Blt,
+            CompareOp.Sgt or CompareOp.FOgt => ILCode.Bgt,
+            CompareOp.Sle or CompareOp.FOle => ILCode.Ble,
+            CompareOp.Sge or CompareOp.FOge => ILCode.Bge,
+            CompareOp.Ult or CompareOp.FUlt => ILCode.Blt_Un,
+            CompareOp.Ugt or CompareOp.FUgt => ILCode.Bgt_Un,
+            CompareOp.Ule or CompareOp.FUle => ILCode.Ble_Un,
+            CompareOp.Uge or CompareOp.FUge => ILCode.Bge_Un,
+            _ => ILCode.Nop
         };
         return code != ILCode.Nop;
     }

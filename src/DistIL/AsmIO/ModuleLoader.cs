@@ -34,7 +34,7 @@ internal class ModuleLoader
         var asmDef = _reader.GetAssemblyDefinition();
         _mod.AsmName = asmDef.GetAssemblyName();
         _mod.AsmFlags = asmDef.Flags;
-
+        
         var modDef = _reader.GetModuleDefinition();
         _mod.Name = _reader.GetString(modDef.Name);
     }
@@ -154,16 +154,13 @@ internal class ModuleLoader
     private FieldDef CreateField(FieldDefinition info)
     {
         var type = info.DecodeSignature(_typeProvider, default);
-        object? defaultValue = null;
 
-        var attribs = info.Attributes;
-        if (attribs.HasFlag(FieldAttributes.HasDefault)) {
-            defaultValue = _reader.DecodeConst(info.GetDefaultValue());
-        }
         return new FieldDef(
             GetType(info.GetDeclaringType()), 
             type, _reader.GetString(info.Name), 
-            attribs, defaultValue, info.GetOffset()
+            info.Attributes,
+            _reader.DecodeConst(info.GetDefaultValue()),
+            info.GetOffset()
         );
     }
     private MethodDef CreateMethod(MethodDefinition info)
@@ -302,7 +299,7 @@ internal class ModuleLoader
     }
     public ImmutableArray<CustomAttrib> DecodeCustomAttribs(CustomAttributeHandleCollection handles)
     {
-        var attribs = ImmutableArray.CreateBuilder<CustomAttrib>();
+        var attribs = ImmutableArray.CreateBuilder<CustomAttrib>(handles.Count);
         return attribs.ToImmutable();
 
         foreach (var handle in handles) {
@@ -330,6 +327,43 @@ internal class ModuleLoader
         var info = _reader.GetStandaloneSignature(handle);
         var sig = info.DecodeMethodSignature(_typeProvider, default);
         return new FuncPtrType(sig);
+    }
+
+    public PropertyDef DecodeProperty(TypeDef parent, PropertyDefinitionHandle handle)
+    {
+        var info = _reader.GetPropertyDefinition(handle);
+        var sig = info.DecodeSignature(_typeProvider, default);
+        var accs = info.GetAccessors();
+        var otherAccessors = accs.Others.IsEmpty
+            ? default(ImmutableArray<MethodDef>)
+            : accs.Others.Select(GetMethod).ToImmutableArray();
+
+        return new PropertyDef(
+            parent, _reader.GetString(info.Name), new MethodSig(sig),
+            accs.Getter.IsNil ? null : GetMethod(accs.Getter),
+            accs.Setter.IsNil ? null : GetMethod(accs.Setter),
+            otherAccessors,
+            _reader.DecodeConst(info.GetDefaultValue()),
+            info.Attributes
+        );
+    }
+    public EventDef DecodeEvent(TypeDef parent, EventDefinitionHandle handle)
+    {
+        var info = _reader.GetEventDefinition(handle);
+        var type = (TypeDesc)GetEntity(info.Type);
+        var accs = info.GetAccessors();
+        var otherAccessors = accs.Others.IsEmpty
+            ? default(ImmutableArray<MethodDef>)
+            : accs.Others.Select(GetMethod).ToImmutableArray();
+
+        return new EventDef(
+            parent, _reader.GetString(info.Name), type,
+            accs.Adder.IsNil ? null : GetMethod(accs.Adder),
+            accs.Remover.IsNil ? null : GetMethod(accs.Remover),
+            accs.Raiser.IsNil ? null : GetMethod(accs.Raiser),
+            otherAccessors,
+            info.Attributes
+        );
     }
 
     private ImmutableArray<TypeDesc> CreatePlaceholderGenericArgs(GenericParameterHandleCollection pars, bool isForMethod)

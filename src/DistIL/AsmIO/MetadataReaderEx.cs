@@ -9,6 +9,9 @@ internal static class MetadataReaderEx
 
     public static object? DecodeConst(this MetadataReader reader, ConstantHandle handle)
     {
+        if (handle.IsNil) {
+            return null;
+        }
         var cst = reader.GetConstant(handle);
         var blob = reader.GetBlobReader(cst.Value);
 

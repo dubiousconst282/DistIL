@@ -61,12 +61,16 @@ public readonly struct MethodSig
     public TypeDesc ReturnType { get; }
     public ImmutableArray<TypeDesc> ParamTypes { get; }
     public int NumGenericParams { get; }
+    public bool IsInstance => _hdr.IsInstance;
+
+    readonly SignatureHeader _hdr;
 
     public MethodSig(in MethodSignature<TypeDesc> srmSig)
     {
         ReturnType = srmSig.ReturnType;
         ParamTypes = srmSig.ParameterTypes;
         NumGenericParams = srmSig.GenericParameterCount;
+        _hdr = srmSig.Header;
     }
 
     public MethodSig(TypeDesc retType, params TypeDesc[] paramTypes)
@@ -82,6 +86,9 @@ public readonly struct MethodSig
             return false;
         }
         if (NumGenericParams != method.GenericParams.Length) {
+            return false;
+        }
+        if (IsInstance != method.IsInstance) {
             return false;
         }
         var p1 = method.StaticParams;

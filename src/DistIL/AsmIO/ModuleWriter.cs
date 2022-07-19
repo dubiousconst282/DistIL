@@ -42,7 +42,9 @@ internal class ModuleWriter
             AddString(asmName.CultureName),
             AddBlob(asmName.GetPublicKey()),
             (AssemblyFlags)asmName.Flags,
+#pragma warning disable SYSLIB0037 // AssemblyName.HashAlgorithm is obsolete
             (AssemblyHashAlgorithm)asmName.HashAlgorithm
+#pragma warning restore SYSLIB0037
         );
         _handleMap.Add(_mod, mainAsmHandle);
 
@@ -179,6 +181,9 @@ internal class ModuleWriter
         Assert(type.Fields.Count == 0 || _handleMap[type.Fields[0]] == firstFieldHandle);
         Assert(type.Methods.Count == 0 || _handleMap[type.Methods[0]] == firstMethodHandle);
 
+        if (type.GenericParams.Length > 0) {
+            _genericDefs.Add(type);
+        }
         if (type.IsNested) {
             _builder.AddNestedType(handle, (TypeDefinitionHandle)GetHandle(type.DeclaringType));
         }
@@ -188,8 +193,41 @@ internal class ModuleWriter
         foreach (var method in type.Methods) {
             EmitMethod(method);
         }
-        if (type.GenericParams.Length > 0) {
-            _genericDefs.Add(type);
+        int propIdx = 0;
+        foreach (var prop in type.Properties) {
+            var propHandle = _builder.AddProperty(prop.Attribs, AddString(prop.Name), EncodeMethodSig(prop.Signature));
+
+            Link(propHandle, prop.Getter, MethodSemanticsAttributes.Getter);
+            Link(propHandle, prop.Setter, MethodSemanticsAttributes.Setter);
+
+            foreach (var otherAcc in prop.OtherAccessors) {
+                Link(propHandle, otherAcc, MethodSemanticsAttributes.Other);
+            }
+            if (propIdx++ == 0) {
+                _builder.AddPropertyMap(handle, propHandle);
+            }
+        }
+        int evtIdx = 0;
+        foreach (var evt in type.Events) {
+            var evtHandle = _builder.AddEvent(evt.Attribs, AddString(evt.Name), GetHandle(evt.Type));
+
+            Link(evtHandle, evt.Adder, MethodSemanticsAttributes.Adder);
+            Link(evtHandle, evt.Remover, MethodSemanticsAttributes.Remover);
+            Link(evtHandle, evt.Raiser, MethodSemanticsAttributes.Raiser);
+
+            foreach (var otherAcc in evt.OtherAccessors) {
+                Link(evtHandle, otherAcc, MethodSemanticsAttributes.Other);
+            }
+            if (evtIdx++ == 0) {
+                _builder.AddEventMap(handle, evtHandle);
+            }
+        }
+
+        void Link(EntityHandle assoc, MethodDef? method, MethodSemanticsAttributes kind)
+        {
+            if (method != null) {
+                _builder.AddMethodSemantics(assoc, kind, (MethodDefinitionHandle)GetHandle(method));
+            }
         }
     }
 
@@ -410,6 +448,25 @@ internal class ModuleWriter
             }
         });
     }
+
+    private BlobHandle EncodeMethodSig(MethodSig sig)
+    {
+        return EncodeSig(b => {
+            //TODO: callconv, genericParamCount
+            var pars = sig.ParamTypes;
+            b.MethodSignature(default, sig.NumGenericParams, sig.IsInstance)
+                .Parameters(
+                    pars.Length,
+                    out var retTypeEnc, out var parsEnc
+                );
+            EncodeType(retTypeEnc.Type(), sig.ReturnType);
+            foreach (var par in pars) {
+                var parEnc = parsEnc.AddParameter();
+                EncodeType(parEnc.Type(), par);
+            }
+        });
+    }
+
 
     private BlobHandle EncodeSpecSig(MethodSpec method)
     {

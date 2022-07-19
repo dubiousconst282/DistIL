@@ -62,6 +62,8 @@ public class TypeDef : TypeDefOrSpec
 
     public override List<FieldDef> Fields { get; } = new();
     public override List<MethodDef> Methods { get; } = new();
+    public List<PropertyDef> Properties { get; } = new();
+    public List<EventDef> Events { get; } = new();
     public List<TypeDef> NestedTypes { get; } = new();
 
     public TypeDef(ModuleDef mod, string? ns, string name, TypeAttributes attribs = default, ImmutableArray<TypeDesc> genericParams = default)
@@ -94,6 +96,12 @@ public class TypeDef : TypeDefOrSpec
         }
         foreach (var handle in info.GetMethods()) {
             Methods.Add(loader.GetMethod(handle));
+        }
+        foreach (var handle in info.GetProperties()) {
+            Properties.Add(loader.DecodeProperty(this, handle));
+        }
+        foreach (var handle in info.GetEvents()) {
+            Events.Add(loader.DecodeEvent(this, handle));
         }
         foreach (var handle in info.GetNestedTypes()) {
             NestedTypes.Add(loader.GetType(handle));

@@ -34,8 +34,8 @@ public class Forestifier
         return use.Block != def.Block || interfs.IsDefInterferedBeforeUse(def, use);
     }
 
-    /// <summary> Returns whether the specified instruction is a rooted tree or statement (i.e. must be assigned into a temp variable). </summary>
-    public bool IsRootedTree(Instruction inst) => _trees.Contains(inst) || !inst.HasResult;
+    /// <summary> Returns whether the specified instruction is a rooted tree or statement (i.e. must be emitted and/or assigned into a temp variable). </summary>
+    public bool IsRootedTree(Instruction inst) => _trees.Contains(inst) || !inst.HasResult || (inst.NumUses == 0 && inst.HasSideEffects);
 
     /// <summary> Returns whether the specified instruction is a leaf (i.e. can be inlined into an operand). </summary>
     public bool IsLeaf(Instruction inst) => !IsRootedTree(inst);

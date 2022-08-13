@@ -3,18 +3,16 @@ namespace DistIL.Passes;
 using DistIL.Analysis;
 using DistIL.IR;
 
-//This pass implements the techniques described in
-//"Revisiting Out-of-SSA Translation for Correctness, Code Quality, and Efficiency"
+//This pass is based on "Revisiting Out-of-SSA Translation for Correctness, Code Quality, and Efficiency"
 //by Boissinot et al. (https://hal.inria.fr/inria-00349925v1/document)
 //
 //The idea is to isolate phis (split live range of its dependencies) by inserting parallel copies 
-//for each argument into their respective predecessor blocks, and for each phi
-//result (this solves the lost copy/swap problem).
+//for each argument into their respective predecessor blocks, and for each phi result (to solve the lost copy/swap problem).
 //Then, all non-interfering copies can be coalesced into the same "congruence class" (MergeList).
 //
-//The paper describes an efficient way to check for interferences in two merge lists, with
+//The paper describes an efficient algorithm to check for interferences in two merge lists, with
 //the notion of value interference (two variables with the same value don't interfere).
-//It also shows to convert parallel copies into a simple sequence of load/stores.
+//It also describes an algorithm to convert parallel copies into a simple sequence of load/stores.
 
 /// <summary> Replace all phi instructions with local variables. </summary>
 public class RemovePhis : MethodPass
@@ -157,8 +155,8 @@ public class RemovePhis : MethodPass
     {
         var copiesToSeq = new List<(Variable Dst, Variable Src)>(); //temp list of vars that need to be sequentialized
 
-        //Blocks with no copies have no phis, so this is fine
         foreach (var (block, (phiCopies, argCopies)) in _copies) {
+            //Note: blocks with no copies have no phis, so we don't need a separate loop over each block
             foreach (var phi in block.Phis()) {
                 phi.Remove();
             }

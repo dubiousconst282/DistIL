@@ -3,7 +3,11 @@ namespace DistIL.Passes;
 using DistIL.IR;
 using DistIL.Passes.Linq;
 
-//See docs/Linq-Optimization.md for some notes.
+//TODO: should we handle consumed/iterated queries?
+//Although a specialized transform would be more effective, general passes like
+//method inlining, lambda inlining and SROA would probably give most of this optimization
+//for free, so it may not be worth pursuing it too far. (We'd probably need to invest in 
+//other complicated passes to handle state machines and weird CFGs.)
 public class ExpandLinq : MethodPass
 {
     TypeDesc? t_Enumerable;
@@ -37,9 +41,28 @@ public class ExpandLinq : MethodPass
             var synther = new QuerySynthesizer(ctx.Method, startStage, endStage);
             synther.Synth();
             synther.Replace();
+            ctx.InvalidateAll();
         }
     }
-
+    //Original Code:
+    //  int[] ArrayTransform(int[] arr) {
+    //      return arr.Where(x => x > 0)
+    //              .Select(x => x * 2)
+    //              .ToArray();
+    //  }
+    //Lowered:
+    //  class _PrivData {
+    //      ...
+    //      static bool Pred(int x) => x > 0; 
+    //      static int Mapper(int x) => x * 2;
+    //  }
+    //  int[] ArrayTransform_Lowered(int[] arr) {
+    //      var pred = _PrivData.PredCache ??= new Func<int, bool>(_PrivData.Instance, &_PrivData.Pred);
+    //      var stage1 = Enumerable.Where(arr, pred);
+    //      var mapper = _PrivData.MapperCache ??= new Func<int, bool>(_PrivData.Instance, &_PrivData.Mapper);
+    //      var stage2 = Enumerable.Select(stage1, mapper);
+    //      return stage2.ToArray();
+    //  }
     private QueryStage? CreateStage(Instruction inst, bool onlyIfRoot = false)
     {
         if (!(inst is CallInst call && call.Method.DeclaringType == t_Enumerable)) return null;

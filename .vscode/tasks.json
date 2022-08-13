@@ -7,7 +7,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/src/DistIL.Playground/DistIL.Playground.csproj",
+                "${workspaceFolder}/src/DistIL.Cli/DistIL.Cli.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
@@ -21,7 +21,7 @@
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/src/DistIL.Playground/DistIL.Playground.csproj"
+                "${workspaceFolder}/src/DistIL.Cli/DistIL.Cli.csproj"
             ],
             "problemMatcher": "$msCompile"
         }

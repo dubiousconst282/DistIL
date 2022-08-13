@@ -1,11 +1,20 @@
+using System.Text.RegularExpressions;
+
 using DistIL.AsmIO;
+using DistIL.CodeGen.Cil;
 using DistIL.Frontend;
 using DistIL.IR.Utils;
-using DistIL.CodeGen.Cil;
 using DistIL.Passes;
 
+if (args.Length == 0) {
+    //Set launch args on VS: Proj Settings > Debug > Cmd Args | VSCode: launch.json
+    //(you can also hardcode them here, whatever.)
+    Console.WriteLine($"Arguments: <input module path> [output module path] [ir dump dir] [dump filter regex]");
+    return;
+}
+
 var resolver = new ModuleResolver();
-var module = resolver.Load("../TestSamples/CsSamples/bin/Debug/IRTests.dll");
+var module = resolver.Load(args[0]);
 
 var mp1 = new MethodPassManager();
 mp1.Add(new SimplifyCFG());
@@ -21,10 +30,13 @@ mp2.Add(new DeadCodeElim());
 mp2.Add(new ValueNumbering());
 mp2.Add(new SimplifyCFG());
 mp2.Add(new DeadCodeElim());
-//mp2.Add(new DistIL.Passes.Utils.NamifyIR());
-mp2.Add(new PrintPass());
+if (args.Length >= 3) {
+    mp2.Add(new DumpPass() {
+        Directory = args[2], 
+        Filter = args.Length >= 4 ? args[3] : null
+    });
+}
 mp2.Add(new RemovePhis());
-
 
 var modPm = new ModulePassManager();
 modPm.Add(new ImportPass());
@@ -34,22 +46,30 @@ modPm.Add(new ExportPass());
 
 modPm.Run(module);
 
-using var outStream = File.Create("../../logs/WriterOut.dll");
-module.Save(outStream);
+if (args.Length >= 2) {
+    using var outStream = File.Create(args[1]);
+    module.Save(outStream);
+}
 
-
-class PrintPass : MethodPass
+class DumpPass : MethodPass
 {
+    public string? Directory { get; init; }
+    public string? Filter { get; init; }
+
     public override void Run(MethodTransformContext ctx)
     {
         var diags = Verifier.Diagnose(ctx.Method);
         if (diags.Count > 0) {
             Console.WriteLine($"BadIR in {ctx.Method}: {string.Join(" | ", diags)}");
         }
-        if (ctx.Method.Definition.Name == "AppendSequence") {
-            IRPrinter.ExportPlain(ctx.Method, "../../logs/code.txt");
-            IRPrinter.ExportDot(ctx.Method, "../../logs/cfg.dot");
-            IRPrinter.ExportForest(ctx.Method, "../../logs/forest.txt");
+        var def = ctx.Method.Definition;
+        string name = $"{def.DeclaringType.Name}::{def.Name}";
+        if (Filter == null || Regex.IsMatch(name, Filter)) {
+            var invalidNameChars = Path.GetInvalidFileNameChars();
+            name = new string(name.Select(c => Array.IndexOf(invalidNameChars, c) < 0 ? c : '_').ToArray());
+
+            IRPrinter.ExportPlain(ctx.Method, $"{Directory}/{name}.txt");
+            IRPrinter.ExportDot(ctx.Method, $"{Directory}/{name}.dot");
         }
     }
 }

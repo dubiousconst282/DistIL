@@ -10,9 +10,14 @@
             "request": "launch",
             "preLaunchTask": "build",
             // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/src/DistIL.Playground/bin/Debug/DistIL.Playground.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/src/DistIL.Playground",
+            "program": "${workspaceFolder}/src/DistIL.Cli/bin/Debug/DistIL.Cli.dll",
+            "args": [
+                "${workspaceFolder}/logs/TestSamples/CsSamples/bin/Debug/IRTests.dll",
+                "${workspaceFolder}/logs/WriterOut.dll",
+                "${workspaceFolder}/logs/dumps/",
+                ".+"
+            ],
+            "cwd": "${workspaceFolder}/src/DistIL.Cli/",
             // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
             "console": "internalConsole",
             "stopAtEntry": false

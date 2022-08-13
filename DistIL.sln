@@ -7,7 +7,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistIL", "src\DistIL\DistIL
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistIL.Tests", "src\DistIL.Tests\DistIL.Tests.csproj", "{38A8415B-D6E3-4953-9A9C-FD407B808922}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DistIL.Playground", "src\DistIL.Playground\DistIL.Playground.csproj", "{F962BBCC-78B5-4BF7-A142-64A27F353315}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DistIL.Cli", "src\DistIL.Cli\DistIL.Cli.csproj", "{F962BBCC-78B5-4BF7-A142-64A27F353315}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

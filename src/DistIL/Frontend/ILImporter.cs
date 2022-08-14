@@ -84,6 +84,7 @@ public class ILImporter
             }
             if (hasFilter) {
                 filterBlock!.PushNoEmit(guard);
+                startBlock.Block.Connect(filterBlock.Block);
             }
             //Set active region for leave/endf* instructions
             ActiveRegion(guard, region.TryStart, region.TryEnd);
@@ -133,7 +134,7 @@ public class ILImporter
         var leaders = new BitSet(codeSize);
 
         foreach (ref var inst in code) {
-            if (!BlockState.IsTerminator(ref inst)) continue;
+            if (!inst.OpCode.IsTerminator()) continue;
 
             if (inst.Operand is int targetOffset) {
                 leaders.Set(targetOffset);

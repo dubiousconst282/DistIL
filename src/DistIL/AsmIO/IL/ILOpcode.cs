@@ -13,9 +13,6 @@ public partial class ILCodes
         SBPushShift = 17,   // 0000000000XXXXX00000000000000000
         SBMask = 0x1F,
 
-        SizeShift = 22,     // 00000000XX0000000000000000000000
-        SizeMask = 0x03,
-
         EndsUncondJmpBlkFlag = 0x01000000,   // 0000000X000000000000000000000000
 
         StackChangeShift = 28;               // XXXX0000000000000000000000000000
@@ -66,7 +63,15 @@ public partial class ILCodes
         => GetFlag(code, StackChangeShift, ~0);
 
     public static int GetSize(this ILCode code)
-        => GetFlag(code, SizeShift, SizeMask);
+        => (int)code <= 0xFF ? 1 : 2;
+
+    /// <summary> Checks whether the specified opcode terminates a basic block. </summary>
+    public static bool IsTerminator(this ILCode code)
+        => GetFlowControl(code) is
+            ILFlowControl.Branch or
+            ILFlowControl.CondBranch or
+            ILFlowControl.Return or
+            ILFlowControl.Throw;
 
     public static string GetName(this ILCode code)
     {
@@ -75,7 +80,7 @@ public partial class ILCodes
             return $"unk.{(int)code:x4}";
         }
         // Create and cache the opcode names lazily. They should be rarely used (only for logging, etc.)
-        // Note that we do not any locks here because of we always get the same names. The last one wins.
+        // Note that we don't use any locks here because we always get the same names. The last one wins.
         _nameCache ??= new string[TableSize];
         string name = _nameCache[idx];
         if (name == null) {

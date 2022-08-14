@@ -3,12 +3,12 @@ namespace DistIL.CodeGen.Cil;
 using DistIL.AsmIO;
 using DistIL.IR;
 
-public partial class ILGenerator
+internal static class ILTables
 {
 #pragma warning disable format
     const bool T = true, F = false;
 
-    private static ILCode GetCodeForBinOp(BinaryOp op)
+    public static ILCode GetBinaryCode(BinaryOp op)
     {
         return op switch {
             BinaryOp.Add  or BinaryOp.FAdd  => ILCode.Add,
@@ -34,7 +34,7 @@ public partial class ILGenerator
         };
     }
 
-    private static ILCode GetCodeForUnOp(UnaryOp op)
+    public static ILCode GetUnaryCode(UnaryOp op)
     {
         return op switch {
             UnaryOp.FNeg or UnaryOp.Neg => ILCode.Neg,
@@ -43,7 +43,7 @@ public partial class ILGenerator
         };
     }
 
-    private static ILCode GetCodeForConv(ConvertInst inst)
+    public static ILCode GetConvertCode(ConvertInst inst)
     {
         var srcType = inst.Value.ResultType;
         var dstType = inst.ResultType;
@@ -91,9 +91,9 @@ public partial class ILGenerator
         };
     }
 
-    private static bool GetCodeForBranch(CompareOp op, out ILCode code)
+    public static ILCode GetBranchCode(CompareOp op)
     {
-        code = op switch {
+        return op switch {
             CompareOp.Eq  or CompareOp.FOeq => ILCode.Beq,
             CompareOp.Ne  or CompareOp.FUne => ILCode.Bne_Un,
             CompareOp.Slt or CompareOp.FOlt => ILCode.Blt,
@@ -106,10 +106,9 @@ public partial class ILGenerator
             CompareOp.Uge or CompareOp.FUge => ILCode.Bge_Un,
             _ => ILCode.Nop
         };
-        return code != ILCode.Nop;
     }
 
-    private static (ILCode Code, bool Invert) GetCodeForCompare(CompareOp op)
+    public static (ILCode Code, bool Invert) GetCompareCode(CompareOp op)
     {
         return op switch {
             CompareOp.Eq    => (ILCode.Ceq,     F),
@@ -141,77 +140,84 @@ public partial class ILGenerator
         };
     }
 
-    private static (ILCode Ld, ILCode St) GetCodeForPtrAcc(TypeDesc type)
+    public static readonly (ILCode Normal, ILCode Inline, ILCode Short)[] VarCodes = {
+        /* Load  Var */ (ILCode.Ldloc,  ILCode.Ldloc_0, ILCode.Ldloc_S),
+        /* Store Var */ (ILCode.Stloc,  ILCode.Stloc_0, ILCode.Stloc_S),
+        /* Addr  Var */ (ILCode.Ldloca, ILCode.Nop,     ILCode.Ldloca_S),
+        /* Load  Arg */ (ILCode.Ldarg,  ILCode.Ldarg_0, ILCode.Ldarg_S),
+        /* Store Arg */ (ILCode.Starg,  ILCode.Nop,     ILCode.Starg_S),
+        /* Addr  Arg */ (ILCode.Ldarga, ILCode.Nop,     ILCode.Ldarga_S),
+    };
+    
+    public static ILCode GetShortBranchCode(ILCode code) => code switch {
+        ILCode.Br      => ILCode.Br_S,
+        ILCode.Brfalse => ILCode.Brfalse_S,
+        ILCode.Brtrue  => ILCode.Brtrue_S,
+        ILCode.Beq     => ILCode.Beq_S,
+        ILCode.Bge     => ILCode.Bge_S,
+        ILCode.Bgt     => ILCode.Bgt_S,
+        ILCode.Ble     => ILCode.Ble_S,
+        ILCode.Blt     => ILCode.Blt_S,
+        ILCode.Bne_Un  => ILCode.Bne_Un_S,
+        ILCode.Bge_Un  => ILCode.Bge_Un_S,
+        ILCode.Bgt_Un  => ILCode.Bgt_Un_S,
+        ILCode.Ble_Un  => ILCode.Ble_Un_S,
+        ILCode.Blt_Un  => ILCode.Blt_Un_S,
+        ILCode.Leave   => ILCode.Leave_S,
+        _ => default
+    };
+    public static ILCode GetLongBranchCode(ILCode code) => code switch {
+        ILCode.Br_S      => ILCode.Br,
+        ILCode.Brfalse_S => ILCode.Brfalse,
+        ILCode.Brtrue_S  => ILCode.Brtrue,
+        ILCode.Beq_S     => ILCode.Beq,
+        ILCode.Bge_S     => ILCode.Bge,
+        ILCode.Bgt_S     => ILCode.Bgt,
+        ILCode.Ble_S     => ILCode.Ble,
+        ILCode.Blt_S     => ILCode.Blt,
+        ILCode.Bne_Un_S  => ILCode.Bne_Un,
+        ILCode.Bge_Un_S  => ILCode.Bge_Un,
+        ILCode.Bgt_Un_S  => ILCode.Bgt_Un,
+        ILCode.Ble_Un_S  => ILCode.Ble_Un,
+        ILCode.Blt_Un_S  => ILCode.Blt_Un,
+        ILCode.Leave_S   => ILCode.Leave,
+        _ => default
+    };
+
+    public static ILCode GetPtrAccessCode(TypeDesc type, bool ld)
     {
         return type.Kind switch {
-            TypeKind.Bool or TypeKind.Byte      => (ILCode.Ldind_U1, ILCode.Stind_I1),
-            TypeKind.SByte                      => (ILCode.Ldind_I1, ILCode.Stind_I1),
-            TypeKind.Char or TypeKind.UInt16    => (ILCode.Ldind_U2, ILCode.Stind_I2),
-            TypeKind.Int16                      => (ILCode.Ldind_I2, ILCode.Stind_I2),
-            TypeKind.Int32                      => (ILCode.Ldind_I4, ILCode.Stind_I4),
-            TypeKind.UInt32                     => (ILCode.Ldind_U4, ILCode.Stind_I4),
-            TypeKind.Int64 or TypeKind.UInt64   => (ILCode.Ldind_I8, ILCode.Stind_I8),
-            TypeKind.Single                     => (ILCode.Ldind_R4, ILCode.Stind_R4),
-            TypeKind.Double                     => (ILCode.Ldind_R8, ILCode.Stind_R8),
-            TypeKind.IntPtr or TypeKind.UIntPtr => (ILCode.Ldind_I, ILCode.Stind_I),
-            _                                   => (ILCode.Ldobj, ILCode.Stobj)
+            TypeKind.Bool or TypeKind.Byte      => ld ? ILCode.Ldind_U1 : ILCode.Stind_I1,
+            TypeKind.SByte                      => ld ? ILCode.Ldind_I1 : ILCode.Stind_I1,
+            TypeKind.Char or TypeKind.UInt16    => ld ? ILCode.Ldind_U2 : ILCode.Stind_I2,
+            TypeKind.Int16                      => ld ? ILCode.Ldind_I2 : ILCode.Stind_I2,
+            TypeKind.Int32                      => ld ? ILCode.Ldind_I4 : ILCode.Stind_I4,
+            TypeKind.UInt32                     => ld ? ILCode.Ldind_U4 : ILCode.Stind_I4,
+            TypeKind.Int64 or TypeKind.UInt64   => ld ? ILCode.Ldind_I8 : ILCode.Stind_I8,
+            TypeKind.Single                     => ld ? ILCode.Ldind_R4 : ILCode.Stind_R4,
+            TypeKind.Double                     => ld ? ILCode.Ldind_R8 : ILCode.Stind_R8,
+            TypeKind.IntPtr or TypeKind.UIntPtr => ld ? ILCode.Ldind_I : ILCode.Stind_I,
+            _                                   => ld ? ILCode.Ldobj : ILCode.Stobj
         };
     }
 
-    enum VarOp { Load, Store, Addr }
-
-    private static (ILCode Norm, ILCode Inline, ILCode Short) GetCodesForVar(VarOp op, bool isArg)
-    {
-        return (op, isArg) switch {
-            (VarOp.Load,    F) => (ILCode.Ldloc,  ILCode.Ldloc_0, ILCode.Ldloc_S),
-            (VarOp.Store,   F) => (ILCode.Stloc,  ILCode.Stloc_0, ILCode.Stloc_S),
-            (VarOp.Addr,    F) => (ILCode.Ldloca, ILCode.Nop,     ILCode.Ldloca_S),
-            (VarOp.Load,    T) => (ILCode.Ldarg,  ILCode.Ldarg_0, ILCode.Ldarg_S),
-            (VarOp.Store,   T) => (ILCode.Starg,  ILCode.Nop,     ILCode.Starg_S),
-            (VarOp.Addr,    T) => (ILCode.Ldarga, ILCode.Nop,     ILCode.Ldarga_S),
-            _ => throw new InvalidOperationException()
-        };
-    }
-
-    private static readonly Dictionary<TypeKind, ILCode> _ldelemMacros = new() {
-        { TypeKind.Bool,    ILCode.Ldelem_U1 },
-        { TypeKind.Char,    ILCode.Ldelem_U2 },
-        { TypeKind.SByte,   ILCode.Ldelem_I1 },
-        { TypeKind.Int16,   ILCode.Ldelem_I2 },
-        { TypeKind.Int32,   ILCode.Ldelem_I4 },
-        { TypeKind.Int64,   ILCode.Ldelem_I8 },
-        { TypeKind.Byte,    ILCode.Ldelem_U1 },
-        { TypeKind.UInt16,  ILCode.Ldelem_U2 },
-        { TypeKind.UInt32,  ILCode.Ldelem_U4 },
-        { TypeKind.UInt64,  ILCode.Ldelem_I8 },
-        { TypeKind.Single,  ILCode.Ldelem_R4 },
-        { TypeKind.Double,  ILCode.Ldelem_R8 },
-        { TypeKind.IntPtr,  ILCode.Ldelem_I },
-        { TypeKind.UIntPtr, ILCode.Ldelem_I },
-        { TypeKind.Pointer, ILCode.Ldelem_I },
-
-        { TypeKind.Object,  ILCode.Ldelem_Ref },
-        { TypeKind.String,  ILCode.Ldelem_Ref },
-    };
-    private static readonly Dictionary<TypeKind, ILCode> _stelemMacros = new() {
-        { TypeKind.Bool,    ILCode.Stelem_I1 },
-        { TypeKind.Char,    ILCode.Stelem_I2 },
-        { TypeKind.SByte,   ILCode.Stelem_I1 },
-        { TypeKind.Int16,   ILCode.Stelem_I2 },
-        { TypeKind.Int32,   ILCode.Stelem_I4 },
-        { TypeKind.Int64,   ILCode.Stelem_I8 },
-        { TypeKind.Byte,    ILCode.Stelem_I1 },
-        { TypeKind.UInt16,  ILCode.Stelem_I2 },
-        { TypeKind.UInt32,  ILCode.Stelem_I4 },
-        { TypeKind.UInt64,  ILCode.Stelem_I8 },
-        { TypeKind.Single,  ILCode.Stelem_R4 },
-        { TypeKind.Double,  ILCode.Stelem_R8 },
-        { TypeKind.IntPtr,  ILCode.Stelem_I },
-        { TypeKind.UIntPtr, ILCode.Stelem_I },
-        { TypeKind.Pointer, ILCode.Stelem_I },
-
-        { TypeKind.Object,  ILCode.Stelem_Ref },
-        { TypeKind.String,  ILCode.Stelem_Ref },
+    public static ILCode GetArrayElemMacro(TypeDesc type, bool ld) => type.Kind switch {
+        TypeKind.Bool    => ld ? ILCode.Ldelem_U1 : ILCode.Stelem_I1,
+        TypeKind.Char    => ld ? ILCode.Ldelem_U2 : ILCode.Stelem_I2,
+        TypeKind.SByte   => ld ? ILCode.Ldelem_I1 : ILCode.Stelem_I1,
+        TypeKind.Int16   => ld ? ILCode.Ldelem_I2 : ILCode.Stelem_I2,
+        TypeKind.Int32   => ld ? ILCode.Ldelem_I4 : ILCode.Stelem_I4,
+        TypeKind.Int64   => ld ? ILCode.Ldelem_I8 : ILCode.Stelem_I8,
+        TypeKind.Byte    => ld ? ILCode.Ldelem_U1 : ILCode.Stelem_I1,
+        TypeKind.UInt16  => ld ? ILCode.Ldelem_U2 : ILCode.Stelem_I2,
+        TypeKind.UInt32  => ld ? ILCode.Ldelem_U4 : ILCode.Stelem_I4,
+        TypeKind.UInt64  => ld ? ILCode.Ldelem_I8 : ILCode.Stelem_I8,
+        TypeKind.Single  => ld ? ILCode.Ldelem_R4 : ILCode.Stelem_R4,
+        TypeKind.Double  => ld ? ILCode.Ldelem_R8 : ILCode.Stelem_R8,
+        TypeKind.IntPtr  => ld ? ILCode.Ldelem_I  : ILCode.Stelem_I1,
+        TypeKind.UIntPtr => ld ? ILCode.Ldelem_I  : ILCode.Stelem_I1,
+        TypeKind.Pointer => ld ? ILCode.Ldelem_I  : ILCode.Stelem_I1,
+        _ => default
     };
 #pragma warning restore format
 }

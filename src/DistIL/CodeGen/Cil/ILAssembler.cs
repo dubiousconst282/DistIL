@@ -1,141 +1,185 @@
 ﻿namespace DistIL.CodeGen.Cil;
 
 using DistIL.AsmIO;
+using DistIL.IR;
 
-public class ILAssembler
+using EHRegionKind = System.Reflection.Metadata.ExceptionRegionKind;
+
+/// <summary> Helper for building a list of <see cref="ILInstruction"/>s. </summary>
+internal class ILAssembler
 {
-    ILInstruction[] _insts = new ILInstruction[16];
-    int _pos;
+    List<ILInstruction> _insts = new();
+    Dictionary<Variable, int> _varSlots = new();
+    Dictionary<BasicBlock, int> _blockStarts = new();
     int _stackDepth = 0, _maxStackDepth = 0;
 
-    /// <summary> Creates a new empty label to be marked later with <see cref="MarkLabel(Label)"/>. </summary>
-    public Label DefineLabel()
+    /// <summary> Specifies that next emitted instructions belongs to the specified block. </summary>
+    public void StartBlock(BasicBlock block)
     {
-        return new Label();
+        _blockStarts.Add(block, _insts.Count);
     }
-    /// <summary> Marks the label to point to the next instruction. </summary>
-    public void MarkLabel(Label lbl)
-    {
-        Ensure(lbl._index < 0, "Label already marked");
 
-        //Check and remove branches like "br IL_0002; IL_0002: ..."
-        while (_pos > 0 && _insts[_pos - 1].Operand == lbl) {
-            _pos--;
-        }
-        lbl._index = _pos;
-    }
-    /// <summary> Creates a label that points to the next instruction. </summary>
-    public Label AddLabel()
+    public void AddRegion(ref LayoutedRegion region)
     {
-        var label = DefineLabel();
-        MarkLabel(label);
-        return label;
+
     }
+
     public void Emit(ILCode op, object? operand = null)
     {
-        if (_pos >= _insts.Length) {
-            Array.Resize(ref _insts, _insts.Length * 2);
+        _insts.Add(new ILInstruction(op, operand));
+
+        switch (op) {
+            case ILCode.Call or ILCode.Callvirt or ILCode.Newobj: {
+                var method = (MethodDesc)operand!;
+                _stackDepth += method.Params.Length - (op == ILCode.Newobj ? 1 : 0);
+                _stackDepth -= method.HasResult ? 1 : 0;
+                break;
+            }
+            case ILCode.Ldfld or ILCode.Ldflda or ILCode.Stfld: {
+                var field = (FieldDesc)operand!;
+                _stackDepth -= field.IsInstance ? 1 : 0;
+                _stackDepth -= op == ILCode.Stfld ? 1 : 0;
+                break;
+            }
+            case ILCode.Ret: break; //depth is reset after block terminators
+            default: {
+                Assert(op.GetStackBehaviourPush() != ILStackBehaviour.Varpush);
+                Assert(op.GetStackBehaviourPop() != ILStackBehaviour.Varpop);
+                _stackDepth += op.GetStackChange();
+                break;
+            }
         }
-        _insts[_pos++] = new ILInstruction(op, operand);
-        _stackDepth += op.GetStackChange();
         _maxStackDepth = Math.Max(_maxStackDepth, _stackDepth);
+
+        if (op.IsTerminator()) {
+            _stackDepth = 0;
+        }
     }
 
-    public (ArraySegment<ILInstruction> Code, int MaxStack) Bake()
+    public void EmitLoad(Value var) => EmitVarInst(var, 0);
+    public void EmitStore(Value var) => EmitVarInst(var, 1);
+    public void EmitAddrOf(Value var) => EmitVarInst(var, 2);
+
+    private void EmitVarInst(Value var, int codeTableIdx)
+    {
+        int index;
+        if (var is Argument arg) {
+            index = arg.Index;
+            codeTableIdx += 3;
+        } else if (!_varSlots.TryGetValue((Variable)var, out index)) {
+            _varSlots[(Variable)var] = index = _varSlots.Count;
+        }
+        ref var codes = ref ILTables.VarCodes[codeTableIdx];
+
+        if (index < 4 && codes.Inline != ILCode.Nop) {
+            Emit((ILCode)((int)codes.Inline + index));
+        } else if (index < 256) {
+            Emit(codes.Short, index);
+        } else {
+            Emit(codes.Normal, index);
+        }
+    }
+
+    public void EmitLdcI4(int value)
+    {
+        if (value >= -1 && value <= 8) {
+            Emit((ILCode)((int)ILCode.Ldc_I4_0 + value));
+        } else if ((sbyte)value == value) {
+            Emit(ILCode.Ldc_I4_S, value);
+        } else {
+            Emit(ILCode.Ldc_I4, value);
+        }
+    }
+
+    public ILMethodBody Seal(LayoutedCFG layout)
     {
         ComputeOffsets();
-        return (
-            Code: new(_insts, 0, _pos),
-            MaxStack: _maxStackDepth
-        );
+        
+        return new ILMethodBody() {
+            ExceptionRegions = ComputeEHRegions(layout),
+            MaxStack = _maxStackDepth,
+            Instructions = _insts,
+            Locals = _varSlots.Keys.ToList(),
+            InitLocals = true //TODO: preserve InitLocals
+        };
     }
 
     private void ComputeOffsets()
     {
-        //Compute offsets
-        var insts = _insts.AsSpan(0, _pos);
-        int offset = 0;
-        foreach (ref var inst in insts) {
-            inst.Offset = offset;
-            offset += inst.GetSize();
-        }
-        //Optimize branch sizes
-        //This loop should always converge, TrySimplify will either shrink code or do nothing.
-        var prevOffsets = new Dictionary<int, int>();
-        bool changed = true;
-        while (changed) {
-            changed = false;
+        var insts = _insts.AsSpan();
 
-            offset = 0;
-            for (int i = 0; i < insts.Length; i++) {
-                changed |= TrySimplify(insts, i);
-                insts[i].Offset = offset;
-                offset += insts[i].GetSize();
+        var branchIndices = new List<int>();
+        int currOffset = 0;
+        for (int i = 0; i < insts.Length; i++) {
+            ref var inst = ref insts[i];
+            if (inst.Operand is BasicBlock or BasicBlock[]) {
+                branchIndices.Add(i);
             }
+            inst.Offset = currOffset;
+            currOffset += inst.GetSize();
         }
-        //Replace labels with offsets
-        foreach (ref var inst in insts) {
-            if (inst.Operand is Label label) {
-                inst.Operand = insts[label._index].Offset;
-            }
-            else if (inst.Operand is Label[] labels) {
-                var offsets = new int[labels.Length];
-                for (int i = 0; i < labels.Length; i++) {
-                    offsets[i] = insts[labels[i]._index].Offset;
+
+        //TODO: Branch displacement optimization
+        //See "A Simple, Linear-Time Algorithm for x86 Jump Encoding" - https://arxiv.org/pdf/0812.4973.pdf
+
+        //Replace blocks with actual offsets
+        foreach (int i in branchIndices) {
+            ref var inst = ref insts[i];
+
+            if (inst.Operand is BasicBlock target) {
+                inst.Operand = GetBlockOffset(target);
+            } else if (inst.Operand is BasicBlock[] targets) {
+                var offsets = new int[targets.Length];
+                for (int j = 0; j < targets.Length; j++) {
+                    offsets[j] = GetBlockOffset(targets[j]);
                 }
                 inst.Operand = offsets;
             }
         }
+    }
 
-        bool TrySimplify(Span<ILInstruction> insts, int index)
-        {
-            ref var inst = ref insts[index];
-            if (inst.Operand is Label target) {
-                int delta = insts[target._index].Offset - inst.GetEndOffset();
+    private int GetBlockOffset(BasicBlock block)
+    {
+        return _insts[_blockStarts[block]].Offset;
+    }
 
-                bool changed = prevOffsets.TryGetValue(index, out int prevOffset) && prevOffset != inst.Offset;
-                prevOffsets[index] = inst.Offset;
-
-                if (delta >= -128 && delta <= 127 && _shortBranches.TryGetValue(inst.OpCode, out var shortOp)) {
-                    inst.OpCode = shortOp;
-                    changed = true;
-                }
-                return changed;
+    private List<ExceptionRegion> ComputeEHRegions(LayoutedCFG layout)
+    {
+        var ehRegions = new List<ExceptionRegion>(layout.Regions.Length);
+        foreach (ref var region in layout.Regions.AsSpan()) {
+            var guard = region.Guard;
+            
+            var ehr = new ExceptionRegion() {
+                Kind = guard.Kind switch {
+                    GuardKind.Catch => guard.HasFilter ? EHRegionKind.Filter : EHRegionKind.Catch,
+                    GuardKind.Fault => EHRegionKind.Fault,
+                    GuardKind.Finally => EHRegionKind.Finally
+                },
+                TryStart = GetBlockOffset(region.TryRange.Start),
+                TryEnd = GetBlockOffset(region.TryRange.End),
+                HandlerStart = GetBlockOffset(region.HandlerRange.Start),
+                HandlerEnd = GetBlockOffset(region.HandlerRange.End)
+            };
+            if (ehr.Kind == EHRegionKind.Catch) {
+                ehr.CatchType = (TypeDefOrSpec?)guard.CatchType;
             }
-            return false;
+            if (guard.HasFilter) {
+                Assert(GetBlockOffset(region.FilterRange.End) == ehr.HandlerStart);
+                ehr.FilterStart = GetBlockOffset(region.FilterRange.Start);
+            }
+            ehRegions.Add(ehr);
         }
+        int GetBlockOffset(int index) => this.GetBlockOffset(layout.Blocks[index]);
+
+        return ehRegions;
     }
 
     public override string ToString()
     {
         var sb = new StringBuilder();
-        foreach (var inst in _insts.AsSpan(0, _pos)) {
+        foreach (ref var inst in _insts.AsSpan()) {
             sb.AppendLine(inst.ToString());
         }
         return sb.ToString();
     }
-
-#pragma warning disable format
-    private static readonly Dictionary<ILCode, ILCode> _shortBranches = new() {
-        { ILCode.Br,        ILCode.Br_S },
-        { ILCode.Brfalse,   ILCode.Brfalse_S },
-        { ILCode.Brtrue,    ILCode.Brtrue_S },
-        { ILCode.Beq,       ILCode.Beq_S },
-        { ILCode.Bge,       ILCode.Bge_S },
-        { ILCode.Bgt,       ILCode.Bgt_S },
-        { ILCode.Ble,       ILCode.Ble_S },
-        { ILCode.Blt,       ILCode.Blt_S },
-        { ILCode.Bne_Un,    ILCode.Bne_Un_S },
-        { ILCode.Bge_Un,    ILCode.Bge_Un_S },
-        { ILCode.Bgt_Un,    ILCode.Bgt_Un_S },
-        { ILCode.Ble_Un,    ILCode.Ble_Un_S },
-        { ILCode.Blt_Un,    ILCode.Blt_Un_S },
-    };
-#pragma warning restore format
-}
-public class Label
-{
-    internal int _index = -1;
-
-    public override string ToString() => $"LBL_{_index}";
 }

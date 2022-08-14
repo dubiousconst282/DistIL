@@ -97,7 +97,7 @@ class ExportPass : ModulePass
             if (method.Body == null) continue;
 
             try {
-                method.ILBody = new ILGenerator(method.Body).Bake();
+                method.ILBody = new ILGenerator(method.Body).Process();
             } catch (Exception ex) {
                 Console.WriteLine($"FailEmit: {method} {ex.Message}");
             }

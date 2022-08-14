@@ -9,9 +9,9 @@ public partial class ILGenerator : InstVisitor
     MethodBody _method;
     Forestifier _forest;
     ILAssembler _asm = new();
-    Dictionary<BasicBlock, Label> _blockLabels = new();
-    Dictionary<Variable, int> _varSlots = new();
     Dictionary<Instruction, Variable> _instSlots = new();
+
+    BasicBlock? _nextBlock;
 
     public ILGenerator(MethodBody method)
     {
@@ -19,32 +19,36 @@ public partial class ILGenerator : InstVisitor
         _forest = new Forestifier(method);
     }
 
-    public ILMethodBody Bake()
+    public ILMethodBody Process()
     {
-        foreach (var block in _method) {
-            _asm.MarkLabel(GetLabel(block));
+        var layout = LayoutedCFG.Compute(_method);
+        var blocks = layout.Blocks;
+
+        for (int i = 0; i < blocks.Length; i++) {
+            var block = blocks[i];
+            _nextBlock = i + 1 < blocks.Length ? blocks[i + 1] : null;
+
+            _asm.StartBlock(block);
+
+            var guard = layout.GetCatchGuard(block);
+            if (guard != null) {
+                _asm.EmitStore(GetSlot(guard));
+            }
             EmitBlock(block);
         }
-        var bakedAsm = _asm.Bake();
-        return new ILMethodBody() {
-            ExceptionRegions = new(),
-            MaxStack = bakedAsm.MaxStack,
-            Instructions = bakedAsm.Code.ToList(),
-            Locals = _varSlots.Keys.ToList(),
-            InitLocals = true //TODO: preserve InitLocals
-        };
+        return _asm.Seal(layout);
     }
 
     private void EmitBlock(BasicBlock block)
     {
         //Emit code for the rooted trees in the forest
         foreach (var inst in block) {
-            if (!_forest.IsRootedTree(inst)) continue;
+            if (!_forest.IsRootedTree(inst) || inst is GuardInst) continue;
 
             inst.Accept(this);
 
             if (inst.NumUses > 0) {
-                EmitVarInst(GetSlot(inst), VarOp.Store);
+                _asm.EmitStore(GetSlot(inst));
             } else if (inst.HasResult) {
                 _asm.Emit(ILCode.Pop); //unused result
             }
@@ -55,13 +59,13 @@ public partial class ILGenerator : InstVisitor
     {
         switch (value) {
             case Variable or Argument: {
-                EmitVarInst(value, VarOp.Load);
+                _asm.EmitLoad(value);
                 break;
             }
             case ConstInt cons: {
                 //Emit int, or small long followed by conv.i8
                 if (cons.IsInt || (cons.Value == (int)cons.Value)) {
-                    EmitLdcI4((int)cons.Value);
+                    _asm.EmitLdcI4((int)cons.Value);
                     if (!cons.IsInt) _asm.Emit(ILCode.Conv_I8);
                 } else {
                     _asm.Emit(ILCode.Ldc_I8, cons.Value);
@@ -88,50 +92,23 @@ public partial class ILGenerator : InstVisitor
                 if (_forest.IsLeaf(inst)) {
                     inst.Accept(this);
                 } else {
-                    EmitVarInst(GetSlot(inst), VarOp.Load);
+                    _asm.EmitLoad(GetSlot(inst));
                 }
                 break;
             }
             default: throw new NotSupportedException(value.GetType().Name + " as operand");
         }
     }
-
-    private Label GetLabel(BasicBlock block)
+    
+    private void EmitFallthrough(BasicBlock target)
     {
-        return _blockLabels.GetOrAddRef(block) ??= new();
+        if (_nextBlock != target) {
+            _asm.Emit(ILCode.Br, target);
+        }
     }
+
     private Variable GetSlot(Instruction inst)
     {
         return _instSlots.GetOrAddRef(inst) ??= new(inst.ResultType, name: $"expr{_instSlots.Count}");
-    }
-
-    private void EmitVarInst(Value var, VarOp op)
-    {
-        int index;
-        if (var is Argument arg) {
-            index = arg.Index;
-        } else if (!_varSlots.TryGetValue((Variable)var, out index)) {
-            _varSlots[(Variable)var] = index = _varSlots.Count;
-        }
-        var codes = GetCodesForVar(op, var is Argument);
-
-        if (index < 4 && codes.Inline != ILCode.Nop) {
-            _asm.Emit((ILCode)((int)codes.Inline + index));
-        } else if (index < 256) {
-            _asm.Emit(codes.Short, index);
-        } else {
-            _asm.Emit(codes.Norm, index);
-        }
-    }
-
-    private void EmitLdcI4(int value)
-    {
-        if (value >= -1 && value <= 8) {
-            _asm.Emit((ILCode)((int)ILCode.Ldc_I4_0 + value));
-        } else if ((sbyte)value == value) {
-            _asm.Emit(ILCode.Ldc_I4_S, value);
-        } else {
-            _asm.Emit(ILCode.Ldc_I4, value);
-        }
     }
 }

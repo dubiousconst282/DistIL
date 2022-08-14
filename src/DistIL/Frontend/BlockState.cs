@@ -103,15 +103,6 @@ internal class BlockState
         }
     }
 
-    public static bool IsTerminator(ref ILInstruction inst)
-    {
-        return inst.FlowControl is
-            ILFlowControl.Branch or
-            ILFlowControl.CondBranch or
-            ILFlowControl.Return or
-            ILFlowControl.Throw;
-    }
-
     /// <summary> Translates the IL code into IR instructions. </summary>
     public void ImportCode(Span<ILInstruction> code)
     {
@@ -451,7 +442,7 @@ internal class BlockState
             }
         }
         //Fallthrough the next block
-        if (!IsTerminator(ref code[^1])) {
+        if (!code[^1].OpCode.IsTerminator()) {
             var succ = AddSucc(code[^1].GetEndOffset());
             TerminateBlock(new BranchInst(succ));
         }

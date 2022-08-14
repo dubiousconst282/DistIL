@@ -3,7 +3,7 @@ namespace DistIL.CodeGen.Cil;
 using DistIL.AsmIO;
 using DistIL.IR;
 
-public partial class ILGenerator
+partial class ILGenerator
 {
     public void VisitDefault(Instruction inst)
     {
@@ -14,24 +14,24 @@ public partial class ILGenerator
     {
         Push(inst.Left);
         Push(inst.Right);
-        _asm.Emit(GetCodeForBinOp(inst.Op));
+        _asm.Emit(ILTables.GetBinaryCode(inst.Op));
     }
     public void Visit(UnaryInst inst)
     {
         Push(inst.Value);
-        _asm.Emit(GetCodeForUnOp(inst.Op));
+        _asm.Emit(ILTables.GetUnaryCode(inst.Op));
     }
     public void Visit(ConvertInst inst)
     {
         Push(inst.Value);
-        _asm.Emit(GetCodeForConv(inst));
+        _asm.Emit(ILTables.GetConvertCode(inst));
     }
     public void Visit(CompareInst inst)
     {
         Push(inst.Left);
         Push(inst.Right);
 
-        var (code, inv) = GetCodeForCompare(inst.Op);
+        var (code, inv) = ILTables.GetCompareCode(inst.Op);
         _asm.Emit(code);
         if (inv) { //!cond
             _asm.Emit(ILCode.Ldc_I4_0);
@@ -41,16 +41,16 @@ public partial class ILGenerator
 
     public void Visit(LoadVarInst inst)
     {
-        EmitVarInst(inst.Var, VarOp.Load);
+        _asm.EmitLoad(inst.Var);
     }
     public void Visit(StoreVarInst inst)
     {
         Push(inst.Value);
-        EmitVarInst(inst.Var, VarOp.Store);
+        _asm.EmitStore(inst.Var);
     }
     public void Visit(VarAddrInst inst)
     {
-        EmitVarInst(inst.Var, VarOp.Addr);
+        _asm.EmitAddrOf(inst.Var);
     }
 
     public void Visit(LoadPtrInst inst)
@@ -72,15 +72,14 @@ public partial class ILGenerator
 
         var addTypeDesc = inst.Address.ResultType;
         var interpType = inst.ElemType;
-        var codes = GetCodeForPtrAcc(interpType);
 
         var refCode = isLoad ? ILCode.Ldind_Ref : ILCode.Stind_Ref;
         var objCode = isLoad ? ILCode.Ldobj : ILCode.Stobj;
-        var code = isLoad ? codes.Ld : codes.St;
 
         if (!interpType.IsValueType && addTypeDesc.ElemType == interpType) {
             _asm.Emit(refCode);
         } else {
+            var code = ILTables.GetPtrAccessCode(interpType, isLoad);
             _asm.Emit(code, code == objCode ? interpType : null);
         }
     }
@@ -122,7 +121,8 @@ public partial class ILGenerator
         Push(inst.Array);
         Push(inst.Index);
 
-        if (_ldelemMacros.TryGetValue(inst.ElemType.Kind, out var code)) {
+        var code = ILTables.GetArrayElemMacro(inst.ElemType, ld: true);
+        if (code != default) {
             _asm.Emit(code);
         } else {
             _asm.Emit(ILCode.Ldelem, inst.ElemType);
@@ -134,7 +134,8 @@ public partial class ILGenerator
         Push(inst.Index);
         Push(inst.Value);
 
-        if (_stelemMacros.TryGetValue(inst.ElemType.Kind, out var code)) {
+        var code = ILTables.GetArrayElemMacro(inst.ElemType, ld: false);
+        if (code != default) {
             _asm.Emit(code);
         } else {
             _asm.Emit(ILCode.Stelem, inst.ElemType);
@@ -186,42 +187,32 @@ public partial class ILGenerator
 
     public void Visit(BranchInst inst)
     {
-        var thenLabel = GetLabel(inst.Then);
-        if (inst.IsJump) {
-            _asm.Emit(ILCode.Br, thenLabel);
-            return;
-        }
-        var elseLabel = GetLabel(inst.Else);
-        var cond = inst.Cond;
+        if (inst.IsConditional) {
+            //`br cmp.op(x, y), @then;`  ->  `br.op x, y, @then;`
+            if (inst.Cond is CompareInst cmp && _forest.IsLeaf(cmp) &&
+                ILTables.GetBranchCode(cmp.Op) is var code && code != default
+            ) {
+                Push(cmp.Left);
 
-        if (cond is CompareInst cmp && _forest.IsLeaf(cmp) && GetCodeForBranch(cmp.Op, out var code)) {
-            Push(cmp.Left);
-
-            //simplify `x == [0|null]` to brfalse, `x != [0|null]` to brtrue
-            if (cmp is { Op: CompareOp.Eq or CompareOp.Ne, Right: ConstInt { Value: 0 } or ConstNull }) {
-                code = cmp.Op == CompareOp.Eq ? ILCode.Brfalse : ILCode.Brtrue;
+                //`x eq/ne [0|null]`  ->  `brfalse/brtrue`
+                if (cmp is { Op: CompareOp.Eq or CompareOp.Ne, Right: ConstInt { Value: 0 } or ConstNull }) {
+                    code = cmp.Op == CompareOp.Eq ? ILCode.Brfalse : ILCode.Brtrue;
+                } else {
+                    Push(cmp.Right);
+                }
             } else {
-                Push(cmp.Right);
+                Push(inst.Cond);
+                code = ILCode.Brtrue;
             }
-            _asm.Emit(code, thenLabel);
-            _asm.Emit(ILCode.Br, elseLabel);
-        } else {
-            //if (cond) goto thenLabel;
-            //goto elseLabel
-            Push(cond);
-            _asm.Emit(ILCode.Brtrue, thenLabel);
-            _asm.Emit(ILCode.Br, elseLabel);
+            _asm.Emit(code, inst.Then);
         }
+        EmitFallthrough(inst.IsJump ? inst.Then : inst.Else);
     }
     public void Visit(SwitchInst inst)
     {
-        var labels = new Label[inst.NumTargets];
-        for (int i = 0; i < labels.Length; i++) {
-            labels[i] = GetLabel(inst.GetTarget(i));
-        }
         Push(inst.Value);
-        _asm.Emit(ILCode.Switch, labels);
-        _asm.Emit(ILCode.Br, GetLabel(inst.DefaultTarget));
+        _asm.Emit(ILCode.Switch, inst.GetTargets().Skip(1).ToArray());
+        EmitFallthrough(inst.DefaultTarget);
     }
     public void Visit(ReturnInst inst)
     {
@@ -243,10 +234,11 @@ public partial class ILGenerator
 
     public void Visit(GuardInst inst)
     {
+        _asm.Emit(ILCode.Nop);
     }
     public void Visit(LeaveInst inst)
     {
-        _asm.Emit(ILCode.Leave, GetLabel(inst.Target));
+        _asm.Emit(ILCode.Leave, inst.Target);
     }
     public void Visit(ContinueInst inst)
     {

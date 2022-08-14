@@ -251,7 +251,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Break,
@@ -259,7 +258,6 @@ public static partial class ILCodes
             ((int)FC.Break << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldarg_0,
@@ -267,7 +265,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldarg_1,
@@ -275,7 +272,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldarg_2,
@@ -283,7 +279,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldarg_3,
@@ -291,7 +286,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldloc_0,
@@ -299,7 +293,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldloc_1,
@@ -307,7 +300,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldloc_2,
@@ -315,7 +307,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldloc_3,
@@ -323,7 +314,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Stloc_0,
@@ -331,7 +321,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Stloc_1,
@@ -339,7 +328,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Stloc_2,
@@ -347,7 +335,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Stloc_3,
@@ -355,7 +342,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldarg_S,
@@ -363,7 +349,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldarga_S,
@@ -371,7 +356,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Starg_S,
@@ -379,7 +363,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldloc_S,
@@ -387,7 +370,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldloca_S,
@@ -395,7 +377,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Stloc_S,
@@ -403,7 +384,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldnull,
@@ -411,7 +391,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushref << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_I4_M1,
@@ -419,7 +398,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_I4_0,
@@ -427,7 +405,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_I4_1,
@@ -435,7 +412,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_I4_2,
@@ -443,7 +419,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_I4_3,
@@ -451,7 +426,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_I4_4,
@@ -459,7 +433,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_I4_5,
@@ -467,7 +440,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_I4_6,
@@ -475,7 +447,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_I4_7,
@@ -483,7 +454,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_I4_8,
@@ -491,7 +461,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_I4_S,
@@ -499,7 +468,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_I4,
@@ -507,7 +475,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_I8,
@@ -515,7 +482,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi8 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_R4,
@@ -523,7 +489,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushr4 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldc_R8,
@@ -531,7 +496,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushr8 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Dup,
@@ -539,7 +503,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Push1_push1 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Pop,
@@ -547,7 +510,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Jmp,
@@ -555,7 +517,6 @@ public static partial class ILCodes
             ((int)FC.Call << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             EndsUncondJmpBlkFlag |
             (0 << StackChangeShift)
         );
@@ -564,7 +525,6 @@ public static partial class ILCodes
             ((int)FC.Call << FCShift) |
             ((int)SB.Varpop << SBPopShift) |
             ((int)SB.Varpush << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Calli,
@@ -572,7 +532,6 @@ public static partial class ILCodes
             ((int)FC.Call << FCShift) |
             ((int)SB.Varpop << SBPopShift) |
             ((int)SB.Varpush << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ret,
@@ -580,7 +539,6 @@ public static partial class ILCodes
             ((int)FC.Return << FCShift) |
             ((int)SB.Varpop << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             EndsUncondJmpBlkFlag |
             (0 << StackChangeShift)
         );
@@ -589,7 +547,6 @@ public static partial class ILCodes
             ((int)FC.Branch << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             EndsUncondJmpBlkFlag |
             (0 << StackChangeShift)
         );
@@ -598,7 +555,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Brtrue_S,
@@ -606,7 +562,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Beq_S,
@@ -614,7 +569,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Bge_S,
@@ -622,7 +576,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Bgt_S,
@@ -630,7 +583,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Ble_S,
@@ -638,7 +590,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Blt_S,
@@ -646,7 +597,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Bne_Un_S,
@@ -654,7 +604,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Bge_Un_S,
@@ -662,7 +611,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Bgt_Un_S,
@@ -670,7 +618,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Ble_Un_S,
@@ -678,7 +625,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Blt_Un_S,
@@ -686,7 +632,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Br,
@@ -694,7 +639,6 @@ public static partial class ILCodes
             ((int)FC.Branch << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             EndsUncondJmpBlkFlag |
             (0 << StackChangeShift)
         );
@@ -703,7 +647,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Brtrue,
@@ -711,7 +654,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Beq,
@@ -719,7 +661,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Bge,
@@ -727,7 +668,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Bgt,
@@ -735,7 +675,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Ble,
@@ -743,7 +682,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Blt,
@@ -751,7 +689,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Bne_Un,
@@ -759,7 +696,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Bge_Un,
@@ -767,7 +703,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Bgt_Un,
@@ -775,7 +710,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Ble_Un,
@@ -783,7 +717,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Blt_Un,
@@ -791,7 +724,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Switch,
@@ -799,7 +731,6 @@ public static partial class ILCodes
             ((int)FC.CondBranch << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldind_I1,
@@ -807,7 +738,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldind_U1,
@@ -815,7 +745,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldind_I2,
@@ -823,7 +752,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldind_U2,
@@ -831,7 +759,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldind_I4,
@@ -839,7 +766,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldind_U4,
@@ -847,7 +773,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldind_I8,
@@ -855,7 +780,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Pushi8 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldind_I,
@@ -863,7 +787,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldind_R4,
@@ -871,7 +794,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Pushr4 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldind_R8,
@@ -879,7 +801,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Pushr8 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldind_Ref,
@@ -887,7 +808,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Pushref << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Stind_Ref,
@@ -895,7 +815,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi_popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Stind_I1,
@@ -903,7 +822,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi_popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Stind_I2,
@@ -911,7 +829,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi_popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Stind_I4,
@@ -919,7 +836,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi_popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Stind_I8,
@@ -927,7 +843,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi_popi8 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Stind_R4,
@@ -935,7 +850,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi_popr4 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Stind_R8,
@@ -943,7 +857,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi_popr8 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Add,
@@ -951,7 +864,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Sub,
@@ -959,7 +871,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Mul,
@@ -967,7 +878,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Div,
@@ -975,7 +885,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Div_Un,
@@ -983,7 +892,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Rem,
@@ -991,7 +899,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Rem_Un,
@@ -999,7 +906,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.And,
@@ -1007,7 +913,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Or,
@@ -1015,7 +920,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Xor,
@@ -1023,7 +927,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Shl,
@@ -1031,7 +934,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Shr,
@@ -1039,7 +941,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Shr_Un,
@@ -1047,7 +948,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Neg,
@@ -1055,7 +955,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Not,
@@ -1063,7 +962,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_I1,
@@ -1071,7 +969,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_I2,
@@ -1079,7 +976,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_I4,
@@ -1087,7 +983,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_I8,
@@ -1095,7 +990,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi8 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_R4,
@@ -1103,7 +997,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushr4 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_R8,
@@ -1111,7 +1004,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushr8 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_U4,
@@ -1119,7 +1011,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_U8,
@@ -1127,7 +1018,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi8 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Callvirt,
@@ -1135,7 +1025,6 @@ public static partial class ILCodes
             ((int)FC.Call << FCShift) |
             ((int)SB.Varpop << SBPopShift) |
             ((int)SB.Varpush << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Cpobj,
@@ -1143,7 +1032,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi_popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Ldobj,
@@ -1151,7 +1039,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldstr,
@@ -1159,7 +1046,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushref << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Newobj,
@@ -1167,7 +1053,6 @@ public static partial class ILCodes
             ((int)FC.Call << FCShift) |
             ((int)SB.Varpop << SBPopShift) |
             ((int)SB.Pushref << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Castclass,
@@ -1175,7 +1060,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref << SBPopShift) |
             ((int)SB.Pushref << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Isinst,
@@ -1183,7 +1067,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_R_Un,
@@ -1191,7 +1074,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushr8 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Unbox,
@@ -1199,7 +1081,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Throw,
@@ -1207,7 +1088,6 @@ public static partial class ILCodes
             ((int)FC.Throw << FCShift) |
             ((int)SB.Popref << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             EndsUncondJmpBlkFlag |
             (-1 << StackChangeShift)
         );
@@ -1216,7 +1096,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldflda,
@@ -1224,7 +1103,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Stfld,
@@ -1232,7 +1110,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Ldsfld,
@@ -1240,7 +1117,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldsflda,
@@ -1248,7 +1124,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Stsfld,
@@ -1256,7 +1131,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Stobj,
@@ -1264,7 +1138,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_I1_Un,
@@ -1272,7 +1145,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_I2_Un,
@@ -1280,7 +1152,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_I4_Un,
@@ -1288,7 +1159,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_I8_Un,
@@ -1296,7 +1166,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi8 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_U1_Un,
@@ -1304,7 +1173,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_U2_Un,
@@ -1312,7 +1180,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_U4_Un,
@@ -1320,7 +1187,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_U8_Un,
@@ -1328,7 +1194,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi8 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_I_Un,
@@ -1336,7 +1201,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_U_Un,
@@ -1344,7 +1208,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Box,
@@ -1352,7 +1215,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushref << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Newarr,
@@ -1360,7 +1222,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Pushref << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldlen,
@@ -1368,7 +1229,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldelema,
@@ -1376,7 +1236,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldelem_I1,
@@ -1384,7 +1243,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldelem_U1,
@@ -1392,7 +1250,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldelem_I2,
@@ -1400,7 +1257,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldelem_U2,
@@ -1408,7 +1264,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldelem_I4,
@@ -1416,7 +1271,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldelem_U4,
@@ -1424,7 +1278,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldelem_I8,
@@ -1432,7 +1285,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi << SBPopShift) |
             ((int)SB.Pushi8 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldelem_I,
@@ -1440,7 +1292,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldelem_R4,
@@ -1448,7 +1299,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi << SBPopShift) |
             ((int)SB.Pushr4 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldelem_R8,
@@ -1456,7 +1306,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi << SBPopShift) |
             ((int)SB.Pushr8 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldelem_Ref,
@@ -1464,7 +1313,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi << SBPopShift) |
             ((int)SB.Pushref << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Stelem_I,
@@ -1472,7 +1320,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi_popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-3 << StackChangeShift)
         );
         Reg(ILCode.Stelem_I1,
@@ -1480,7 +1327,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi_popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-3 << StackChangeShift)
         );
         Reg(ILCode.Stelem_I2,
@@ -1488,7 +1334,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi_popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-3 << StackChangeShift)
         );
         Reg(ILCode.Stelem_I4,
@@ -1496,7 +1341,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi_popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-3 << StackChangeShift)
         );
         Reg(ILCode.Stelem_I8,
@@ -1504,7 +1348,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi_popi8 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-3 << StackChangeShift)
         );
         Reg(ILCode.Stelem_R4,
@@ -1512,7 +1355,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi_popr4 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-3 << StackChangeShift)
         );
         Reg(ILCode.Stelem_R8,
@@ -1520,7 +1362,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi_popr8 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-3 << StackChangeShift)
         );
         Reg(ILCode.Stelem_Ref,
@@ -1528,7 +1369,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi_popref << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-3 << StackChangeShift)
         );
         Reg(ILCode.Ldelem,
@@ -1536,7 +1376,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Stelem,
@@ -1544,7 +1383,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref_popi_pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-3 << StackChangeShift)
         );
         Reg(ILCode.Unbox_Any,
@@ -1552,7 +1390,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_I1,
@@ -1560,7 +1397,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_U1,
@@ -1568,7 +1404,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_I2,
@@ -1576,7 +1411,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_U2,
@@ -1584,7 +1418,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_I4,
@@ -1592,7 +1425,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_U4,
@@ -1600,7 +1432,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_I8,
@@ -1608,7 +1439,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi8 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_U8,
@@ -1616,7 +1446,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi8 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Refanyval,
@@ -1624,7 +1453,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ckfinite,
@@ -1632,7 +1460,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushr8 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Mkrefany,
@@ -1640,7 +1467,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldtoken,
@@ -1648,7 +1474,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Conv_U2,
@@ -1656,7 +1481,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_U1,
@@ -1664,7 +1488,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_I,
@@ -1672,7 +1495,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_I,
@@ -1680,7 +1502,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Conv_Ovf_U,
@@ -1688,7 +1509,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Add_Ovf,
@@ -1696,7 +1516,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Add_Ovf_Un,
@@ -1704,7 +1523,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Mul_Ovf,
@@ -1712,7 +1530,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Mul_Ovf_Un,
@@ -1720,7 +1537,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Sub_Ovf,
@@ -1728,7 +1544,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Sub_Ovf_Un,
@@ -1736,7 +1551,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (1 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Endfinally,
@@ -1744,7 +1558,6 @@ public static partial class ILCodes
             ((int)FC.Return << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             EndsUncondJmpBlkFlag |
             (0 << StackChangeShift)
         );
@@ -1753,7 +1566,6 @@ public static partial class ILCodes
             ((int)FC.Branch << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             EndsUncondJmpBlkFlag |
             (0 << StackChangeShift)
         );
@@ -1762,7 +1574,6 @@ public static partial class ILCodes
             ((int)FC.Branch << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             EndsUncondJmpBlkFlag |
             (0 << StackChangeShift)
         );
@@ -1771,7 +1582,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi_popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (-2 << StackChangeShift)
         );
         Reg(ILCode.Conv_U,
@@ -1779,7 +1589,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Prefix7,
@@ -1787,7 +1596,6 @@ public static partial class ILCodes
             ((int)FC.Meta << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Prefix6,
@@ -1795,7 +1603,6 @@ public static partial class ILCodes
             ((int)FC.Meta << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Prefix5,
@@ -1803,7 +1610,6 @@ public static partial class ILCodes
             ((int)FC.Meta << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Prefix4,
@@ -1811,7 +1617,6 @@ public static partial class ILCodes
             ((int)FC.Meta << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Prefix3,
@@ -1819,7 +1624,6 @@ public static partial class ILCodes
             ((int)FC.Meta << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Prefix2,
@@ -1827,7 +1631,6 @@ public static partial class ILCodes
             ((int)FC.Meta << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Prefix1,
@@ -1835,7 +1638,6 @@ public static partial class ILCodes
             ((int)FC.Meta << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Prefixref,
@@ -1843,7 +1645,6 @@ public static partial class ILCodes
             ((int)FC.Meta << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (1 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Arglist,
@@ -1851,7 +1652,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (2 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ceq,
@@ -1859,7 +1659,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (2 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Cgt,
@@ -1867,7 +1666,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (2 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Cgt_Un,
@@ -1875,7 +1673,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (2 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Clt,
@@ -1883,7 +1680,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (2 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Clt_Un,
@@ -1891,7 +1687,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1_pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (2 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldftn,
@@ -1899,7 +1694,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (2 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldvirtftn,
@@ -1907,7 +1701,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popref << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (2 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Ldarg,
@@ -1915,7 +1708,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (2 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldarga,
@@ -1923,7 +1715,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (2 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Starg,
@@ -1931,7 +1722,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (2 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Ldloc,
@@ -1939,7 +1729,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push1 << SBPushShift) |
-            (2 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Ldloca,
@@ -1947,7 +1736,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (2 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Stloc,
@@ -1955,7 +1743,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (2 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Localloc,
@@ -1963,7 +1750,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (2 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Endfilter,
@@ -1971,7 +1757,6 @@ public static partial class ILCodes
             ((int)FC.Return << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (2 << SizeShift) |
             EndsUncondJmpBlkFlag |
             (-1 << StackChangeShift)
         );
@@ -1980,7 +1765,6 @@ public static partial class ILCodes
             ((int)FC.Meta << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (2 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Volatile_,
@@ -1988,7 +1772,6 @@ public static partial class ILCodes
             ((int)FC.Meta << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (2 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Tail_,
@@ -1996,7 +1779,6 @@ public static partial class ILCodes
             ((int)FC.Meta << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (2 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Initobj,
@@ -2004,7 +1786,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (2 << SizeShift) |
             (-1 << StackChangeShift)
         );
         Reg(ILCode.Constrained_,
@@ -2012,7 +1793,6 @@ public static partial class ILCodes
             ((int)FC.Meta << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (2 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Cpblk,
@@ -2020,7 +1800,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi_popi_popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (2 << SizeShift) |
             (-3 << StackChangeShift)
         );
         Reg(ILCode.Initblk,
@@ -2028,7 +1807,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Popi_popi_popi << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (2 << SizeShift) |
             (-3 << StackChangeShift)
         );
         Reg(ILCode.No_,
@@ -2036,7 +1814,6 @@ public static partial class ILCodes
             ((int)FC.Meta << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (2 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Rethrow,
@@ -2044,7 +1821,6 @@ public static partial class ILCodes
             ((int)FC.Throw << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (2 << SizeShift) |
             EndsUncondJmpBlkFlag |
             (0 << StackChangeShift)
         );
@@ -2053,7 +1829,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (2 << SizeShift) |
             (1 << StackChangeShift)
         );
         Reg(ILCode.Refanytype,
@@ -2061,7 +1836,6 @@ public static partial class ILCodes
             ((int)FC.Next << FCShift) |
             ((int)SB.Pop1 << SBPopShift) |
             ((int)SB.Pushi << SBPushShift) |
-            (2 << SizeShift) |
             (0 << StackChangeShift)
         );
         Reg(ILCode.Readonly_,
@@ -2069,7 +1843,6 @@ public static partial class ILCodes
             ((int)FC.Meta << FCShift) |
             ((int)SB.Pop0 << SBPopShift) |
             ((int)SB.Push0 << SBPushShift) |
-            (2 << SizeShift) |
             (0 << StackChangeShift)
         );
     }

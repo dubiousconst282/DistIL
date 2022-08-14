@@ -15,20 +15,20 @@ public class Forestifier
 
             //Find statements
             foreach (var inst in block) {
-                if (NeedsSlot(inst, interfs)) {
+                if (MustBeRooted(inst, interfs)) {
                     _trees.Add(inst);
                 }
             }
         }
     }
 
-    private bool NeedsSlot(Instruction def, BlockInterfs interfs)
+    private bool MustBeRooted(Instruction def, BlockInterfs interfs)
     {
         //Void or unused insts don't need slots
         if (!def.HasResult || def.NumUses == 0) return false;
 
         //Def must have one use in the same block
-        if (def.NumUses >= 2 || def is PhiInst) return true;
+        if (def.NumUses >= 2 || def is PhiInst or GuardInst) return true;
 
         var use = def.GetFirstUser()!;
         return use.Block != def.Block || interfs.IsDefInterferedBeforeUse(def, use);

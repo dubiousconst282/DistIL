@@ -312,7 +312,7 @@ public class ILMethodBody
         return vars;
     }
 }
-public struct ExceptionRegion
+public class ExceptionRegion
 {
     public ExceptionRegionKind Kind { get; set; }
 
@@ -330,7 +330,7 @@ public struct ExceptionRegion
     public int TryEnd { get; set; }
 
     /// <summary> Gets the starting IL offset of the filter region, or -1 if the region is not a filter. </summary>
-    public int FilterStart { get; set; }
+    public int FilterStart { get; set; } = -1;
     /// <summary> Gets the ending IL offset of the filter region. This is an alias for `HandlerStart`. </summary>
     public int FilterEnd => HandlerStart;
 

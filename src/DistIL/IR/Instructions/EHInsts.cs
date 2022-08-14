@@ -44,12 +44,14 @@ public class GuardInst : Instruction
     {
         ctx.Print($" {Kind.ToString().ToLower()}", PrintToner.InstName);
         ctx.Print(" -> ");
-        if (HasFilter) {
-            ctx.Print(" filter ", PrintToner.InstName);
-            FilterBlock.Print(ctx);
-            ctx.Print(" -> ");
-        }
         HandlerBlock.Print(ctx);
+
+        if (HasFilter) {
+            ctx.Print(", ");
+            ctx.Print("filter", PrintToner.InstName);
+            ctx.Print(" -> ");
+            FilterBlock.Print(ctx);
+        }
     }
 }
 public enum GuardKind
@@ -79,7 +81,7 @@ public class LeaveInst : Instruction
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }
-/// <summary> Leaves a protected region. </summary>
+/// <summary> Leaves a filter/finally region. </summary>
 public class ContinueInst : Instruction
 {
     public GuardInst ParentGuard {

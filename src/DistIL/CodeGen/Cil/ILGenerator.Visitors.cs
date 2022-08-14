@@ -153,6 +153,9 @@ partial class ILGenerator
         foreach (var arg in inst.Args) {
             Push(arg);
         }
+        if (inst.Constraint != null) {
+            _asm.Emit(ILCode.Constrained_, inst.Constraint);
+        }
         var code = inst.IsVirtual ? ILCode.Callvirt : ILCode.Call;
         _asm.Emit(code, inst.Method);
     }
@@ -179,6 +182,16 @@ partial class ILGenerator
             }
             case IntrinsicId.LoadToken: {
                 _asm.Emit(ILCode.Ldtoken, inst.Args[0]);
+                break;
+            }
+            case IntrinsicId.IsInstance: {
+                Push(inst.Args[0]);
+                _asm.Emit(ILCode.Isinst, inst.Args[1]);
+                break;
+            }
+            case IntrinsicId.CastClass: {
+                Push(inst.Args[0]);
+                _asm.Emit(ILCode.Castclass, inst.ResultType);
                 break;
             }
             default: throw new NotSupportedException($"Intrinsic {inst.Id}");

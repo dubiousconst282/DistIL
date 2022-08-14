@@ -1,7 +1,5 @@
 namespace DistIL.IR;
 
-using System.Text;
-
 public class CallInst : Instruction
 {
     public MethodDesc Method {
@@ -15,18 +13,20 @@ public class CallInst : Instruction
 
     public bool IsVirtual { get; set; }
     public bool IsStatic => Method.IsStatic;
+    public TypeDesc? Constraint { get; set; }
 
     public override bool HasSideEffects => true;
     public override bool MayThrow => true;
     public override bool MayWriteToMemory => true;
     public override string InstName => "call" + (IsVirtual ? "virt" : "");
 
-    public CallInst(MethodDesc method, Value[] args, bool isVirtual = false)
+    public CallInst(MethodDesc method, Value[] args, bool isVirtual = false, TypeDesc? constraint = null)
         : base(args.Prepend(method).ToArray())
     {
         Ensure(args.Length == method.Params.Length);
         ResultType = method.ReturnType;
         IsVirtual = isVirtual;
+        Constraint = constraint;
     }
 
     public Value GetArg(int index) => Operands[index + 1];
@@ -35,16 +35,16 @@ public class CallInst : Instruction
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
     protected override void PrintOperands(PrintContext ctx)
-        => PrintOperands(ctx, Method, Args);
+        => PrintOperands(ctx, Method, Args, Constraint);
 
-    internal static void PrintOperands(PrintContext ctx, MethodDesc method, ReadOnlySpan<Value> args, bool isCtor = false)
+    internal static void PrintOperands(PrintContext ctx, MethodDesc method, ReadOnlySpan<Value> args, TypeDesc? constraint, bool isCtor = false)
     {
         ctx.Print(" ");
         method.DeclaringType.Print(ctx, includeNs: false);
         ctx.Print("::");
         ctx.Print(method.Name, PrintToner.MethodName);
         if (method is MethodSpec { GenericParams.Length: > 0 }) {
-            ctx.PrintSequence("<", ">", method.GenericParams, p => p.Print(ctx, false));
+            ctx.PrintSequence("<", ">", method.GenericParams, p => p.Print(ctx, includeNs: false));
         }
         ctx.Print("(");
         for (int i = 0; i < args.Length; i++) {
@@ -54,12 +54,16 @@ public class CallInst : Instruction
                 ctx.Print("this", PrintToner.Keyword);
             } else {
                 var paramType = method.Params[i + (isCtor ? 1 : 0)].Type;
-                paramType.Print(ctx, false);
+                paramType.Print(ctx, includeNs: false);
             }
             ctx.Print(": ");
             args[i].PrintAsOperand(ctx);
         }
         ctx.Print(")");
+        if (constraint != null) {
+            ctx.Print(" constrained ", PrintToner.Keyword);
+            constraint.Print(ctx, includeNs: false);
+        }
     }
 }
 
@@ -89,7 +93,7 @@ public class NewObjInst : Instruction
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
     protected override void PrintOperands(PrintContext ctx)
-        => CallInst.PrintOperands(ctx, Constructor, Args, true);
+        => CallInst.PrintOperands(ctx, Constructor, Args, null, true);
 }
 
 public class FuncAddrInst : Instruction

@@ -1,7 +1,7 @@
 namespace DistIL.Frontend;
 
-using DistIL.IR;
 using DistIL.AsmIO;
+using DistIL.IR;
 
 internal class BlockState
 {
@@ -18,6 +18,7 @@ internal class BlockState
 
     private InstFlags _prefixFlags = InstFlags.None;
     private GuardInst? _activeGuard;
+    private TypeDesc? _callConstraint;
 
     public BlockState(ILImporter importer)
     {
@@ -375,7 +376,7 @@ internal class BlockState
                 case ILCode.Unaligned_:     prefix = InstFlags.Unaligned; break;
                 case ILCode.Volatile_:      prefix = InstFlags.Volatile; break;
                 case ILCode.Tail_:          prefix = InstFlags.Tailcall; break;
-                case ILCode.Constrained_:   prefix = InstFlags.Constrained; break;
+                case ILCode.Constrained_:   prefix = InstFlags.Constrained; _callConstraint = (TypeDesc)inst.Operand!; break;
                 case ILCode.Readonly_:      prefix = InstFlags.Readonly; break;
                 case ILCode.No_: {
                     int flags = (int)inst.Operand!;
@@ -416,11 +417,15 @@ internal class BlockState
                 case ILCode.Newarr:
                     ImportNewArray((TypeDesc)inst.Operand!);
                     break;
-
                 case ILCode.Ldtoken:
                     ImportLoadToken((EntityDesc)inst.Operand!);
                     break;
-
+                case ILCode.Isinst:
+                    ImportIsInst((TypeDesc)inst.Operand!);
+                    break;
+                case ILCode.Castclass:
+                    ImportCast((TypeDesc)inst.Operand!);
+                    break;
                 #endregion
 
                 case ILCode.Ret: ImportRet(); break;
@@ -439,6 +444,7 @@ internal class BlockState
                 _prefixFlags |= prefix;
             } else {
                 _prefixFlags = InstFlags.None;
+                _callConstraint = null;
             }
         }
         //Fallthrough the next block
@@ -679,7 +685,8 @@ internal class BlockState
     private void ImportCall(MethodDesc method, bool isVirt)
     {
         var args = PopCallArgs(method);
-        var inst = new CallInst(method, args, isVirt);
+        var constraint = HasPrefix(InstFlags.Constrained) ? _callConstraint : null;
+        var inst = new CallInst(method, args, isVirt, constraint);
 
         if (method.ReturnType.Kind == TypeKind.Void) {
             Emit(inst);
@@ -751,6 +758,15 @@ internal class BlockState
             _ => throw Error("Invalid token type for ldtoken")
         };
         Push(new IntrinsicInst(IntrinsicId.LoadToken, resultType, entity));
+    }
+
+    private void ImportIsInst(TypeDesc type)
+    {
+        Push(new IntrinsicInst(IntrinsicId.IsInstance, PrimType.Bool, Pop(), type));
+    }
+    private void ImportCast(TypeDesc destType)
+    {
+        Push(new IntrinsicInst(IntrinsicId.CastClass, destType, Pop()));
     }
 
     private Exception Error(string? msg = null)

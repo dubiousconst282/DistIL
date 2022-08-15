@@ -18,6 +18,8 @@ public class ModuleDef : ModuleEntity
 
     internal Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); //root assemblies for references of forwarded types
 
+    public ModuleResolver Resolver { get; init; } = null!;
+
     /// <summary> The resolved `System.Runtime` or `System.Private.CoreLib` module reference. </summary>
     public ModuleDef CoreLib { get; internal set; } = null!;
     public SystemTypes SysTypes { get; internal set; } = null!;
@@ -42,6 +44,13 @@ public class ModuleDef : ModuleEntity
     {
         //TODO: add new references
         return FindReferencedType(type) ?? throw new NotImplementedException();
+    }
+
+    /// <summary> Imports the module/assembly with the given name. </summary>
+    public ModuleDef ImportModule(string name)
+    {
+        //TODO: add new references
+        return AssemblyRefs.First(m => m.AsmName.Name == name);
     }
 
     public TypeDesc? GetImport(Type type)

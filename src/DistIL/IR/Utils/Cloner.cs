@@ -185,23 +185,8 @@ public class Cloner
 
         public void Visit(ReturnInst inst) => Out(new ReturnInst(inst.HasValue ? Remap(inst.Value) : null));
         public void Visit(BranchInst inst) => Out(inst.IsJump ? new BranchInst(Remap(inst.Then)) : new BranchInst(Remap(inst.Cond), Remap(inst.Then), Remap(inst.Else)));
-        public void Visit(SwitchInst inst)
-        {
-            var newBlocks = new BasicBlock[inst.NumTargets];
-            for (int i = 0; i < inst.NumTargets; i++) {
-                newBlocks[i] = Remap(inst.GetTarget(i));
-            }
-            Out(new SwitchInst(Remap(inst.Value), Remap(inst.DefaultTarget), newBlocks));
-        }
-        public void Visit(PhiInst inst)
-        {
-            var newArgs = new PhiArg[inst.NumArgs];
-            for (int i = 0; i < inst.NumArgs; i++) {
-                var (block, value) = inst.GetArg(i);
-                newArgs[i] = (Remap(block), Remap(value));
-            }
-            Out(new PhiInst(newArgs));
-        }
+        public void Visit(SwitchInst inst) => Out(new SwitchInst(RemapArgs(inst.Operands)));
+        public void Visit(PhiInst inst) => Out(new PhiInst(inst.ResultType, RemapArgs(inst.Operands)));
 
         public void Visit(GuardInst inst) => Out(new GuardInst(inst.Kind, Remap(inst.HandlerBlock), inst.CatchType, inst.HasFilter ? Remap(inst.FilterBlock) : null));
         public void Visit(ThrowInst inst) => Out(new ThrowInst(inst.IsRethrow ? null : Remap(inst.Exception)));

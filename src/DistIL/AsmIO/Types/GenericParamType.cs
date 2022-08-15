@@ -32,8 +32,8 @@ public class GenericParamType : TypeDesc
 
     public override void Print(PrintContext ctx, bool includeNs = true)
     {
-        base.Print(ctx, includeNs);
         ctx.Print(IsMethodParam ? "!!" : "!");
+        base.Print(ctx, includeNs);
     }
 
     public override TypeDesc GetSpec(GenericContext context)

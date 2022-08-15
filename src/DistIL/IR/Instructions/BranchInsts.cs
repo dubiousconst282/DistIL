@@ -79,6 +79,15 @@ public class SwitchInst : Instruction
         : base(targets.Prepend(defaultTarget).Prepend(value).ToArray())
     {
     }
+    /// <summary> Unchecked non-copying constructor. </summary>
+    /// <param name="operands">
+    /// Operand array containing [Value, DefaultTarget, Targets...].
+    /// The instruction will take ownership of this array, its elements should not be modified after.
+    /// </param>
+    public SwitchInst(Value[] operands)
+        : base(operands)
+    {
+    }
 
     public BasicBlock GetTarget(int index) => (BasicBlock)Operands[index + 2];
     public void SetTarget(int index, BasicBlock block) => ReplaceOperand(index + 2, block);

@@ -19,6 +19,6 @@ public class Argument : TrackedValue
 
     public override void Print(PrintContext ctx)
     {
-        ctx.Print("#" + (Name ?? $"arg{Param.Index}"), PrintToner.VarName);
+        ctx.Print("#" + (Name ?? Param.Index.ToString()), PrintToner.VarName);
     }
 }

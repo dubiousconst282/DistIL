@@ -5,9 +5,13 @@ using DistIL.IR;
 
 class Utils
 {
-    public static MethodBody CreateDummyMethodBody()
+    public static MethodBody CreateDummyMethodBody(TypeDesc? retType = null, params TypeDesc[] paramTypes)
     {
-        return new MethodBody(new MethodDef(null!, PrimType.Int32, ImmutableArray<ParamDef>.Empty, "Dummy"));
+        var pars = paramTypes
+            .Select((t, i) => new ParamDef(t, i))
+            .ToImmutableArray();
+        var def = new MethodDef(null!, retType ?? PrimType.Void, pars, "Dummy");
+        return new MethodBody(def);
     }
 }
 

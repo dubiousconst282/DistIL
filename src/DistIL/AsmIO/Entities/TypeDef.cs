@@ -134,6 +134,11 @@ public class TypeDef : TypeDefOrSpec
             .ToImmutableArray();
         return new TypeSpec(this, genArgs);
     }
+    public TypeSpec GetSpec(ImmutableArray<TypeDesc> genArgs)
+    {
+        Ensure(IsGeneric);
+        return new TypeSpec(this, genArgs);
+    }
 
     //overriden props can't have setter
     public void SetName(string value) => _name = value;

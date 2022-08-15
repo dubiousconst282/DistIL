@@ -21,6 +21,17 @@ public class PhiInst : Instruction
         Assert(args.All(a => a.Value.ResultType.IsStackAssignableTo(ResultType)));
     }
     
+    /// <summary> Unchecked non-copying constructor. </summary>
+    /// <param name="operands">
+    /// Operand array containing pairs of [PredBlock, IncommingValue].
+    /// The instruction will take ownership of this array, its elements should not be modified after.
+    /// </param>
+    public PhiInst(TypeDesc resultType, Value[] operands)
+        : base(operands)
+    {
+        ResultType = resultType;
+    }
+    
     public BasicBlock GetBlock(int index) => (BasicBlock)Operands[index * 2 + 0];
     public Value GetValue(int index) => Operands[index * 2 + 1];
 

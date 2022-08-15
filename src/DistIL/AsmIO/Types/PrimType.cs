@@ -5,6 +5,8 @@ using DistIL.IR;
 /// <summary> Represents an internal reference to a known primitive or system type. </summary>
 public class PrimType : TypeDesc
 {
+    static readonly Dictionary<string, PrimType> _fromAlias = new();
+
 #pragma warning disable format
     public static readonly PrimType
         Void    = new(TypeKind.Void,    StackType.Void,     "Void",      "void"),
@@ -46,7 +48,13 @@ public class PrimType : TypeDesc
         StackType = stackType;
         Name = name;
         Alias = alias;
+
+        if (alias != null) {
+            _fromAlias[alias] = this;
+        }
     }
+
+    public static PrimType? GetFromAlias(string alias) => _fromAlias.GetValueOrDefault(alias);
 
     public TypeDef GetDefinition(ModuleDef module) => module.SysTypes.GetPrimitiveDef(Kind);
 

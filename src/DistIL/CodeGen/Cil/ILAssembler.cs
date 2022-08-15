@@ -19,11 +19,6 @@ internal class ILAssembler
         _blockStarts.Add(block, _insts.Count);
     }
 
-    public void AddRegion(ref LayoutedRegion region)
-    {
-
-    }
-
     public void Emit(ILCode op, object? operand = null)
     {
         _insts.Add(new ILInstruction(op, operand));
@@ -169,7 +164,12 @@ internal class ILAssembler
             }
             ehRegions.Add(ehr);
         }
-        int GetBlockOffset(int index) => this.GetBlockOffset(layout.Blocks[index]);
+        int GetBlockOffset(int index)
+        {
+            return index < layout.Blocks.Length
+                ? this.GetBlockOffset(layout.Blocks[index])
+                : _insts[^1].GetEndOffset();
+        }
 
         return ehRegions;
     }

@@ -85,6 +85,7 @@ public class ILImporter
             if (hasFilter) {
                 filterBlock!.PushNoEmit(guard);
                 startBlock.Block.Connect(filterBlock.Block);
+                ActiveRegion(guard, region.FilterStart, region.FilterEnd);
             }
             //Set active region for leave/endf* instructions
             ActiveRegion(guard, region.TryStart, region.TryEnd);

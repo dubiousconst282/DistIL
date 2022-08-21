@@ -40,22 +40,17 @@ public class ModuleDef : ModuleEntity
         return null;
     }
 
-    public TypeDesc Import(Type type)
+    public TypeDesc? Import(Type type, [DoesNotReturnIf(false)] bool returnNullIfNotFound = false)
     {
         //TODO: add new references
         return FindReferencedType(type) ?? throw new NotImplementedException();
     }
 
     /// <summary> Imports the module/assembly with the given name. </summary>
-    public ModuleDef ImportModule(string name)
+    public ModuleDef? ImportModule(string name, [DoesNotReturnIf(false)] bool returnNullIfNotFound = false)
     {
         //TODO: add new references
         return AssemblyRefs.First(m => m.AsmName.Name == name);
-    }
-
-    public TypeDesc? GetImport(Type type)
-    {
-        return FindReferencedType(type);
     }
 
     private TypeDef? FindReferencedType(Type type)

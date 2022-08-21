@@ -15,9 +15,11 @@ public class CompareInst : Instruction
     public override string InstName {
         get {
             var str = Op.ToString().ToLower();
-            if (Op is (>= CompareOp.Slt and <= CompareOp.Uge)) return "icmp." + str;
-            if (Op is (>= CompareOp.FOlt and <= CompareOp.FUne)) return "fcmp." + str.Substring(1);
-            return "cmp." + str;
+            return Op switch {
+                >= CompareOp.Slt and <= CompareOp.Uge => "icmp." + str,
+                >= CompareOp.FOlt and <= CompareOp.FUne => "fcmp." + str[1..],
+                _ => "cmp." + str
+            };
         }
     }
 
@@ -32,7 +34,7 @@ public class CompareInst : Instruction
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }
 /// <summary>
-/// Defines comparison predicates for CompareInst.
+/// Specifies comparison operators for CompareInst.
 /// 
 /// Prefixes:
 ///   Eq|Ne    -> integers, objects, refs/pointers
@@ -57,16 +59,14 @@ public enum CompareOp
 
     FOlt,   FOgt,   FOle,   FOge, FOeq,   FOne, //float ordered
     FUlt,   FUgt,   FUle,   FUge, FUeq,   FUne, //float unordered
-
-    //These names suck, but verbose names like FloatUnorderedGreaterThanOrEqual suck even more, so...
 }
-public static class CompareOpEx
+public static class CompareOps
 {
     /// <summary> Returns the negated operator: 
     /// Eq -> Ne, Slt -> Sge, Sgt -> Sle, 
     /// FOeq -> FUne, FOlt -> FUge, etc. 
     /// </summary>
-    public static CompareOp GetInverse(this CompareOp op)
+    public static CompareOp GetNegated(this CompareOp op)
     {
         return op switch {
             CompareOp.Eq => CompareOp.Ne,
@@ -93,7 +93,7 @@ public static class CompareOpEx
             CompareOp.FUge => CompareOp.FOlt,
             CompareOp.FUle => CompareOp.FOgt,
 
-            _ => throw new ArgumentException()
+            _ => throw new InvalidOperationException()
         };
     }
 }

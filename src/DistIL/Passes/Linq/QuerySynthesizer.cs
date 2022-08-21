@@ -94,7 +94,7 @@ public class QuerySynthesizer
 
         startBlock.SetBranch(PreHeader.Block);
         Exit.SetBranch(endBlock);
-        EndStage.Call.ReplaceWith(_result, insertIfInst: false);
+        EndStage.Call.ReplaceWith(_result);
 
         //Delete old query
         for (var stage = StartStage; stage != null; stage = stage.Next) {

@@ -160,7 +160,7 @@ public class SsaTransform : MethodPass
             foreach (var phi in block.Phis()) {
                 //Remove phis with the same value in all args
                 if (IsTrivialPhi(phi)) {
-                    phi.ReplaceWith(phi.GetValue(0), false);
+                    phi.ReplaceWith(phi.GetValue(0));
                 }
                 //Enqueue phis with dependencies from non-phi instructions
                 else if (HasStrongDependencies(phi)) {

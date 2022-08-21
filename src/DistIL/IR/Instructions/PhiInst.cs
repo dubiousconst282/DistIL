@@ -77,7 +77,7 @@ public class PhiInst : Instruction
     {
         Ensure(index >= 0 && index < NumArgs);
         if (removeTrivialPhi && NumArgs == 2) {
-            ReplaceWith(GetValue(1 - index), false);
+            ReplaceWith(GetValue(1 - index));
             return;
         }
         RemoveOperands(index * 2, 2);

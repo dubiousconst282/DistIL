@@ -26,7 +26,7 @@ public class InlineMethods : MethodPass
         if (callInst.Method is not MethodDef callee) {
             return false;
         }
-        if (callInst.IsVirtual && (callee.Attribs & System.Reflection.MethodAttributes.Virtual) != 0) {
+        if (callInst.IsVirtual && (callee.Attribs & System.Reflection.MethodAttributes.NewSlot) != 0) {
             return false;
         }
         //TODO: better inlining heuristics

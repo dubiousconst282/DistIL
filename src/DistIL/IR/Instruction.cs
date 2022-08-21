@@ -54,7 +54,7 @@ public abstract class Instruction : TrackedValue
     /// in the same place as this instruction. 
     /// Operands of this instruction are keept unmodified, but uses are removed. 
     /// </summary>
-    public void ReplaceWith(Value newValue, bool insertIfInst = true)
+    public void ReplaceWith(Value newValue, bool insertIfInst = false)
     {
         if (insertIfInst && newValue is Instruction newInst && newInst.Block == null) {
             Block.InsertAfter(this, newInst);

@@ -32,6 +32,10 @@ public class DeadCodeElim : MethodPass
                         changed = true;
                     }
                 }
+                //`goto 1 ? T : F`  ->  `goto T`
+                if (block.Last is BranchInst { Cond: ConstInt { Value: var cond } } br) {
+                    block.SetBranch(cond != 0 ? br.Then : br.Else!);
+                }
                 //Enqueue successors
                 foreach (var succ in block.Succs) {
                     Push(succ);

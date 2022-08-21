@@ -115,7 +115,7 @@ public class SimplifyCFG : MethodPass
         }
         //Commit changes
         foreach (var (repl, phi) in repls.Zip(block.Phis())) {
-            phi.ReplaceWith(repl, false);
+            phi.ReplaceWith(repl);
         }
         ib.PrependInto(block);
         return true;

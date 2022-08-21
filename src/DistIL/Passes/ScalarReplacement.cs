@@ -53,9 +53,9 @@ public class ScalarReplacement : MethodPass
                     info.Scalars[field] = variable;
                 }
                 if (access is LoadFieldInst) {
-                    access.ReplaceWith(new LoadVarInst(variable));
+                    access.ReplaceWith(new LoadVarInst(variable), insertIfInst: true);
                 } else if (access is StoreFieldInst st) {
-                    access.ReplaceWith(new StoreVarInst(variable, st.Value));
+                    access.ReplaceWith(new StoreVarInst(variable, st.Value), insertIfInst: true);
                 }
             }
             if (obj is NewObjInst nwo) {

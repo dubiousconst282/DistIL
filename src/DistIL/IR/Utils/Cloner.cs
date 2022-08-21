@@ -1,7 +1,5 @@
 namespace DistIL.IR.Utils;
 
-using DistIL.Passes;
-
 public class Cloner
 {
     readonly MethodBody _targetMethod;
@@ -139,26 +137,26 @@ public class Cloner
         {
             var left = Remap(inst.Left);
             var right = Remap(inst.Right);
-            Out(ConstFold.FoldBinary(inst.Op, left, right)
+            Out(ConstFolding.FoldBinary(inst.Op, left, right)
                 ?? new BinaryInst(inst.Op, left, right));
         }
         public void Visit(UnaryInst inst)
         {
             var value = Remap(inst.Value);
-            Out(ConstFold.FoldUnary(inst.Op, value)
+            Out(ConstFolding.FoldUnary(inst.Op, value)
                 ?? new UnaryInst(inst.Op, value));
         }
         public void Visit(CompareInst inst)
         {
             var left = Remap(inst.Left);
             var right = Remap(inst.Right);
-            Out(ConstFold.FoldCompare(inst.Op, left, right)
+            Out(ConstFolding.FoldCompare(inst.Op, left, right)
                 ?? new CompareInst(inst.Op, left, right));
         }
         public void Visit(ConvertInst inst)
         {
             var value = Remap(inst.Value);
-            Out(ConstFold.FoldConvert(value, inst.ResultType, inst.CheckOverflow, inst.SrcUnsigned)
+            Out(ConstFolding.FoldConvert(value, inst.ResultType, inst.CheckOverflow, inst.SrcUnsigned)
                 ?? new ConvertInst(value, inst.ResultType, inst.CheckOverflow, inst.SrcUnsigned));
         }
 

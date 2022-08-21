@@ -16,7 +16,7 @@ public class ExpandLinq : MethodPass
     {
         ctx.PreserveAll();
 
-        t_Enumerable = ctx.Module.GetImport(typeof(Enumerable));
+        t_Enumerable = ctx.Module.Import(typeof(Enumerable), returnNullIfNotFound: true);
         if (t_Enumerable == null) return; //Module doesn't reference linq.
 
         //Find root queries

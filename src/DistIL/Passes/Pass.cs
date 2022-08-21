@@ -1,8 +1,8 @@
 namespace DistIL.Passes;
 
+using DistIL.Analysis;
 using DistIL.AsmIO;
 using DistIL.IR;
-using DistIL.Analysis;
 
 public abstract class Pass
 {

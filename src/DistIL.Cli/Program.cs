@@ -22,17 +22,16 @@ mp1.Add(new SsaTransform());
 
 var mp2 = new MethodPassManager();
 mp2.Add(new ExpandLinq());
-mp2.Add(new SimplifyInsts());
+mp2.Add(new SimplifyInsts()); //lambdas and devirtualization
 mp2.Add(new InlineMethods());
-mp2.Add(new ConstFold());
-mp2.Add(new SimplifyCFG());
+mp2.Add(new SimplifyInsts());
 mp2.Add(new DeadCodeElim());
+mp2.Add(new SimplifyCFG());
 mp2.Add(new ValueNumbering());
-mp2.Add(new SimplifyCFG());
-mp2.Add(new DeadCodeElim());
+
 if (args.Length >= 3) {
     mp2.Add(new DumpPass() {
-        Directory = args[2], 
+        BaseDir = args[2], 
         Filter = args.Length >= 4 ? args[3] : null
     });
 }
@@ -53,7 +52,7 @@ if (args.Length >= 2) {
 
 class DumpPass : MethodPass
 {
-    public string? Directory { get; init; }
+    public string BaseDir { get; init; } = null!;
     public string? Filter { get; init; }
 
     public override void Run(MethodTransformContext ctx)
@@ -68,8 +67,9 @@ class DumpPass : MethodPass
             var invalidNameChars = Path.GetInvalidFileNameChars();
             name = new string(name.Select(c => Array.IndexOf(invalidNameChars, c) < 0 ? c : '_').ToArray());
 
-            IRPrinter.ExportPlain(ctx.Method, $"{Directory}/{name}.txt");
-            IRPrinter.ExportDot(ctx.Method, $"{Directory}/{name}.dot");
+            Directory.CreateDirectory(BaseDir);
+            IRPrinter.ExportPlain(ctx.Method, $"{BaseDir}/{name}.txt");
+            IRPrinter.ExportDot(ctx.Method, $"{BaseDir}/{name}.dot");
         }
     }
 }

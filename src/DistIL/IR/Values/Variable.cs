@@ -1,9 +1,7 @@
 ﻿namespace DistIL.IR;
 
-/// <summary>
-/// Represents a local method variable. They should not be used directly as operands,
-/// except with VarLoadInst and VarStoreInst.
-/// </summary>
+/// <summary> Represents a local method variable. </summary>
+/// <remarks> The actual value of a variable can be accessed using LoadVarInst, StoreVarInst, and VarAddrInst. </remarks>
 public class Variable : TrackedValue
 {
     public TypeDesc Type => ResultType;
@@ -27,9 +25,9 @@ public class Variable : TrackedValue
         ctx.Print("$" + (Name ?? ctx.SymTable.GetName(this)), PrintToner.VarName);
     }
 
-    protected override SymbolTable GetDefaultSymbolTable()
+    public override SymbolTable? GetSymbolTable()
     {
         var parentMethod = GetFirstUser()?.Block?.Method;
-        return parentMethod?.GetSymbolTable() ?? base.GetDefaultSymbolTable();
+        return parentMethod?.GetSymbolTable();
     }
 }

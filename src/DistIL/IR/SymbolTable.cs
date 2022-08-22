@@ -1,96 +1,89 @@
 namespace DistIL.IR;
 
+using System.Runtime.CompilerServices;
+
 /// <summary> Tracks and provides names for values defined/used in a method. </summary>
 public class SymbolTable
 {
-    Dictionary<TrackedValue, int> _slots = new();
-    Dictionary<TrackedValue, string> _names = new();
-    HashSet<string> _usedNames = new();
+    readonly MethodBody? _method;
+    readonly bool _forceSeqNames;
 
-    public void UpdateSlots(MethodBody method)
+    readonly ConditionalWeakTable<TrackedValue, object /* string | int */> _tags = new();
+    readonly HashSet<string> _usedNames = new();
+    int _nextId = 1;
+
+    public SymbolTable(MethodBody? method = null, bool forceSeqNames = false)
     {
-        _slots.Clear();
-
-        foreach (var bb in method) {
-            Add(bb);
-
-            foreach (var inst in bb) {
-                if (inst.HasResult) {
-                    Add(inst);
-                }
-            }
-        }
-        //Delete names of removed values
-        foreach (var (val, name) in _names) {
-            if (!_slots.ContainsKey(val)) {
-                _names.Remove(val);
-                _usedNames.Remove(name);
-            }
-        }
-    }
-    private void Add(TrackedValue value)
-    {
-        _slots.Add(value, _slots.Count + 1);
+        _method = method;
+        _forceSeqNames = method != null && forceSeqNames;
     }
 
-    public void SetName(TrackedValue value, string? name)
+    public void SetName(TrackedValue value, string name)
     {
-        if (name == null) {
-            if (_names.Remove(value, out var prevName)) {
-                _usedNames.Remove(prevName);
-            }
-            return;
-        }
-        //Pick a unique name
+        //Pick an unique name
         string origName = name;
         int counter = 2;
         while (!_usedNames.Add(name)) {
             name = origName + counter;
             counter++;
         }
-        _names[value] = name;
+        _tags.AddOrUpdate(value, name);
     }
     
     public bool HasCustomName(TrackedValue value)
     {
-        return _names.ContainsKey(value);
+        return _tags.TryGetValue(value, out var tag) && tag is string;
     }
 
-    public string GetName(Instruction inst)
-        => GetName(inst, slot => $"r{slot}", unkName: "r?");
+    public string GetName(BasicBlock block) => GetName(block, "BB_{0:00}");
+    public string GetName(Instruction inst) => GetName(inst, "r{0}");
+    public string GetName(Variable var) => GetName(var, "loc{0}");
 
-    public string GetName(Variable var)
-        => GetName(var, slot => $"loc{slot}");
-
-    public string GetName(BasicBlock block)
-        => GetName(block, slot => $"BB_{slot:00}", unkName: "BB_??");
-
-    private string GetName(TrackedValue value, Func<int/*Slot*/, string> genAnon, string? unkName = null)
+    private string GetName(TrackedValue value, string format)
     {
-        if (_names.TryGetValue(value, out var name)) {
-            return name;
-        }
-        if (!_slots.TryGetValue(value, out int id)) {
-            if (unkName != null) {
-                return unkName;
+        if (!_tags.TryGetValue(value, out var tag)) {
+            if (_forceSeqNames && value is Instruction or BasicBlock) {
+                UpdateSeqNames();
+                _tags.TryGetValue(value, out tag);
             }
-            _slots[value] = id = _slots.Count + 1;
+            if (tag == null) {
+                tag = _nextId++;
+                _tags.Add(value, tag);
+            }
         }
-        return genAnon(id);
+        return tag as string ?? string.Format(format, tag);
+    }
+    private void UpdateSeqNames()
+    {
+        int currId = 1;
+        foreach (var block in _method!) {
+            AddNext(block);
+
+            foreach (var inst in block) {
+                AddNext(inst);
+            }
+        }
+        void AddNext(TrackedValue value)
+        {
+            if (!HasCustomName(value)) {
+                _tags.AddOrUpdate(value, currId++);
+            }
+        }
     }
 }
-public static class SlotTrackerEx
+
+public static class SymbolTableEx
 {
     /// <summary> Sets the instruction name on its parent method slot tracker. </summary>
     public static TInst SetName<TInst>(this TInst inst, string name) where TInst : Instruction
     {
-        inst.Block.Method.GetSymbolTable().SetName(inst, name);
+        inst.GetSymbolTable()!.SetName(inst, name);
         return inst;
     }
     /// <summary> Sets the block name on its parent method slot tracker. </summary>
     public static BasicBlock SetName(this BasicBlock block, string name)
     {
-        block.Method.GetSymbolTable().SetName(block, name);
+        block.GetSymbolTable()!.SetName(block, name);
         return block;
     }
 }

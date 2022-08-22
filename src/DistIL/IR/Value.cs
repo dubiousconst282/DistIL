@@ -12,12 +12,12 @@ public abstract class Value
 
     public abstract void Print(PrintContext ctx);
     public virtual void PrintAsOperand(PrintContext ctx) => Print(ctx);
-    protected virtual SymbolTable GetDefaultSymbolTable() => new();
+    public virtual SymbolTable? GetSymbolTable() => null;
 
     public override string ToString()
     {
         var sw = new StringWriter();
-        Print(new PrintContext(sw, GetDefaultSymbolTable()));
+        Print(new PrintContext(sw, GetSymbolTable() ?? new()));
         return sw.ToString();
     }
 

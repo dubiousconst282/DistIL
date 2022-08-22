@@ -179,8 +179,8 @@ public abstract class Instruction : TrackedValue
             _operands[i].PrintAsOperand(ctx);
         }
     }
-    protected override SymbolTable GetDefaultSymbolTable()
+    public override SymbolTable? GetSymbolTable()
     {
-        return Block?.Method.GetSymbolTable() ?? base.GetDefaultSymbolTable();
+        return Block?.Method.GetSymbolTable();
     }
 }

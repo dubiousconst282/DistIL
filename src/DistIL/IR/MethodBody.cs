@@ -6,7 +6,6 @@ public class MethodBody
 {
     public MethodDef Definition { get; }
     private SymbolTable? _symTable = null;
-    private bool _symsDirty = true;
 
     public ImmutableArray<Argument> Args { get; }
     /// <summary> Gets a view over `Args` excluding the first argument (`this`) if this is an instance method. </summary>
@@ -36,7 +35,6 @@ public class MethodBody
             InsertBlock(insertAfter ?? _lastBlock!, block);
         }
         NumBlocks++;
-        InvalidateBlocks();
         return block;
     }
 
@@ -67,27 +65,13 @@ public class MethodBody
         }
         block.Method = null!; //to ensure it can't be removed again
         NumBlocks--;
-        InvalidateBlocks();
         return false;
     }
 
     public SymbolTable GetSymbolTable()
     {
-        _symTable ??= new();
-        if (_symsDirty) {
-            _symsDirty = false;
-            _symTable.UpdateSlots(this);
-        }
-        return _symTable;
-    }
-    internal void InvalidateSlots()
-    {
-        _symsDirty = true;
-    }
-    //Called when a block is added/removed, to invalidate cached DFS lists and slots.
-    internal void InvalidateBlocks()
-    {
-        InvalidateSlots();
+        //TODO: Context options and SymbolTable.ForceSeqNames
+        return _symTable ??= new(this, true);
     }
 
     public IEnumerator<BasicBlock> GetEnumerator()

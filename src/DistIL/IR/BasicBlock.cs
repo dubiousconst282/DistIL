@@ -124,7 +124,6 @@ public class BasicBlock : TrackedValue
             First = rangeFirst;
             Last ??= rangeLast;
         }
-        OnCodeChanged();
     }
 
     /// <summary> Moves a range of instructions from this block to `newParent`, after `newParentPos` (null means before the first instruction in `newParent`). </summary>
@@ -135,7 +134,6 @@ public class BasicBlock : TrackedValue
 
         UnlinkRange(first, last);
         newParent.InsertRange(newParentPos, first, last);
-        OnCodeChanged();
     }
 
     public void Remove(Instruction inst)
@@ -144,7 +142,6 @@ public class BasicBlock : TrackedValue
         inst.Block = null!; //prevent inst from being removed again
 
         UnlinkRange(inst, inst);
-        OnCodeChanged();
     }
 
     private void UnlinkRange(Instruction rangeFirst, Instruction rangeLast)
@@ -159,11 +156,6 @@ public class BasicBlock : TrackedValue
         } else {
             Last = rangeFirst.Prev!;
         }
-    }
-
-    private void OnCodeChanged()
-    {
-        Method.InvalidateSlots();
     }
 
     public PhiInst AddPhi(PhiInst phi)
@@ -275,9 +267,9 @@ public class BasicBlock : TrackedValue
     {
         ctx.Print(ctx.SymTable.GetName(this));
     }
-    protected override SymbolTable GetDefaultSymbolTable()
+    public override SymbolTable? GetSymbolTable()
     {
-        return Method.GetSymbolTable();
+        return Method?.GetSymbolTable();
     }
 
     public IEnumerator<Instruction> GetEnumerator()

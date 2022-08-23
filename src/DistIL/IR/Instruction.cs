@@ -164,7 +164,7 @@ public abstract class Instruction : TrackedValue
     protected virtual void PrintPrefix(PrintContext ctx)
     {
         if (HasResult) {
-            ResultType.Print(ctx, includeNs: false);
+            ResultType.Print(ctx);
             ctx.Print(" ");
             PrintAsOperand(ctx);
             ctx.Print(" = ");

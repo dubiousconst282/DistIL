@@ -1,4 +1,4 @@
-﻿namespace DistIL.AsmIO;
+namespace DistIL.AsmIO;
 
 using DistIL.IR;
 
@@ -76,7 +76,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     public sealed override void Print(PrintContext ctx)
         => Print(ctx);
 
-    public virtual void Print(PrintContext ctx, bool includeNs = true)
+    public virtual void Print(PrintContext ctx, bool includeNs = false)
     {
         var ns = Namespace;
         if (ns != null && includeNs) {

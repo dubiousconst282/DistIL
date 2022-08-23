@@ -26,9 +26,9 @@ public abstract class MethodDesc : MemberDesc
     public override void Print(PrintContext ctx)
     {
         if (IsStatic) ctx.Print("static ", PrintToner.Keyword);
-        ReturnType.Print(ctx, includeNs: false);
+        ReturnType.Print(ctx);
         ctx.Print(" ");
-        DeclaringType.Print(ctx, includeNs: false);
+        DeclaringType.Print(ctx);
         ctx.Print("::");
         ctx.Print(Name, PrintToner.MethodName);
         if (IsGeneric) {

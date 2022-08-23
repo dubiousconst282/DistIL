@@ -40,11 +40,11 @@ public class CallInst : Instruction
     internal static void PrintOperands(PrintContext ctx, MethodDesc method, ReadOnlySpan<Value> args, TypeDesc? constraint, bool isCtor = false)
     {
         ctx.Print(" ");
-        method.DeclaringType.Print(ctx, includeNs: false);
+        method.DeclaringType.Print(ctx);
         ctx.Print("::");
         ctx.Print(method.Name, PrintToner.MethodName);
         if (method is MethodSpec { GenericParams.Length: > 0 }) {
-            ctx.PrintSequence("<", ">", method.GenericParams, p => p.Print(ctx, includeNs: false));
+            ctx.PrintSequence("<", ">", method.GenericParams, p => p.Print(ctx));
         }
         ctx.Print("(");
         for (int i = 0; i < args.Length; i++) {
@@ -54,7 +54,7 @@ public class CallInst : Instruction
                 ctx.Print("this", PrintToner.Keyword);
             } else {
                 var paramType = method.Params[i + (isCtor ? 1 : 0)].Type;
-                paramType.Print(ctx, includeNs: false);
+                paramType.Print(ctx);
             }
             ctx.Print(": ");
             args[i].PrintAsOperand(ctx);
@@ -62,7 +62,7 @@ public class CallInst : Instruction
         ctx.Print(")");
         if (constraint != null) {
             ctx.Print(" constrained ", PrintToner.Keyword);
-            constraint.Print(ctx, includeNs: false);
+            constraint.Print(ctx);
         }
     }
 }

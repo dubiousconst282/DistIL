@@ -16,13 +16,13 @@ public abstract class FieldDesc : MemberDesc
 
     public override void Print(PrintContext ctx)
     {
-        Type.Print(ctx, includeNs: false);
+        Type.Print(ctx);
         ctx.Print(" ");
         PrintAsOperand(ctx);
     }
     public override void PrintAsOperand(PrintContext ctx)
     {
-        DeclaringType.Print(ctx, includeNs: false);
+        DeclaringType.Print(ctx);
         ctx.Print("::");
         ctx.Print(Name, PrintToner.MemberName);
     }

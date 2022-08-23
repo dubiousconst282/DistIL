@@ -2,18 +2,14 @@ namespace DistIL.Util;
 
 using System.Runtime.CompilerServices;
 
-/// <summary>
-/// Implements a compact unordered hash set of object references.
-/// The implementation is uses linear probing, and the internal array grows when the load factor reaches 3/4.
-/// 
-/// Modifiying the set during enumeration is not supported, and may cause entries to be enumerated multiple times. (TODO)
-/// </summary>
+/// <summary> Implements a compact unordered set of object references. </summary>
+/// <remarks> Enumerators will be invalidated and throw after mutations (adds/removes). </remarks>
 public class RefSet<T, H>
     where T : class
     where H : struct, Hasher<T>
 {
-    internal T?[] _slots = new T[4];
-    internal int _count;
+    T?[] _slots = new T[16];
+    int _count;
     //Used to invalidate the enumerator when the set is changed.
     //Add()/Remove() will set it to true, and GetEnumerator() to false.
     //This approach could fail if GetEnumerator() is called on multiple threads, but we don't care about that.
@@ -32,15 +28,12 @@ public class RefSet<T, H>
     public bool Add(T value)
     {
         var slots = _slots;
-        for (int hash = Hash(value); ; hash++) {
-            int index = hash & (slots.Length - 1);
+        for (int index = Hash(value); ; index++) {
+            index &= (slots.Length - 1);
             var slot = slots[index];
 
-            if (slot == value) {
-                return false;
-            }
             if (slot == null) {
-                slots[index] = value;
+                MemUtils.WriteInvariant(slots, index, value);
                 _count++;
                 //Expand when load factor reaches 3/4
                 //Casting to uint avoids extra sign calcs in the resulting asm.
@@ -50,14 +43,17 @@ public class RefSet<T, H>
                 _changed = true;
                 return true;
             }
+            if (slot == value) {
+                return false;
+            }
         }
     }
 
     public bool Contains(T value)
     {
         var slots = _slots;
-        for (int hash = Hash(value); ; hash++) {
-            int index = hash & (slots.Length - 1);
+        for (int index = Hash(value); ; index++) {
+            index &= (slots.Length - 1);
             var slot = slots[index];
 
             if (slot == value) {
@@ -72,8 +68,8 @@ public class RefSet<T, H>
     public bool Remove(T value)
     {
         var slots = _slots;
-        for (int hash = Hash(value); ; hash++) {
-            int index = hash & (slots.Length - 1);
+        for (int index = Hash(value); ; index++) {
+            index &= (slots.Length - 1);
             var slot = slots[index];
 
             if (slot == value) {
@@ -106,7 +102,7 @@ public class RefSet<T, H>
                 // |....j i.k.| or  |.k..j i...|
                 if (i <= j ? (i >= k || k > j) : (i >= k && k > j)) break;
             }
-            slots[i] = slots[j];
+            MemUtils.WriteInvariant(slots, i, slots[j]);
             i = j;
         }
     }
@@ -120,16 +116,15 @@ public class RefSet<T, H>
     private void Expand()
     {
         var oldSlots = _slots;
-        var newSlots = new T[oldSlots.Length * 2];
-        _slots = newSlots;
+        var newSlots = _slots = new T[oldSlots.Length * 2];
 
         foreach (var value in oldSlots) {
             if (value == null) continue;
 
-            for (int hash = Hash(value); ; hash++) {
-                int index = hash & (newSlots.Length - 1);
+            for (int index = Hash(value); ; index++) {
+                index &= (newSlots.Length - 1);
                 if (newSlots[index] == null) {
-                    newSlots[index] = value;
+                    MemUtils.WriteInvariant(newSlots, index, value);
                     break;
                 }
                 Assert(newSlots[index] != value); //slots shouldn't have dupes
@@ -152,7 +147,8 @@ public class RefSet<T, H>
 
         public bool MoveNext()
         {
-            Assert(!_owner._changed, "RefSet cannot be modified during enumeration");
+            Ensure(!_owner._changed, "RefSet cannot be modified during enumeration");
+
             while (_index < _slots.Length) {
                 Current = _slots[_index++]!;
                 if (Current != null) {
@@ -163,13 +159,13 @@ public class RefSet<T, H>
         }
     }
 }
-/// <summary> A compact unordered hash set of object references. </summary>
+/// <inheritdoc/>
 public class RefSet<T> : RefSet<T, IdentityHasher>
     where T : class
 {
 }
 
-/// <summary> A specialization of <see cref="RefSet{T, H}"/> for <see cref="IR.TrackedValue"/> objects. </summary>
+/// <inheritdoc/>
 public class ValueSet<T> : RefSet<T, IRValueHasher>
     where T : IR.TrackedValue
 {

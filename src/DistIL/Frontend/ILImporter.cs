@@ -138,26 +138,26 @@ public class ILImporter
             if (!inst.OpCode.IsTerminator()) continue;
 
             if (inst.Operand is int targetOffset) {
-                leaders.Set(targetOffset);
+                leaders.Add(targetOffset);
             }
             //switch
             else if (inst.Operand is int[] targetOffsets) {
                 foreach (int offset in targetOffsets) {
-                    leaders.Set(offset);
+                    leaders.Add(offset);
                 }
             }
-            leaders.Set(inst.GetEndOffset()); //fallthrough
+            leaders.Add(inst.GetEndOffset()); //fallthrough
         }
 
         foreach (var region in ehRegions) {
             //Note: end offsets must have already been marked by leave/endfinally
-            leaders.Set(region.TryStart);
+            leaders.Add(region.TryStart);
 
             if (region.HandlerStart >= 0) {
-                leaders.Set(region.HandlerStart);
+                leaders.Add(region.HandlerStart);
             }
             if (region.FilterStart >= 0) {
-                leaders.Set(region.FilterStart);
+                leaders.Add(region.FilterStart);
             }
         }
         return leaders;

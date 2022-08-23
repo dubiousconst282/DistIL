@@ -4,31 +4,21 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-public sealed class BitSet : IEquatable<BitSet>
+public class BitSet : IEquatable<BitSet>
 {
     private ulong[] _data;
-    private int _len;
 
-    public int Length => _len;
+    public ulong[] RawData => _data;
 
-    public int NumWords => _data.Length;
-    public ulong[] Words => _data;
-
-    public BitSet(int initialLen = 256)
+    public BitSet(int initialCapacity = 256)
     {
-        Ensure(initialLen >= 0);
-        _len = initialLen;
-        _data = new ulong[(_len + 63) >> 6];
+        _data = new ulong[(initialCapacity + 63) >> 6];
     }
 
-    public bool this[int index]
-    {
-        get {
-            return index < _len && 
-                   (GetWord(index, allowRegrow: false) & (1ul << index)) != 0;
-        }
+    public bool this[int index] {
+        get => Contains(index);
         set {
-            ref ulong w = ref GetWord(index);
+            ref ulong w = ref GetOrAddWord(index);
             ulong mask = 1ul << index;
             if (value) {
                 w |= mask;
@@ -39,43 +29,36 @@ public sealed class BitSet : IEquatable<BitSet>
         }
     }
 
-    /// <summary> Sets the bit at the specified position, and returns whether it was previously clear. </summary>
+    /// <summary> Sets the bit at the specified index, and returns whether it was previously clear. </summary>
     public bool Add(int index)
     {
-        ref ulong w = ref GetWord(index);
-        ulong mask = 1ul << index;
-        bool wasClear = (w & mask) == 0;
-        w |= mask;
-        return wasClear;
+        ref ulong w = ref GetOrAddWord(index);
+        ulong prev = w;
+        w |= (1ul << index);
+        return w != prev;
     }
 
     /// <summary> Clears the bit at the specified index, and returns whether it was previously set. </summary>
     public bool Remove(int index)
     {
-        if ((uint)index >= (uint)_len) {
+        if (!IsIndexValid(index)) {
             return false;
         }
-        ref ulong w = ref GetWord(index, allowRegrow: false);
-        ulong mask = 1ul << index;
-        bool wasSet = (w & mask) != 0;
-        w &= ~mask;
-        return wasSet;
+        ref ulong w = ref GetWord(index);
+        ulong prev = w;
+        w &= ~(1ul << index);
+        return w != prev;
     }
 
-    /// <summary> Sets the bit at the specified index. </summary>
-    public void Set(int index)
-    {
-        GetWord(index) |= (1ul << index);
-    }
-
-    /// <summary> Sets the bit at the specified index. </summary>
+    /// <summary> Checks if the bit at the specified index is set. </summary>
     public bool Contains(int index)
     {
-        return this[index];
+        return IsIndexValid(index) &&
+               ((GetWord(index) >> index) & 1) != 0;
     }
 
-    /// <summary> Returns the number of set bits. </summary>
-    public int Count()
+    /// <summary> Computes the number of set bits. </summary>
+    public int PopCount()
     {
         int r = 0;
         foreach (ulong w in _data) {
@@ -90,7 +73,7 @@ public sealed class BitSet : IEquatable<BitSet>
         return GetRangeEnumerator(start, end).MoveNext();
     }
 
-    /// <summary> Excludes the elements of the specified set from this set, and returns whether there was any change. </summary>
+    /// <summary> Removes the elements of the specified set from this set, and returns whether any change occurred. </summary>
     public bool Intersect(BitSet other)
     {
         var wa = _data;
@@ -107,7 +90,7 @@ public sealed class BitSet : IEquatable<BitSet>
         return changed != 0;
     }
 
-    /// <summary> Adds the elements of the specified set to this set, and returns whether there was any change. </summary>
+    /// <summary> Adds the elements of the specified set to this set, and returns whether any change occurred. </summary>
     public bool Union(BitSet other)
     {
         var wa = _data;
@@ -128,21 +111,20 @@ public sealed class BitSet : IEquatable<BitSet>
         return changed != 0;
     }
 
-    /// <summary> Adds the differences between `a` and `b` (a ∩ b') to this set, and returns whether there was any change. </summary>
+    /// <summary> Adds the differences between `a` and `b` (a ∩ b') to this set, and returns whether any change occurred. </summary>
     public bool UnionDiffs(BitSet a, BitSet b)
     {
         var dst = _data;
         var wa = a._data;
         var wb = b._data;
-        int count = Math.Min(wa.Length, wb.Length);
         ulong changed = 0;
 
-        if (count > dst.Length) {
+        if (wa.Length > dst.Length) {
             //Note: passing dst by ref will prevent the JIT from enregistering it.
-            Array.Resize(ref _data, wb.Length);
+            Array.Resize(ref _data, wa.Length);
             dst = _data;
         }
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < wa.Length; i++) {
             ulong prev = dst[i];
             ulong next = prev | (wa[i] & ~wb[i]);
             dst[i] = next;
@@ -153,39 +135,39 @@ public sealed class BitSet : IEquatable<BitSet>
 
     public void Clear()
     {
-        Array.Clear(_data);
+        _data.AsSpan().Clear();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private ref ulong GetWord(int bitPos, bool allowRegrow = true)
+    private ref ulong GetWord(int bitPos)
     {
-        if ((uint)bitPos >= (uint)_len) {
-            if (allowRegrow) {
-                Grow(bitPos);
-            } else {
-                throw new ArgumentOutOfRangeException();
-            }
-        }
         return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_data), bitPos >> 6);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private ref ulong GetOrAddWord(int bitPos)
+    {
+        if (!IsIndexValid(bitPos)) {
+            Grow(bitPos);
+        }
+        return ref GetWord(bitPos);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IsIndexValid(int bitPos) => (uint)(bitPos >> 6) < (uint)_data.Length;
+
     private void Grow(int bitPos)
     {
-        Ensure(bitPos >= 0);
-        _len = bitPos + 1;
-
-        int wordIndex = bitPos >> 6;
-        if (wordIndex >= _data.Length) {
-            const int GROW_AMOUNT = 512 / 64;
-            Array.Resize(ref _data, wordIndex + GROW_AMOUNT);
+        if (bitPos < 0) {
+            throw new IndexOutOfRangeException();
         }
+        int newSize = Math.Max(bitPos / 64 + 8, (int)(_data.Length * 6L / 4L));
+        Array.Resize(ref _data, newSize);
     }
 
     public bool Equals(BitSet? other)
     {
-        return other != null &&
-               _len == other._len &&
-               _data.AsSpan().SequenceEqual(other._data);
+        return other != null && _data.AsSpan().SequenceEqual(other._data);
     }
     public override bool Equals(object? obj)
     {
@@ -211,20 +193,17 @@ public sealed class BitSet : IEquatable<BitSet>
         return sb.ToString();
     }
 
-    public Enumerator GetEnumerator() => new(_data, 0, _len);
+    public Enumerator GetEnumerator() => new(_data, 0, _data.Length * 64);
     public Enumerator GetRangeEnumerator(int start, int end)
     {
-        Ensure(
-            (uint)end <= (uint)_len &&
-            start >= 0 && start <= end
-        );
-        return new Enumerator(_data, start, end);
+        Ensure((uint)start <= (uint)end);
+        return new Enumerator(_data, start, Math.Min(end, _data.Length * 64));
     }
 
     public struct Enumerator
     {
         ulong _word;
-        int _wordBitPos, _end;
+        int _basePos, _end;
         ulong[] _data;
 
         public int Current { get; private set; } = 0;
@@ -234,25 +213,24 @@ public sealed class BitSet : IEquatable<BitSet>
             Assert(start >= 0 && (end >> 6) <= data.Length);
             _data = data;
             _end = end;
-            
-            int wordIndex = start >> 6;
-            _word = (data[wordIndex] >> start) << start; //clear bits before `start % 64`
-            _wordBitPos = wordIndex << 6;
+
+            _word = (data[start >> 6] >> start) << start; //clear bits before `start % 64`
+            _basePos = start & ~63; //floor(start / 64) * 64
         }
 
         public bool MoveNext()
         {
             while (true) {
                 if (_word != 0) {
-                    Current = _wordBitPos + BitOperations.TrailingZeroCount(_word);
+                    Current = _basePos + BitOperations.TrailingZeroCount(_word);
                     _word &= _word - 1; //clear lsb
                     return Current < _end;
                 }
-                _wordBitPos += 64;
-                if (_wordBitPos >= _end) {
+                _basePos += 64;
+                if (_basePos >= _end) {
                     return false;
                 }
-                _word = _data[_wordBitPos >> 6];
+                _word = _data[_basePos >> 6];
             }
         }
 

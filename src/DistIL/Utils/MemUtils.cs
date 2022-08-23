@@ -4,9 +4,10 @@ using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+/// <summary> Provides high performance memory related utility functions. </summary>
 public unsafe class MemUtils
 {
-    /// <summary> Reads a T value from the span. Does not perform bounds check in release mode. </summary>
+    /// <summary> Reads a T value from the span. Bounds check is not guaranteed to happen. </summary>
     public static T Read<T>(ReadOnlySpan<byte> buf, int pos) where T : unmanaged
     {
         Assert((uint)(pos + sizeof(T)) < (uint)buf.Length);
@@ -27,6 +28,17 @@ public unsafe class MemUtils
 
         throw new NotSupportedException();
     }
+
+    /// <summary> Writes an object to the specified array without covariance checks. `array[index] = value` </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void WriteInvariant<T>(T?[] array, int index, T? value) where T : class
+    {
+        //Based on https://github.com/dotnet/coreclr/pull/23571
+        //This is probably not very portable, but worth the risk.
+        Assert(typeof(T[]) == array.GetType());
+        Unsafe.As<ObjWrapper[]>(array)[index].Value = value;
+    }
+    struct ObjWrapper { public object? Value; }
 }
 
 public ref struct SpanReader
@@ -64,7 +76,7 @@ public ref struct SpanReader
         return value;
     }
 
-    private void ThrowEOS()
+    private static void ThrowEOS()
     {
         throw new InvalidOperationException("Cannot read past span");
     }

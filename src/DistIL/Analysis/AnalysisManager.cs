@@ -7,7 +7,7 @@ public interface IAnalysis
 }
 public interface IMethodAnalysis : IAnalysis
 {
-    static abstract IMethodAnalysis Create(IMethodAnalysisManager mgr);
+    static virtual IMethodAnalysis Create(IMethodAnalysisManager mgr) => throw new NotImplementedException();
 }
 public interface IMethodAnalysisManager
 {

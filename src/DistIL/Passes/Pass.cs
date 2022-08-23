@@ -61,7 +61,7 @@ public class MethodTransformContext : IMethodAnalysisManager
     public MethodDef Definition => Method.Definition;
     public ModuleDef Module => Method.Definition.Module;
     
-    private Dictionary<Type, (object/*IMethodAnalysis*/ Analysis, bool Valid)> _analysis = new();
+    private Dictionary<Type, (IMethodAnalysis Analysis, bool Valid)> _analyses = new();
 
     public MethodTransformContext(MethodBody method)
     {
@@ -70,7 +70,7 @@ public class MethodTransformContext : IMethodAnalysisManager
 
     public A GetAnalysis<A>(bool preserve = false) where A : IMethodAnalysis
     {
-        ref var info = ref _analysis.GetOrAddRef(typeof(A));
+        ref var info = ref _analyses.GetOrAddRef(typeof(A));
         if (info.Analysis == null || !info.Valid) {
             info.Analysis = A.Create(this);
         }
@@ -79,18 +79,18 @@ public class MethodTransformContext : IMethodAnalysisManager
     }
     public void Preserve<A>() where A : IMethodAnalysis
     {
-        ref var info = ref _analysis.GetOrAddRef(typeof(A));
+        ref var info = ref _analyses.GetOrAddRef(typeof(A));
         info.Valid = true;
     }
     public void PreserveAll()
     {
-        foreach (var key in _analysis.Keys) {
-            _analysis.GetOrAddRef(key).Valid = true;
+        foreach (var key in _analyses.Keys) {
+            _analyses.GetOrAddRef(key).Valid = true;
         }
     }
     public void InvalidateAll()
     {
-        _analysis.Clear();
+        _analyses.Clear();
     }
 }
 public class ModuleTransformContext

@@ -11,7 +11,7 @@ public class ArrayType : CompoundType
 
     protected override string Postfix => "[]";
 
-    public ArrayType(TypeDesc elemType)
+    internal ArrayType(TypeDesc elemType)
         : base(elemType)
     {
     }
@@ -92,7 +92,7 @@ public class MDArrayMethod : MethodDesc
     public override string Name { get; }
     public Kind MethodKind { get; }
 
-    public MDArrayMethod(MDArrayType type, Kind kind)
+    internal MDArrayMethod(MDArrayType type, Kind kind)
     {
         bool isCtor = kind <= Kind.RangeCtor;
         DeclaringType = type;

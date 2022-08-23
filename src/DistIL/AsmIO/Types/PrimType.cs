@@ -42,6 +42,11 @@ public class PrimType : TypeDesc
 
     public string? Alias { get; }
 
+    //Cached compound types
+    private ArrayType? _arrayType;
+    private PointerType? _ptrType;
+    private ByrefType? _byrefType;
+
     private PrimType(TypeKind kind, StackType stackType, string name, string? alias)
     {
         Kind = kind;
@@ -55,6 +60,10 @@ public class PrimType : TypeDesc
     }
 
     public static PrimType? GetFromAlias(string alias) => _fromAlias.GetValueOrDefault(alias);
+
+    public override ArrayType CreateArray() => _arrayType ??= new(this);
+    public override PointerType CreatePointer() => _ptrType ??= new(this);
+    public override ByrefType CreateByref() => _byrefType ??= new(this);
 
     public TypeDef GetDefinition(ModuleDef module) => module.SysTypes.GetPrimitiveDef(Kind);
 

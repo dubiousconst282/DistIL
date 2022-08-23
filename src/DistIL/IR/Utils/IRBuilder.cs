@@ -65,7 +65,7 @@ public class IRBuilder
         => Add(new StoreArrayInst(array, index, value, elemType ?? (array.ResultType as ArrayType)!.ElemType, flags));
 
     public IntrinsicInst CreateNewArray(TypeDesc elemType, Value length)
-        => Add(new IntrinsicInst(IntrinsicId.NewArray, new ArrayType(elemType), length));
+        => Add(new IntrinsicInst(IntrinsicId.NewArray, elemType.CreateArray(), length));
 
     public LoadFieldInst CreateFieldLoad(FieldDesc field, Value? obj = null)
         => Add(new LoadFieldInst(field, obj));

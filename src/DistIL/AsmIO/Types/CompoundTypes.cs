@@ -1,7 +1,5 @@
 namespace DistIL.AsmIO;
 
-using System.Collections.Immutable;
-
 using DistIL.IR;
 
 /// <summary> Represents a type that has an element type (array, pointer, byref) </summary>
@@ -23,10 +21,7 @@ public abstract class CompoundType : TypeDesc
     public override TypeDesc GetSpec(GenericContext context)
     {
         var specElemType = ElemType.GetSpec(context);
-        if (specElemType == ElemType) {
-            return this;
-        }
-        return New(specElemType);
+        return specElemType == ElemType ? this : New(specElemType);
     }
     protected abstract CompoundType New(TypeDesc elemType);
 
@@ -49,7 +44,7 @@ public class PointerType : CompoundType
     public override TypeDesc? BaseType => null;
     protected override string Postfix => "*";
 
-    public PointerType(TypeDesc elemType)
+    internal PointerType(TypeDesc elemType)
         : base(elemType)
     {
     }
@@ -66,7 +61,7 @@ public class ByrefType : CompoundType
     public override TypeDesc? BaseType => null;
     protected override string Postfix => "&";
 
-    public ByrefType(TypeDesc elemType)
+    internal ByrefType(TypeDesc elemType)
         : base(elemType)
     {
     }

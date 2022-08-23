@@ -19,9 +19,9 @@ internal class TypeResolver
             BasicTypeNode nodeC => Resolve(nodeC),
             NestedTypeNode nodeC => Resolve(nodeC),
             TypeSpecNode nodeC => Resolve(nodeC),
-            ArrayTypeNode nodeC => ResolveAndWrap(nodeC.ElemType, et => new ArrayType(et)),
-            PointerTypeNode nodeC => ResolveAndWrap(nodeC.ElemType, et => new PointerType(et)),
-            ByrefTypeNode nodeC => ResolveAndWrap(nodeC.ElemType, et => new ByrefType(et)),
+            ArrayTypeNode nodeC => ResolveAndWrap(nodeC.ElemType, et => et.CreateArray()),
+            PointerTypeNode nodeC => ResolveAndWrap(nodeC.ElemType, et => et.CreatePointer()),
+            ByrefTypeNode nodeC => ResolveAndWrap(nodeC.ElemType, et => et.CreateByref()),
             _ => throw new InvalidOperationException()
         };
         if (type != null) {

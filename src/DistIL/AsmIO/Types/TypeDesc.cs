@@ -1,4 +1,4 @@
-namespace DistIL.AsmIO;
+﻿namespace DistIL.AsmIO;
 
 using DistIL.IR;
 
@@ -38,8 +38,20 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
                (t2 == StackType.NInt || t2 == StackType.ByRef);
     }
 
-    public virtual TypeDesc GetSpec(GenericContext context)
-        => this;
+    /// <summary>
+    /// Creates a generic type instantiation with the context arguments, 
+    /// or returns the current instance if it is not a generic type definition.
+    /// </summary>
+    public virtual TypeDesc GetSpec(GenericContext context) => this;
+
+    /// <summary> Creates an <see cref="ArrayType"/> of the current type. </summary>
+    public virtual ArrayType CreateArray() => new(this);
+
+    /// <summary> Creates a <see cref="PointerType"/> of the current type. </summary>
+    public virtual PointerType CreatePointer() => new(this);
+
+    /// <summary> Creates a <see cref="ByrefType"/> of the current type. </summary>
+    public virtual ByrefType CreateByref() => new(this);
 
     public virtual MethodDesc? FindMethod(string name, in MethodSig sig)
     {

@@ -744,8 +744,7 @@ internal class BlockState
     private void ImportNewArray(TypeDesc elemType)
     {
         var length = Pop();
-        var resultType = new ArrayType(elemType);
-        Push(new IntrinsicInst(IntrinsicId.NewArray, resultType, length));
+        Push(new IntrinsicInst(IntrinsicId.NewArray, elemType.CreateArray(), length));
     }
 
     private void ImportLoadToken(EntityDesc entity)

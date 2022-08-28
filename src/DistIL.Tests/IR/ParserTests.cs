@@ -5,19 +5,78 @@ using DistIL.IR.Utils.Parser;
 
 public class ParserTests
 {
-    [Theory, MemberData(nameof(GetTypeTests))]
-    internal void ParseType(string str, TypeNode expType)
+    readonly ModuleResolver _modResolver;
+    readonly ModuleDef _corelib;
+
+    public ParserTests()
     {
-        var parser = new AstParser(new ParserContext(str, null));
-        var actType = parser.ParseType();
-        Assert.Equal(expType, actType);
+        _modResolver = new();
+        _corelib = _modResolver.Resolve("System.Private.CoreLib");
     }
 
-    [Theory, MemberData(nameof(GetInstTests))]
-    internal void ParseInst(string str, IEnumerable<InstNode> expInsts)
+    [Fact]
+    internal void Test_ParseType()
     {
-        var parser = new AstParser(new ParserContext(str, null));
-        foreach (var expInst in expInsts) {
+        var t_List = _corelib.FindType("System.Collections.Generic", "List`1", throwIfNotFound: true);
+
+        Check("System.Int32", _corelib.SysTypes.Int32);
+        Check("int[]", PrimType.Int32.CreateArray());
+        Check("int[][]", PrimType.Int32.CreateArray().CreateArray());
+        Check("int*[]&", PrimType.Int32.CreatePointer().CreateArray().CreateByref());
+        Check(
+            "System.Collections.Generic.List`1+Enumerator[string[]]&",
+
+            t_List.GetNestedType("Enumerator").GetSpec(
+                ImmutableArray.Create<TypeDesc>(PrimType.String.CreateArray())
+            ).CreateByref()
+        );
+
+        void Check(string str, TypeDesc expType)
+        {
+            var parser = new AstParser(new ParserContext(str, _modResolver));
+            var actType = parser.ParseType();
+            Assert.Equal(expType, actType);
+        }
+    }
+
+    [Fact]
+    internal void ParseInst1()
+    {
+        var t_Math = _corelib.FindType("System", "Math", throwIfNotFound: true);
+        var t_DateTime = _corelib.FindType("System", "DateTime", throwIfNotFound: true);
+
+        string code = @"
+int x = phi [A -> -1], [B -> 2]
+int y = mul x, 4
+int z = call Math::Max(int: y, int: 0)
+DateTime w = ldfld DateTime::UnixEpoch
+goto z ? BB_01 : BB_02";
+
+        var expAst = new List<InstNode>() {
+            new InstNode("phi", new() {
+                new IdNode("A"), new BoundNode(ConstInt.CreateI(-1)),
+                new IdNode("B"), new BoundNode(ConstInt.CreateI(2)),
+            }, PrimType.Int32, "x"),
+
+            new InstNode("mul", new() {
+                new IdNode("x"), new BoundNode(ConstInt.CreateI(4)),
+            }, PrimType.Int32, "y"),
+
+            new InstNode("call", new() {
+                new BoundNode(t_Math.FindMethod("Max", new MethodSig(PrimType.Int32, PrimType.Int32, PrimType.Int32))!),
+                new IdNode("y"),
+                new BoundNode(ConstInt.CreateI(0))
+            }, PrimType.Int32, "z"),
+
+            new InstNode("ldfld", new() {
+                new BoundNode(t_DateTime.FindField("UnixEpoch")!)
+            }, t_DateTime, "w"),
+
+            new InstNode("goto", new() { new IdNode("z"), new IdNode("BB_01"), new IdNode("BB_02"), } )
+        };
+
+        var parser = new AstParser(new ParserContext(code, _modResolver));
+        foreach (var expInst in expAst) {
             var actInst = parser.ParseInst();
             Assert.Equal(expInst, actInst);
         }
@@ -38,7 +97,7 @@ Block2:
     ret res
 Block3: goto Block3
 ";
-        IRParser.Populate(body, new ParserContext(code, null));
+        IRParser.Populate(body, new ParserContext(code, _modResolver));
 
         Assert.Equal(3, body.NumBlocks);
         var insts = body.Instructions().ToArray();
@@ -49,65 +108,5 @@ Block3: goto Block3
         Assert.True(insts[3] is BranchInst { Cond: ConstInt { Value: 1 } });
         Assert.True(insts[4] is PhiInst phi && phi.GetBlock(0) == insts[3].Block && phi.GetValue(0) == insts[1] && phi.GetValue(1) is ConstInt { Value: -1 });
         Assert.True(insts[5] is ReturnInst ret && ret.Value == insts[4]);
-    }
-
-    public static IEnumerable<object[]> GetTypeTests()
-    {
-        yield return new object[] { "System.Int32", new BasicTypeNode("System.Int32") };
-        yield return new object[] { "int[]", new ArrayTypeNode(new BasicTypeNode("int")) };
-        yield return new object[] { "int[][]", new ArrayTypeNode(new ArrayTypeNode(new BasicTypeNode("int"))) };
-        yield return new object[] { "int*[]&", new ByrefTypeNode(new ArrayTypeNode(new PointerTypeNode(new BasicTypeNode("int")))) };
-        yield return new object[] {
-            "System.Collections.Generic.List`1+Enumerator[string[]]", 
-            new TypeSpecNode(
-                new NestedTypeNode(new BasicTypeNode("System.Collections.Generic.List`1"), "Enumerator"),
-                new TypeNode[] { new ArrayTypeNode(new BasicTypeNode("string")) }
-            )
-        };
-        yield return new object[] {
-            "NS.A`1+B`1[int[], int][]&",
-            new ByrefTypeNode(new ArrayTypeNode(
-                new TypeSpecNode(
-                    new NestedTypeNode(new BasicTypeNode("NS.A`1"), "B`1"),
-                    new TypeNode[] {
-                        new ArrayTypeNode(new BasicTypeNode("int")),
-                        new BasicTypeNode("int")
-                    }
-                )
-            ))
-        };
-    }
-
-    public static IEnumerable<object[]> GetInstTests()
-    {
-        yield return new object[] {
-            "int x = phi [A -> -1], [B -> 2]\n" +
-            "int y = mul x, 4\n" +
-            "int z = call Math::Abs(int: y)\n" +
-            "DateTime w = ldfld DateTime::UnixEpoch\n" +
-            "goto z ? BB_01 : BB_02",
-            new List<InstNode>() {
-                new InstNode("phi", new() {
-                    new IdNode("A"), new ConstNode(ConstInt.CreateI(-1)),
-                    new IdNode("B"), new ConstNode(ConstInt.CreateI(2)),
-                }, new BasicTypeNode("int"), "x"),
-
-                new InstNode("mul", new() {
-                    new IdNode("x"), new ConstNode(ConstInt.CreateI(4)),
-                }, new BasicTypeNode("int"), "y"),
-
-                new InstNode("call", new() {
-                    new MethodNode(new BasicTypeNode("Math"), "Abs", null, new BasicTypeNode("int"), new() { new BasicTypeNode("int") }),
-                    new IdNode("y"),
-                }, new BasicTypeNode("int"), "z"),
-
-                new InstNode("ldfld", new() {
-                    new FieldNode(new BasicTypeNode("DateTime"), "UnixEpoch")
-                },
-                new BasicTypeNode("DateTime"), "w"),
-
-                new InstNode("goto", new() { new IdNode("z"), new IdNode("BB_01"), new IdNode("BB_02"), } )
-            }
-        };
     }
 }

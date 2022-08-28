@@ -6,24 +6,17 @@ internal partial class Materializer
     readonly MethodBody _method;
     readonly SymbolTable _symTable;
     readonly Dictionary<Node, Value> _cache = new();
-    readonly TypeResolver _typeResolver;
     readonly ParserContext _ctx;
 
     public Materializer(ParserContext ctx, MethodBody method)
     {
         _method = method;
         _symTable = method.GetSymbolTable();
-        _typeResolver = new TypeResolver();
         _ctx = ctx;
     }
 
     public void Process(ProgramNode program)
     {
-        foreach (var (modName, ns) in program.Imports) {
-            var mod = _ctx.ResolveModule(modName);
-            _typeResolver.ImportNamespace(mod, ns);
-        }
-
         //Materialize blocks
         foreach (var blockNode in program.Blocks) {
             var block = (BasicBlock)GetMaterialized(blockNode);
@@ -45,7 +38,7 @@ internal partial class Materializer
 
     private Value GetMaterialized(Node node)
     {
-        if (node is ConstNode cst) {
+        if (node is BoundNode cst) {
             return cst.Value;
         }
         if (_cache.TryGetValue(node, out var value)) {
@@ -54,16 +47,13 @@ internal partial class Materializer
         return _cache[node] = node switch {
             BlockNode => _method.CreateBlock(),
             InstNode c => Materialize(c),
-            MethodNode c => Materialize(c),
-            FieldNode c => Materialize(c),
             VarNode c => Materialize(c)
         };
     }
 
     private Instruction Materialize(InstNode node)
     {
-        var resultType = ResolveType(node.ResultType);
-
+        var resultType = node.ResultType ?? PrimType.Void;
         var opers = new Value[node.Operands.Count];
         for (int i = 0; i < opers.Length; i++) {
             opers[i] = GetMaterialized(node.Operands[i]);
@@ -74,28 +64,9 @@ internal partial class Materializer
             throw _ctx.Error(node, "Unknown opcode or too few arguments");
         }
         if (inst.ResultType != resultType) {
-            throw _ctx.Error(node, "Result type does not match declaration");
+            throw _ctx.Error(node, "Instruction result type does not match declaration");
         }
         return inst;
-    }
-
-    private MethodDesc Materialize(MethodNode node)
-    {
-        var ownerType = ResolveType(node.Owner);
-        var retType = ResolveType(node.RetType);
-        var paramTypes = new TypeDesc[node.Params.Count];
-        for (int i = 0; i < paramTypes.Length; i++) {
-            paramTypes[i] = ResolveType(node.Params[i]);
-        }
-        return ownerType.FindMethod(node.Name, new MethodSig(retType, paramTypes))
-                ?? throw _ctx.Error(node, "Failed to resolve method");
-    }
-
-    private FieldDesc Materialize(FieldNode node)
-    {
-        var ownerType = ResolveType(node.Owner);
-        return ownerType.FindField(node.Name)
-                ?? throw _ctx.Error(node, "Failed to resolve field");
     }
 
     private Value Materialize(VarNode node)
@@ -118,17 +89,8 @@ internal partial class Materializer
             if (node.Type == null) {
                 throw _ctx.Error(node, $"Variable must be loaded at least once for its type to be bound.");
             }
-            return new Variable(ResolveType(node.Type), false, rawName.ToString());
+            return new Variable(node.Type, false, rawName.ToString());
         }
         throw new InvalidOperationException("VarNode with unknown prefix");
-    }
-
-    private TypeDesc ResolveType(TypeNode? node)
-    {
-        if (node == null) {
-            return PrimType.Void;
-        }
-        return _typeResolver.Resolve(node)
-                ?? throw _ctx.Error(node, "Failed to resolve type");
     }
 }

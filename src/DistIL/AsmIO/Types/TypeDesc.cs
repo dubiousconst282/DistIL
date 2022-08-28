@@ -135,6 +135,15 @@ public struct GenericContext
         TypeArgs = method.DeclaringType.GenericParams;
         MethodArgs = method.GenericParams;
     }
+
+    public ImmutableArray<TypeDesc> FillParams(ImmutableArray<TypeDesc> pars)
+    {
+        var builder = ImmutableArray.CreateBuilder<TypeDesc>(pars.Length);
+        foreach (var type in pars) {
+            builder.Add(type.GetSpec(this));
+        }
+        return builder.MoveToImmutable();
+    }
 }
 
 public enum TypeKind

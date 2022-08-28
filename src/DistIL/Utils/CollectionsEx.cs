@@ -71,6 +71,17 @@ public static class CollectionsEx
         return false;
     }
 
+    /// <summary> 
+    /// Extracts the internal array as an <see cref="ImmutableArray{T}"/> and resets the builder
+    /// if the capacity matches the count; otherwise, creates a copy and keep the builder unchanged. 
+    /// </summary>
+    public static ImmutableArray<T> TakeImmutable<T>(this ImmutableArray<T>.Builder builder)
+    {
+        return builder.Count == builder.Capacity 
+            ? builder.MoveToImmutable()
+            : builder.ToImmutable();
+    }
+
     public static ReverseEnumerable<T> ReverseItr<T>(this T[] arr)
         => new() { Span = arr.AsSpan() };
 

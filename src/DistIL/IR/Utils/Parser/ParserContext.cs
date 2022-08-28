@@ -3,9 +3,9 @@ namespace DistIL.IR.Utils.Parser;
 internal class ParserContext
 {
     public string Code { get; }
-    public ModuleResolver? ModuleResolver { get; }
+    public ModuleResolver ModuleResolver { get; }
 
-    public ParserContext(string code, ModuleResolver? modResolver)
+    public ParserContext(string code, ModuleResolver modResolver)
     {
         Code = code;
         ModuleResolver = modResolver;

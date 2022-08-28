@@ -80,6 +80,8 @@ internal class Lexer
         throw Error($"Expected {value ?? "Identifier"}, got {token.Type}");
     }
 
+    public int NextPos() => Peek().Position.Start;
+
     public Token Peek()
     {
         if (_peeked == null) {
@@ -133,8 +135,8 @@ internal class Lexer
             '}' => TokenType.RBrace,
             '[' => TokenType.LBracket,
             ']' => TokenType.RBracket,
-            '<' => TokenType.LChevron,
-            '>' => TokenType.RChevron,
+            '<' => TokenType.LAngle,
+            '>' => TokenType.RAngle,
 
             '+' => TokenType.Plus,
             '*' => TokenType.Asterisk,
@@ -291,7 +293,7 @@ internal class Lexer
         return true;
     }
 
-    public Exception Error(string msg) => _ctx.Error(msg, _startPos, _pos);
+    public Exception Error(string msg, int start = -1) => _ctx.Error(msg, start < 0 ? _startPos : start, _pos);
     public Exception Error(string msg, Token token) => _ctx.Error(msg, token.Position.Start, token.Position.End);
 
     public struct CursorHandle

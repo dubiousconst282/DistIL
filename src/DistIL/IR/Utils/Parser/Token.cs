@@ -29,7 +29,7 @@ internal enum TokenType
     LParen, RParen,         // ( )
     LBrace, RBrace,         // { }
     LBracket, RBracket,     // [ ]
-    LChevron, RChevron,     // < >
+    LAngle, RAngle,         // < >
 
     Plus,           // +
     Minus,          // -

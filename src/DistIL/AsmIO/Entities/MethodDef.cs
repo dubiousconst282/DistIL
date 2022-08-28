@@ -36,6 +36,12 @@ public abstract class MethodDesc : MemberDesc
         }
         ctx.PrintSequence("(", ")", Params, p => p.Type.Print(ctx));
     }
+
+    public virtual MethodDesc GetSpec(GenericContext ctx)
+    {
+        Assert(GenericParams.Length == 0, "GetSpec() must be overriden if the method can be instantiated");
+        return this;
+    }
 }
 public class ParamDef
 {
@@ -80,6 +86,13 @@ public readonly struct MethodSig
         NumGenericParams = 0;
     }
 
+    public MethodSig(TypeDesc retType, ImmutableArray<TypeDesc> paramTypes, int numGenPars = 0)
+    {
+        ReturnType = retType;
+        ParamTypes = paramTypes;
+        NumGenericParams = numGenPars;
+    }
+
     public bool Equals(MethodDesc method)
     {
         if (method.ReturnType != ReturnType) {
@@ -117,9 +130,7 @@ public class MethodDef : MethodDefOrSpec
 {
     public override MethodDef Definition => this;
     public override TypeDef DeclaringType { get; }
-
-    private string _name;
-    public override string Name => _name;
+    public override string Name { get; }
 
     public ILMethodBody? ILBody { get; set; }
     public IR.MethodBody? Body { get; set; }
@@ -133,9 +144,9 @@ public class MethodDef : MethodDefOrSpec
         DeclaringType = declaringType;
         ReturnType = retType;
         Params = pars;
-        _name = name;
+        Name = name;
         Attribs = attribs;
-        ImplAttribs = ImplAttribs;
+        ImplAttribs = implAttribs;
         GenericParams = genericParams.EmptyIfDefault();
     }
 
@@ -162,7 +173,12 @@ public class MethodDef : MethodDefOrSpec
         CustomAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
     }
 
-    public void SetName(string value) => _name = value;
+    public override MethodDesc GetSpec(GenericContext ctx)
+    {
+        return IsGeneric || DeclaringType.IsGeneric
+            ? new MethodSpec(DeclaringType.GetSpec(ctx), this, ctx.FillParams(GenericParams))
+            : this;
+    }
 }
 
 /// <summary> Represents a generic method instantiation. </summary>
@@ -213,7 +229,7 @@ public class ILMethodBody
         //TODO: use C#11 required properties
     }
 
-    private List<ILInstruction> DecodeInsts(ModuleLoader loader, BlobReader reader)
+    private static List<ILInstruction> DecodeInsts(ModuleLoader loader, BlobReader reader)
     {
         var list = new List<ILInstruction>(reader.Length / 2);
         while (reader.Offset < reader.Length) {

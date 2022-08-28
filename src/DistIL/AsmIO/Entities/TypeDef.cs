@@ -124,15 +124,11 @@ public class TypeDef : TypeDefOrSpec
                TypeKind.Object;
     }
 
-    public override TypeDesc GetSpec(GenericContext context)
+    public override TypeDefOrSpec GetSpec(GenericContext context)
     {
-        if (!IsGeneric) {
-            return this;
-        }
-        var genArgs = GenericParams
-            .Select(p => p.GetSpec(context))
-            .ToImmutableArray();
-        return new TypeSpec(this, genArgs);
+        return IsGeneric 
+            ? new TypeSpec(this, context.FillParams(GenericParams)) 
+            : this;
     }
     public TypeSpec GetSpec(ImmutableArray<TypeDesc> genArgs)
     {

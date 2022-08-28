@@ -1,61 +1,63 @@
 namespace DistIL.IR.Utils.Parser;
 
-//Program: "Import... Block..."
-//Import: " 'import' Id 'from' Id" 
-//Block: "Id: Indent "Inst, ..." Dedent" | Inst
-//Type: "Id"                -> Basic
-//    | "Type[]"            -> Array
-//    | "Type*"             -> Pointer
-//    | "Type&"             -> Byref
-//    | "Type+Id"           -> Nested
-//    | "Id`2[Type,...]"    -> Spec
-//    | "!0"                -> GenParam
-//    | "!!0"               -> GenParam (Method)
-//Inst: "Type Id = InstBody"
-//    | "Type Id = phi [Label -> Value], ..."
-//    | "InstBody"
-//InstBody: "Value, ..."
-//        | "goto Label"
-//        | "goto Value ? Label : Label"
-//        | "call|callvirt|newobj Method(this|Type: Value, ...)"
-//        | "ldfld|stfld|fldaddr Type::Id [, Value...]"
-//Method: "Type::Id"
-//      | "Type::Id<Type, ...>"
-//Value: Id | Number | String | 'null'
+//Program   = Import*  Block*
+//Import    = "import"  Id  "from"  Id
+//Block     = Id  ":"  (Indent  Inst+  Dedent) | Inst
+//Type      = Identifier  ("+"  Identifier)?  ("["  Seq{Type}  "]")?  ("[]" | "*" | "&")*
+//Inst      = (Type  Id  "=")?  InstBody
+//InstBody  = 
+//    "goto"  (Label | (Value "?" Label : Label))
+//  | "phi"  Seq{"["  Label  "->"  Value  "]"}
+//  | ("call" | "callvirt" | "newobj")  Method  "(" Seq{CallArg}? ")"
+//  | ("ldfld" | "stfld" | "fldaddr")  Field  Operands
+//  | Opcode  Operands
+//  | Type  Id  "="  Opcode  Operands
+//Operands  = Seq{Value}
+//Method    = Type  "::"  Id ("<" Seq{Type} ">")?
+//CallArg   = ("this" | Type)  ":"  Value
+//Field     = Type  "::"  Id
+//Value     = Id | Number | String | "null"
+//Seq{R}    = R  (","  R)*
+//DelimSeq{Start, End, R} = Start  Seq{R}?  End
 
 /// <summary> Generates an AST from an arbitrary string. </summary>
 internal class AstParser
 {
     readonly Lexer _lexer;
     readonly ParserContext _ctx;
+    readonly List<(ModuleDef Mod, string? Ns)> _imports = new();
+    readonly ModuleDef _coreLib;
 
     public AstParser(ParserContext ctx)
     {
         _lexer = new Lexer(ctx);
         _ctx = ctx;
+
+        _coreLib = _ctx.ResolveModule("System.Private.CoreLib");
+        _imports.Add((_coreLib, "System"));
     }
 
     public ProgramNode ParseProgram()
     {
-        var imports = new List<(string Mod, string Ns)>();
-        var blocks = new List<BlockNode>();
-
         while (_lexer.MatchKeyword("import")) {
             string ns = _lexer.ExpectId();
             _lexer.ExpectId("from");
-            var mod = _lexer.ExpectId();
+            string modName = _lexer.ExpectId();
 
-            imports.Add((mod, ns));
+            var mod = _ctx.ResolveModule(modName);
+            _imports.Add((mod, ns));
         }
+        var blocks = new List<BlockNode>();
+
         while (!_lexer.Match(TokenType.EOF)) {
             blocks.Add(ParseBlock());
         }
-        return new ProgramNode(imports, blocks);
+        return new ProgramNode(blocks);
     }
 
+    //Block = Id  ":"  (Indent  Inst+  Dedent) | Inst
     public BlockNode ParseBlock()
     {
-        //Id: Indent Inst... Dedent | Inst
         var label = _lexer.ExpectId();
         var code = new List<InstNode>();
 
@@ -73,8 +75,15 @@ internal class AstParser
 
     public InstNode ParseInst()
     {
-        var slot = MatchSlot();
-        var opcode = _lexer.ExpectId();
+        string? slotName = null;
+        TypeDesc? slotType = null;
+
+        if (ParseOpcode() is not string opcode) {
+            slotType = ParseType();
+            slotName = _lexer.ExpectId();
+            _lexer.Expect(TokenType.Equal);
+            opcode = _lexer.ExpectId();
+        }
         var opers = new List<Node>();
 
         switch (opcode) {
@@ -102,18 +111,11 @@ internal class AstParser
             }
             case "call" or "callvirt" or "newobj": {
                 //call Type::Id<Type, ...>(this|Type: Value, ...)
-                var method = ParseMethodLhs(slot.Type);
-                opers.Add(method);
-
-                while (!_lexer.Match(TokenType.RParen)) {
-                    method.Params.Add(_lexer.MatchKeyword("this") ? method.Owner : ParseType());
-                    _lexer.Expect(TokenType.Colon);
-                    opers.Add(ParseValue());
-                }
+                ParseCall(opers, slotType ?? PrimType.Void);
                 break;
             }
             case "ldfld" or "stfld" or "fldaddr": {
-                opers.Add(ParseField());
+                opers.Add(new BoundNode(ParseField()!));
                 if (_lexer.Match(TokenType.Comma)) {
                     goto default; //cursed or ok?
                 }
@@ -129,26 +131,36 @@ internal class AstParser
                 break;
             }
         }
-        return new InstNode(opcode, opers, slot.Type, slot.Name);
+        return new InstNode(opcode, opers, slotType, slotName);
     }
 
-    private (TypeNode? Type, string? Name) MatchSlot()
+    private string? ParseOpcode()
     {
-        var startPos = _lexer.Cursor;
-        if (
-            MatchType() is TypeNode type &&
-            _lexer.MatchId() is string name &&
-            _lexer.Match(TokenType.Equal)
-        ) {
-            return (type, name);
+        var token = _lexer.Peek();
+        if (token.Type == TokenType.Identifier && Materializer.IsValidOpcode(token.StrValue)) {
+            _lexer.Next();
+            return token.StrValue;
         }
-        _lexer.Cursor = startPos;
-        return default;
+        return null;
     }
 
     private IdNode ParseId()
     {
         return new IdNode(_lexer.ExpectId());
+    }
+
+    // DelimSeq{T} = Start  Seq{T}?  End
+    // Seq{T} = T  (","  T)*
+    private void ParseDelimSeq(TokenType start, TokenType end, Action parseElem)
+    {
+        _lexer.Expect(start);
+
+        if (!_lexer.Match(end)) {
+            do {
+                parseElem();
+            } while (_lexer.Match(TokenType.Comma));
+            _lexer.Expect(end);
+        }
     }
 
     private Node ParseValue()
@@ -157,105 +169,128 @@ internal class AstParser
 
         return token.Type switch {
             TokenType.Identifier when token.StrValue is "null" =>
-                new ConstNode(ConstNull.Create()),
+                new BoundNode(ConstNull.Create()),
             TokenType.Identifier => new IdNode(token.StrValue),
-            TokenType.Number => new ConstNode((Const)token.Value!),
-            TokenType.String => new ConstNode(ConstString.Create(token.StrValue)),
+            TokenType.Number => new BoundNode((Const)token.Value!),
+            TokenType.String => new BoundNode(ConstString.Create(token.StrValue)),
             _ => throw _lexer.Error("Value expected")
         };
     }
 
-    //Parse a method left hand side: `OwnerType::Name ['<' Type... '>'] '('`
-    private MethodNode ParseMethodLhs(TypeNode? retType)
+    private void ParseCall(List<Node> instOpers, TypeDesc retType)
     {
+        //Method = Type  "::"  Id  GenArgs  Call
+        int start = _lexer.Peek().Position.Start;
         var ownerType = ParseType();
         _lexer.Expect(TokenType.DoubleColon);
         var name = _lexer.ExpectId();
-        var genPars = default(List<TypeNode>);
 
-        if (_lexer.Match(TokenType.LChevron)) {
-            genPars = new();
-            while (!_lexer.Match(TokenType.RChevron)) {
+        //GenArgs = ("<" Seq{Type} ">")?
+        var genPars = ImmutableArray.CreateBuilder<TypeDesc>();
+        if (_lexer.IsNext(TokenType.LAngle)) {
+            ParseDelimSeq(TokenType.LAngle, TokenType.RAngle, () => {
                 genPars.Add(ParseType());
-            }
+            });
         }
-        _lexer.Expect(TokenType.LParen);
+        //Call    = "(" Seq{CallArg}? ")"
+        //CallArg = ("this" | Type)  ":"  Value
+        var pars = ImmutableArray.CreateBuilder<TypeDesc>();
+        ParseDelimSeq(TokenType.LParen, TokenType.RParen, () => {
+            pars.Add(_lexer.MatchKeyword("this") ? ownerType : ParseType());
+            _lexer.Expect(TokenType.Colon);
+            instOpers.Add(ParseValue());
+        });
 
-        retType ??= new BasicTypeNode("void");
-        var pars = new List<TypeNode>();
-        return new MethodNode(ownerType, name, genPars, retType, pars);
+        var method = ownerType.FindMethod(name, new MethodSig(retType, pars.TakeImmutable(), genPars.Count));
+        if (method == null) {
+            _lexer.Error("Method could not be found", start);
+        } else if (genPars.Count > 0) {
+            method = method.GetSpec(new GenericContext(methodArgs: genPars.TakeImmutable()));
+        }
+        instOpers.Insert(0, new BoundNode(method!));
     }
 
-    private FieldNode ParseField()
+    private FieldDesc? ParseField()
     {
         var ownerType = ParseType();
         _lexer.Expect(TokenType.DoubleColon);
-        var name = _lexer.ExpectId();
-        return new FieldNode(ownerType, name);
+        string name = _lexer.ExpectId();
+
+        var field = ownerType.FindField(name);
+        if (field == null) {
+            _lexer.Error("Field could not be found");
+        }
+        return field;
     }
 
-    public TypeNode ParseType()
-    {
-        return MatchType() ?? throw _lexer.Error("Type expected");
-    }
-    public TypeNode? MatchType()
+    public TypeDesc ParseType()
     {
         //I.10.7.2 Type names and arity encoding
-        //NS.A`1+B`1[int[], int][]&
-        if (_lexer.MatchId() is not string name) {
-            return null;
-        }
-        var type = new BasicTypeNode(name) as TypeNode;
-        int numArgs = ParseIntAfterBacktick(name);
+        // Type = Identifier  ("+"  Identifier)?  ("["  Seq{Type}  "]")?  ("[]" | "*" | "&")*
+        //Ex: "NS.A`1+B`1[int[], int][]&"  ->  "NS.A.B<int[], int>[]&"
+        int start = _lexer.NextPos();
+        string name = _lexer.ExpectId();
+        var type = ResolveType(name);
 
         //Nested types
         while (_lexer.Match(TokenType.Plus)) {
-            if (_lexer.MatchId() is not string childName) {
-                return null;
+            string childName = _lexer.ExpectId();
+            type = (type as TypeDef)?.GetNestedType(childName);
+        }
+        if (type == null) {
+            _lexer.Error("Type could not be found", start);
+            return PrimType.Void;
+        }
+        //Generic arguments
+        if (type.IsGeneric && _lexer.IsNext(TokenType.LBracket)) {
+            var args = ImmutableArray.CreateBuilder<TypeDesc>();
+            ParseDelimSeq(TokenType.LBracket, TokenType.RBracket, () => {
+                args.Add(ParseType());
+            });
+
+            if (type is TypeDef def) {
+                type = def.GetSpec(args.TakeImmutable());
+            } else {
+                _lexer.Error("Non-generic type cannot be instantiated", start);
+                return PrimType.Void;
             }
-            type = new NestedTypeNode(type, childName);
-            numArgs += ParseIntAfterBacktick(childName);
         }
 
-        //Generic arguments
-        if (numArgs > 0) {
-            _lexer.Expect(TokenType.LBracket);
-            var args = new TypeNode[numArgs];
-            for (int i = 0; i < numArgs; i++) {
-                if (i != 0) _lexer.Expect(TokenType.Comma);
-                args[i] = ParseType();
-            }
-            _lexer.Expect(TokenType.RBracket);
-            type = new TypeSpecNode(type, args);
-        }
-        
-        //Compound types (arrays, pointers, ...)
+        //Compound types (array, pointer, byref)
         while (true) {
             if (_lexer.Match(TokenType.LBracket)) {
                 //TODO: multi dim arrays
                 _lexer.Expect(TokenType.RBracket);
-                type = new ArrayTypeNode(type);
-            }
+                type = type.CreateArray();
+            } //
             else if (_lexer.Match(TokenType.Asterisk)) {
-                type = new PointerTypeNode(type);
-            }
+                type = type.CreatePointer();
+            } //
             else if (_lexer.Match(TokenType.Ampersand)) {
-                type = new ByrefTypeNode(type);
-            }
+                type = type.CreateByref();
+            } //
             else break;
         }
         return type;
-
-        int ParseIntAfterBacktick(string name)
-        {
-            int idx = name.LastIndexOf('`');
-            if (idx < 0) {
-                return 0;
+    }
+    private TypeDesc? ResolveType(string name)
+    {
+        int nsEnd = name.LastIndexOf('.');
+        if (nsEnd < 0) {
+            var prim = PrimType.GetFromAlias(name);
+            if (prim != null) {
+                return prim;
             }
-            if (!int.TryParse(name.AsSpan(idx + 1), out int val)) {
-                throw _lexer.Error("Malformed generic type name: backtick must be followed with an integer.");
+            foreach (var (mod, ns) in _imports) {
+                var type = mod.FindType(ns, name);
+                if (type != null) {
+                    return type;
+                }
             }
-            return val;
+        } else {
+            return _coreLib.FindType(name[0..nsEnd], name[(nsEnd + 1)..]) ??
+                throw new NotImplementedException("Fully qualified type name");
         }
+        return null;
     }
 }

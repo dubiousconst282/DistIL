@@ -2,6 +2,13 @@ namespace DistIL.IR.Utils.Parser;
 
 partial class Materializer
 {
+    public static bool IsValidOpcode(string opcode) =>
+        opcode is "phi" or "goto" or "ret" or
+                  "call" or "callvirt" or "newobj" or
+                  "ldvar" or "stvar" or "varaddr" or
+                  "ldfld" or "stfld" or "fldaddr" or
+                  "ldarr" or "starr" or "arraddr";
+
     private static Instruction? CreateInstUnchecked(string opcode, Value[] opers, TypeDesc resultType)
     {
         return (opcode, opers.Length) switch {

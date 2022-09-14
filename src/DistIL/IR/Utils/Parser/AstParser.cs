@@ -167,14 +167,19 @@ internal class AstParser
     {
         var token = _lexer.Next();
 
-        return token.Type switch {
-            TokenType.Identifier when token.StrValue is "null" =>
-                new BoundNode(ConstNull.Create()),
-            TokenType.Identifier => new IdNode(token.StrValue),
-            TokenType.Number => new BoundNode((Const)token.Value!),
-            TokenType.String => new BoundNode(ConstString.Create(token.StrValue)),
-            _ => throw _lexer.Error("Value expected")
-        };
+        switch (token.Type) {
+            case TokenType.Identifier when token.StrValue is "null":
+                return new BoundNode(ConstNull.Create());
+            case TokenType.Identifier:
+                return new IdNode(token.StrValue);
+            case TokenType.Number:
+                return new BoundNode((Const)token.Value!);
+            case TokenType.String:
+                return new BoundNode(ConstString.Create(token.StrValue));
+            default:
+                _lexer.Error("Value expected");
+                return new BoundNode(null!);
+        }
     }
 
     private void ParseCall(List<Node> instOpers, TypeDesc retType)
@@ -247,13 +252,7 @@ internal class AstParser
             ParseDelimSeq(TokenType.LBracket, TokenType.RBracket, () => {
                 args.Add(ParseType());
             });
-
-            if (type is TypeDef def) {
-                type = def.GetSpec(args.TakeImmutable());
-            } else {
-                _lexer.Error("Non-generic type cannot be instantiated", start);
-                return PrimType.Void;
-            }
+            type = ((TypeDef)type).GetSpec(args.TakeImmutable());
         }
 
         //Compound types (array, pointer, byref)

@@ -10,9 +10,12 @@ public class IRParser
         Populate(method, ctx);
     }
 
-    internal static void Populate(MethodBody method, ParserContext ctx)
+    public static void Populate(MethodBody method, ParserContext ctx)
     {
         var program = new AstParser(ctx).ParseProgram();
+        if (ctx.Errors.Count > 0) {
+            throw new FormatException("Failed to parse source code");
+        }
         new Binder(ctx).Process(program);
         new Materializer(ctx, method).Process(program);
     }

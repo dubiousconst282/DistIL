@@ -31,7 +31,7 @@ internal class Lexer
         }
     }
 
-    public Lexer(ParserContext ctx) => (_str, _ctx) = (ctx.Code, ctx);
+    public Lexer(ParserContext ctx) => (_str, _ctx) = (ctx.SourceCode, ctx);
 
     public bool Match(TokenType type) => Match(type, out _);
     public bool Match(TokenType type, out Token token)
@@ -63,13 +63,14 @@ internal class Lexer
         return Peek().Type == type;
     }
 
-    public Token Expect(TokenType type)
+    public bool Expect(TokenType type)
     {
         var token = Next();
-        if (token.Type == type) {
-            return token;
+        if (token.Type != type) {
+            Error($"Expected '{type}', got '{token.Type}'");
+            return false;
         }
-        throw Error($"Expected {type}, got {token.Type}");
+        return true;
     }
     public string ExpectId(string? value = null)
     {
@@ -77,7 +78,8 @@ internal class Lexer
         if (token.Type == TokenType.Identifier && (value == null || token.StrValue == value)) {
             return token.StrValue;
         }
-        throw Error($"Expected {value ?? "Identifier"}, got {token.Type}");
+        Error($"Expected '{value ?? "Identifier"}', got '{token.Type}'");
+        return "<broken expectations>";
     }
 
     public int NextPos() => Peek().Position.Start;
@@ -168,7 +170,7 @@ internal class Lexer
         if (IsIdentifierChar(ch)) {
             return Tok(TokenType.Identifier, ParseIdentifier());
         }
-        throw Error("Unknown character");
+        throw _ctx.Fatal("Unknown character", _startPos, _pos);
 
         Token Tok(TokenType type, object? value = null) => new(type, _startPos, _pos, value);
     }
@@ -191,7 +193,7 @@ internal class Lexer
         if (_nextLevel < currLevel) {
             currLevel = _indents.IsEmpty ? 0 : _indents.Pop();
             if (currLevel < _nextLevel) {
-                throw Error("Inconsistent indentation");
+                Error("Inconsistent indentation");
             }
             return TokenType.Dedent;
         }
@@ -204,14 +206,17 @@ internal class Lexer
     {
         var m = _numberRegex.Match(_str, _pos);
         if (!m.Success) {
-            throw Error("Malformed number");
+            Error("Malformed number");
+            _pos++; //skip at least one char to prevent infinite loop
+            return ConstInt.CreateI(0);
         }
         _pos += m.Length;
 
         string postfix = m.Groups[3].Value;
         bool F = postfix.EqualsIgnoreCase("F");
+        bool D = postfix.EqualsIgnoreCase("D");
 
-        if (m.Groups[1].Success || m.Groups[2].Success || F) { //fraction or exponent
+        if (m.Groups[1].Success || m.Groups[2].Success || F || D) { //fraction or exponent
             double r = double.Parse(m.ValueSpan, NumberStyles.Float, CultureInfo.InvariantCulture);
 
             var type = F ? PrimType.Single : PrimType.Double;
@@ -245,12 +250,14 @@ internal class Lexer
                     '"' => '"',
                     '\\' => '\\', // \
                     '\'' => '\'', // '
-                    _ => throw _ctx.Error("Unknown escaping sequence", _pos - 2, _pos)
+                    _ => Unk()
                 };
+                char Unk() { _ctx.Error("Unknown escaping sequence", _pos - 2, _pos); return '?'; }
             }
             sb.Append(ch);
         }
-        throw Error("Unterminated string");
+        Error("Unterminated string");
+        return sb.ToString();
     }
     private string ParseIdentifier()
     {
@@ -285,7 +292,10 @@ internal class Lexer
             if (len == 0) len = str.Length;
         } else if (str.StartsWith("/*")) {
             len = str.IndexOf("*/") + 2;
-            if (len == 1) throw Error("Unterminated multi-line comment");
+            if (len == 1) {
+                len = str.Length;
+                Error("Unterminated multi-line comment");
+            }
         } else {
             return false;
         }
@@ -293,8 +303,7 @@ internal class Lexer
         return true;
     }
 
-    public Exception Error(string msg, int start = -1) => _ctx.Error(msg, start < 0 ? _startPos : start, _pos);
-    public Exception Error(string msg, Token token) => _ctx.Error(msg, token.Position.Start, token.Position.End);
+    public void Error(string msg, int start = -1) => _ctx.Error(msg, start < 0 ? _startPos : start, _pos);
 
     public struct CursorHandle
     {

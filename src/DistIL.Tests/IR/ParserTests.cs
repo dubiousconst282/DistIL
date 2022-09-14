@@ -40,7 +40,7 @@ public class ParserTests
     }
 
     [Fact]
-    internal void ParseInst1()
+    internal void Test_ParseInst()
     {
         var t_Math = _corelib.FindType("System", "Math", throwIfNotFound: true);
         var t_DateTime = _corelib.FindType("System", "DateTime", throwIfNotFound: true);
@@ -83,7 +83,7 @@ goto z ? BB_01 : BB_02";
     }
 
     [Fact]
-    internal void Materialize()
+    internal void Test_Materializer()
     {
         var body = Utils.CreateDummyMethodBody(PrimType.Int32, PrimType.Int32);
         string code = @"
@@ -108,5 +108,20 @@ Block3: goto Block3
         Assert.True(insts[3] is BranchInst { Cond: ConstInt { Value: 1 } });
         Assert.True(insts[4] is PhiInst phi && phi.GetBlock(0) == insts[3].Block && phi.GetValue(0) == insts[1] && phi.GetValue(1) is ConstInt { Value: -1 });
         Assert.True(insts[5] is ReturnInst ret && ret.Value == insts[4]);
+    }
+
+    [Fact]
+    public void Test_MultiErrors()
+    {
+        var code = @"
+Block1:
+    ThisTypeDoesNotExist x = add 1, 1
+    int y = call Int32::Parse(string: ""12"")";
+        var ctx = new ParserContext(code, _modResolver);
+        var program = new AstParser(ctx).ParseProgram();
+
+        var errors = ctx.Errors.Select(e => e.GetDetailedMessage()).ToArray();
+
+        ;
     }
 }

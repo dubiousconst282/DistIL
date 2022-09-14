@@ -162,10 +162,10 @@ internal class Lexer
             return Tok(sym);
         }
         if (ch is (>= '0' and <= '9') or '-') {
-            return Tok(TokenType.Number, ParseNumber());
+            return Tok(TokenType.Literal, ParseNumber());
         }
         if (ch is '"') {
-            return Tok(TokenType.String, ParseString());
+            return Tok(TokenType.Literal, ParseString());
         }
         if (IsIdentifierChar(ch)) {
             return Tok(TokenType.Identifier, ParseIdentifier());
@@ -202,7 +202,7 @@ internal class Lexer
 
     //[-] int [.fract] [E|e [+|-] exp] [UL|U|L|F|D]
     static readonly Regex _numberRegex = new(@"-?\d+(\.\d+)?([Ee][+-]?\d+)?(UL|U|L|F|D)?", RegexOptions.IgnoreCase);
-    private Const ParseNumber()
+    private Value ParseNumber()
     {
         var m = _numberRegex.Match(_str, _pos);
         if (!m.Success) {
@@ -233,15 +233,13 @@ internal class Lexer
             return ConstInt.Create(type, r);
         }
     }
-    private string ParseString()
+    private Value ParseString()
     {
         var sb = new StringBuilder();
         _pos++; //skip initial quote
         while (_pos < _str.Length) {
             char ch = _str[_pos++];
-            if (ch == '"') {
-                return sb.ToString();
-            }
+            if (ch == '"') break;
             if (ch == '\\') {
                 ch = _str[_pos++] switch {
                     'r' => '\r',
@@ -256,8 +254,10 @@ internal class Lexer
             }
             sb.Append(ch);
         }
-        Error("Unterminated string");
-        return sb.ToString();
+        if (_pos >= _str.Length) {
+            Error("Unterminated string");
+        }
+        return ConstString.Create(sb.ToString());
     }
     private string ParseIdentifier()
     {

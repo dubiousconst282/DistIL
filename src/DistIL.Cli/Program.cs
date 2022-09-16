@@ -25,6 +25,7 @@ mp2.Add(new ExpandLinq());
 mp2.Add(new SimplifyInsts()); //lambdas and devirtualization
 mp2.Add(new InlineMethods());
 mp2.Add(new SimplifyInsts());
+mp2.Add(new LoopInvariantCodeMotion());
 mp2.Add(new DeadCodeElim());
 mp2.Add(new SimplifyCFG());
 mp2.Add(new ValueNumbering());

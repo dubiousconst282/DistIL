@@ -48,6 +48,9 @@ public abstract class Instruction : TrackedValue
     /// <summary> Inserts this instruction after `inst`. </summary>
     public void InsertAfter(Instruction inst) => inst.Block.InsertAfter(inst, this);
 
+    /// <summary> Moves this instruction before `inst`. </summary>
+    public void MoveBefore(Instruction inst) => Block.MoveRange(inst.Block, inst.Prev, this, this);
+
     /// <summary> 
     /// Removes this instruction from the parent block and replaces its uses with the specified value. 
     /// If `newValue` is an instruction with no parent block and `insertIfInst == true`, it will be added 

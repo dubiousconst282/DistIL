@@ -14,9 +14,10 @@ public class BinaryInst : Instruction
     }
     public override string InstName => Op.ToString().ToLower();
 
-    public override bool MayThrow => Op is 
-        (>= BinaryOp.SDiv and <= BinaryOp.URem) or
-        (>= BinaryOp.FirstOvf_ and <= BinaryOp.LastOvf_);
+    public override bool MayThrow =>
+        //(x / 0) or (x / -1, when x == INT_MIN) may overflow
+        (Op is >= BinaryOp.SDiv and <= BinaryOp.URem && Right is not ConstInt { Value: not (0 or -1) }) ||
+        (Op is >= BinaryOp.FirstOvf_ and <= BinaryOp.LastOvf_);
 
     public bool IsCommutative => Op.IsCommutative();
     public bool IsAssociative => Op.IsAssociative();
@@ -36,15 +37,16 @@ public class BinaryInst : Instruction
         var sb = b.StackType;
 
         //Shift allows any combination of <i4|i8|nint> op <i4|nint>
-        if (op is BinaryOp.Shl or BinaryOp.Shra or BinaryOp.Shrl && 
+        if (op is BinaryOp.Shl or BinaryOp.Shra or BinaryOp.Shrl &&
             sa is StackType.Int or StackType.Long or StackType.NInt &&
-            sb is StackType.Int or StackType.NInt) {
+            sb is StackType.Int or StackType.NInt
+        ) {
             return a;
         }
 
-        //Sort sa, sb to reduce number of cases,
+        //Sort (sa, sb) and (a, b) to reduce number of cases,
         //such that sa <= sb with order [int long nint float nint byref]
-        if (sa > sb) (sa, sb) = (sb, sa);
+        if (sa > sb) (sa, sb, a, b) = (sb, sa, b, a);
 
         #pragma warning disable format
         return (sa, sb, op) switch {
@@ -52,7 +54,7 @@ public class BinaryInst : Instruction
             (StackType.Long,    StackType.Long, _)  => PrimType.Int64,
             (StackType.Float,   StackType.Float, _) => a == PrimType.Double ? a : b, //pick double over float
             (StackType.NInt,    StackType.NInt, _)  => a == b ? a : PrimType.IntPtr, //pick pointer over nint
-            (StackType.Int,     StackType.NInt, _)  => a,
+            (StackType.Int,     StackType.NInt, _)  => b,
             (StackType.ByRef,   StackType.ByRef, BinaryOp.Sub) => PrimType.IntPtr,   //& - & = nint
             //& + int/nint = &
             (StackType.ByRef,   StackType.Int or StackType.NInt, BinaryOp.Add or BinaryOp.AddOvf)
@@ -78,10 +80,10 @@ public enum BinaryOp
 
     FAdd, FSub, FMul, FDiv, FRem,
 
+    FirstOvf_,
     AddOvf, SubOvf, MulOvf,
     UAddOvf, USubOvf, UMulOvf,
-
-    FirstOvf_ = AddOvf, LastOvf_ = UMulOvf
+    LastOvf_
 }
 public static class BinaryOps
 {

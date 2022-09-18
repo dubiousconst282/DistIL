@@ -192,7 +192,5 @@ public class Cloner
         public void Visit(ContinueInst inst) => Out(inst.IsFromFilter
             ? new ContinueInst((GuardInst)Remap(inst.ParentGuard), inst.FilterResult)
             : new ContinueInst((GuardInst)Remap(inst.ParentGuard)));
-
-        public void VisitDefault(Instruction inst) => Ensure(false, "Missing cloner for " + inst.GetType());
     }
 }

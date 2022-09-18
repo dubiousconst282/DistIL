@@ -5,11 +5,6 @@ using DistIL.IR;
 
 partial class ILGenerator
 {
-    public void VisitDefault(Instruction inst)
-    {
-        throw new NotImplementedException("Missing emitter for " + inst.GetType().Name);
-    }
-
     public void Visit(BinaryInst inst)
     {
         Push(inst.Left);
@@ -261,5 +256,10 @@ partial class ILGenerator
         } else {
             _asm.Emit(ILCode.Endfinally);
         }
+    }
+
+    public void Visit(PhiInst inst)
+    {
+        throw new NotSupportedException("Phis should be removed before code gen.");
     }
 }

@@ -2,39 +2,40 @@ namespace DistIL.IR.Utils;
 
 public class Cloner
 {
-    readonly MethodBody _targetMethod;
-    readonly Dictionary<Value, Value> _mappings = new(); //mapping from old to new (clonned) values
-    readonly RefSet<Value> _valuesPendingRemap = new(); //values needing remap bc they weren't at first
+    readonly MethodBody _destMethod;
+    //Mapping from old to new (clonned) values
+    readonly Dictionary<Value, Value> _mappings = new();
+    //Values that must be remapped and replaced last (they depend on defs in an unprocessed block).
+    readonly ValueSet<TrackedValue> _pendingValues = new();
     readonly InstCloner _instCloner;
+    readonly List<BasicBlock> _oldBlocks = new();
 
-    public Cloner(MethodBody targetMethod)
+    public Cloner(MethodBody destMethod)
     {
-        _targetMethod = targetMethod;
+        _destMethod = destMethod;
         _instCloner = new(this);
     }
 
-    public void AddMapping(Value key, Value val)
+    public void AddMapping(Value oldVal, Value newVal)
     {
-        _mappings.Add(key, val);
+        _mappings.Add(oldVal, newVal);
+    }
+    /// <summary> Schedules the cloning of the specified block, and adds its mapping. </summary>
+    /// <returns> The new (empty) block in which `oldBlock` will be cloned into. </returns> 
+    public BasicBlock AddBlock(BasicBlock oldBlock, BasicBlock? insertAfter = null)
+    {
+        var newBlock = _destMethod.CreateBlock(insertAfter);
+        _mappings.Add(oldBlock, newBlock);
+        _oldBlocks.Add(oldBlock);
+        return newBlock;
     }
 
-    //TODO: Streaming API
-    public List<BasicBlock> CloneBlocks(MethodBody method)
+    /// <summary> Clones pending blocks. </summary>
+    public void Run()
     {
-        var newBlocks = new List<BasicBlock>();
-        //List of instructions that need to be remapped last (they may depend on a instruction in a unvisited pred block)
-        var pendingInsts = new List<Instruction>();
+        foreach (var oldBlock in _oldBlocks) {
+            var newBlock = (BasicBlock)_mappings[oldBlock];
 
-        //Create empty blocks to initialize mappings
-        foreach (var oldBlock in method) {
-            var newBlock = _targetMethod.CreateBlock();
-            _mappings.Add(oldBlock, newBlock);
-            newBlocks.Add(newBlock);
-        }
-        //Fill in the new blocks
-        int blockIdx = 0;
-        foreach (var oldBlock in method) {
-            var newBlock = newBlocks[blockIdx++];
             //Clone edges
             foreach (var succ in oldBlock.Succs) {
                 newBlock.Succs.Add(Remap(succ));
@@ -44,83 +45,64 @@ public class Cloner
             }
             //Clone instructions
             foreach (var inst in oldBlock) {
-                var (newVal, fullyRemapped) = _instCloner.Clone(inst);
-                //Clone() may fold constants: "add r10, 0" -> "r10",
-                //so we can only insert if isn't already in a block.
-                if (newVal is Instruction newInst && newInst.Block == null) {
+                var newVal = _instCloner.Clone(inst);
+                //Clone() may fold constants: `add r10, 0` -> `r10`,
+                //so we can only insert a inst if it isn't already in a block.
+                if (newVal is Instruction { Block: null } newInst) {
                     newBlock.InsertLast(newInst);
-                    if (!fullyRemapped) {
-                        pendingInsts.Add(newInst);
-                    }
                 }
                 if (newVal.HasResult) {
                     _mappings.Add(inst, newVal);
                 }
             }
         }
-        //Remap pending instructions
-        foreach (var inst in pendingInsts) {
-            var opers = inst.Operands;
-            for (int i = 0; i < opers.Length; i++) {
-                if (!_valuesPendingRemap.Contains(opers[i])) continue;
-                if (!Remap(opers[i], out var newValue)) {
-                    throw new InvalidOperationException("No mapping for value " + opers[i]);
-                }
-                inst.ReplaceOperand(i, newValue);
-            }
+        //Remap pending values
+        foreach (var value in _pendingValues) {
+            var newValue = Remap(value) ??
+                throw new InvalidOperationException("No mapping for value " + value);
+            value.ReplaceUses(newValue);
         }
-        return newBlocks;
     }
 
-    private bool Remap(Value value, [NotNullWhen(true)] out Value? newValue)
+    private Value? Remap(Value value)
     {
-        if (_mappings.TryGetValue(value, out newValue)) {
-            return true;
+        if (_mappings.TryGetValue(value, out var newValue)) {
+            return newValue;
         }
         if (value is Variable var) {
             newValue = new Variable(var.Type, var.IsPinned);
             _mappings.Add(value, newValue);
-            return true;
+            return newValue;
         }
-        if (value is Const or EntityDesc) {
-            newValue = value;
-            return true;
+        if (value is Const or EntityDesc or Undef) {
+            return value;
         }
-        _valuesPendingRemap.Add(value);
-        return false;
+        //At this point, all non TrackedValue`s, must have been handled
+        _pendingValues.Add((TrackedValue)value); 
+        return null;
     }
     private BasicBlock Remap(BasicBlock block)
     {
-        if (Remap(block, out var newBlock)) {
-            return (BasicBlock)newBlock!;
-        }
-        throw new InvalidOperationException("No mapping for " + block);
+        return Remap((Value)block) as BasicBlock ?? 
+            throw new InvalidOperationException("No mapping for " + block);
     }
 
     class InstCloner : InstVisitor
     {
         readonly Cloner _ctx;
-        Value _newValue = null!;
-        bool _fullyRemapped;
+        Value _result = null!;
 
         public InstCloner(Cloner ctx) => _ctx = ctx;
 
-        public (Value NewValue, bool FullyRemapped) Clone(Instruction inst)
+        public Value Clone(Instruction inst)
         {
-            _fullyRemapped = true;
             inst.Accept(this);
-            return (_newValue, _fullyRemapped);
+            return _result;
         }
 
-        private void Out(Value val)
-        {
-            _newValue = val;
-        }
-        private Value Remap(Value val)
-        {
-            _fullyRemapped &= _ctx.Remap(val, out var newVal);
-            return newVal ?? val;
-        }
+        private void Out(Value val) => _result = val;
+
+        private Value Remap(Value val) => _ctx.Remap(val) ?? val;
         private Variable Remap(Variable var) => (Variable)Remap((Value)var);
         private BasicBlock Remap(BasicBlock block) => (BasicBlock)Remap((Value)block);
 

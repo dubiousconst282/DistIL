@@ -17,7 +17,7 @@ public class InlineMethods : MethodPass
         }
 
         foreach (var call in inlineableCalls) {
-            Inline(method, call);
+            Inline(call);
         }
     }
 
@@ -34,44 +34,50 @@ public class InlineMethods : MethodPass
         return caller != callee && callee.Body?.NumBlocks <= 8;
     }
 
-    private static void Inline(MethodBody caller, CallInst callInst)
-    {
-        var callee = ((MethodDef)callInst.Method).Body!;
-        var cloner = new Cloner(caller);
+    public static void Inline(CallInst call)
+    {   
+        var callee = ((MethodDef)call.Method).Body!;
+        var cloner = new Cloner(call.Block.Method);
 
         //Add argument mappings
         for (int i = 0; i < callee.Args.Length; i++) {
-            cloner.AddMapping(callee.Args[i], callInst.GetArg(i));
+            cloner.AddMapping(callee.Args[i], call.GetArg(i));
         }
-        var newBlocks = cloner.CloneBlocks(callee);
+        //Clone blocks
+        var newBlocks = new List<BasicBlock>();
+        foreach (var block in callee) {
+            var newBlock = cloner.AddBlock(block, insertAfter: newBlocks.LastOrDefault(call.Block));
+            newBlocks.Add(newBlock);
+        }
+        cloner.Run();
 
         if (newBlocks is [{ Last: ReturnInst }]) {
             //opt: avoid creating new blocks for callees with a single block ending with a return
-            InlineOneBlock(callInst, newBlocks[0]);
+            InlineOneBlock(call, newBlocks[0]);
             newBlocks[0].Remove();
         } else {
-            InlineManyBlocks(callInst, newBlocks);
+            InlineManyBlocks(call, newBlocks);
         }
     }
 
-    private static void InlineOneBlock(CallInst callInst, BasicBlock block)
+    private static void InlineOneBlock(CallInst call, BasicBlock block)
     {
         //Move code (if not a single return)
         if (block.Last.Prev != null) {
-            block.MoveRange(callInst.Block, callInst, block.First, block.Last.Prev);
+            block.MoveRange(call.Block, call, block.First, block.Last.Prev);
         }
         //Replace call value
         if (block.Last is ReturnInst ret && ret.HasValue) {
-            callInst.ReplaceWith(ret.Value!);
+            call.ReplaceWith(ret.Value);
         } else {
-            callInst.Remove();
+            call.Remove();
         }
     }
 
-    private static void InlineManyBlocks(CallInst callInst, List<BasicBlock> blocks)
+    private static void InlineManyBlocks(CallInst call, List<BasicBlock> blocks)
     {
-        var startBlock = callInst.Block;
-        var endBlock = startBlock.Split(callInst);
+        var startBlock = call.Block;
+        var endBlock = startBlock.Split(call);
 
         var returnedVals = new List<PhiArg>();
 
@@ -81,8 +87,8 @@ public class InlineMethods : MethodPass
                 startBlock.SetBranch(block);
             }
             if (block.Last is ReturnInst ret) {
-                if (callInst.HasResult) {
-                    returnedVals.Add((block, ret.Value!));
+                if (ret.HasValue) {
+                    returnedVals.Add((block, ret.Value));
                 }
                 block.SetBranch(endBlock);
             }
@@ -90,12 +96,12 @@ public class InlineMethods : MethodPass
         //Replace uses of the call with the returned value, or a phi for each returning block
         if (returnedVals.Count >= 2) {
             var value = endBlock.AddPhi(new PhiInst(returnedVals.ToArray()));
-            callInst.ReplaceWith(value);
+            call.ReplaceWith(value);
         } else if (returnedVals.Count == 1) {
             var (exitBlock, retValue) = returnedVals[0];
-            callInst.ReplaceWith(retValue);
+            call.ReplaceWith(retValue);
         } else {
-            callInst.Remove();
+            call.Remove();
         }
     }
 }

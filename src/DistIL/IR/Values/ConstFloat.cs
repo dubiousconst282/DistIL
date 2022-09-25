@@ -4,11 +4,7 @@ using System.Globalization;
 
 public class ConstFloat : Const
 {
-    private double _value;
-    public double Value {
-        get => _value;
-        set => _value = IsSingle ? (float)value : value;
-    }
+    public double Value { get; private init; }
     public bool IsSingle => ResultType.Kind == TypeKind.Single;
     public bool IsDouble => ResultType.Kind == TypeKind.Double;
 

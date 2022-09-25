@@ -40,7 +40,7 @@ public class ConstNull : Const
 
 public class ConstString : Const
 {
-    public string Value { get; set; } = null!;
+    public string Value { get; private init; } = null!;
 
     private ConstString() { }
 

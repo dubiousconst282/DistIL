@@ -114,38 +114,6 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     public static bool operator !=(TypeDesc? a, TypeDesc? b) => !(a == b);
 }
 
-public struct GenericContext
-{
-    public ImmutableArray<TypeDesc> TypeArgs { get; }
-    public ImmutableArray<TypeDesc> MethodArgs { get; }
-
-    public GenericContext(ImmutableArray<TypeDesc> typeArgs = default, ImmutableArray<TypeDesc> methodArgs = default)
-    {
-        Ensure(!typeArgs.IsDefault || !methodArgs.IsDefault);
-        TypeArgs = typeArgs;
-        MethodArgs = methodArgs;
-    }
-    public GenericContext(TypeDefOrSpec type)
-    {
-        TypeArgs = type.GenericParams;
-        MethodArgs = default;
-    }
-    public GenericContext(MethodDefOrSpec method)
-    {
-        TypeArgs = method.DeclaringType.GenericParams;
-        MethodArgs = method.GenericParams;
-    }
-
-    public ImmutableArray<TypeDesc> FillParams(ImmutableArray<TypeDesc> pars)
-    {
-        var builder = ImmutableArray.CreateBuilder<TypeDesc>(pars.Length);
-        foreach (var type in pars) {
-            builder.Add(type.GetSpec(this));
-        }
-        return builder.MoveToImmutable();
-    }
-}
-
 public enum TypeKind
 {
     Void,

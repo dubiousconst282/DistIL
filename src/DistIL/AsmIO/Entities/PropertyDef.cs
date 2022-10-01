@@ -15,7 +15,7 @@ public class PropertyDef : MemberDesc
 
     public MethodDef? Getter { get; }
     public MethodDef? Setter { get; }
-    public ImmutableArray<MethodDef> OtherAccessors { get; }
+    public IReadOnlyList<MethodDef> OtherAccessors { get; }
 
     public PropertyDef(
         TypeDef declaryingType, string name, MethodSig sig,

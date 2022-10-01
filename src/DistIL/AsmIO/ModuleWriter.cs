@@ -455,10 +455,7 @@ internal class ModuleWriter
             //TODO: callconv, genericParamCount
             var pars = sig.ParamTypes;
             b.MethodSignature(default, sig.NumGenericParams, sig.IsInstance)
-                .Parameters(
-                    pars.Length,
-                    out var retTypeEnc, out var parsEnc
-                );
+                .Parameters(pars.Count, out var retTypeEnc, out var parsEnc);
             EncodeType(retTypeEnc.Type(), sig.ReturnType);
             foreach (var par in pars) {
                 var parEnc = parsEnc.AddParameter();

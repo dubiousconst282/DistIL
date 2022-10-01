@@ -62,61 +62,6 @@ public class ParamDef
 
     public override string ToString() => Type.ToString();
 }
-public readonly struct MethodSig
-{
-    public TypeDesc ReturnType { get; }
-    public ImmutableArray<TypeDesc> ParamTypes { get; }
-    public int NumGenericParams { get; }
-    public bool IsInstance => _hdr.IsInstance;
-
-    readonly SignatureHeader _hdr;
-
-    public MethodSig(in MethodSignature<TypeDesc> srmSig)
-    {
-        ReturnType = srmSig.ReturnType;
-        ParamTypes = srmSig.ParameterTypes;
-        NumGenericParams = srmSig.GenericParameterCount;
-        _hdr = srmSig.Header;
-    }
-
-    public MethodSig(TypeDesc retType, params TypeDesc[] paramTypes)
-    {
-        ReturnType = retType;
-        ParamTypes = ImmutableArray.Create(paramTypes);
-        NumGenericParams = 0;
-    }
-
-    public MethodSig(TypeDesc retType, ImmutableArray<TypeDesc> paramTypes, int numGenPars = 0)
-    {
-        ReturnType = retType;
-        ParamTypes = paramTypes;
-        NumGenericParams = numGenPars;
-    }
-
-    public bool Equals(MethodDesc method)
-    {
-        if (method.ReturnType != ReturnType) {
-            return false;
-        }
-        if (NumGenericParams != method.GenericParams.Length) {
-            return false;
-        }
-        if (IsInstance != method.IsInstance) {
-            return false;
-        }
-        var p1 = method.StaticParams;
-        var p2 = ParamTypes;
-        if (p1.Length != p2.Length) {
-            return false;
-        }
-        for (int i = 0; i < p1.Length; i++) {
-            if (p1[i].Type != p2[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-}
 
 public abstract class MethodDefOrSpec : MethodDesc, ModuleEntity
 {

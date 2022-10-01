@@ -206,10 +206,7 @@ public class TypeSpec : TypeDefOrSpec
 
     public override TypeDesc GetSpec(GenericContext context)
     {
-        var genArgs = GenericParams
-            .Select(p => p.GetSpec(context))
-            .ToImmutableArray();
-        return new TypeSpec(Definition, genArgs);
+        return new TypeSpec(Definition, context.FillParams(GenericParams));
     }
 
     public override void Print(PrintContext ctx, bool includeNs = true)

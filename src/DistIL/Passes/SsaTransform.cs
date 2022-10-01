@@ -25,7 +25,7 @@ public class SsaTransform : MethodPass
     private void InsertPhis(DominanceFrontier domFrontier)
     {
         var varDefs = new Dictionary<Variable, (bool Global, ArrayStack<BasicBlock> Wl)>(); //var -> blocks assigning to var
-        var killedVars = new ValueSet<Variable>();
+        var killedVars = new RefSet<Variable>();
 
         //Find variable definitions
         foreach (var block in _method) {
@@ -46,8 +46,8 @@ public class SsaTransform : MethodPass
             killedVars.Clear();
         }
 
-        var phiAdded = new ValueSet<BasicBlock>(); //blocks where a phi has been added
-        var processed = new ValueSet<BasicBlock>(); //blocks already visited in worklist
+        var phiAdded = new RefSet<BasicBlock>(); //blocks where a phi has been added
+        var processed = new RefSet<BasicBlock>(); //blocks already visited in worklist
 
         //Insert phis
         foreach (var (variable, (isGlobal, worklist)) in varDefs) {
@@ -152,7 +152,7 @@ public class SsaTransform : MethodPass
     private void PrunePhis()
     {
         //Algorithm from the SSABook
-        var usefulPhis = new ValueSet<PhiInst>();
+        var usefulPhis = new RefSet<PhiInst>();
         var propagationStack = new ArrayStack<PhiInst>();
         var pruneablePhis = new List<PhiInst>();
         //Initial marking phase

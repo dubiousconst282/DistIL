@@ -1,7 +1,7 @@
 namespace DistIL.Analysis;
 
 using DistIL.IR;
-using InstSet = ValueSet<IR.Instruction>;
+using InstSet = RefSet<IR.Instruction>;
 
 /// <summary>
 /// Liveness analysis for SSA definitions. The current implementation is based on the path exploration method.

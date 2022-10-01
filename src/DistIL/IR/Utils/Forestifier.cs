@@ -3,7 +3,7 @@ namespace DistIL.IR.Utils;
 /// <summary> Computes information to help build expression trees from the linear IR. </summary>
 public class Forestifier
 {
-    readonly ValueSet<Instruction> _trees = new(); //tree instructions / statements
+    readonly RefSet<Instruction> _trees = new(); //tree instructions / statements
 
     public Forestifier(MethodBody method)
     {

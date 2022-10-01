@@ -32,18 +32,8 @@ public abstract class TrackedValue : Value
     //References are represented as (Inst Owner, int Index).
     UseRef _firstUse;
 
-    //To avoid the overhead of getting the identity hash code (which is pretty small tbh),
-    //we calculate a random hash based on the object address on constructor.
-    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-    internal readonly int _hash;
-
     /// <summary> The number of (operand) uses this value have. </summary>
     public int NumUses { get; private set; }
-
-    public TrackedValue()
-    {
-        _hash = GetAddrHash(this);
-    }
 
     internal override void AddUse(Instruction user, int operIdx)
     {
@@ -99,15 +89,6 @@ public abstract class TrackedValue : Value
         }
         _firstUse = default;
         NumUses = 0;
-    }
-
-    public override int GetHashCode() => _hash;
-    private static int GetAddrHash(object obj)
-    {
-        //This is a Fibonacci hash. It's very fast, compact, and generates satisfactory results.
-        //The result must be cached, because it will change when the GC compacts the heap.
-        ulong addr = Unsafe.As<object, ulong>(ref obj); // *&obj
-        return (int)((addr * 11400714819323198485) >> 32);
     }
 
     /// <summary> Returns an enumerator of instructions using this value. Neither order nor uniqueness is guaranteed. </summary>

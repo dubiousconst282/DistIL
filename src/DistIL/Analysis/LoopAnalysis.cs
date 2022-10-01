@@ -21,7 +21,7 @@ public class LoopAnalysis : IMethodAnalysis
 
                 //The loop body includes `header`, `block`, and all predecessors
                 //of `block` (direct and indirect) up to `header`.
-                var body = new ValueSet<BasicBlock>();
+                var body = new RefSet<BasicBlock>();
                 body.Add(header);
                 worklist.Push(block);
 
@@ -43,7 +43,7 @@ public class LoopAnalysis : IMethodAnalysis
     }
 
     //TODO: maybe this should be done by the loop canocalization pass (so that new blocks can be created)
-    private BasicBlock? FindPreHeader(BasicBlock header, ValueSet<BasicBlock> body, DominatorTree domTree)
+    private BasicBlock? FindPreHeader(BasicBlock header, RefSet<BasicBlock> body, DominatorTree domTree)
     {
         var preHeader = default(BasicBlock);
         int numFound = 0;
@@ -64,7 +64,7 @@ public class LoopAnalysis : IMethodAnalysis
 public class LoopInfo
 {
     public required BasicBlock Header { get; set; }
-    public required ValueSet<BasicBlock> Body { get; set; } 
+    public required RefSet<BasicBlock> Body { get; set; } 
     public required BasicBlock Latch { get; set; }
 
     public BasicBlock? PreHeader { get; set; }

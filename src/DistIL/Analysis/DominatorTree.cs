@@ -207,8 +207,8 @@ public class DominatorTree : IMethodAnalysis
 
 public class DominanceFrontier : IMethodAnalysis
 {
-    private static ValueSet<BasicBlock> _emptySet = new();
-    private Dictionary<BasicBlock, ValueSet<BasicBlock>> _df = new();
+    private static RefSet<BasicBlock> _emptySet = new();
+    private Dictionary<BasicBlock, RefSet<BasicBlock>> _df = new();
 
     public DominanceFrontier(DominatorTree domTree)
     {
@@ -234,6 +234,6 @@ public class DominanceFrontier : IMethodAnalysis
         return new DominanceFrontier(mgr.GetAnalysis<DominatorTree>(preserve: true));
     }
 
-    public ValueSet<BasicBlock> Of(BasicBlock block)
+    public RefSet<BasicBlock> Of(BasicBlock block)
         => _df.GetValueOrDefault(block, _emptySet);
 }

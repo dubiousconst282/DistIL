@@ -6,7 +6,7 @@ public class DeadCodeElim : MethodPass
 {
     public override void Run(MethodTransformContext ctx)
     {
-        var visitedBlocks = new ValueSet<BasicBlock>();
+        var visitedBlocks = new RefSet<BasicBlock>();
         var pendingBlocks = new ArrayStack<BasicBlock>();
 
         void Push(BasicBlock block)

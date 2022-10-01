@@ -4,9 +4,7 @@ using System.Runtime.CompilerServices;
 
 /// <summary> Implements a compact unordered set of object references. </summary>
 /// <remarks> Enumerators will be invalidated and throw after mutations (adds/removes). </remarks>
-public class RefSet<T, H>
-    where T : class
-    where H : struct, Hasher<T>
+public class RefSet<T> where T : class
 {
     T?[] _slots = new T[16];
     int _count;
@@ -20,10 +18,7 @@ public class RefSet<T, H>
     //JIT can't inline static interface methods atm, so that's why we're doing it this way.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Hash(T obj)
-    {
-        Unsafe.SkipInit(out H h);
-        return h.Hash(obj);
-    }
+        => RuntimeHelpers.GetHashCode(obj);
 
     public bool Add(T value)
     {
@@ -138,11 +133,11 @@ public class RefSet<T, H>
     {
         T?[] _slots;
         int _index;
-        RefSet<T, H> _owner;
+        RefSet<T> _owner;
 
         public T Current { get; private set; } = null!;
 
-        internal Enumerator(RefSet<T, H> owner) 
+        internal Enumerator(RefSet<T> owner) 
             => (_slots, _owner, owner._changed) = (owner._slots, owner, false);
 
         public bool MoveNext()
@@ -158,29 +153,4 @@ public class RefSet<T, H>
             return false;
         }
     }
-}
-/// <inheritdoc/>
-public class RefSet<T> : RefSet<T, IdentityHasher>
-    where T : class
-{
-}
-
-/// <inheritdoc/>
-public class ValueSet<T> : RefSet<T, IRValueHasher>
-    where T : IR.TrackedValue
-{
-}
-
-public interface Hasher<in T>
-{
-    int Hash(T obj);
-}
-
-public struct IdentityHasher : Hasher<object>
-{
-    public int Hash(object obj) => RuntimeHelpers.GetHashCode(obj);
-}
-public struct IRValueHasher : Hasher<IR.TrackedValue>
-{
-    public int Hash(IR.TrackedValue obj) => obj._hash;
 }

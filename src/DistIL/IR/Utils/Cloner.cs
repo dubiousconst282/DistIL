@@ -6,7 +6,7 @@ public class Cloner
     //Mapping from old to new (clonned) values
     readonly Dictionary<Value, Value> _mappings = new();
     //Values that must be remapped and replaced last (they depend on defs in an unprocessed block).
-    readonly ValueSet<TrackedValue> _pendingValues = new();
+    readonly RefSet<TrackedValue> _pendingValues = new();
     readonly InstCloner _instCloner;
     readonly List<BasicBlock> _oldBlocks = new();
 

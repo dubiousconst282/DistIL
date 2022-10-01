@@ -43,7 +43,7 @@ public class GraphTraversal
     )
     {
         var pending = new ArrayStack<(BasicBlock Node, int Index)>();
-        var visited = new ValueSet<BasicBlock>();
+        var visited = new RefSet<BasicBlock>();
 
         visited.Add(entry);
         pending.Push((entry, 0));

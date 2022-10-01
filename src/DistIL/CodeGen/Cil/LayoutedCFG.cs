@@ -16,7 +16,7 @@ public class LayoutedCFG
     {
         var blocks = new BasicBlock[method.NumBlocks];
         var regions = Array.Empty<LayoutedRegion>();
-        var visited = new ValueSet<BasicBlock>();
+        var visited = new RefSet<BasicBlock>();
         int blockIdx = 0, regionIdx = 0;
 
         Recurse(method.EntryBlock, null!);

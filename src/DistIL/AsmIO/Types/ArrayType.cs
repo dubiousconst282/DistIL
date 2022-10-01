@@ -123,7 +123,7 @@ public class MDArrayMethod : MethodDesc
             if (isSetter) {
                 b.Add(new ParamDef(type.ElemType, count + 1));
             }
-            return b.ToImmutable();
+            return b.MoveToImmutable();
         }
     }
 }

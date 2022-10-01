@@ -21,7 +21,7 @@ public abstract class MethodDesc : MemberDesc
 
     public TypeDesc ReturnType { get; protected set; } = null!;
     public ImmutableArray<ParamDef> Params { get; protected set; }
-    public ReadOnlySpan<ParamDef> StaticParams => Params.AsSpan().Slice(IsStatic ? 0 : 1);
+    public ReadOnlySpan<ParamDef> StaticParams => Params.AsSpan(IsStatic ? 0 : 1);
 
     public override void Print(PrintContext ctx)
     {
@@ -134,7 +134,7 @@ public class MethodSpec : MethodDefOrSpec
     public override TypeDefOrSpec DeclaringType { get; }
     public override string Name => Definition.Name;
 
-    public MethodSpec(TypeDefOrSpec declaringType, MethodDef def, ImmutableArray<TypeDesc> args = default)
+    internal MethodSpec(TypeDefOrSpec declaringType, MethodDef def, ImmutableArray<TypeDesc> args = default)
     {
         Definition = def;
         Attribs = def.Attribs;
@@ -152,12 +152,13 @@ public class MethodSpec : MethodDefOrSpec
 
 public class ILMethodBody
 {
-    public List<ExceptionRegion> ExceptionRegions { get; set; } = null!;
-    public List<ILInstruction> Instructions { get; set; } = null!;
-    public List<Variable> Locals { get; set; } = null!;
+    public required List<ExceptionRegion> ExceptionRegions { get; set; }
+    public required List<ILInstruction> Instructions { get; set; }
+    public required List<Variable> Locals { get; set; }
     public int MaxStack { get; set; }
     public bool InitLocals { get; set; }
 
+    [SetsRequiredMembers]
     internal ILMethodBody(ModuleLoader loader, int rva)
     {
         var block = loader._pe.GetMethodBody(rva);
@@ -171,7 +172,6 @@ public class ILMethodBody
 
     public ILMethodBody()
     {
-        //TODO: use C#11 required properties
     }
 
     private static List<ILInstruction> DecodeInsts(ModuleLoader loader, BlobReader reader)
@@ -201,7 +201,7 @@ public class ILMethodBody
                 => loader.GetEntity(MetadataTokens.EntityHandle(reader.ReadInt32())),
             ILOperandType.Sig
                 //We convert "StandaloneSignature" into "FuncPtrType" because it's only used by calli
-                //and it'd be inconvinient to have another obscure class.
+                //and it'd be inconvenient to have another obscure class.
                 //TODO: fix generic context?
                 => loader.DecodeMethodSig(MetadataTokens.StandaloneSignatureHandle(reader.ReadInt32())),
             ILOperandType.String => loader._reader.GetUserString(MetadataTokens.UserStringHandle(reader.ReadInt32())),
@@ -277,7 +277,7 @@ public class ExceptionRegion
 {
     public ExceptionRegionKind Kind { get; set; }
 
-    /// <summary> The catch type if the region represents a catch, or null otherwise. </summary>
+    /// <summary> The catch type if the region represents a catch handler, or null otherwise. </summary>
     public TypeDefOrSpec? CatchType { get; set; }
 
     /// <summary> Gets the starting IL offset of the exception handler. </summary>

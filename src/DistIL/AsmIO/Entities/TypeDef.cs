@@ -136,19 +136,9 @@ public class TypeDef : TypeDefOrSpec
         return new TypeSpec(this, genArgs);
     }
 
-    //overriden props can't have setter
-    public void SetName(string value) => _name = value;
-    public void SetNamespace(string? value) => _namespace = value;
-    public void SetBaseType(TypeDef? value) => _baseType = value;
-
     public TypeDef? GetNestedType(string name)
     {
-        foreach (var type in NestedTypes) {
-            if (type.Name == name) {
-                return (TypeDef)type;
-            }
-        }
-        return null;
+        return NestedTypes.Find(e => e.Name == name);
     }
 
     public override void Print(PrintContext ctx, bool includeNs = true)
@@ -183,7 +173,7 @@ public class TypeSpec : TypeDefOrSpec
         get => Definition.Fields.Select(f => new FieldSpec(this, f)).ToList();
     }
     public override IReadOnlyList<MethodSpec> Methods {
-        get => Definition.Methods.Select(m => new MethodSpec(this, m)).ToImmutableArray();
+        get => Definition.Methods.Select(m => new MethodSpec(this, m)).ToList();
     }
 
     internal TypeSpec(TypeDef def, ImmutableArray<TypeDesc> args)
@@ -194,6 +184,7 @@ public class TypeSpec : TypeDefOrSpec
 
     public override MethodDesc? FindMethod(string name, in MethodSig sig)
     {
+        //FIXME: this will fail for fully qualified signature (!0 -> int)
         var method = Definition.FindMethod(name, sig);
         return method != null ? new MethodSpec(this, (MethodDef)method) : null;
     }

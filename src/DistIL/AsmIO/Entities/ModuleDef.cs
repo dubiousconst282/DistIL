@@ -56,7 +56,6 @@ public class ModuleDef : ModuleEntity
     private TypeDef? FindReferencedType(Type type)
     {
         var asmName = type.Assembly.GetName().Name;
-        bool isCoreLib = type.Assembly == typeof(int).Assembly;
         
         foreach (var mod in AssemblyRefs) {
             if (mod.AsmName.Name == asmName) {

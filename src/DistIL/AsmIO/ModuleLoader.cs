@@ -185,7 +185,7 @@ internal class ModuleLoader
         }
         return new MethodDef(
             declaringType, 
-            sig.ReturnType, pars.ToImmutable(),
+            sig.ReturnType, pars.MoveToImmutable(),
             name, 
             attribs, info.ImplAttributes,
             genericParams: CreatePlaceholderGenericArgs(info.GetGenericParameters(), true)
@@ -293,14 +293,14 @@ internal class ModuleLoader
                 //TODO: constraint.GetCustomAttributes()
                 constraints.Add((TypeDesc)GetEntity(constraint.Type));
             }
-            builder.Add(new GenericParamType(par.Index, isMethodParam, name, constraints.ToImmutable()));
+            builder.Add(new GenericParamType(par.Index, isMethodParam, name, constraints.TakeImmutable()));
         }
-        return builder.ToImmutable();
+        return builder.MoveToImmutable();
     }
     public ImmutableArray<CustomAttrib> DecodeCustomAttribs(CustomAttributeHandleCollection handles)
     {
         var attribs = ImmutableArray.CreateBuilder<CustomAttrib>(handles.Count);
-        return attribs.ToImmutable();
+        return attribs.TakeImmutable();
 
         foreach (var handle in handles) {
             var attrib = _reader.GetCustomAttribute(handle);
@@ -320,7 +320,7 @@ internal class ModuleLoader
                 }).ToImmutableArray()
             });
         }
-        return attribs.ToImmutable();
+        return attribs.MoveToImmutable();
     }
     public FuncPtrType DecodeMethodSig(StandaloneSignatureHandle handle)
     {
@@ -375,7 +375,7 @@ internal class ModuleLoader
         for (int i = 0; i < pars.Count; i++) {
             builder.Add(new GenericParamType(i, isForMethod));
         }
-        return builder.ToImmutable();
+        return builder.TakeImmutable();
     }
 
     //Adds an entity to the map. This will break if entities of the same type are not added sequentially.

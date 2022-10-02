@@ -7,7 +7,7 @@ public struct GenericContext
 
     public GenericContext(IReadOnlyList<TypeDesc>? typeArgs = null, IReadOnlyList<TypeDesc>? methodArgs = null)
     {
-        Ensure(typeArgs != null || methodArgs != null, "Either typeArgs or methodArgs must be non-null");
+        Ensure(typeArgs != null || methodArgs != null, "Either `typeArgs` or `methodArgs` must be non-null");
         TypeArgs = typeArgs ?? Array.Empty<TypeDesc>();
         MethodArgs = methodArgs ?? Array.Empty<TypeDesc>();
     }
@@ -22,9 +22,9 @@ public struct GenericContext
         MethodArgs = method.GenericParams;
     }
 
-    public ImmutableArray<TypeDesc> FillParams(IReadOnlyList<TypeDesc> pars)
+    public ImmutableArray<TypeDesc> FillParams(ImmutableArray<TypeDesc> pars)
     {
-        var builder = ImmutableArray.CreateBuilder<TypeDesc>(pars.Count);
+        var builder = ImmutableArray.CreateBuilder<TypeDesc>(pars.Length);
         foreach (var type in pars) {
             builder.Add(type.GetSpec(this));
         }

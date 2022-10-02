@@ -9,21 +9,19 @@ public class ModuleDef : ModuleEntity
     public string Name { get; set; } = null!;
     public AssemblyName AsmName { get; set; } = null!;
     public AssemblyFlags AsmFlags { get; set; }
-    public ImmutableArray<CustomAttrib> CustomAttribs { get; set; } = ImmutableArray<CustomAttrib>.Empty;
 
     public MethodDef? EntryPoint { get; set; }
     public List<TypeDef> TypeDefs { get; } = new();
     public List<TypeDef> ExportedTypes { get; } = new();
 
-    internal Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); //root assemblies for references of forwarded types
-
     public ModuleResolver Resolver { get; init; } = null!;
 
-    /// <summary> The resolved `System.Runtime` or `System.Private.CoreLib` module reference. </summary>
-    public ModuleDef CoreLib { get; internal set; } = null!;
     public SystemTypes SysTypes { get; internal set; } = null!;
 
     ModuleDef ModuleEntity.Module => this;
+
+    internal Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); //root assemblies for references of forwarded types
+    internal Dictionary<CustomAttribLink, CustomAttrib[]> _customAttribs = new();
 
     internal TypeDef? FindType(string? ns, string name, bool includeExports = true, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
     {
@@ -63,6 +61,9 @@ public class ModuleDef : ModuleEntity
     {
         return TypeDefs;
     }
+
+    internal CustomAttrib[] GetCustomAttribs(in CustomAttribLink link)
+        => _customAttribs.GetValueOrDefault(link, Array.Empty<CustomAttrib>());
 
     public void Save(Stream stream)
     {

@@ -39,7 +39,7 @@ public class FuncPtrType : TypeDesc
         IsInstance = desc.IsInstance;
     }
 
-    internal FuncPtrType(MethodSignature<TypeDesc> sig)
+    internal FuncPtrType(in MethodSignature<TypeDesc> sig)
     {
         Ensure(sig.GenericParameterCount == 0);
         var header = sig.Header;

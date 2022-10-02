@@ -47,9 +47,8 @@ public class ParamDef
 {
     public TypeDesc Type { get; set; }
     public string? Name { get; set; }
-    public int Index { get; set; }
+    public int Index { get; }
     public ParameterAttributes Attribs { get; set; }
-    public ImmutableArray<CustomAttrib> CustomAttribs { get; set; }
 
     public ParamDef(TypeDesc type, int index, string? name = null, ParameterAttributes attribs = default)
     {
@@ -57,7 +56,6 @@ public class ParamDef
         Name = name;
         Index = index;
         Attribs = attribs;
-        CustomAttribs = ImmutableArray<CustomAttrib>.Empty;
     }
 
     public override string ToString() => Type.ToString();
@@ -65,11 +63,32 @@ public class ParamDef
 
 public abstract class MethodDefOrSpec : MethodDesc, ModuleEntity
 {
-    /// <summary> Returns the parent definition if this is a MethodSpec, or itself if it is already a MethodDef. </summary>
+    /// <summary> Returns the parent definition if this is a MethodSpec, or the current instance if already a MethodDef. </summary>
     public abstract MethodDef Definition { get; }
     public ModuleDef Module => Definition.DeclaringType.Module;
 
     public abstract override TypeDefOrSpec DeclaringType { get; }
+
+    public IReadOnlyCollection<CustomAttrib> GetParamCustomAttribs(ParamDef param)
+    {
+        Assert(Params.Contains(param));
+
+        return Module.GetCustomAttribs(new() {
+            LinkType = CustomAttribLink.Type.MethodParam,
+            Entity = Definition,
+            Index = param.Index
+        });
+    }
+    public IReadOnlyCollection<CustomAttrib> GetGenericArgCustomAttribs(int index)
+    {
+        Ensure(index >= 0 && index < GenericParams.Length);
+
+        return Module.GetCustomAttribs(new() {
+            LinkType = CustomAttribLink.Type.GenericParam,
+            Entity = Definition,
+            Index = index
+        });
+    }
 }
 public class MethodDef : MethodDefOrSpec
 {
@@ -108,14 +127,12 @@ public class MethodDef : MethodDefOrSpec
                 var par = Params[index - (IsStatic ? 1 : 0)]; //`this` is always implicit
                 par.Name = reader.GetString(parInfo.Name);
                 par.Attribs = parInfo.Attributes;
-                par.CustomAttribs = loader.DecodeCustomAttribs(parInfo.GetCustomAttributes());
             }
         }
         if (info.RelativeVirtualAddress != 0) {
             ILBody = new ILMethodBody(loader, info.RelativeVirtualAddress);
         }
-        GenericParams = loader.DecodeGenericParams(info.GetGenericParameters());
-        CustomAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
+        loader.FillGenericParams(GenericParams, info.GetGenericParameters());
     }
 
     public override MethodDesc GetSpec(GenericContext ctx)

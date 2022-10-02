@@ -2,7 +2,6 @@ namespace DistIL.AsmIO;
 
 using System.Reflection;
 using System.Reflection.Metadata;
-using System.Text;
 
 using DistIL.IR;
 
@@ -22,28 +21,17 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
     protected TypeDefOrSpec? _baseType;
     public override TypeDefOrSpec? BaseType => _baseType;
 
-    public List<InterfaceImpl> Interfaces { get; } = new();
+    public abstract IReadOnlyList<TypeDesc> Interfaces { get; }
     public ImmutableArray<TypeDesc> GenericParams { get; protected set; }
 
     /// <summary> The enclosing type of this nested type, or null if not nested. </summary>
     public TypeDefOrSpec? DeclaringType { get; set; }
 
     [MemberNotNullWhen(true, nameof(IsEnum))]
-    public TypeDesc? UnderlyingEnumType { get; protected set; }
+    public TypeDesc? UnderlyingEnumType => IsEnum ? Fields.First(f => f.IsInstance).Type : null;
 
     public override bool Equals(TypeDesc? other) => object.ReferenceEquals(this, other);
     public override int GetHashCode() => HashCode.Combine(Module, Name, GenericParams.Length);
-}
-public struct InterfaceImpl
-{
-    public TypeDesc Interface { get; }
-    public ImmutableArray<CustomAttrib> CustomAttribs { get; }
-
-    public InterfaceImpl(TypeDesc itf, ImmutableArray<CustomAttrib> customAttribs)
-    {
-        Interface = itf;
-        CustomAttribs = customAttribs.EmptyIfDefault();
-    }
 }
 
 public class TypeDef : TypeDefOrSpec
@@ -53,29 +41,36 @@ public class TypeDef : TypeDefOrSpec
     public override StackType StackType => _kind.ToStackType();
 
     private TypeKind _kind;
-    private string? _namespace, _name;
-    public override string? Namespace => _namespace;
-    public override string Name => _name!;
+    public override string? Namespace { get; }
+    public override string Name { get; }
 
     public int LayoutSize { get; set; }
     public int LayoutPack { get; set; }
 
-    public override List<FieldDef> Fields { get; } = new();
-    public override List<MethodDef> Methods { get; } = new();
-    public List<PropertyDef> Properties { get; } = new();
-    public List<EventDef> Events { get; } = new();
-    public List<TypeDef> NestedTypes { get; } = new();
+    private List<TypeDesc> _interfaces = new();
+    private List<FieldDef> _fields = new();
+    private List<MethodDef> _methods = new();
+    private List<PropertyDef> _properties = new();
+    private List<EventDef> _events = new();
+    private List<TypeDef> _nestedTypes = new();
+
+    public override IReadOnlyList<TypeDesc> Interfaces => _interfaces;
+    public override IReadOnlyList<FieldDef> Fields => _fields;
+    public override IReadOnlyList<MethodDef> Methods => _methods;
+    public IReadOnlyList<PropertyDef> Properties => _properties;
+    public IReadOnlyList<EventDef> Events => _events;
+    public IReadOnlyList<TypeDef> NestedTypes => _nestedTypes;
 
     public TypeDef(ModuleDef mod, string? ns, string name, TypeAttributes attribs = default, ImmutableArray<TypeDesc> genericParams = default)
     {
         Module = mod;
-        _namespace = ns;
-        _name = name;
+        Namespace = ns;
+        Name = name;
         Attribs = attribs;
         GenericParams = genericParams.EmptyIfDefault();
     }
 
-    internal void Load(ModuleLoader loader, TypeDefinition info)
+    internal void Load1(ModuleLoader loader, TypeDefinition info)
     {
         if (!info.BaseType.IsNil) {
             _baseType = (TypeDefOrSpec)loader.GetEntity(info.BaseType);
@@ -83,7 +78,7 @@ public class TypeDef : TypeDefOrSpec
         if (info.IsNested) {
             DeclaringType = loader.GetType(info.GetDeclaringType());
         }
-        GenericParams = loader.DecodeGenericParams(info.GetGenericParameters());
+        loader.FillGenericParams(GenericParams, info.GetGenericParameters());
 
         var layout = info.GetLayout();
         LayoutPack = layout.PackingSize;
@@ -92,31 +87,26 @@ public class TypeDef : TypeDefOrSpec
     internal void Load2(ModuleLoader loader, TypeDefinition info)
     {
         foreach (var handle in info.GetFields()) {
-            Fields.Add(loader.GetField(handle));
+            _fields.Add(loader.GetField(handle));
         }
         foreach (var handle in info.GetMethods()) {
-            Methods.Add(loader.GetMethod(handle));
+            _methods.Add(loader.GetMethod(handle));
         }
         foreach (var handle in info.GetProperties()) {
-            Properties.Add(loader.DecodeProperty(this, handle));
+            _properties.Add(loader.DecodeProperty(this, handle));
         }
         foreach (var handle in info.GetEvents()) {
-            Events.Add(loader.DecodeEvent(this, handle));
+            _events.Add(loader.DecodeEvent(this, handle));
         }
         foreach (var handle in info.GetNestedTypes()) {
-            NestedTypes.Add(loader.GetType(handle));
-        }
-        if (IsEnum) {
-            UnderlyingEnumType = Fields.First(f => f.IsInstance).Type;
+            _nestedTypes.Add(loader.GetType(handle));
         }
 
-        foreach (var itfHandle in info.GetInterfaceImplementations()) {
-            var itfInfo = loader._reader.GetInterfaceImplementation(itfHandle);
+        foreach (var handle in info.GetInterfaceImplementations()) {
+            var itfInfo = loader._reader.GetInterfaceImplementation(handle);
             var itf = (TypeDesc)loader.GetEntity(itfInfo.Interface);
-            var attribs = loader.DecodeCustomAttribs(itfInfo.GetCustomAttributes());
-            Interfaces.Add(new InterfaceImpl(itf, attribs));
+            _interfaces.Add(itf);
         }
-        CustomAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
 
         //FIXME: TypeDef.Kind for String/Array/... and maybe primitives?
         _kind = IsEnum ? UnderlyingEnumType!.Kind :
@@ -138,7 +128,7 @@ public class TypeDef : TypeDefOrSpec
 
     public TypeDef? GetNestedType(string name)
     {
-        return NestedTypes.Find(e => e.Name == name);
+        return _nestedTypes.Find(e => e.Name == name);
     }
 
     public override void Print(PrintContext ctx, bool includeNs = true)
@@ -174,6 +164,9 @@ public class TypeSpec : TypeDefOrSpec
     }
     public override IReadOnlyList<MethodSpec> Methods {
         get => Definition.Methods.Select(m => new MethodSpec(this, m)).ToList();
+    }
+    public override IReadOnlyList<TypeDesc> Interfaces {
+        get => Definition.Interfaces.Select(t => t.GetSpec(new GenericContext(this))).ToList();
     }
 
     internal TypeSpec(TypeDef def, ImmutableArray<TypeDesc> args)

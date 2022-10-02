@@ -23,11 +23,8 @@ partial class SimplifyInsts : MethodPass
     private bool DirectizeLambda(CallInst call)
     {
         var method = call.Method;
-        if (method.Name != "Invoke") return false;
-
-        var module = call.Block.Method.Definition.Module;
-        var t_Delegate = module.Import(typeof(Delegate), returnNullIfNotFound: true);
         if (!(
+            method.Name != "Invoke" &&
             t_Delegate != null && method.DeclaringType.Inherits(t_Delegate) &&
             call is { IsStatic: false, Args: [var lambdaInstance, ..] }
         )) return false;

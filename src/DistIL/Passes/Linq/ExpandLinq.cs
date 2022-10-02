@@ -10,13 +10,16 @@ using DistIL.Passes.Linq;
 //other complicated passes to handle state machines and weird CFGs.)
 public class ExpandLinq : MethodPass
 {
-    TypeDesc? t_Enumerable;
+    readonly TypeDesc? t_Enumerable;
+
+    public ExpandLinq(ModuleDef mod)
+    {
+        t_Enumerable = mod.Import(typeof(Enumerable));
+    }
 
     public override void Run(MethodTransformContext ctx)
     {
         ctx.PreserveAll();
-
-        t_Enumerable = ctx.Module.Import(typeof(Enumerable), returnNullIfNotFound: true);
         if (t_Enumerable == null) return; //Module doesn't reference linq.
 
         //Find root queries

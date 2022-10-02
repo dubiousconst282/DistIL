@@ -21,10 +21,10 @@ mp1.Add(new SimplifyCFG());
 mp1.Add(new SsaTransform());
 
 var mp2 = new MethodPassManager();
-mp2.Add(new ExpandLinq());
-mp2.Add(new SimplifyInsts()); //lambdas and devirtualization
+mp2.Add(new ExpandLinq(module));
+mp2.Add(new SimplifyInsts(module)); //lambdas and devirtualization
 mp2.Add(new InlineMethods());
-mp2.Add(new SimplifyInsts());
+mp2.Add(new SimplifyInsts(module));
 mp2.Add(new LoopInvariantCodeMotion());
 mp2.Add(new DeadCodeElim());
 mp2.Add(new SimplifyCFG());

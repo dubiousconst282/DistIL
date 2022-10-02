@@ -52,9 +52,8 @@ internal class ModuleLoader
     {
         foreach (var handle in _reader.AssemblyReferences) {
             var info = _reader.GetAssemblyReference(handle);
-            var entity = _resolver.Resolve(info.GetAssemblyName());
+            var entity = _resolver.Resolve(info.GetAssemblyName(), throwIfNotFound: true);
             AddEntity(handle, entity);
-            _mod.AssemblyRefs.Add(entity);
         }
         foreach (var handle in _reader.TypeReferences) {
             var info = _reader.GetTypeReference(handle);
@@ -71,22 +70,20 @@ internal class ModuleLoader
             AddEntity(handle, entity);
             _mod.TypeDefs.Add(entity);
         }
-        //We need to load type specs because they may get lookedup by GetEntity()
         int numTypeSpecs = _reader.GetTableRowCount(TableIndex.TypeSpec);
         for (int rowId = 0; rowId < numTypeSpecs; rowId++) {
             var handle = MetadataTokens.TypeSpecificationHandle(rowId + 1);
             var info = _reader.GetTypeSpecification(handle);
             AddEntity(handle, info.DecodeSignature(_typeProvider, default));
         }
+
+        //If we're loading CoreLib, SysTypes will be null. Create it if that's the case
+        var coreLib = _resolver.CoreLib;
+        _mod.SysTypes = coreLib.SysTypes ?? new SystemTypes(coreLib);
     }
 
     private void LoadTypes()
     {
-        //Kind/IsValueType depends on SysTypes
-        var coreLib = FindCoreLib();
-        _mod.CoreLib = coreLib;
-        _mod.SysTypes = coreLib == _mod ? new SystemTypes(coreLib) : coreLib.SysTypes;
-
         //Load members, and props like BaseType/Kind
         foreach (var handle in _reader.TypeDefinitions) {
             var entity = GetType(handle);
@@ -190,20 +187,6 @@ internal class ModuleLoader
             attribs, info.ImplAttributes,
             genericParams: CreatePlaceholderGenericArgs(info.GetGenericParameters(), true)
         );
-    }
-
-    private ModuleDef FindCoreLib()
-    {
-        foreach (var asm in _mod.AssemblyRefs) {
-            var name = asm.AsmName.Name;
-            if (name is "System.Runtime" or "System.Private.CoreLib") {
-                return asm;
-            }
-        }
-        if (_mod.AsmName.Name == "System.Private.CoreLib") {
-            return _mod;
-        }
-        throw new NotImplementedException();
     }
 
     private TypeDef ResolveType(TypeReference info)

@@ -3,7 +3,7 @@ namespace DistIL.IR.Utils.Parser;
 //Program   = Import*  Block*
 //Import    = "import"  Id  "from"  Id
 //Block     = Id  ":"  (Indent  Inst+  Dedent) | Inst
-//Type      = Identifier  ("+"  Identifier)?  ("["  Seq{Type}  "]")?  ("[]" | "*" | "&")*
+//Type      = Identifier  ("+"  Identifier)*  ("["  Seq{Type}  "]")?  ("[]" | "*" | "&")*
 //Inst      = (Type  Id  "=")?  InstBody
 //InstBody  = 
 //    "goto"  (Label | (Value "?" Label ":" Label))
@@ -73,7 +73,7 @@ internal class AstParser
         return new BlockNode(label, code);
     }
 
-    //Type = Identifier  ("+"  Identifier)?  ("["  Seq{Type}  "]")?  ("[]" | "*" | "&")*
+    //Type = Identifier  ("+"  Identifier)*  ("["  Seq{Type}  "]")?  ("[]" | "*" | "&")*
     // ~ "NS.A`1+B`1[int[], int][]&"  ->  "NS.A.B<int[], int>[]&"
     //This loosely follows I.10.7.2 "Type names and arity encoding"
     public TypeDesc ParseType()

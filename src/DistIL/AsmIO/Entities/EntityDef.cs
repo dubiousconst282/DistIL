@@ -10,9 +10,6 @@ public interface Entity
 public interface ModuleEntity : Entity
 {
     ModuleDef Module { get; }
-
-    IReadOnlyCollection<CustomAttrib> GetCustomAttribs()
-        => Module.GetCustomAttribs(new() { LinkType = CustomAttribLink.Type.Entity, Entity = this });
 }
 /// <summary> Represents an entity referenced or defined in a module. </summary>
 public abstract class EntityDesc : Value, Entity
@@ -23,4 +20,10 @@ public abstract class EntityDesc : Value, Entity
 public abstract class MemberDesc : EntityDesc
 {
     public abstract TypeDesc DeclaringType { get; }
+}
+
+public static class EntityExt
+{
+    public static IReadOnlyCollection<CustomAttrib> GetCustomAttribs(this ModuleEntity entity)
+        => entity.Module.GetCustomAttribs(new() { Entity = entity });
 }

@@ -9,7 +9,7 @@ internal class ModuleLoader
 {
     public readonly PEReader _pe;
     public readonly MetadataReader _reader;
-    private readonly ModuleResolver _resolver;
+    public readonly ModuleResolver _resolver;
     public readonly TypeProvider _typeProvider;
     public readonly ModuleDef _mod;
     private readonly EntityList _entities;
@@ -38,6 +38,7 @@ internal class ModuleLoader
         //then we progressively fill remaining properties.
         CreateTypes();
         LoadTypes();
+        LoadCustomAttribs();
     }
 
     private void CreateTypes()
@@ -86,6 +87,23 @@ internal class ModuleLoader
             var handle = MetadataTokens.EntityHandle(entryPointToken);
             _mod.EntryPoint = (MethodDef)GetEntity(handle);
         }
+    }
+    private void LoadCustomAttribs()
+    {
+        _entities.Iterate<TypeDef, TypeDefinition>((type, info) => {
+            FillCustomAttribs(info.GetCustomAttributes(), new() { Entity = type });
+            //TODO: interface attribs
+            //TODO: generic attribs
+        });
+
+        _entities.Iterate<MethodDef, MethodDefinition>((method, info) => {
+            FillCustomAttribs(info.GetCustomAttributes(), new() { Entity = method });
+            //TODO: param attribs
+            //TODO: generic attribs
+        });
+
+        _entities.Iterate<FieldDef, FieldDefinition>((field, info)
+            => FillCustomAttribs(info.GetCustomAttributes(), new() { Entity = field }));
     }
 
     private TypeDef CreateType(TypeDefinition info)
@@ -245,15 +263,18 @@ internal class ModuleLoader
         }
     }
 
-    public ImmutableArray<CustomAttrib> DecodeCustomAttribs(CustomAttributeHandleCollection handleList)
+    private void FillCustomAttribs(CustomAttributeHandleCollection handleList, in CustomAttribLink link)
     {
-        var attribs = ImmutableArray.CreateBuilder<CustomAttrib>(handleList.Count);
+        if (handleList.Count == 0) return;
+
+        var attribs = new CustomAttrib[handleList.Count];
+        int index = 0;
 
         foreach (var handle in handleList) {
             var attrib = _reader.GetCustomAttribute(handle);
             var value = attrib.DecodeValue(_typeProvider);
 
-            attribs.Add(new CustomAttrib() {
+            attribs[index++] = new CustomAttrib() {
                 Constructor = (MethodDesc)GetEntity(attrib.Constructor),
                 FixedArgs = value.FixedArguments.Select(a => new CustomAttrib.Argument() {
                     Type = a.Type,
@@ -265,9 +286,9 @@ internal class ModuleLoader
                     Name = a.Name!,
                     Kind = (CustomAttrib.ArgumentKind)a.Kind
                 }).ToImmutableArray()
-            });
+            };
         }
-        return attribs.MoveToImmutable();
+        _mod._customAttribs.Add(link, attribs);
     }
     public FuncPtrType DecodeMethodSig(StandaloneSignatureHandle handle)
     {
@@ -325,8 +346,7 @@ internal class ModuleLoader
             TableIndex.TypeRef, TableIndex.MemberRef,
             TableIndex.TypeDef, TableIndex.TypeSpec,
             TableIndex.Field,
-            TableIndex.MethodDef, TableIndex.MethodSpec,
-            TableIndex.Property, TableIndex.Event
+            TableIndex.MethodDef, TableIndex.MethodSpec
         };
         readonly MetadataReader _reader;
         readonly Entity[] _entities; //entities laid out linearly
@@ -344,6 +364,7 @@ internal class ModuleLoader
         {
             var table = GetTable<TInfo>();
             int numRows = _reader.GetTableRowCount(table);
+
             var (start, end) = _ranges[(int)table] = (_index, _index + numRows);
             _index = end;
 
@@ -370,6 +391,7 @@ internal class ModuleLoader
         {
             var table = GetTable<TInfo>();
             Assert(Array.IndexOf(s_Tables, table) >= 0);
+
             var (start, end) = _ranges[(int)table];
             for (int i = 0; i < end - start; i++) {
                 var entity = (TEntity)(object)_entities[start + i];

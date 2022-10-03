@@ -84,7 +84,7 @@ internal class ModuleWriter
         foreach (var entity in _genericDefs) {
             var handle = _handleMap[entity];
             var genPars = (entity as TypeDef)?.GenericParams ?? ((MethodDef)entity).GenericParams;
-            foreach (GenericParamType par in genPars) {
+            foreach (var par in genPars.Cast<GenericParamType>()) {
                 _builder.AddGenericParameter(handle, par.Attribs, AddString(par.Name), par.Index);
             }
         }
@@ -152,16 +152,11 @@ internal class ModuleWriter
         if (type is PrimType primType) {
             type = primType.GetDefinition(_mod);
         }
-        return GetHandle((Entity)type);
+        return GetHandle(type);
     }
     private StandaloneSignatureHandle GetStandaloneSig(FuncPtrType type)
     {
         throw new NotImplementedException();
-    }
-
-    private void AssertHandleAllocated(ModuleEntity def, EntityHandle handle)
-    {
-        Assert(_handleMap[def] == handle);
     }
 
     private void EmitType(TypeDef type)
@@ -177,7 +172,7 @@ internal class ModuleWriter
             firstFieldHandle,
             firstMethodHandle
         );
-        AssertHandleAllocated(type, handle);
+        Assert(_handleMap[type] == handle);
         Assert(type.Fields.Count == 0 || _handleMap[type.Fields[0]] == firstFieldHandle);
         Assert(type.Methods.Count == 0 || _handleMap[type.Methods[0]] == firstMethodHandle);
 
@@ -238,7 +233,7 @@ internal class ModuleWriter
             AddString(field.Name),
             EncodeFieldSig(field)
         );
-        AssertHandleAllocated(field, handle);
+        Assert(_handleMap[field] == handle);
 
         if (field.MappedData != null) {
             _fieldDataStream ??= new();
@@ -264,9 +259,7 @@ internal class ModuleWriter
         var pars = method.StaticParams;
         for (int i = 0; i < pars.Length; i++) {
             var par = pars[i];
-            if (par.Name != null) {
-                _builder.AddParameter(ParameterAttributes.None, AddString(par.Name), i + 1);
-            }
+            _builder.AddParameter(par.Attribs, AddString(par.Name), i + 1);
         }
 
         var handle = _builder.AddMethodDefinition(
@@ -275,7 +268,7 @@ internal class ModuleWriter
             AddString(method.Name),
             signature, bodyOffset, firstParamHandle
         );
-        AssertHandleAllocated(method, handle);
+        Assert(_handleMap[method] == handle);
 
         if (method.GenericParams.Length > 0) {
             _genericDefs.Add(method);
@@ -300,16 +293,14 @@ internal class ModuleWriter
             });
             localVarSigs = _builder.AddStandaloneSignature(sigBlobHandle);
         }
-        var ilBytes = EncodeInsts(body);
-
+        int codeSize = body.Instructions[^1].GetEndOffset();
         var enc = _bodyEncoder.AddMethodBody(
-            ilBytes.Count, body.MaxStack,
+            codeSize, body.MaxStack,
             body.ExceptionRegions.Count,
             hasSmallExceptionRegions: false, //TODO
             localVarSigs, attribs
         );
-        //Copy IL bytes to output blob
-        new BlobWriter(enc.Instructions).WriteBytes(ilBytes);
+        EncodeInsts(body, new BlobWriter(enc.Instructions));
 
         //Add exception regions
         foreach (var ehr in body.ExceptionRegions) {
@@ -326,92 +317,90 @@ internal class ModuleWriter
         return enc.Offset;
     }
 
-    private BlobBuilder EncodeInsts(ILMethodBody body)
+    private void EncodeInsts(ILMethodBody body, BlobWriter writer)
     {
-        var blob = new BlobBuilder();
         foreach (ref var inst in body.Instructions.AsSpan()) {
-            EncodeInst(blob, ref inst);
+            EncodeInst(ref writer, ref inst);
         }
-        return blob;
     }
 
-    private void EncodeInst(BlobBuilder bb, ref ILInstruction inst)
+    private void EncodeInst(ref BlobWriter bw, ref ILInstruction inst)
     {
         int code = (int)inst.OpCode;
         if ((code & 0xFF00) == 0xFE00) {
-            bb.WriteByte((byte)(code >> 8));
+            bw.WriteByte((byte)(code >> 8));
         }
-        bb.WriteByte((byte)code);
+        bw.WriteByte((byte)code);
 
         switch (inst.OpCode.GetOperandType()) {
             case ILOperandType.BrTarget: {
-                bb.WriteInt32((int)inst.Operand! - inst.GetEndOffset());
+                bw.WriteInt32((int)inst.Operand! - inst.GetEndOffset());
                 break;
             }
             case ILOperandType.Field:
             case ILOperandType.Method:
             case ILOperandType.Tok: {
                 var handle = GetHandle((Entity)inst.Operand!);
-                bb.WriteInt32(MetadataTokens.GetToken(handle));
+                bw.WriteInt32(MetadataTokens.GetToken(handle));
                 break;
             }
             case ILOperandType.Sig: {
                 var handle = GetStandaloneSig((FuncPtrType)inst.Operand!);
-                bb.WriteInt32(MetadataTokens.GetToken(handle));
+                bw.WriteInt32(MetadataTokens.GetToken(handle));
                 break;
             }
             case ILOperandType.Type: {
                 var handle = GetTypeHandle((TypeDesc)inst.Operand!);
-                bb.WriteInt32(MetadataTokens.GetToken(handle));
+                bw.WriteInt32(MetadataTokens.GetToken(handle));
                 break;
             }
-            case ILOperandType.String:{
+            case ILOperandType.String: {
                 var handle = _builder.GetOrAddUserString((string)inst.Operand!);
-                bb.WriteInt32(MetadataTokens.GetToken(handle));
+                bw.WriteInt32(MetadataTokens.GetToken(handle));
                 break;
             }
             case ILOperandType.I: {
-                bb.WriteInt32((int)inst.Operand!);
+                bw.WriteInt32((int)inst.Operand!);
                 break;
             }
             case ILOperandType.I8: {
-                bb.WriteInt64((long)inst.Operand!);
+                bw.WriteInt64((long)inst.Operand!);
                 break;
             }
             case ILOperandType.R: {
-                bb.WriteDouble((double)inst.Operand!);
+                bw.WriteDouble((double)inst.Operand!);
                 break;
             }
             case ILOperandType.Switch: {
-                WriteTumpTable(bb, ref inst);
+                WriteTumpTable(ref bw, ref inst);
                 break;
             }
             case ILOperandType.Var: {
                 int varIndex = (int)inst.Operand!;
                 Assert(varIndex == (ushort)varIndex);
-                bb.WriteUInt16((ushort)varIndex);
+                bw.WriteUInt16((ushort)varIndex);
                 break;
             }
             case ILOperandType.ShortBrTarget: {
                 int offset = (int)inst.Operand! - inst.GetEndOffset();
                 Assert(offset == (sbyte)offset);
-                bb.WriteSByte((sbyte)offset);
+                bw.WriteSByte((sbyte)offset);
                 break;
             }
             case ILOperandType.ShortI: {
                 int value = (int)inst.Operand!;
                 Assert(value == (sbyte)value);
-                bb.WriteSByte((sbyte)value);
+                bw.WriteSByte((sbyte)value);
                 break;
             }
             case ILOperandType.ShortR: {
-                bb.WriteSingle((float)inst.Operand!);
+                bw.WriteSingle((float)inst.Operand!);
                 break;
             }
             case ILOperandType.ShortVar: {
                 int varIndex = (int)inst.Operand!;
                 Assert(varIndex == (byte)varIndex);
-                bb.WriteByte((byte)varIndex);
+                bw.WriteByte((byte)varIndex);
                 break;
             }
             default: {
@@ -419,14 +408,14 @@ internal class ModuleWriter
                 break;
             }
         }
-        static void WriteTumpTable(BlobBuilder bb, ref ILInstruction inst)
+        static void WriteTumpTable(ref BlobWriter bw, ref ILInstruction inst)
         {
             int baseOffset = inst.GetEndOffset();
             var targets = (int[])inst.Operand!;
 
-            bb.WriteInt32(targets.Length);
+            bw.WriteInt32(targets.Length);
             for (int i = 0; i < targets.Length; i++) {
-                bb.WriteInt32(targets[i] - baseOffset);
+                bw.WriteInt32(targets[i] - baseOffset);
             }
         }
     }
@@ -434,7 +423,7 @@ internal class ModuleWriter
     private BlobHandle EncodeMethodSig(MethodDef method)
     {
         return EncodeSig(b => {
-            //TODO: callconv, genericParamCount
+            //TODO: callconv
             var pars = method.StaticParams;
             b.MethodSignature(default, method.GenericParams.Length, method.IsInstance)
                 .Parameters(
@@ -463,7 +452,6 @@ internal class ModuleWriter
             }
         });
     }
-
 
     private BlobHandle EncodeSpecSig(MethodSpec method)
     {

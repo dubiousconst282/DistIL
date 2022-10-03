@@ -46,11 +46,11 @@ public abstract class MethodDesc : MemberDesc
 public class ParamDef
 {
     public TypeDesc Type { get; set; }
-    public string? Name { get; set; }
+    public string Name { get; set; }
     public int Index { get; }
     public ParameterAttributes Attribs { get; set; }
 
-    public ParamDef(TypeDesc type, int index, string? name = null, ParameterAttributes attribs = default)
+    public ParamDef(TypeDesc type, int index, string name, ParameterAttributes attribs = default)
     {
         Type = type;
         Name = name;

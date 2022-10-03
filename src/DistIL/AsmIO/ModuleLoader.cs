@@ -148,7 +148,7 @@ internal class ModuleLoader
             pars.Add(new ParamDef(thisType, 0, "this"));
         }
         foreach (var paramType in sig.ParameterTypes) {
-            pars.Add(new ParamDef(paramType, pars.Count));
+            pars.Add(new ParamDef(paramType, pars.Count, ""));
         }
         return new MethodDef(
             declaringType, 

@@ -24,7 +24,7 @@ partial class SimplifyInsts : MethodPass
     {
         var method = call.Method;
         if (!(
-            method.Name != "Invoke" &&
+            method.Name == "Invoke" &&
             t_Delegate != null && method.DeclaringType.Inherits(t_Delegate) &&
             call is { IsStatic: false, Args: [var lambdaInstance, ..] }
         )) return false;

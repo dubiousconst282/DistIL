@@ -103,37 +103,46 @@ internal class ILAssembler
     {
         var insts = _insts.AsSpan();
 
-        var branchIndices = new List<int>();
+        //Calculate initial offsets
         int currOffset = 0;
-        for (int i = 0; i < insts.Length; i++) {
-            ref var inst = ref insts[i];
-            if (inst.Operand is BasicBlock or BasicBlock[]) {
-                branchIndices.Add(i);
-            }
+        foreach (ref var inst in insts) {
             inst.Offset = currOffset;
             currOffset += inst.GetSize();
         }
 
-        //TODO: Branch displacement optimization
-        //See "A Simple, Linear-Time Algorithm for x86 Jump Encoding" - https://arxiv.org/pdf/0812.4973.pdf
+        //Early return for methods with no branches
+        if (_blockStarts.Count == 1 && insts[^1].OpCode == ILCode.Ret) return;
 
-        //Replace blocks with actual offsets
-        foreach (int i in branchIndices) {
-            ref var inst = ref insts[i];
+        //Optimize branches using a simple greedy algorithm;
+        //Better algorithms do exist (https://arxiv.org/pdf/0812.4973.pdf), but they'd probably just
+        //save a few hundred bytes at best. Not worth since the result will most likely be recompiled again.
+        currOffset = 0;
+        foreach (ref var inst in insts) {
+            inst.Offset = currOffset;
+            currOffset += inst.GetSize();
 
             if (inst.Operand is BasicBlock target) {
-                inst.Operand = GetBlockOffset(target);
-            } else if (inst.Operand is BasicBlock[] targets) {
-                var offsets = new int[targets.Length];
-                for (int j = 0; j < targets.Length; j++) {
-                    offsets[j] = GetBlockOffset(targets[j]);
+                int dist = GetLabelOffset(target) - currOffset;
+                var shortCode = ILTables.GetShortBranchCode(inst.OpCode);
+
+                if ((sbyte)dist == dist && shortCode != default) {
+                    inst.OpCode = shortCode;
+                    currOffset -= 3;
                 }
-                inst.Operand = offsets;
+            }
+        }
+
+        //Replace label refs with actual offsets
+        foreach (ref var inst in insts) {
+            if (inst.Operand is BasicBlock target) {
+                inst.Operand = GetLabelOffset(target);
+            } else if (inst.Operand is BasicBlock[] targets) {
+                inst.Operand = targets.Select(GetLabelOffset).ToArray();
             }
         }
     }
 
-    private int GetBlockOffset(BasicBlock block)
+    private int GetLabelOffset(BasicBlock block)
     {
         return _insts[_blockStarts[block]].Offset;
     }
@@ -167,7 +176,7 @@ internal class ILAssembler
         int GetBlockOffset(int index)
         {
             return index < layout.Blocks.Length
-                ? this.GetBlockOffset(layout.Blocks[index])
+                ? GetLabelOffset(layout.Blocks[index])
                 : _insts[^1].GetEndOffset();
         }
 

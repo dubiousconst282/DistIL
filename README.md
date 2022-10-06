@@ -1,76 +1,56 @@
 # DistIL
-Optimization and transformation framework for the Common Intermediate Language (WIP)
+An experimental optimizer and IR for .NET CIL
 
----
+# Feature status
+- SSA-based Intermediate Representation
+  - Type system powered by _System.Reflection.Metadata_*
+  - Plain text and graphviz dumps
+  - Parser for plain text dumps*
+- Analyses:
+  - Dominators
+  - Natural Loops*
+- Transforms:
+  - Method Inlining*
+  - Constant Folding and Peepholes
+  - Local Value Numbering
+  - Loop Invariant Code Motion*
+  - Linq Expansion*
+  - Local Delegate Devirtualization
+  - Out of SSA translation based on _Boissinot et al._ methods
 
-Currently, the most notable implemented features are:
-- Type system and module loader/writer based on System.Reflection.Metadata
-- Simple and consistent SSA based Intermediate Representation
-- Analyses: Dominator tree, Liveness
-- Optimizations:
-  - Method Inlining, Constant Folding, Dead Code Elimination, Local Value Numbering
-  - Linq Query Expansion: Convert reification/reduction queries (ToArray, Count, ...) into imperative code
-  - Delegate Concretization: Replace delegates invocations with direct calls (if they are known)
+\* incomplete or unstable
 
-# IR Details
-DistIL uses a SSA-based intermediate representation, which focus on being simple and suitable for general program optimizations. It is in fact very similar to LLVM's IR, the obvious difference being that it is based on CIL, so it has direct support for things like objects, fields, and such.
+Many CIL opcodes [are implemented](./src/DistIL/Frontend/BlockState.cs#L108) as well, in both frontend and backend. However, several other features are missing, incomplete, or poorly implemented (e.g. custom attributes, codegen for exception handlers, and pretty much all transforms).
 
-## Variables
-Local variables are treated similarly as memory locations, they are accessed using the `LoadVarInst` and `StoreVarInst` instructions. They can also have their address exposed by `VarAddrInst`, but this operation prevents it from being transformed into an SSA _register_. They are currently not explicitly declared nor tracked in the IR.
+# Overview and IR details
+The IR is very similar to that of LLVM. Instructions are represented in _static single assignment_ form (meaning they output an immutable value that can be used by any other _dominated_ instruction, as opposed to being pushed into the evaluation stack as a temporary like in CIL). Data dependencies are direct references to `Value` objects (which may be other instructions), and def-use chains are implicitly managed. This allows for quick and easy pattern matching of expressions:
 
-Arguments are always read only. The CIL importer (parser), copies them into local variables at the entry block, most of these copies are removed by the SSA transform pass.
-
-## Exception Regions
-Due to the large number of instructions that may potentially throw exceptions, exception handlers are represented implicitly on the CFG (blocks don't end at instructions that may throw). Protected regions start with a single entry block, which contains one or more `GuardInst` instructions, each of which point to the handler/filter blocks. Exit blocks end with a single `LeaveInst` or `ContinueInst` (for filter/finally handlers) instruction.
-
-Variables used across protected and normal regions are marked as exposed (to disable SSA registration), because control flow may be interrupted at any point inside the protected region, and phi instructions can only merge values at block edges.
-
-## Code Generation
-Once all phi instructions have been removed (we currently use the technique described in "Revisiting Out-of-SSA Translation" by Boissinot et al.), generating CIL code is quite straightforward.
-
-Because the IR forms a kind of DAG structure, we simply visit each instruction and recurse into operands if they can be inlined to form an deeper expression. An instruction can be inlined if it only has one use within the same block, and there are no interferences to its operands before the result is used. Otherwise, it must be placed into into a temporary variable.
-
-There's no register allocation pass yet, and while the result code is decent, it might have many temporary variables.
-
-## IR Dumps
-The IR can be easily dumped in plain text or graphviz forms, some examples are shown later in this section.
-
-In the text form of the IR, instructions are automatically assigned a _temporary variable_/_register_ for its result, they doesn't actually exist in the IR - the instruction itself _is_ the register, operands just refer to them directly.
-
-Blocks, instructions and variables are given sequential names by the `SymbolTable` class (e.g. `BB_01, BB_02, ...; r1, r2, ...`), but custom names can also be set. The `Namify` pass can be used to generate fixed names, which can be useful when generating diffs between passes.
-
----
-
-Exception handlers:
-<table>
-  <tr> <th>Original code</th> <th>CFG</th> </tr>
-  <tr>
-    <td>
-      <pre lang="csharp">
-static int Try2(string str) {
-  int r = 0;
-  try {
-    int tmp = str.Length == 0 ? 1 : int.Parse(str);
-    r = tmp;
-    r *= 2;
-  } catch (FormatException ex) {
-    Console.WriteLine(ex);
-    r += 2;
-  } finally {
-    r += 3;
+```cs
+foreach (var inst in methodBody.Instructions()) {
+  //`-x + y`  ->  `y - x`
+  if (inst is BinaryInst { Op: BinaryOp.Add, Left: UnaryInst { Op: UnaryOp.Neg, Value: var x }, Right: var y }) {
+    inst.ReplaceWith(new BinaryInst(BinaryOp.Sub, y, x), insertIfInst: true);
   }
-  return r;
 }
-      </pre>
-    </td>
-    <td>
-      <img src="https://user-images.githubusercontent.com/87553666/177763432-746541a7-9074-4f7c-aff9-c070cd4e6598.svg">
-    </td>
-  </tr>
-</table>
+```
 
----
-Linq expansion + delegate concretization + inlining:
+## Modules and the Type System
+Modules (assemblies) and all dependencies are fully loaded at once using _System.Reflection.Metadata_. This makes the code simpler by avoiding lazy properties and other issues caused by circular references, and eliminates the need of _TypeReference_ and similar placeholder entities (which can be annoying to deal with).
+
+## Exceptions and Protected Regions
+Exception control flow is implicit and not directly represented in the IR. This follows the CIL model, but hinders SSA when used in conjuction with handlers, because phi instructions can only merge values at block boundaries.
+
+Protected regions are also represented as implicit sub-graphs of the main CFG. They start with a single entry block, containing one or more `GuardInst` instructions pointing to the entry block of the handler/filter regions (which are otherwise unreachable), and end with a single `LeaveInst` or `ContinueInst` (for filter/finally handlers) instruction.
+
+## Code generation
+Once phi instructions have been removed, CIL code is generated by simply visiting and emitting the appropriate opcodes for each IR instruction. To minimize the number of temporary variables and generate smaller code, some instructions are marked as _leafs_ and visited recursively. Leaf instructions only have a single use within the same block, and there are no interferences to any of its dependencies before the result is used.
+
+Blocks of methods with exception handlers are ordered carefully in order to generate valid region ranges, which are linear in CIL. (The current implementation is actually not that careful and just uses a basic DFS.)
+
+## IR dumps
+The IR can be dumped into either plain text or graphviz forms. Plain text dumps can be parsed and rematerialized into IR, but they can be hard to read depending on the method complexity and branchiness. There are several ways to render graphviz dumps, one of them is using a [VSCode extension](https://marketplace.visualstudio.com/items?itemName=tintinweb.graphviz-interactive-preview).
+
+### Showcase: Linq expansion
 <table>
   <tr> <th>Original code</th> <th>Optimized CFG</th> </tr>
   <tr>
@@ -84,41 +64,66 @@ static int[] Linq1(int[] arr) {
       </pre>
     </td>
     <td>
-      <img src="https://user-images.githubusercontent.com/87553666/177763428-ab1b772e-145b-45a7-bc8e-4cb9c9f79a47.svg">
+      <img src="https://user-images.githubusercontent.com/87553666/194204401-a5662186-b83f-41cd-b5cd-70a8ade1e7b9.svg">
     </td>
   </tr>
 </table>
 
-<details>
-  <summary>Decompiled output</summary>
-Not looking pretty because the out of SSA pass isn't fully done yet. It will get there eventually :)
+That looks cool and all, but unlike most other most other compilers, the optimized result can be decompiled into high level code using a tool like ILSpy:
 
 ```cs
-int[] Linq1(int[] arr) {
-    int num = arr.Length;
-    int[] array = new int[num];
-    int num2 = 0;
-    int num3 = 0;
-    int num4;
-    while (true) {
-        num4 = num3;
-        if (num2 >= num) break;
-        
-        int num5 = arr[num2];
-        num3 = num4;
-        if (num5 > 0) {
-            array[num4] = num5 * 2;
-            num3 = num4 + 1;
-        }
-        num2++;
+static int[] Linq1(int[] arr) {
+  int num = arr.Length;
+  int[] array = new int[num];
+  int i = 0;
+  int num2 = 0;
+  for (; i < num; i++) {
+    int num3 = arr[i];
+    if (num3 > 0) {
+      array[num2] = num3 * 2;
+      num2++;
     }
-    int num6 = ((num4 != num) ? 1 : 0);
-    int[] array2 = array;
-    if (num6 != 0) {
-        array2 = new int[num4];
-        Array.Copy(array, array2, num4);
-    }
-    return array2;
+  }
+  if (num2 != num) {
+    int[] array2 = new int[num2];
+    Array.Copy(array, array2, num2);
+    array = array2;
+  }
+  return array;
 }
 ```
-</details>
+No variable names (yet!), but significantly more readable than an assembly-ish language.
+
+### Showcase: Exception handlers
+<table>
+  <tr> <th>Original code</th> <th>Optimized CFG</th> </tr>
+  <tr>
+    <td>
+      <pre lang="csharp">
+static int Try2(string str) {
+  int r = 0;
+  try {
+    r = str.Length > 0 ? int.Parse(str) : 0;
+    r *= 5;
+  } catch (FormatException ex) {
+    Console.WriteLine(ex);
+    r = -1;
+  } finally {
+    r += 30;
+  }
+  return r;
+}
+      </pre>
+    </td>
+    <td>
+      <img src="https://user-images.githubusercontent.com/87553666/194204356-e058f90e-0c24-442f-94e8-5a6baae7ca8f.svg">
+    </td>
+  </tr>
+</table>
+
+This sample is not optimal in terms of the IR (there's a dead store and an empty block), but it shows how exception handlers are represented, and that variables used across protected regions are not _SSA-ified_ due to the issues mentioned earlier.
+
+# Related projects
+- https://github.com/jonathanvdc/Flame
+- https://github.com/Washi1337/Echo
+- https://github.com/edgardozoppi/analysis-net

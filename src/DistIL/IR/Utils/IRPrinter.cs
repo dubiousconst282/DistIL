@@ -36,24 +36,17 @@ public class IRPrinter
             pc.Pop();
 
             tw.Write("</td></tr>\n");
-            if (block.Last is BranchInst { IsConditional: true }) {
-                tw.Write("      <tr> <td port='T'>T</td> <td port='F'>F</td> </tr>\n");
-            }
-
             tw.Write("    </table>\n");
             tw.Write("  >]\n");
 
             foreach (var succ in block.Succs) {
-                string port = "s";
-                string style = "";
+                string port = "s", style = "";
                 if (block.Last is BranchInst { IsConditional: true } br) {
-                    port = succ == br.Then ? "T" : "F";
-                }
-                if (block.Last is LeaveInst) {
+                    port = succ == br.Then ? "sw" : "se";
+                } else if (block.Last is LeaveInst) {
                     style = "[color=red]";
                 }
-                foreach (var inst in block) {
-                    if (inst is not GuardInst guard) break;
+                foreach (var guard in block.Guards()) {
                     if (guard.HandlerBlock == succ || guard.FilterBlock == succ) {
                         (style, port) = ("[style=dashed color=gray]", "e");
                     }
@@ -99,17 +92,21 @@ public class IRPrinter
 
         public override void Print(string str, PrintToner toner = PrintToner.Default)
         {
-            str = Regex.Replace(str, @"[&<>\n]| [^a-zA-Z_]", m => {
-                return m.ValueSpan switch {
-                    "&" => "&amp;",
-                    "<" => "&lt;",
-                    ">" => "&gt;",
-                    "\n" => "<br/>\n",
-                    [' ', char c] => $"<b> </b>{c}", //graphviz is buggy and won't render spaces between font tags correctly
-                    _ => m.Value
-                };
+            str = Regex.Replace(str, @"[&<>\n]", m => m.ValueSpan switch {
+                "&" => "&amp;",
+                "<" => "&lt;",
+                ">" => "&gt;",
+                "\n" => "<br/>\n",
+                _ => m.Value
             });
 
+            //Graphviz doesn't render spaces between font tags correctly,
+            //this workaround seem to work most of the time.
+            if (str.StartsWith(' ')) {
+                Output.Write("<b> </b>");
+                str = str[1..];
+            }
+            
             string? color = null;
             if (toner != PrintToner.Default && _colors.TryGetValue(toner, out color)) {
                 Output.Write($"<font color=\"{color}\">");

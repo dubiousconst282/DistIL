@@ -6,15 +6,19 @@ using System.Reflection.PortableExecutable;
 
 public class ModuleResolver
 {
-    //FIXME: Do we need to care about FullName (public keys and versions?)
+    //FIXME: Do we need to care about FullName (public keys and versions)?
     protected readonly Dictionary<string, ModuleDef> _cache = new(StringComparer.OrdinalIgnoreCase);
 
-    public ModuleDef Resolve(AssemblyName name, [MaybeNullWhen(false)] bool throwIfNotFound = true)
+    /// <summary> A reference to the `System.Private.CoreLib` assembly. </summary>
+    public ModuleDef CoreLib => _coreLib ??= Resolve("System.Private.CoreLib", throwIfNotFound: true);
+    private ModuleDef? _coreLib;
+
+    public ModuleDef? Resolve(AssemblyName name, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
     {
-        return Resolve(name.Name ?? throw new ArgumentException(), throwIfNotFound);
+        return Resolve(name.Name ?? throw new InvalidOperationException(), throwIfNotFound);
     }
 
-    public ModuleDef Resolve(string name, [MaybeNullWhen(false)] bool throwIfNotFound = true)
+    public ModuleDef? Resolve(string name, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
     {
         if (_cache.TryGetValue(name, out var module)) {
             return module;

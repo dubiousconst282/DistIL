@@ -11,7 +11,7 @@ public class ParserTests
     public ParserTests()
     {
         _modResolver = new();
-        _corelib = _modResolver.Resolve("System.Private.CoreLib");
+        _corelib = _modResolver.Resolve("System.Private.CoreLib", throwIfNotFound: true);
     }
 
     [Fact]

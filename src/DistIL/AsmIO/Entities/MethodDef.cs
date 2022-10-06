@@ -21,7 +21,7 @@ public abstract class MethodDesc : MemberDesc
 
     public TypeDesc ReturnType { get; protected set; } = null!;
     public ImmutableArray<ParamDef> Params { get; protected set; }
-    public ReadOnlySpan<ParamDef> StaticParams => Params.AsSpan().Slice(IsStatic ? 0 : 1);
+    public ReadOnlySpan<ParamDef> StaticParams => Params.AsSpan(IsStatic ? 0 : 1);
 
     public override void Print(PrintContext ctx)
     {
@@ -46,85 +46,49 @@ public abstract class MethodDesc : MemberDesc
 public class ParamDef
 {
     public TypeDesc Type { get; set; }
-    public string? Name { get; set; }
-    public int Index { get; set; }
+    public string Name { get; set; }
+    public int Index { get; }
     public ParameterAttributes Attribs { get; set; }
-    public ImmutableArray<CustomAttrib> CustomAttribs { get; set; }
 
-    public ParamDef(TypeDesc type, int index, string? name = null, ParameterAttributes attribs = default)
+    public ParamDef(TypeDesc type, int index, string name, ParameterAttributes attribs = default)
     {
         Type = type;
         Name = name;
         Index = index;
         Attribs = attribs;
-        CustomAttribs = ImmutableArray<CustomAttrib>.Empty;
     }
 
     public override string ToString() => Type.ToString();
 }
-public readonly struct MethodSig
-{
-    public TypeDesc ReturnType { get; }
-    public ImmutableArray<TypeDesc> ParamTypes { get; }
-    public int NumGenericParams { get; }
-    public bool IsInstance => _hdr.IsInstance;
-
-    readonly SignatureHeader _hdr;
-
-    public MethodSig(in MethodSignature<TypeDesc> srmSig)
-    {
-        ReturnType = srmSig.ReturnType;
-        ParamTypes = srmSig.ParameterTypes;
-        NumGenericParams = srmSig.GenericParameterCount;
-        _hdr = srmSig.Header;
-    }
-
-    public MethodSig(TypeDesc retType, params TypeDesc[] paramTypes)
-    {
-        ReturnType = retType;
-        ParamTypes = ImmutableArray.Create(paramTypes);
-        NumGenericParams = 0;
-    }
-
-    public MethodSig(TypeDesc retType, ImmutableArray<TypeDesc> paramTypes, int numGenPars = 0)
-    {
-        ReturnType = retType;
-        ParamTypes = paramTypes;
-        NumGenericParams = numGenPars;
-    }
-
-    public bool Equals(MethodDesc method)
-    {
-        if (method.ReturnType != ReturnType) {
-            return false;
-        }
-        if (NumGenericParams != method.GenericParams.Length) {
-            return false;
-        }
-        if (IsInstance != method.IsInstance) {
-            return false;
-        }
-        var p1 = method.StaticParams;
-        var p2 = ParamTypes;
-        if (p1.Length != p2.Length) {
-            return false;
-        }
-        for (int i = 0; i < p1.Length; i++) {
-            if (p1[i].Type != p2[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-}
 
 public abstract class MethodDefOrSpec : MethodDesc, ModuleEntity
 {
-    /// <summary> Returns the parent definition if this is a MethodSpec, or itself if it is already a MethodDef. </summary>
+    /// <summary> Returns the parent definition if this is a MethodSpec, or the current instance if already a MethodDef. </summary>
     public abstract MethodDef Definition { get; }
     public ModuleDef Module => Definition.DeclaringType.Module;
 
     public abstract override TypeDefOrSpec DeclaringType { get; }
+
+    public IReadOnlyCollection<CustomAttrib> GetParamCustomAttribs(ParamDef param)
+    {
+        Assert(Params.Contains(param));
+
+        return Module.GetCustomAttribs(new() {
+            LinkType = CustomAttribLink.Type.MethodParam,
+            Entity = Definition,
+            Index = param.Index
+        });
+    }
+    public IReadOnlyCollection<CustomAttrib> GetGenericArgCustomAttribs(int index)
+    {
+        Ensure(index >= 0 && index < GenericParams.Length);
+
+        return Module.GetCustomAttribs(new() {
+            LinkType = CustomAttribLink.Type.GenericParam,
+            Entity = Definition,
+            Index = index
+        });
+    }
 }
 public class MethodDef : MethodDefOrSpec
 {
@@ -163,14 +127,12 @@ public class MethodDef : MethodDefOrSpec
                 var par = Params[index - (IsStatic ? 1 : 0)]; //`this` is always implicit
                 par.Name = reader.GetString(parInfo.Name);
                 par.Attribs = parInfo.Attributes;
-                par.CustomAttribs = loader.DecodeCustomAttribs(parInfo.GetCustomAttributes());
             }
         }
         if (info.RelativeVirtualAddress != 0) {
             ILBody = new ILMethodBody(loader, info.RelativeVirtualAddress);
         }
-        GenericParams = loader.DecodeGenericParams(info.GetGenericParameters());
-        CustomAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
+        loader.FillGenericParams(GenericParams, info.GetGenericParameters());
     }
 
     public override MethodDesc GetSpec(GenericContext ctx)
@@ -189,7 +151,7 @@ public class MethodSpec : MethodDefOrSpec
     public override TypeDefOrSpec DeclaringType { get; }
     public override string Name => Definition.Name;
 
-    public MethodSpec(TypeDefOrSpec declaringType, MethodDef def, ImmutableArray<TypeDesc> args = default)
+    internal MethodSpec(TypeDefOrSpec declaringType, MethodDef def, ImmutableArray<TypeDesc> args = default)
     {
         Definition = def;
         Attribs = def.Attribs;
@@ -207,12 +169,13 @@ public class MethodSpec : MethodDefOrSpec
 
 public class ILMethodBody
 {
-    public List<ExceptionRegion> ExceptionRegions { get; set; } = null!;
-    public List<ILInstruction> Instructions { get; set; } = null!;
-    public List<Variable> Locals { get; set; } = null!;
+    public required List<ExceptionRegion> ExceptionRegions { get; set; }
+    public required List<ILInstruction> Instructions { get; set; }
+    public required List<Variable> Locals { get; set; }
     public int MaxStack { get; set; }
     public bool InitLocals { get; set; }
 
+    [SetsRequiredMembers]
     internal ILMethodBody(ModuleLoader loader, int rva)
     {
         var block = loader._pe.GetMethodBody(rva);
@@ -226,7 +189,6 @@ public class ILMethodBody
 
     public ILMethodBody()
     {
-        //TODO: use C#11 required properties
     }
 
     private static List<ILInstruction> DecodeInsts(ModuleLoader loader, BlobReader reader)
@@ -256,7 +218,7 @@ public class ILMethodBody
                 => loader.GetEntity(MetadataTokens.EntityHandle(reader.ReadInt32())),
             ILOperandType.Sig
                 //We convert "StandaloneSignature" into "FuncPtrType" because it's only used by calli
-                //and it'd be inconvinient to have another obscure class.
+                //and it'd be inconvenient to have another obscure class.
                 //TODO: fix generic context?
                 => loader.DecodeMethodSig(MetadataTokens.StandaloneSignatureHandle(reader.ReadInt32())),
             ILOperandType.String => loader._reader.GetUserString(MetadataTokens.UserStringHandle(reader.ReadInt32())),
@@ -332,7 +294,7 @@ public class ExceptionRegion
 {
     public ExceptionRegionKind Kind { get; set; }
 
-    /// <summary> The catch type if the region represents a catch, or null otherwise. </summary>
+    /// <summary> The catch type if the region represents a catch handler, or null otherwise. </summary>
     public TypeDefOrSpec? CatchType { get; set; }
 
     /// <summary> Gets the starting IL offset of the exception handler. </summary>

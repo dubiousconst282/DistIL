@@ -5,7 +5,6 @@ using DistIL.IR;
 public interface Entity
 {
     string Name { get; }
-    ImmutableArray<CustomAttrib> CustomAttribs { get; set; }
 }
 /// <summary> Represents an entity defined in a module. </summary>
 public interface ModuleEntity : Entity
@@ -16,10 +15,15 @@ public interface ModuleEntity : Entity
 public abstract class EntityDesc : Value, Entity
 {
     public abstract string Name { get; }
-    public ImmutableArray<CustomAttrib> CustomAttribs { get; set; } = ImmutableArray<CustomAttrib>.Empty;
 }
 
 public abstract class MemberDesc : EntityDesc
 {
     public abstract TypeDesc DeclaringType { get; }
+}
+
+public static class EntityExt
+{
+    public static IReadOnlyCollection<CustomAttrib> GetCustomAttribs(this ModuleEntity entity)
+        => entity.Module.GetCustomAttribs(new() { Entity = entity });
 }

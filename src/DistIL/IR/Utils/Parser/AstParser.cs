@@ -3,7 +3,7 @@ namespace DistIL.IR.Utils.Parser;
 //Program   = Import*  Block*
 //Import    = "import"  Id  "from"  Id
 //Block     = Id  ":"  (Indent  Inst+  Dedent) | Inst
-//Type      = Identifier  ("+"  Identifier)?  ("["  Seq{Type}  "]")?  ("[]" | "*" | "&")*
+//Type      = Identifier  ("+"  Identifier)*  ("["  Seq{Type}  "]")?  ("[]" | "*" | "&")*
 //Inst      = (Type  Id  "=")?  InstBody
 //InstBody  = 
 //    "goto"  (Label | (Value "?" Label ":" Label))
@@ -73,7 +73,7 @@ internal class AstParser
         return new BlockNode(label, code);
     }
 
-    //Type = Identifier  ("+"  Identifier)?  ("["  Seq{Type}  "]")?  ("[]" | "*" | "&")*
+    //Type = Identifier  ("+"  Identifier)*  ("["  Seq{Type}  "]")?  ("[]" | "*" | "&")*
     // ~ "NS.A`1+B`1[int[], int][]&"  ->  "NS.A.B<int[], int>[]&"
     //This loosely follows I.10.7.2 "Type names and arity encoding"
     public TypeDesc ParseType()
@@ -275,7 +275,7 @@ internal class AstParser
         var name = _lexer.ExpectId();
 
         //GenArgs = ("<" Seq{Type} ">")?
-        var genPars = ImmutableArray.CreateBuilder<TypeDesc>();
+        var genPars = new List<TypeDesc>();
         if (_lexer.IsNext(TokenType.LAngle)) {
             ParseDelimSeq(TokenType.LAngle, TokenType.RAngle, () => {
                 genPars.Add(ParseType());
@@ -283,18 +283,18 @@ internal class AstParser
         }
         //Call    = "(" Seq{CallArg}? ")"
         //CallArg = ("this" | Type)  ":"  Value
-        var pars = ImmutableArray.CreateBuilder<TypeDesc>();
+        var pars = new List<TypeDesc>();
         ParseDelimSeq(TokenType.LParen, TokenType.RParen, () => {
             pars.Add(_lexer.MatchKeyword("this") ? ownerType : ParseType());
             _lexer.Expect(TokenType.Colon);
             instOpers.Add(ParseValue());
         });
 
-        var method = ownerType.FindMethod(name, new MethodSig(retType, pars.TakeImmutable(), genPars.Count));
+        var method = ownerType.FindMethod(name, new MethodSig(retType, pars, genPars.Count));
         if (method == null) {
             _lexer.Error("Method could not be found", start);
         } else if (genPars.Count > 0) {
-            method = method.GetSpec(new GenericContext(methodArgs: genPars.TakeImmutable()));
+            method = method.GetSpec(new GenericContext(methodArgs: genPars));
         }
         instOpers.Insert(0, new BoundNode(method!));
     }

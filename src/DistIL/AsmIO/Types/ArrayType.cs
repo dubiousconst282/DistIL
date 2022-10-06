@@ -109,7 +109,7 @@ public class MDArrayMethod : MethodDesc
             Kind.RangeCtor => (PrimType.Void, CreateParams(dims * 2)),
             Kind.Get       => (type.ElemType, CreateParams(dims)),
             Kind.Set       => (PrimType.Void, CreateParams(dims, true)),
-            Kind.Address   => (new ByrefType(type.ElemType), CreateParams(dims)),
+            Kind.Address   => (type.ElemType.CreateByref(), CreateParams(dims)),
         };
 #pragma warning restore format
 
@@ -118,12 +118,12 @@ public class MDArrayMethod : MethodDesc
             var b = ImmutableArray.CreateBuilder<ParamDef>(count + (isSetter ? 2 : 1));
             b.Add(new ParamDef(type, 0, "this"));
             for (int i = 0; i < count; i++) {
-                b.Add(new ParamDef(PrimType.Int32, i + 1));
+                b.Add(new ParamDef(PrimType.Int32, i + 1, "idx" + i));
             }
             if (isSetter) {
-                b.Add(new ParamDef(type.ElemType, count + 1));
+                b.Add(new ParamDef(type.ElemType, count + 1, "value"));
             }
-            return b.ToImmutable();
+            return b.MoveToImmutable();
         }
     }
 }

@@ -9,12 +9,10 @@ internal class ModuleLoader
 {
     public readonly PEReader _pe;
     public readonly MetadataReader _reader;
-    private readonly ModuleResolver _resolver;
+    public readonly ModuleResolver _resolver;
     public readonly TypeProvider _typeProvider;
     public readonly ModuleDef _mod;
-    private Entity[] _entities; //entities laid out linearly
-    private (int Start, int End)[] _entityRanges; //inclusive range in _entities for each TableIndex
-    private int _entityIdx; //current index in _entities for Add()
+    private readonly EntityList _entities;
 
     public ModuleLoader(PEReader pe, ModuleResolver resolver, ModuleDef mod)
     {
@@ -23,13 +21,7 @@ internal class ModuleLoader
         _resolver = resolver;
         _typeProvider = new TypeProvider(this);
         _mod = mod;
-
-        int numEntities = 0;
-        foreach (var table in s_EntityTables) {
-            numEntities += _reader.GetTableRowCount(table);
-        }
-        _entities = new Entity[numEntities];
-        _entityRanges = new (int, int)[64];
+        _entities = new EntityList(_reader);
 
         var asmDef = _reader.GetAssemblyDefinition();
         _mod.AsmName = asmDef.GetAssemblyName();
@@ -41,99 +33,54 @@ internal class ModuleLoader
 
     public void Load()
     {
-        //Module loading consists of two passes through the defined types:
-        // 1. Create the entities, so they can be referenced while loading others
-        // 2. Load remaining metadata (members, base type, ...)
+        //Modules are loaded via several passes over the unstructured data provided by SRM.
+        //First we create all entities with as much data as possible (so that dependents can refer them),
+        //then we progressively fill remaining properties.
         CreateTypes();
         LoadTypes();
+        LoadCustomAttribs();
     }
 
     private void CreateTypes()
     {
-        foreach (var handle in _reader.AssemblyReferences) {
-            var info = _reader.GetAssemblyReference(handle);
-            var entity = _resolver.Resolve(info.GetAssemblyName());
-            AddEntity(handle, entity);
-            _mod.AssemblyRefs.Add(entity);
-        }
-        foreach (var handle in _reader.TypeReferences) {
-            var info = _reader.GetTypeReference(handle);
-            AddEntity(handle, ResolveType(info));
-        }
+        _entities.Create<AssemblyReference>(info => _resolver.Resolve(info.GetAssemblyName(), throwIfNotFound: true));
+        _entities.Create<TypeReference>(ResolveTypeRef);
+        _entities.Create<TypeDefinition>(CreateType);
+        _entities.Create<TypeSpecification>(info => info.DecodeSignature(_typeProvider, default));
+
         foreach (var handle in _reader.ExportedTypes) {
-            var entity = ResolveExportedType(handle);
-            _mod.ExportedTypes.Add(entity);
+            _mod.ExportedTypes.Add(ResolveExportedType(handle));
         }
-
-        foreach (var handle in _reader.TypeDefinitions) {
-            var info = _reader.GetTypeDefinition(handle);
-            var entity = CreateType(info);
-            AddEntity(handle, entity);
-            _mod.TypeDefs.Add(entity);
-        }
-        //We need to load type specs because they may get lookedup by GetEntity()
-        int numTypeSpecs = _reader.GetTableRowCount(TableIndex.TypeSpec);
-        for (int rowId = 0; rowId < numTypeSpecs; rowId++) {
-            var handle = MetadataTokens.TypeSpecificationHandle(rowId + 1);
-            var info = _reader.GetTypeSpecification(handle);
-            AddEntity(handle, info.DecodeSignature(_typeProvider, default));
-        }
+        //If we're loading CoreLib, SysTypes will be null. Create it if that's the case
+        var coreLib = _resolver.CoreLib;
+        _mod.SysTypes = coreLib.SysTypes ?? new SystemTypes(coreLib);
     }
-
     private void LoadTypes()
     {
-        //Kind/IsValueType depends on SysTypes
-        var coreLib = FindCoreLib();
-        _mod.CoreLib = coreLib;
-        _mod.SysTypes = coreLib == _mod ? new SystemTypes(coreLib) : coreLib.SysTypes;
+        //Load props like BaseType/Kind (CreateMethod() depends on IsValueType)
+        _entities.Iterate((TypeDef entity, TypeDefinition info) => entity.Load1(this, info));
 
-        //Load members, and props like BaseType/Kind
-        foreach (var handle in _reader.TypeDefinitions) {
-            var entity = GetType(handle);
-            var info = _reader.GetTypeDefinition(handle);
-            entity.Load(this, info);
-        }
+        _entities.Create<FieldDefinition>(CreateField);
+        _entities.Create<MethodDefinition>(CreateMethod);
 
-        foreach (var handle in _reader.FieldDefinitions) {
-            var info = _reader.GetFieldDefinition(handle);
-            var entity = CreateField(info);
-            AddEntity(handle, entity);
-            entity.Load(this, info);
-        }
-        foreach (var handle in _reader.MethodDefinitions) {
-            var info = _reader.GetMethodDefinition(handle);
-            var entity = CreateMethod(info);
-            AddEntity(handle, entity);
-        }
-        //Following depend on props like BaseType/Kind
-        foreach (var handle in _reader.TypeDefinitions) {
-            var entity = GetType(handle);
-            var info = _reader.GetTypeDefinition(handle);
-            entity.Load2(this, info);
-        }
-        foreach (var handle in _reader.MemberReferences) {
-            var info = _reader.GetMemberReference(handle);
-            Entity entity = info.GetKind() switch {
+        //Populate types with their members
+        _entities.Iterate((TypeDef entity, TypeDefinition info) => entity.Load2(this, info));
+        //Resolve MemberRefs (they depend on type members)
+        _entities.Create<MemberReference>(info => {
+            return info.GetKind() switch {
                 MemberReferenceKind.Field => ResolveField(info),
                 MemberReferenceKind.Method => ResolveMethod(info)
             };
-            AddEntity(handle, entity);
-        }
-        int numMethodSpecs = _reader.GetTableRowCount(TableIndex.MethodSpec);
-        for (int rowId = 0; rowId < numMethodSpecs; rowId++) {
-            var handle = MetadataTokens.MethodSpecificationHandle(rowId + 1);
-            var info = _reader.GetMethodSpecification(handle);
+        });
+        //Create MethodSpecs (they may reference MemberRefs)
+        _entities.Create<MethodSpecification>(info => {
             var method = (MethodDefOrSpec)GetEntity(info.Method);
             var genArgs = info.DecodeSignature(_typeProvider, default);
-            AddEntity(handle, new MethodSpec(method.DeclaringType, method.Definition, genArgs));
-        }
-        foreach (var handle in _reader.MethodDefinitions) {
-            var info = _reader.GetMethodDefinition(handle);
-            var entity = GetMethod(handle);
-            entity.Load(this, info);
-        }
-        var asmDef = _reader.GetAssemblyDefinition();
-        _mod.CustomAttribs = DecodeCustomAttribs(asmDef.GetCustomAttributes());
+            return new MethodSpec(method.DeclaringType, method.Definition, genArgs);
+        });
+        //Populate members
+        _entities.Iterate((FieldDef entity, FieldDefinition info) => entity.Load(this, info));
+        _entities.Iterate((MethodDef entity, MethodDefinition info) => entity.Load(this, info));
 
         int entryPointToken = _pe.PEHeaders.CorHeader?.EntryPointTokenOrRelativeVirtualAddress ?? 0;
         if (entryPointToken != 0) {
@@ -141,15 +88,35 @@ internal class ModuleLoader
             _mod.EntryPoint = (MethodDef)GetEntity(handle);
         }
     }
+    private void LoadCustomAttribs()
+    {
+        _entities.Iterate<TypeDef, TypeDefinition>((type, info) => {
+            FillCustomAttribs(info.GetCustomAttributes(), new() { Entity = type });
+            //TODO: interface attribs
+            //TODO: generic attribs
+        });
+
+        _entities.Iterate<MethodDef, MethodDefinition>((method, info) => {
+            FillCustomAttribs(info.GetCustomAttributes(), new() { Entity = method });
+            //TODO: param attribs
+            //TODO: generic attribs
+        });
+
+        _entities.Iterate<FieldDef, FieldDefinition>((field, info)
+            => FillCustomAttribs(info.GetCustomAttributes(), new() { Entity = field }));
+    }
 
     private TypeDef CreateType(TypeDefinition info)
     {
-        return new TypeDef(
-            _mod, _reader.GetOptString(info.Namespace),
+        var type = new TypeDef(
+            _mod,
+            _reader.GetOptString(info.Namespace),
             _reader.GetString(info.Name),
             info.Attributes,
-            CreatePlaceholderGenericArgs(info.GetGenericParameters(), false)
+            CreateGenericParams(info.GetGenericParameters(), false)
         );
+        _mod.TypeDefs.Add(type);
+        return type;
     }
     private FieldDef CreateField(FieldDefinition info)
     {
@@ -181,32 +148,32 @@ internal class ModuleLoader
             pars.Add(new ParamDef(thisType, 0, "this"));
         }
         foreach (var paramType in sig.ParameterTypes) {
-            pars.Add(new ParamDef(paramType, pars.Count));
+            pars.Add(new ParamDef(paramType, pars.Count, ""));
         }
         return new MethodDef(
             declaringType, 
-            sig.ReturnType, pars.ToImmutable(),
+            sig.ReturnType, pars.MoveToImmutable(),
             name, 
             attribs, info.ImplAttributes,
-            genericParams: CreatePlaceholderGenericArgs(info.GetGenericParameters(), true)
+            genericParams: CreateGenericParams(info.GetGenericParameters(), true)
         );
     }
 
-    private ModuleDef FindCoreLib()
+    private ImmutableArray<TypeDesc> CreateGenericParams(GenericParameterHandleCollection handleList, bool isForMethod)
     {
-        foreach (var asm in _mod.AssemblyRefs) {
-            var name = asm.AsmName.Name;
-            if (name is "System.Runtime" or "System.Private.CoreLib") {
-                return asm;
-            }
+        if (handleList.Count == 0) {
+            return ImmutableArray<TypeDesc>.Empty;
         }
-        if (_mod.AsmName.Name == "System.Private.CoreLib") {
-            return _mod;
+        var builder = ImmutableArray.CreateBuilder<TypeDesc>(handleList.Count);
+        foreach (var handle in handleList) {
+            var info = _reader.GetGenericParameter(handle);
+            string name = _reader.GetString(info.Name);
+            builder.Add(new GenericParamType(info.Index, isForMethod, name, info.Attributes));
         }
-        throw new NotImplementedException();
+        return builder.TakeImmutable();
     }
 
-    private TypeDef ResolveType(TypeReference info)
+    private TypeDef ResolveTypeRef(TypeReference info)
     {
         string? ns = _reader.GetOptString(info.Namespace);
         string name = _reader.GetString(info.Name);
@@ -274,53 +241,54 @@ internal class ModuleLoader
         throw new InvalidOperationException($"Could not resolve referenced field '{rootParent}::{name}'");
     }
 
-    public ImmutableArray<TypeDesc> DecodeGenericParams(GenericParameterHandleCollection handles)
+    public ImmutableArray<TypeDesc> DecodeGenericConstraints(GenericParameterConstraintHandleCollection handleList)
     {
-        if (handles.Count == 0) {
+        if (handleList.Count == 0) {
             return ImmutableArray<TypeDesc>.Empty;
         }
-        var builder = ImmutableArray.CreateBuilder<TypeDesc>(handles.Count);
-        foreach (var parHandle in handles) {
-            var par = _reader.GetGenericParameter(parHandle);
-            bool isMethodParam = par.Parent.Kind is
-                HandleKind.MethodDefinition or
-                HandleKind.MethodSpecification or
-                HandleKind.MemberReference;
-            var name = _reader.GetString(par.Name);
-            var constraints = ImmutableArray.CreateBuilder<TypeDesc>();
-            foreach (var constraintHandle in par.GetConstraints()) {
-                var constraint = _reader.GetGenericParameterConstraint(constraintHandle);
-                //TODO: constraint.GetCustomAttributes()
-                constraints.Add((TypeDesc)GetEntity(constraint.Type));
-            }
-            builder.Add(new GenericParamType(par.Index, isMethodParam, name, constraints.ToImmutable()));
+        var builder = ImmutableArray.CreateBuilder<TypeDesc>(handleList.Count);
+        foreach (var handle in handleList) {
+            var info = _reader.GetGenericParameterConstraint(handle);
+            var constraint = (TypeDesc)GetEntity(info.Type);
+            builder.Add(constraint);
         }
-        return builder.ToImmutable();
+        return builder.MoveToImmutable();
     }
-    public ImmutableArray<CustomAttrib> DecodeCustomAttribs(CustomAttributeHandleCollection handles)
+    public void FillGenericParams(ImmutableArray<TypeDesc> genPars, GenericParameterHandleCollection handleList)
     {
-        var attribs = ImmutableArray.CreateBuilder<CustomAttrib>(handles.Count);
-        return attribs.ToImmutable();
+        foreach (var handle in handleList) {
+            var info = _reader.GetGenericParameter(handle);
+            var param = (GenericParamType)genPars[info.Index];
+            param.Load(this, info);
+        }
+    }
 
-        foreach (var handle in handles) {
+    private void FillCustomAttribs(CustomAttributeHandleCollection handleList, in CustomAttribLink link)
+    {
+        if (handleList.Count == 0) return;
+
+        var attribs = new CustomAttrib[handleList.Count];
+        int index = 0;
+
+        foreach (var handle in handleList) {
             var attrib = _reader.GetCustomAttribute(handle);
             var value = attrib.DecodeValue(_typeProvider);
 
-            attribs.Add(new CustomAttrib() {
+            attribs[index++] = new CustomAttrib() {
                 Constructor = (MethodDesc)GetEntity(attrib.Constructor),
-                FixedArgs = value.FixedArguments.Select(a => new CustomAttribArg() {
+                FixedArgs = value.FixedArguments.Select(a => new CustomAttrib.Argument() {
                     Type = a.Type,
                     Value = a.Value
                 }).ToImmutableArray(),
-                NamedArgs = value.NamedArguments.Select(a => new CustomAttribArg() {
+                NamedArgs = value.NamedArguments.Select(a => new CustomAttrib.Argument() {
                     Type = a.Type,
                     Value = a.Value,
                     Name = a.Name!,
-                    Kind = (CustomAttribArgKind)a.Kind
+                    Kind = (CustomAttrib.ArgumentKind)a.Kind
                 }).ToImmutableArray()
-            });
+            };
         }
-        return attribs.ToImmutable();
+        _mod._customAttribs.Add(link, attribs);
     }
     public FuncPtrType DecodeMethodSig(StandaloneSignatureHandle handle)
     {
@@ -366,59 +334,127 @@ internal class ModuleLoader
         );
     }
 
-    private ImmutableArray<TypeDesc> CreatePlaceholderGenericArgs(GenericParameterHandleCollection pars, bool isForMethod)
-    {
-        if (pars.Count == 0) {
-            return ImmutableArray<TypeDesc>.Empty;
-        }
-        var builder = ImmutableArray.CreateBuilder<TypeDesc>(pars.Count);
-        for (int i = 0; i < pars.Count; i++) {
-            builder.Add(new GenericParamType(i, isForMethod));
-        }
-        return builder.ToImmutable();
-    }
-
-    //Adds an entity to the map. This will break if entities of the same type are not added sequentially.
-    private void AddEntity(EntityHandle handle, Entity entity)
-    {
-        var tableIdx = (int)handle.Kind;
-        Assert(Array.IndexOf(s_EntityTables, (TableIndex)tableIdx) >= 0);
-
-        _entities[_entityIdx] = entity;
-        ref var range = ref _entityRanges[tableIdx];
-        if (range.Start == 0) {
-            range.Start = _entityIdx + 1;
-        }
-        range.End = _entityIdx;
-        _entityIdx++;
-    }
-    public Entity GetEntity(EntityHandle handle)
-    {
-        var tableIdx = (int)handle.Kind;
-        Assert(Array.IndexOf(s_EntityTables, (TableIndex)tableIdx) >= 0);
-
-        var (start, end) = _entityRanges[tableIdx];
-        int index = start + MetadataTokens.GetRowNumber(handle) - 2; //row ids and start index are 1 based
-        Ensure(index <= end);
-
-        if (handle.Kind == HandleKind.TypeDefinition) {
-            var info = _reader.GetTypeDefinition((TypeDefinitionHandle)handle);
-            var name = _reader.GetString(info.Name);
-            Assert(name == ((TypeDef)_entities[index]).Name);
-        }
-        return _entities[index];
-    }
+    public Entity GetEntity(EntityHandle handle) => _entities.Get(handle);
     public TypeDef GetType(TypeDefinitionHandle handle) => (TypeDef)GetEntity(handle);
     public FieldDef GetField(FieldDefinitionHandle handle) => (FieldDef)GetEntity(handle);
     public MethodDef GetMethod(MethodDefinitionHandle handle) => (MethodDef)GetEntity(handle);
 
-    //Entity tables we're interested in
-    static TableIndex[] s_EntityTables = {
-        TableIndex.AssemblyRef,
-        TableIndex.TypeRef, TableIndex.MemberRef,
-        TableIndex.TypeDef, TableIndex.TypeSpec,
-        TableIndex.Field,
-        TableIndex.MethodDef, TableIndex.MethodSpec,
-        TableIndex.Property, TableIndex.Event
-    };
+    class EntityList
+    {
+        static readonly TableIndex[] s_Tables = {
+            TableIndex.AssemblyRef,
+            TableIndex.TypeRef, TableIndex.MemberRef,
+            TableIndex.TypeDef, TableIndex.TypeSpec,
+            TableIndex.Field,
+            TableIndex.MethodDef, TableIndex.MethodSpec
+        };
+        readonly MetadataReader _reader;
+        readonly Entity[] _entities; //entities laid out linearly
+        readonly (int Start, int End)[] _ranges; //inclusive range in _entities for each TableIndex
+        int _index; //current index in _entities for Create()
+
+        public EntityList(MetadataReader reader)
+        {
+            _reader = reader;
+            _entities = new Entity[s_Tables.Sum(reader.GetTableRowCount)];
+            _ranges = new (int, int)[s_Tables.Max(v => (int)v) + 1];
+        }
+
+        public void Create<TInfo>(Func<TInfo, Entity> factory)
+        {
+            var table = GetTable<TInfo>();
+            int numRows = _reader.GetTableRowCount(table);
+
+            var (start, end) = _ranges[(int)table] = (_index, _index + numRows);
+            _index = end;
+
+            for (int i = 0; i < numRows; i++) {
+                _entities[start + i] = factory(GetInfo<TInfo>(_reader, i + 1));
+            }
+        }
+        public Entity Get(EntityHandle handle)
+        {
+            var tableIdx = (int)handle.Kind;
+            Assert(Array.IndexOf(s_Tables, (TableIndex)tableIdx) >= 0);
+
+            var (start, end) = _ranges[tableIdx];
+            int index = start + MetadataTokens.GetRowNumber(handle) - 1; //rows are 1 based
+            Ensure(index < end);
+
+            //FIXME: Create() will update the ranges before populating the table,
+            //so that ResolveTypeRef() can call Get() with a nested type.
+            //There must be a better way to do that...
+            return _entities[index] 
+                ?? throw new InvalidOperationException("Table entry is not yet populated");
+        }
+        public void Iterate<TEntity, TInfo>(Action<TEntity, TInfo> cb)
+        {
+            var table = GetTable<TInfo>();
+            Assert(Array.IndexOf(s_Tables, table) >= 0);
+
+            var (start, end) = _ranges[(int)table];
+            for (int i = 0; i < end - start; i++) {
+                var entity = (TEntity)(object)_entities[start + i];
+                var info = GetInfo<TInfo>(_reader, i + 1);
+                cb(entity, info);
+            }
+        }
+
+        private static TInfo GetInfo<TInfo>(MetadataReader reader, int rowId)
+        {
+            if (typeof(TInfo) == typeof(AssemblyReference)) {
+                return (TInfo)(object)reader.GetAssemblyReference(MetadataTokens.AssemblyReferenceHandle(rowId));
+            }
+            if (typeof(TInfo) == typeof(TypeReference)) {
+                return (TInfo)(object)reader.GetTypeReference(MetadataTokens.TypeReferenceHandle(rowId));
+            }
+            if (typeof(TInfo) == typeof(TypeDefinition)) {
+                return (TInfo)(object)reader.GetTypeDefinition(MetadataTokens.TypeDefinitionHandle(rowId));
+            }
+            if (typeof(TInfo) == typeof(TypeSpecification)) {
+                return (TInfo)(object)reader.GetTypeSpecification(MetadataTokens.TypeSpecificationHandle(rowId));
+            }
+            if (typeof(TInfo) == typeof(FieldDefinition)) {
+                return (TInfo)(object)reader.GetFieldDefinition(MetadataTokens.FieldDefinitionHandle(rowId));
+            }
+            if (typeof(TInfo) == typeof(MethodDefinition)) {
+                return (TInfo)(object)reader.GetMethodDefinition(MetadataTokens.MethodDefinitionHandle(rowId));
+            }
+            if (typeof(TInfo) == typeof(MethodSpecification)) {
+                return (TInfo)(object)reader.GetMethodSpecification(MetadataTokens.MethodSpecificationHandle(rowId));
+            }
+            if (typeof(TInfo) == typeof(MemberReference)) {
+                return (TInfo)(object)reader.GetMemberReference(MetadataTokens.MemberReferenceHandle(rowId));
+            }
+            throw new NotImplementedException();
+        }
+        private static TableIndex GetTable<TInfo>()
+        {
+            if (typeof(TInfo) == typeof(AssemblyReference)) {
+                return TableIndex.AssemblyRef;
+            }
+            if (typeof(TInfo) == typeof(TypeReference)) {
+                return TableIndex.TypeRef;
+            }
+            if (typeof(TInfo) == typeof(TypeDefinition)) {
+                return TableIndex.TypeDef;
+            }
+            if (typeof(TInfo) == typeof(TypeSpecification)) {
+                return TableIndex.TypeSpec;
+            }
+            if (typeof(TInfo) == typeof(FieldDefinition)) {
+                return TableIndex.Field;
+            }
+            if (typeof(TInfo) == typeof(MethodDefinition)) {
+                return TableIndex.MethodDef;
+            }
+            if (typeof(TInfo) == typeof(MethodSpecification)) {
+                return TableIndex.MethodSpec;
+            }
+            if (typeof(TInfo) == typeof(MemberReference)) {
+                return TableIndex.MemberRef;
+            }
+            throw new NotImplementedException();
+        }
+    }
 }

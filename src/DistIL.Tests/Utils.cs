@@ -8,7 +8,7 @@ class Utils
     public static MethodBody CreateDummyMethodBody(TypeDesc? retType = null, params TypeDesc[] paramTypes)
     {
         var pars = paramTypes
-            .Select((t, i) => new ParamDef(t, i))
+            .Select((t, i) => new ParamDef(t, i, "par" + i))
             .ToImmutableArray();
         var def = new MethodDef(null!, retType ?? PrimType.Void, pars, "Dummy");
         return new MethodBody(def);

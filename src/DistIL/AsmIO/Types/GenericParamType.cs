@@ -1,6 +1,7 @@
 namespace DistIL.AsmIO;
 
 using System.Reflection;
+using System.Reflection.Metadata;
 
 using DistIL.IR;
 
@@ -14,20 +15,24 @@ public class GenericParamType : TypeDesc
     public override string? Namespace => null;
     public override string Name { get; }
 
-    public ImmutableArray<TypeDesc> Constraints { get; }
+    public ImmutableArray<TypeDesc> Constraints { get; private set; }
     public GenericParameterAttributes Attribs { get; }
 
     public int Index { get; }
     public bool IsMethodParam { get; }
 
-    public GenericParamType(int index, bool isMethodParam, string? name = null, ImmutableArray<TypeDesc> constraints = default)
+    public GenericParamType(int index, bool isMethodParam, string? name = null, GenericParameterAttributes attribs = 0, ImmutableArray<TypeDesc> constraints = default)
     {
         Index = index;
         IsMethodParam = isMethodParam;
         Name = name ?? Index.ToString();
-        if (!constraints.IsDefault) {
-            Constraints = constraints;
-        }
+        Attribs = attribs;
+        Constraints = constraints.EmptyIfDefault();
+    }
+
+    internal void Load(ModuleLoader loader, GenericParameter info)
+    {
+        Constraints = loader.DecodeGenericConstraints(info.GetConstraints());
     }
 
     public override void Print(PrintContext ctx, bool includeNs = true)
@@ -39,7 +44,7 @@ public class GenericParamType : TypeDesc
     public override TypeDesc GetSpec(GenericContext context)
     {
         var args = IsMethodParam ? context.MethodArgs : context.TypeArgs;
-        return Index < args.Length ? args[Index] : this;
+        return Index < args.Count ? args[Index] : this;
     }
 
     public override bool Equals(TypeDesc? other)

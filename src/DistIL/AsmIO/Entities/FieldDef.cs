@@ -70,10 +70,9 @@ public class FieldDef : FieldDefOrSpec
         if (Attribs.HasFlag(FieldAttributes.HasFieldRVA)) {
             int rva = info.GetRelativeVirtualAddress();
             var data = loader._pe.GetSectionData(rva);
-            int size = FieldDef.GetMappedDataSize(Type);
+            int size = GetMappedDataSize(Type);
             unsafe { MappedData = new Span<byte>(data.Pointer, size).ToArray(); }
         }
-        CustomAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
         //TODO: info.GetMarshallingDescriptor()
     }
 

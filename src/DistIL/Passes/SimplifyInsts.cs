@@ -9,6 +9,13 @@ using Cmp = IR.CompareOp;
 /// <summary> Implements peepholes/combining/scalar transforms that don't affect control flow. </summary>
 public partial class SimplifyInsts : MethodPass
 {
+    readonly TypeDesc? t_Delegate;
+
+    public SimplifyInsts(ModuleDef mod)
+    {
+        t_Delegate = mod.Import(typeof(Delegate));
+    }
+
     public override void Run(MethodTransformContext ctx)
     {
         int itr = 0;

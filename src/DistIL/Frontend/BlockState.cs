@@ -759,9 +759,9 @@ internal class BlockState
         Push(new IntrinsicInst(IntrinsicId.LoadToken, resultType, entity));
     }
 
-    private void ImportIsInst(TypeDesc type)
+    private void ImportIsInst(TypeDesc destType)
     {
-        Push(new IntrinsicInst(IntrinsicId.IsInstance, PrimType.Bool, Pop(), type));
+        Push(new IntrinsicInst(IntrinsicId.AsInstance, destType, Pop()));
     }
     private void ImportCast(TypeDesc destType)
     {

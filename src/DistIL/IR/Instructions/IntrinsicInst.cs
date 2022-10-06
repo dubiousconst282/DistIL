@@ -62,7 +62,7 @@ public enum IntrinsicId
     SizeOf,         //uint sizeof<T>()
 
     CastClass,      //R castclass<T, R>(T obj)
-    IsInstance,     //bool isinst<T>(T obj)
+    AsInstance,     //T? isinst<T>(object obj)
 
     LoadToken,
 

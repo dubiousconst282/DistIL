@@ -179,9 +179,9 @@ partial class ILGenerator
                 _asm.Emit(ILCode.Ldtoken, inst.Args[0]);
                 break;
             }
-            case IntrinsicId.IsInstance: {
+            case IntrinsicId.AsInstance: {
                 Push(inst.Args[0]);
-                _asm.Emit(ILCode.Isinst, inst.Args[1]);
+                _asm.Emit(ILCode.Isinst, inst.ResultType);
                 break;
             }
             case IntrinsicId.CastClass: {

@@ -115,7 +115,7 @@ internal class ModuleWriter
                 case MethodSpec { GenericParams.Length: > 0 } method: {
                     return _builder.AddMethodSpecification(
                         GetHandle(method.Definition),
-                        EncodeSpecSig(method)
+                        EncodeMethodSig(method)
                     );
                 }
                 case MethodDefOrSpec method: {
@@ -190,7 +190,7 @@ internal class ModuleWriter
         }
         int propIdx = 0;
         foreach (var prop in type.Properties) {
-            var propHandle = _builder.AddProperty(prop.Attribs, AddString(prop.Name), EncodeMethodSig(prop.Signature));
+            var propHandle = _builder.AddProperty(prop.Attribs, AddString(prop.Name), EncodePropertySig(prop));
 
             Link(propHandle, prop.Getter, MethodSemanticsAttributes.Getter);
             Link(propHandle, prop.Setter, MethodSemanticsAttributes.Setter);
@@ -426,10 +426,8 @@ internal class ModuleWriter
             //TODO: callconv
             var pars = method.StaticParams;
             b.MethodSignature(default, method.GenericParams.Length, method.IsInstance)
-                .Parameters(
-                    pars.Length,
-                    out var retTypeEnc, out var parsEnc
-                );
+                .Parameters(pars.Length, out var retTypeEnc, out var parsEnc);
+
             EncodeType(retTypeEnc.Type(), method.ReturnType);
             foreach (var par in pars) {
                 var parEnc = parsEnc.AddParameter();
@@ -437,29 +435,28 @@ internal class ModuleWriter
             }
         });
     }
-
-    private BlobHandle EncodeMethodSig(MethodSig sig)
+    private BlobHandle EncodeMethodSig(MethodSpec method)
     {
         return EncodeSig(b => {
-            //TODO: callconv, genericParamCount
-            var pars = sig.ParamTypes;
-            b.MethodSignature(default, sig.NumGenericParams, sig.IsInstance)
-                .Parameters(pars.Count, out var retTypeEnc, out var parsEnc);
-            EncodeType(retTypeEnc.Type(), sig.ReturnType);
-            foreach (var par in pars) {
-                var parEnc = parsEnc.AddParameter();
-                EncodeType(parEnc.Type(), par);
+            var genArgEnc = b.MethodSpecificationSignature(method.GenericParams.Length);
+            
+            foreach (var par in method.GenericParams) {
+                var parEnc = genArgEnc.AddArgument();
+                EncodeType(parEnc, par);
             }
         });
     }
 
-    private BlobHandle EncodeSpecSig(MethodSpec method)
+    private BlobHandle EncodePropertySig(PropertyDef prop)
     {
         return EncodeSig(b => {
-            var genArgEnc = b.MethodSpecificationSignature(method.GenericParams.Length);
-            foreach (var par in method.GenericParams) {
-                var parEnc = genArgEnc.AddArgument();
-                EncodeType(parEnc, par);
+            b.PropertySignature(prop.IsInstance)
+                .Parameters(prop.ParamTypes.Count, out var retTypeEnc, out var parsEnc);
+
+            EncodeType(retTypeEnc.Type(), prop.Type);
+            foreach (var par in prop.ParamTypes) {
+                var parEnc = parsEnc.AddParameter();
+                EncodeType(parEnc.Type(), par);
             }
         });
     }

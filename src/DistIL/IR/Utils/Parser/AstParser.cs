@@ -266,7 +266,7 @@ internal class AstParser
         } while (_lexer.Match(TokenType.Comma));
     }
 
-    private void ParseCall(List<Node> instOpers, TypeDesc retType)
+    private void ParseCall(List<Node> opers, TypeDesc retType)
     {
         //Method = Type  "::"  Id  GenArgs  Call
         int start = _lexer.Peek().Position.Start;
@@ -284,19 +284,25 @@ internal class AstParser
         //Call    = "(" Seq{CallArg}? ")"
         //CallArg = ("this" | Type)  ":"  Value
         var pars = new List<TypeDesc>();
+        bool isInstance = false;
+
         ParseDelimSeq(TokenType.LParen, TokenType.RParen, () => {
-            pars.Add(_lexer.MatchKeyword("this") ? ownerType : ParseType());
+            if (_lexer.MatchKeyword("this")) {
+                isInstance = true;
+            } else {
+                pars.Add(ParseType());
+            }
             _lexer.Expect(TokenType.Colon);
-            instOpers.Add(ParseValue());
+            opers.Add(ParseValue());
         });
 
-        var method = ownerType.FindMethod(name, new MethodSig(retType, pars, genPars.Count));
+        var method = ownerType.FindMethod(name, new MethodSig(retType, pars, isInstance, genPars.Count));
         if (method == null) {
             _lexer.Error("Method could not be found", start);
         } else if (genPars.Count > 0) {
             method = method.GetSpec(new GenericContext(methodArgs: genPars));
         }
-        instOpers.Insert(0, new BoundNode(method!));
+        opers.Insert(0, new BoundNode(method!));
     }
 
     private FieldDesc? ParseField()

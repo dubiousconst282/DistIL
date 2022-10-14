@@ -118,7 +118,7 @@ public class ToArrayStage : ReductionStage
     {
         var mod = synther.Method.Definition.Module;
         var t_Array = mod.Import(typeof(Array));
-        var copyMethod = t_Array?.FindMethod("Copy", new MethodSig(PrimType.Void, t_Array, t_Array, PrimType.Int32));
+        var copyMethod = t_Array?.FindMethod("Copy", new MethodSig(PrimType.Void, new[] { t_Array, t_Array, PrimType.Int32 }));
         Ensure(copyMethod != null, "Missing Array.Copy() method");
         return copyMethod;
     }

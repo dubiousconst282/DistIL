@@ -1,9 +1,13 @@
 namespace DistIL.AsmIO;
 
-public struct GenericContext
+public readonly struct GenericContext
 {
+    public static readonly GenericContext Empty = new(Array.Empty<TypeDesc>(), Array.Empty<TypeDesc>());
+
     public IReadOnlyList<TypeDesc> TypeArgs { get; }
     public IReadOnlyList<TypeDesc> MethodArgs { get; }
+
+    public bool IsNull => TypeArgs == null && MethodArgs == null;
 
     public GenericContext(IReadOnlyList<TypeDesc>? typeArgs = null, IReadOnlyList<TypeDesc>? methodArgs = null)
     {
@@ -29,5 +33,13 @@ public struct GenericContext
             builder.Add(type.GetSpec(this));
         }
         return builder.MoveToImmutable();
+    }
+
+    public TypeDesc? GetArgument(int index, bool isMethodParam)
+    {
+        var args = isMethodParam ? MethodArgs : TypeArgs;
+        return args != null && index < args.Count
+            ? args[index]
+            : null;
     }
 }

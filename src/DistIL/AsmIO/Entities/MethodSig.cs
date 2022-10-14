@@ -2,52 +2,51 @@ namespace DistIL.AsmIO;
 
 using System.Reflection.Metadata;
 
+/// <summary> Represents the signature of a method declared in a type. </summary>
 public readonly struct MethodSig
 {
     public TypeDesc ReturnType { get; }
     public IReadOnlyList<TypeDesc> ParamTypes { get; }
     public int NumGenericParams { get; }
-    public bool IsInstance => _hdr.IsInstance;
+    public bool? IsInstance { get; }
 
-    readonly SignatureHeader _hdr;
-
-    public MethodSig(in MethodSignature<TypeDesc> srmSig)
+    internal MethodSig(in MethodSignature<TypeDesc> srmSig)
     {
         ReturnType = srmSig.ReturnType;
         ParamTypes = srmSig.ParameterTypes;
         NumGenericParams = srmSig.GenericParameterCount;
-        _hdr = srmSig.Header;
+        IsInstance = srmSig.Header.IsInstance;
     }
 
-    public MethodSig(TypeDesc retType, params TypeDesc[] paramTypes)
-    {
-        ReturnType = retType;
-        ParamTypes = paramTypes;
-        NumGenericParams = 0;
-    }
-
-    public MethodSig(TypeDesc retType, IReadOnlyList<TypeDesc> paramTypes, int numGenPars = 0)
+    /// <remarks> Note that <paramref name="paramTypes"/> should not include the instance type (`this` parameter). </remarks>
+    public MethodSig(TypeDesc retType, IReadOnlyList<TypeDesc> paramTypes, bool? isInstance = null, int numGenPars = 0)
     {
         ReturnType = retType;
         ParamTypes = paramTypes;
         NumGenericParams = numGenPars;
+        IsInstance = isInstance;
     }
 
-    public bool Equals(MethodDesc method)
+    public bool Matches(MethodDesc method, in GenericContext spec)
     {
-        if (method.ReturnType != ReturnType) {
+        return method.GenericParams.Length == NumGenericParams &&
+            (IsInstance == null || IsInstance == method.IsInstance) &&
+            method.ReturnType.GetSpec(spec) == ReturnType &&
+            CompareParams(method, spec);
+    }
+
+    private bool CompareParams(MethodDesc method, in GenericContext spec)
+    {
+        var pars1 = method.StaticParams;
+        var pars2 = ParamTypes;
+
+        if (pars1.Length != pars2.Count) {
             return false;
         }
-        if (NumGenericParams != method.GenericParams.Length) {
-            return false;
-        }
-        var p1 = method.StaticParams;
-        var p2 = ParamTypes;
-        if (p1.Length != p2.Count) {
-            return false;
-        }
-        for (int i = 0; i < p1.Length; i++) {
-            if (p1[i].Type != p2[i]) {
+        for (int i = 0; i < pars1.Length; i++) {
+            var type1 = pars1[i].Type.GetSpec(spec);
+            var type2 = pars2[i];
+            if (type1 != type2) {
                 return false;
             }
         }

@@ -25,7 +25,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     public virtual IReadOnlyList<MethodDesc> Methods { get; } = s_EmptyMethodList;
     public virtual IReadOnlyList<FieldDesc> Fields { get; } = s_EmptyFieldList;
 
-    /// <summary> Checks whether this type can be assigned to a variable of type `assigneeType`, assuming they are values on the evaluation stack. </summary>
+    /// <summary> Checks whether this type can be assigned to a variable of given type, assuming they are values on the evaluation stack. </summary>
     public bool IsStackAssignableTo(TypeDesc assigneeType)
     {
         var t1 = StackType;
@@ -39,7 +39,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     }
 
     /// <summary>
-    /// Creates a generic type instantiation with the context arguments, 
+    /// Creates a generic type instantiation with the given context as arguments, 
     /// or returns the current instance if it is not a generic type definition.
     /// </summary>
     public virtual TypeDesc GetSpec(GenericContext context) => this;
@@ -53,20 +53,20 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     /// <summary> Creates a <see cref="ByrefType"/> of the current type. </summary>
     public virtual ByrefType CreateByref() => new(this);
 
-    public virtual MethodDesc? FindMethod(string name, in MethodSig sig)
+    public virtual MethodDesc? FindMethod(string name, in MethodSig sig, in GenericContext spec = default)
     {
         foreach (var method in Methods) {
-            if (method.Name == name && sig.Equals(method)) {
+            if (method.Name == name && sig.Matches(method, spec)) {
                 return method;
             }
         }
         return null;
     }
 
-    public virtual FieldDesc? FindField(string name, TypeDesc? type = null)
+    public virtual FieldDesc? FindField(string name)
     {
         foreach (var field in Fields) {
-            if (field.Name == name && (type == null || field.Type == type)) {
+            if (field.Name == name) {
                 return field;
             }
         }

@@ -175,16 +175,15 @@ public class TypeSpec : TypeDefOrSpec
         GenericParams = args;
     }
 
-    public override MethodDesc? FindMethod(string name, in MethodSig sig)
+    public override MethodDesc? FindMethod(string name, in MethodSig sig, in GenericContext spec = default)
     {
-        //FIXME: this will fail for fully qualified signature (!0 -> int)
-        var method = Definition.FindMethod(name, sig);
+        var method = Definition.FindMethod(name, sig, spec.IsNull ? new GenericContext(this) : spec);
         return method != null ? new MethodSpec(this, (MethodDef)method) : null;
     }
 
-    public override FieldDesc? FindField(string name, TypeDesc? type = null)
+    public override FieldDesc? FindField(string name)
     {
-        var field = Definition.FindField(name, type);
+        var field = Definition.FindField(name);
         return field != null ? new FieldSpec(this, (FieldDef)field) : null;
     }
 

@@ -63,7 +63,7 @@ goto z ? BB_01 : BB_02";
             }, PrimType.Int32, "y"),
 
             new InstNode("call", new() {
-                new BoundNode(t_Math.FindMethod("Max", new MethodSig(PrimType.Int32, PrimType.Int32, PrimType.Int32))!),
+                new BoundNode(t_Math.FindMethod("Max", new MethodSig(PrimType.Int32, new[] { PrimType.Int32, PrimType.Int32 }))!),
                 new IdNode("y"),
                 new BoundNode(ConstInt.CreateI(0))
             }, PrimType.Int32, "z"),

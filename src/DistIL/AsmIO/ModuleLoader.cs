@@ -137,10 +137,10 @@ internal class ModuleLoader
         string name = _reader.GetString(info.Name);
 
         var attribs = info.Attributes;
-        bool isInst = (attribs & MethodAttributes.Static) == 0;
-        var pars = ImmutableArray.CreateBuilder<ParamDef>(sig.RequiredParameterCount + (isInst ? 1 : 0));
+        bool isInstance = (attribs & MethodAttributes.Static) == 0;
+        var pars = ImmutableArray.CreateBuilder<ParamDef>(sig.RequiredParameterCount + (isInstance ? 1 : 0));
 
-        if (isInst) {
+        if (isInstance) {
             var thisType = declaringType as TypeDesc;
             if (thisType.IsValueType) {
                 thisType = new ByrefType(thisType);
@@ -189,10 +189,7 @@ internal class ModuleLoader
         } else if (scope is TypeDef parent) {
             type = parent.GetNestedType(name);
         }
-        if (type == null) {
-            throw new InvalidOperationException($"Could not resolve referenced type '{ns}.{name}'");
-        }
-        return type;
+        return type ?? throw new InvalidOperationException($"Could not resolve referenced type '{ns}.{name}'");
     }
     private TypeDef ResolveExportedType(ExportedTypeHandle handle)
     {
@@ -217,11 +214,16 @@ internal class ModuleLoader
         var rootParent = (TypeDesc)GetEntity(info.Parent);
         string name = _reader.GetString(info.Name);
         var signature = new MethodSig(info.DecodeMethodSignature(_typeProvider, default));
+        var spec = GenericContext.Empty;
 
         for (var parent = rootParent; parent != null; parent = parent.BaseType) {
-            var method = parent.FindMethod(name, signature);
+            var method = parent.FindMethod(name, signature, spec);
             if (method != null) {
                 return method;
+            }
+            if (parent.BaseType is TypeSpec) {
+                //TODO: ResolveMethod() for generic type inheritance
+                throw new NotImplementedException();
             }
         }
         throw new InvalidOperationException($"Could not resolve referenced method '{rootParent}::{name}'");
@@ -230,10 +232,9 @@ internal class ModuleLoader
     {
         var rootParent = (TypeDesc)GetEntity(info.Parent);
         string name = _reader.GetString(info.Name);
-        var type = info.DecodeFieldSignature(_typeProvider, default);
 
         for (var parent = rootParent; parent != null; parent = parent.BaseType) {
-            var field = parent.FindField(name, type);
+            var field = parent.FindField(name);
             if (field != null) {
                 return field;
             }
@@ -307,7 +308,8 @@ internal class ModuleLoader
             : accs.Others.Select(GetMethod).ToImmutableArray();
 
         return new PropertyDef(
-            parent, _reader.GetString(info.Name), new MethodSig(sig),
+            parent, _reader.GetString(info.Name),
+            sig.ReturnType, sig.ParameterTypes, sig.Header.IsInstance,
             accs.Getter.IsNil ? null : GetMethod(accs.Getter),
             accs.Setter.IsNil ? null : GetMethod(accs.Setter),
             otherAccessors,

@@ -10,32 +10,31 @@ internal class BlockState
     private ModuleDef _mod => _body.Definition.Module;
 
     public BasicBlock Block { get; }
-    private ArrayStack<Value> _stack;
+    //A parent block that enters this one. Currently used to handle nested exception regions.
+    public BasicBlock EntryBlock;
+    readonly ArrayStack<Value> _stack;
 
     //Variables that were left in the stack after the execution of a predecessor block.
     private ArrayStack<PhiInst>? _entryStack;
-    private List<BlockState> _succStates = new();
+    readonly List<BlockState> _succStates = new();
 
     private InstFlags _prefixFlags = InstFlags.None;
-    private GuardInst? _activeGuard;
     private TypeDesc? _callConstraint;
+    readonly bool _isInsideEhRegion;
 
-    public BlockState(ILImporter importer)
+    public BlockState(ILImporter importer, bool isInsideEhRegion)
     {
         _importer = importer;
         _body = importer._body;
         Block = _body.CreateBlock();
+        EntryBlock = Block;
         _stack = new ArrayStack<Value>(_body.Definition.ILBody!.MaxStack);
+        _isInsideEhRegion = isInsideEhRegion;
     }
 
     public void Emit(Instruction inst)
     {
         Block.InsertLast(inst);
-    }
-
-    public void SetActiveGuard(GuardInst guard)
-    {
-        _activeGuard ??= guard;
     }
 
     public void PushNoEmit(Value value)
@@ -62,9 +61,9 @@ internal class BlockState
     private BasicBlock AddSucc(int offset)
     {
         var succ = _importer.GetBlock(offset);
-        Block.Connect(succ.Block);
+        Block.Connect(succ.EntryBlock);
         _succStates.Add(succ);
-        return succ.Block;
+        return succ.EntryBlock;
     }
     //Adds the last instruction in the block (a branch),
     //and propagate variables left on the stack to successor blocks.
@@ -77,6 +76,8 @@ internal class BlockState
     {
         var exitStack = _stack;
         if (exitStack.Count == 0) return;
+
+        Assert(EntryBlock == Block); //Blocks should not have both phis and guards
 
         foreach (var succ in _succStates) {
             var entryStack = succ._entryStack;
@@ -491,7 +492,7 @@ internal class BlockState
     {
         var variable = isArg ? _importer._argSlots[index] : _body.Definition.ILBody!.Locals[index];
         ref var flags = ref _importer._varFlags[index + (isArg ? 0 : _body.Args.Length)];
-        flags |= flagsToAdd | (_activeGuard != null ? VarFlags.UsedInsideTry : VarFlags.UsedOutsideTry);
+        flags |= flagsToAdd | (_isInsideEhRegion ? VarFlags.UsedInsideTry : VarFlags.UsedOutsideTry);
 
         if ((flags & VarFlags.CrossesTry) == VarFlags.CrossesTry || (flags & VarFlags.AddrTaken) != 0) {
             variable.IsExposed = true;
@@ -724,15 +725,15 @@ internal class BlockState
 
     private void ImportLeave(int targetOffset)
     {
-        Ensure(_activeGuard != null, "Cannot leave non protected region");
+        Ensure(_isInsideEhRegion, "Leave instruction found outside protected region");
         var targetBlock = AddSucc(targetOffset);
-        TerminateBlock(new LeaveInst(_activeGuard, targetBlock));
+        TerminateBlock(new LeaveInst(targetBlock));
     }
     private void ImportContinue(bool isFromFilter)
     {
-        Ensure(_activeGuard != null, "Cannot leave non protected region");
+        Ensure(_isInsideEhRegion, "Leave instruction found outside protected region");
         var filterResult = isFromFilter ? Pop() : null;
-        TerminateBlock(new ContinueInst(_activeGuard, filterResult));
+        TerminateBlock(new ContinueInst(filterResult));
     }
 
     private void ImportThrow(bool isRethrow)

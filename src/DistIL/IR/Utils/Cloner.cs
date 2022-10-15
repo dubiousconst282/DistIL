@@ -170,9 +170,7 @@ public class Cloner
 
         public void Visit(GuardInst inst) => Out(new GuardInst(inst.Kind, Remap(inst.HandlerBlock), inst.CatchType, inst.HasFilter ? Remap(inst.FilterBlock) : null));
         public void Visit(ThrowInst inst) => Out(new ThrowInst(inst.IsRethrow ? null : Remap(inst.Exception)));
-        public void Visit(LeaveInst inst) => Out(new LeaveInst((GuardInst)Remap(inst.ParentGuard), Remap(inst.Target)));
-        public void Visit(ContinueInst inst) => Out(inst.IsFromFilter
-            ? new ContinueInst((GuardInst)Remap(inst.ParentGuard), inst.FilterResult)
-            : new ContinueInst((GuardInst)Remap(inst.ParentGuard)));
+        public void Visit(LeaveInst inst) => Out(new LeaveInst(Remap(inst.Target)));
+        public void Visit(ContinueInst inst) => Out(new ContinueInst(inst.IsFromFilter ? Remap(inst.FilterResult) : null));
     }
 }

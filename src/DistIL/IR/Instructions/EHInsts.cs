@@ -1,7 +1,5 @@
 namespace DistIL.IR;
 
-using System.Text;
-
 /// <summary>
 /// Starts a protected region (try block) on the parent block.
 /// The result of this instruction is the thrown exception object, which is undefined outside handler/filter blocks.
@@ -27,7 +25,7 @@ public class GuardInst : Instruction
     public TypeDesc? CatchType => ResultType;
     public GuardKind Kind { get; set; }
 
-    public override string InstName => "try";
+    public override string InstName => "try " + Kind.ToString().ToLower();
     public override bool SafeToRemove => false;
     public override bool IsHeader => true;
 
@@ -35,14 +33,13 @@ public class GuardInst : Instruction
         : base(filterBlock == null ? new Value[] { handlerBlock } : new Value[] { handlerBlock, filterBlock })
     {
         Kind = kind;
-        ResultType = catchType ?? PrimType.Object;
+        ResultType = catchType ?? (HasFilter ? PrimType.Object : PrimType.Void);
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
     protected override void PrintOperands(PrintContext ctx)
     {
-        ctx.Print($" {Kind.ToString().ToLower()}", PrintToner.InstName);
         ctx.Print(" -> ");
         HandlerBlock.Print(ctx);
 
@@ -59,23 +56,19 @@ public enum GuardKind
     Catch, Fault, Finally
 }
 
-/// <summary> Leaves a protected region. </summary>
+/// <summary> Leaves the current protected region. </summary>
 public class LeaveInst : Instruction
 {
-    public GuardInst ParentGuard {
-        get => (GuardInst)Operands[0];
-        set => ReplaceOperand(0, value);
-    }
     public BasicBlock Target {
-        get => (BasicBlock)Operands[1];
-        set => ReplaceOperand(1, value);
+        get => (BasicBlock)Operands[0];
+        set => ReplaceOperand(0, value);
     }
 
     public override string InstName => "leave";
     public override bool IsBranch => true;
 
-    public LeaveInst(GuardInst parentGuard, BasicBlock target)
-        : base(parentGuard, target)
+    public LeaveInst(BasicBlock target)
+        : base(target)
     {
     }
 
@@ -84,29 +77,21 @@ public class LeaveInst : Instruction
 /// <summary> Leaves a filter/finally region. </summary>
 public class ContinueInst : Instruction
 {
-    public GuardInst ParentGuard {
-        get => (GuardInst)Operands[0];
-        set => ReplaceOperand(0, value);
-    }
     public Value? FilterResult {
-        get => IsFromFilter ? Operands[1] : null;
+        get => IsFromFilter ? Operands[0] : null;
         set {
             Ensure(value != null && IsFromFilter);
-            ReplaceOperand(1, value);
+            ReplaceOperand(0, value);
         }
     }
     [MemberNotNullWhen(true, nameof(FilterResult))]
-    public bool IsFromFilter => Operands.Length >= 2;
+    public bool IsFromFilter => Operands.Length > 0;
 
     public override string InstName => "continue";
     public override bool IsBranch => true;
 
-    public ContinueInst(GuardInst parentGuard)
-        : base(parentGuard)
-    {
-    }
-    public ContinueInst(GuardInst parentGuard, Value? filterResult = null)
-        : base(filterResult == null ? new Value[] { parentGuard } : new Value[] { parentGuard, filterResult })
+    public ContinueInst(Value? filterResult = null)
+        : base(filterResult == null ? Array.Empty<Value>() : new Value[] { filterResult })
     {
     }
 

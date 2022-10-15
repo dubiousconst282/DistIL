@@ -29,18 +29,18 @@ public class ILImporter
 
     public MethodBody ImportCode()
     {
-        var body = Method.ILBody!;
-        var code = body.Instructions.AsSpan();
-        var ehRegions = body.ExceptionRegions;
+        var ilBody = Method.ILBody!;
+        var code = ilBody.Instructions.AsSpan();
+        var ehRegions = ilBody.ExceptionRegions;
         var leaders = FindLeaders(code, ehRegions);
 
-        CreateBlocks(leaders);
-        GuardRegions(leaders, ehRegions);
+        CreateBlocks(leaders, ehRegions);
+        CreateGuards(ehRegions);
         ImportBlocks(code, leaders);
         return _body;
     }
 
-    private void CreateBlocks(BitSet leaders)
+    private void CreateBlocks(BitSet leaders, List<ExceptionRegion> regions)
     {
         //Remove 0th label to avoid creating 2 blocks
         bool firstHasPred = leaders.Remove(0);
@@ -48,7 +48,7 @@ public class ILImporter
 
         int startOffset = 0;
         foreach (int endOffset in leaders) {
-            _blocks[startOffset] = new BlockState(this);
+            _blocks[startOffset] = new BlockState(this, IsInsideRegion(regions, startOffset));
             startOffset = endOffset;
         }
         //Ensure that the entry block don't have predecessors
@@ -58,10 +58,12 @@ public class ILImporter
         }
     }
 
-    private void GuardRegions(BitSet leaders, List<ExceptionRegion> ehRegions)
+    private void CreateGuards(List<ExceptionRegion> regions)
     {
+        var mappings = new Dictionary<GuardInst, ExceptionRegion>(regions.Count);
+        
         //I.12.4.2.5 Overview of exception handling
-        foreach (var region in ehRegions) {
+        foreach (var region in regions) {
             var kind = region.Kind switch {
                 ExceptionRegionKind.Catch or
                 ExceptionRegionKind.Filter  => GuardKind.Catch,
@@ -71,12 +73,14 @@ public class ILImporter
             };
             bool hasFilter = region.Kind == ExceptionRegionKind.Filter;
 
-            var startBlock = GetBlock(region.TryStart);
+            var startBlock = GetOrSplitStartBlock(region);
             var handlerBlock = GetBlock(region.HandlerStart);
             var filterBlock = hasFilter ? GetBlock(region.FilterStart) : null;
+
             var guard = new GuardInst(kind, handlerBlock.Block, region.CatchType, filterBlock?.Block);
-            startBlock.Emit(guard);
-            startBlock.Block.Connect(handlerBlock.Block); //dummy edge to avoid unreachable blocks
+            startBlock.InsertBefore(startBlock.Last, guard);
+            startBlock.Connect(handlerBlock.Block); //dummy edge to avoid unreachable blocks
+            mappings.Add(guard, region);
 
             //Push exception on handler/filter entry stack
             if (kind == GuardKind.Catch) {
@@ -84,23 +88,40 @@ public class ILImporter
             }
             if (hasFilter) {
                 filterBlock!.PushNoEmit(guard);
-                startBlock.Block.Connect(filterBlock.Block);
-                ActiveRegion(guard, region.FilterStart, region.FilterEnd);
+                startBlock.Connect(filterBlock.Block);
             }
-            //Set active region for leave/endf* instructions
-            ActiveRegion(guard, region.TryStart, region.TryEnd);
-            ActiveRegion(guard, region.HandlerStart, region.HandlerEnd);
         }
 
-        void ActiveRegion(GuardInst guard, int start, int end)
+        BasicBlock GetOrSplitStartBlock(ExceptionRegion region)
         {
-            //leaders[0] is always unset at this point
-            if (start == 0) {
-                GetBlock(0).SetActiveGuard(guard);
+            var state = GetBlock(region.TryStart);
+
+            //Create a new dominating block for this region if it nests any other in the current block.
+            //Note that this code relies on the region table to be correctly ordered, as required by ECMA335:
+            //  "If handlers are nested, the most deeply nested try blocks shall come
+            //  before the try blocks that enclose them."
+            if (IsBlockNestedBy(region, state.EntryBlock)) {
+                var newBlock = _body.CreateBlock(insertAfter: state.EntryBlock.Prev);
+
+                //FIXME: stop hacking block edges!
+                foreach (var pred in state.EntryBlock.Preds.ToArray()) {
+                    Assert(pred.Succs.Count == 1);
+                    pred.SetBranch(newBlock);
+                }
+                newBlock.SetBranch(state.EntryBlock);
+                state.EntryBlock = newBlock;
             }
-            foreach (int offset in leaders.GetRangeEnumerator(start, end)) {
-                GetBlock(offset).SetActiveGuard(guard);
+            return state.EntryBlock;
+        }
+        bool IsBlockNestedBy(ExceptionRegion region, BasicBlock block)
+        {
+            foreach (var guard in block.Guards()) {
+                var currRegion = mappings[guard];
+                if (currRegion.TryStart >= region.TryStart && currRegion.TryEnd < region.TryEnd) {
+                    return true;
+                }
             }
+            return false;
         }
     }
 
@@ -128,7 +149,16 @@ public class ILImporter
         }
     }
 
-    //Returns a bitset containing instruction offsets marking block starts (branch targets).
+    private static bool IsInsideRegion(List<ExceptionRegion> regions, int offset)
+    {
+        return regions.Any(r =>
+            (offset >= r.TryStart && offset < r.TryEnd) ||
+            (offset >= r.HandlerStart && offset < r.HandlerEnd) ||
+            (r.Kind == ExceptionRegionKind.Filter && offset >= r.FilterStart && offset < r.FilterEnd)
+        );
+    }
+
+    //Returns a bitset containing all instruction offsets where a block starts (branch targets).
     private static BitSet FindLeaders(Span<ILInstruction> code, List<ExceptionRegion> ehRegions)
     {
         int codeSize = code[^1].GetEndOffset();

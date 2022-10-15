@@ -87,9 +87,9 @@ public class BasicBlock : TrackedValue
     public void InsertFirst(Instruction newInst) => InsertRange(null, newInst, newInst);
     /// <summary> Inserts `newInst` after the last instruction in this block. </summary>
     public void InsertLast(Instruction newInst) => InsertRange(Last, newInst, newInst);
-    /// <summary> Inserts `newInst` before `inst`. </summary>
-    public void InsertBefore(Instruction inst, Instruction newInst) => InsertRange(inst.Prev, newInst, newInst);
-    /// <summary> Inserts `newInst` after `inst`. If `inst` is null, `newInst` will be inserted at the first position. </summary>
+    /// <summary> Inserts `newInst` before `inst`. If `inst` is null, `newInst` will be inserted at the block start. </summary>
+    public void InsertBefore(Instruction? inst, Instruction newInst) => InsertRange(inst?.Prev, newInst, newInst);
+    /// <summary> Inserts `newInst` after `inst`. If `inst` is null, `newInst` will be inserted at the block start. </summary>
     public void InsertAfter(Instruction? inst, Instruction newInst) => InsertRange(inst, newInst, newInst);
 
     /// <summary> Inserts a range of instructions into this block after pos (null means before the first instruction). </summary>

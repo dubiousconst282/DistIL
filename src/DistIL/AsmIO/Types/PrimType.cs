@@ -1,7 +1,5 @@
 namespace DistIL.AsmIO;
 
-using DistIL.IR;
-
 /// <summary> Represents an internal reference to a known primitive or system type. </summary>
 public class PrimType : TypeDesc
 {

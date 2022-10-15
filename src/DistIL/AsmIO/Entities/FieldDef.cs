@@ -3,8 +3,6 @@ namespace DistIL.AsmIO;
 using System.Reflection;
 using System.Reflection.Metadata;
 
-using DistIL.IR;
-
 /// <summary> Base class for all field entities. </summary>
 public abstract class FieldDesc : MemberDesc
 {

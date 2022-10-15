@@ -2,8 +2,6 @@ namespace DistIL.Passes;
 
 using System.Numerics;
 
-using DistIL.IR;
-
 public class SimplifyCFG : MethodPass
 {
     public override void Run(MethodTransformContext ctx)

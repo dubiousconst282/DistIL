@@ -1,7 +1,5 @@
 namespace DistIL.Passes;
 
-using DistIL.IR;
-
 partial class SimplifyInsts : MethodPass
 {
     //Lambda with cache:

@@ -5,7 +5,7 @@ public class BranchInst : Instruction
     public Value? Cond {
         get => IsConditional ? Operands[0] : null;
         set {
-            Ensure(value != null && IsConditional, "Branch condition cannot be added or removed after construction");
+            Ensure.That(value != null && IsConditional, "Branch condition cannot be added or removed after construction");
             ReplaceOperand(0, value);
         }
     }
@@ -16,7 +16,7 @@ public class BranchInst : Instruction
     public BasicBlock? Else {
         get => IsConditional ? (BasicBlock)Operands[2] : null;
         set {
-            Ensure(value != null && IsConditional, "Branch else target cannot be added or removed after construction");
+            Ensure.That(value != null && IsConditional, "Branch else target cannot be added or removed after construction");
             ReplaceOperand(2, value);
         }
     }
@@ -125,7 +125,7 @@ public class ReturnInst : Instruction
     public Value? Value {
         get => HasValue ? Operands[0] : null;
         set {
-            Ensure(Operands.Length > 0 && value != null, "Cannot add return value after construction.");
+            Ensure.That(Operands.Length > 0 && value != null, "Cannot add return value after construction.");
             ReplaceOperand(0, value);
         }
     }

@@ -1,8 +1,5 @@
 ﻿namespace DistIL.CodeGen.Cil;
 
-using DistIL.AsmIO;
-using DistIL.IR;
-
 using EHRegionKind = System.Reflection.Metadata.ExceptionRegionKind;
 
 /// <summary> Helper for building a list of <see cref="ILInstruction"/>s. </summary>
@@ -38,8 +35,8 @@ internal class ILAssembler
             }
             case ILCode.Ret: break; //depth is reset after block terminators
             default: {
-                Assert(op.GetStackBehaviourPush() != ILStackBehaviour.Varpush);
-                Assert(op.GetStackBehaviourPop() != ILStackBehaviour.Varpop);
+                Debug.Assert(op.GetStackBehaviourPush() != ILStackBehaviour.Varpush);
+                Debug.Assert(op.GetStackBehaviourPop() != ILStackBehaviour.Varpop);
                 _stackDepth += op.GetStackChange();
                 break;
             }
@@ -168,7 +165,7 @@ internal class ILAssembler
                 ehr.CatchType = (TypeDefOrSpec?)guard.CatchType;
             }
             if (guard.HasFilter) {
-                Assert(GetBlockOffset(region.FilterRange.End) == ehr.HandlerStart);
+                Debug.Assert(GetBlockOffset(region.FilterRange.End) == ehr.HandlerStart);
                 ehr.FilterStart = GetBlockOffset(region.FilterRange.Start);
             }
             ehRegions.Add(ehr);

@@ -1,7 +1,5 @@
 namespace DistIL.Util;
 
-using DistIL.IR;
-
 public class GraphTraversal
 {
     public static void DepthFirst<TNode>(

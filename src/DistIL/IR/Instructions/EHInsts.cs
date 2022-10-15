@@ -15,7 +15,7 @@ public class GuardInst : Instruction
     public BasicBlock? FilterBlock {
         get => HasFilter ? (BasicBlock)Operands[1] : null;
         set {
-            Ensure(value != null && HasFilter);
+            Ensure.That(value != null && HasFilter);
             ReplaceOperand(1, value);
         }
     }
@@ -80,7 +80,7 @@ public class ContinueInst : Instruction
     public Value? FilterResult {
         get => IsFromFilter ? Operands[0] : null;
         set {
-            Ensure(value != null && IsFromFilter);
+            Ensure.That(value != null && IsFromFilter);
             ReplaceOperand(0, value);
         }
     }
@@ -104,7 +104,7 @@ public class ThrowInst : Instruction
     public Value? Exception {
         get => Operands.Length > 0 ? Operands[0] : null;
         set {
-            Ensure(value != null && Operands.Length > 0);
+            Ensure.That(value != null && Operands.Length > 0);
             ReplaceOperand(0, value);
         }
     }

@@ -1,7 +1,5 @@
 namespace DistIL.Passes.Linq;
 
-using DistIL.IR;
-
 public abstract class QueryStage
 {
     public QueryStage? Prev, Next;
@@ -119,7 +117,7 @@ public class ToArrayStage : ReductionStage
         var mod = synther.Method.Definition.Module;
         var t_Array = mod.Import(typeof(Array));
         var copyMethod = t_Array?.FindMethod("Copy", new MethodSig(PrimType.Void, new[] { t_Array, t_Array, PrimType.Int32 }));
-        Ensure(copyMethod != null, "Missing Array.Copy() method");
+        Ensure.That(copyMethod != null, "Missing Array.Copy() method");
         return copyMethod;
     }
 }

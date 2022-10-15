@@ -377,11 +377,11 @@ internal class ModuleLoader
         public Entity Get(EntityHandle handle)
         {
             var tableIdx = (int)handle.Kind;
-            Assert(Array.IndexOf(s_Tables, (TableIndex)tableIdx) >= 0);
+            Debug.Assert(Array.IndexOf(s_Tables, (TableIndex)tableIdx) >= 0);
 
             var (start, end) = _ranges[tableIdx];
             int index = start + MetadataTokens.GetRowNumber(handle) - 1; //rows are 1 based
-            Ensure(index < end);
+            Ensure.That(index < end);
 
             //FIXME: Create() will update the ranges before populating the table,
             //so that ResolveTypeRef() can call Get() with a nested type.
@@ -392,7 +392,7 @@ internal class ModuleLoader
         public void Iterate<TEntity, TInfo>(Action<TEntity, TInfo> cb)
         {
             var table = GetTable<TInfo>();
-            Assert(Array.IndexOf(s_Tables, table) >= 0);
+            Debug.Assert(Array.IndexOf(s_Tables, table) >= 0);
 
             var (start, end) = _ranges[(int)table];
             for (int i = 0; i < end - start; i++) {

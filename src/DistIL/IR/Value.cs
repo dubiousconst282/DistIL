@@ -1,8 +1,6 @@
 namespace DistIL.IR;
 
 using System.IO;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 public abstract class Value
 {
@@ -142,12 +140,7 @@ internal struct UseRef
     public ref UseRef Prev => ref Def.Prev;
     public ref UseRef Next => ref Def.Next;
 
-    public ref UseDef Def {
-        get {
-            Assert((uint)Index < (uint)Owner._useDefs.Length);
-            return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(Owner._useDefs), Index);
-        }
-    }
+    public ref UseDef Def => ref Owner._useDefs[Index];
 
     public override string ToString() => Owner == null ? "<null>" : $"<{Owner}> at {Index}";
 }

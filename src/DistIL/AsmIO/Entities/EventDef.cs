@@ -3,8 +3,6 @@ namespace DistIL.AsmIO;
 using System.Reflection;
 using System.Reflection.Metadata;
 
-using DistIL.IR;
-
 public class EventDef : MemberDesc
 {
     public override TypeDef DeclaringType { get; }

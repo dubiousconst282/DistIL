@@ -1,8 +1,5 @@
 ﻿namespace DistIL.Frontend;
 
-using DistIL.AsmIO;
-using DistIL.IR;
-
 using ExceptionRegionKind = System.Reflection.Metadata.ExceptionRegionKind;
 
 public class ILImporter
@@ -105,7 +102,7 @@ public class ILImporter
 
                 //FIXME: stop hacking block edges!
                 foreach (var pred in state.EntryBlock.Preds.ToArray()) {
-                    Assert(pred.Succs.Count == 1);
+                    Debug.Assert(pred.Succs.Count == 1);
                     pred.SetBranch(newBlock);
                 }
                 newBlock.SetBranch(state.EntryBlock);

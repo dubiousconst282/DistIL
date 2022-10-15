@@ -9,7 +9,7 @@ public abstract class FieldAccessInst : Instruction
     public Value? Obj {
         get => IsStatic ? null : Operands[1];
         set {
-            Ensure(!IsStatic && value != null);
+            Ensure.That(!IsStatic && value != null);
             ReplaceOperand(1, value);
         }
     }
@@ -45,7 +45,7 @@ public class LoadFieldInst : FieldAccessInst
     public LoadFieldInst(FieldDesc field, Value? obj)
         : base(obj == null ? new[] { field } : new[] { field, obj })
     {
-        Ensure(field.IsStatic == (obj == null));
+        Ensure.That(field.IsStatic == (obj == null));
         ResultType = field.Type;
     }
 
@@ -66,7 +66,7 @@ public class StoreFieldInst : FieldAccessInst
     public StoreFieldInst(FieldDesc field, Value? obj, Value value)
         : base(obj == null ? new[] { field, value } : new[] { field, obj, value })
     {
-        Ensure((field.IsStatic == (obj == null)) && value.ResultType.IsStackAssignableTo(field.Type));
+        Ensure.That((field.IsStatic == (obj == null)) && value.ResultType.IsStackAssignableTo(field.Type));
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
@@ -79,7 +79,7 @@ public class FieldAddrInst : FieldAccessInst
     public FieldAddrInst(FieldDesc field, Value? obj)
         : base(obj == null ? new[] { field } : new[] { field, obj })
     {
-        Ensure(field.IsStatic == (obj == null));
+        Ensure.That(field.IsStatic == (obj == null));
         ResultType = new ByrefType(field.Type);
     }
 

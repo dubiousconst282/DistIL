@@ -3,8 +3,6 @@ namespace DistIL.AsmIO;
 using System.Reflection;
 using System.Reflection.Metadata;
 
-using DistIL.IR;
-
 public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
 {
     public abstract ModuleDef Module { get; }
@@ -122,7 +120,7 @@ public class TypeDef : TypeDefOrSpec
     }
     public TypeSpec GetSpec(ImmutableArray<TypeDesc> genArgs)
     {
-        Ensure(IsGeneric);
+        Ensure.That(IsGeneric);
         return new TypeSpec(this, genArgs);
     }
 

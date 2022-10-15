@@ -1,8 +1,4 @@
 namespace DistIL.Frontend;
-
-using DistIL.AsmIO;
-using DistIL.IR;
-
 internal class BlockState
 {
     readonly ILImporter _importer;
@@ -77,7 +73,7 @@ internal class BlockState
         var exitStack = _stack;
         if (exitStack.Count == 0) return;
 
-        Assert(EntryBlock == Block); //Blocks should not have both phis and guards
+        Debug.Assert(EntryBlock == Block); //Blocks should not have both phis and guards
 
         foreach (var succ in _succStates) {
             var entryStack = succ._entryStack;
@@ -547,7 +543,7 @@ internal class BlockState
     }
     private CompareInst CreateCompare(CompareOp op, CompareOp fltOp, Value left, Value right)
     {
-        Assert(left.ResultType.StackType == right.ResultType.StackType); //TODO: check CompareInst operand types
+        Debug.Assert(left.ResultType.StackType == right.ResultType.StackType); //TODO: check CompareInst operand types
         return new CompareInst(op, left, right);
     }
 
@@ -642,7 +638,7 @@ internal class BlockState
         var addr = Pop();
 
         if (type == null) {
-            Ensure(addr.ResultType is PointerType or ByrefType);
+            Ensure.That(addr.ResultType is PointerType or ByrefType);
             type = addr.ResultType.ElemType!; //ldind_ref
         }
         Push(new LoadPtrInst(addr, type, PopPointerFlags()));
@@ -653,7 +649,7 @@ internal class BlockState
         var addr = Pop();
 
         if (type == null) {
-            Ensure(addr.ResultType is PointerType or ByrefType);
+            Ensure.That(addr.ResultType is PointerType or ByrefType);
             type = addr.ResultType.ElemType!; //stind_ref
         }
         Emit(new StorePtrInst(addr, value, type, PopPointerFlags()));
@@ -725,13 +721,13 @@ internal class BlockState
 
     private void ImportLeave(int targetOffset)
     {
-        Ensure(_isInsideEhRegion, "Leave instruction found outside protected region");
+        Ensure.That(_isInsideEhRegion, "Leave instruction found outside protected region");
         var targetBlock = AddSucc(targetOffset);
         TerminateBlock(new LeaveInst(targetBlock));
     }
     private void ImportContinue(bool isFromFilter)
     {
-        Ensure(_isInsideEhRegion, "Leave instruction found outside protected region");
+        Ensure.That(_isInsideEhRegion, "Leave instruction found outside protected region");
         var filterResult = isFromFilter ? Pop() : null;
         TerminateBlock(new ContinueInst(filterResult));
     }

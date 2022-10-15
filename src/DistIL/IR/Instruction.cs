@@ -126,7 +126,7 @@ public abstract class Instruction : TrackedValue
     /// <summary> Removes operands in the specified range. </summary>
     protected void RemoveOperands(int startIndex, int count)
     {
-        Assert(startIndex >= 0 && startIndex + count <= _operands.Length);
+        Debug.Assert(startIndex >= 0 && startIndex + count <= _operands.Length);
 
         var oldOpers = _operands;
         var oldUses = _useDefs;

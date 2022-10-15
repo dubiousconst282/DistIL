@@ -1,7 +1,5 @@
 namespace DistIL.CodeGen.Cil;
 
-using DistIL.AsmIO;
-using DistIL.IR;
 using DistIL.IR.Utils;
 
 public partial class ILGenerator : InstVisitor

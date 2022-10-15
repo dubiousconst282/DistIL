@@ -1,6 +1,5 @@
 namespace DistIL.Passes;
 
-using DistIL.IR;
 using DistIL.IR.Utils;
 
 public class InlineMethods : MethodPass

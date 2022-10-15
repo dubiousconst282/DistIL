@@ -38,7 +38,7 @@ public class StoreVarInst : VarAccessInst
     public StoreVarInst(Variable dest, Value value)
         : base(dest, value)
     {
-        Ensure(value.ResultType.IsStackAssignableTo(dest.ResultType));
+        Ensure.That(value.ResultType.IsStackAssignableTo(dest.ResultType));
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);

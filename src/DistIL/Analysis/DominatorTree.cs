@@ -1,7 +1,5 @@
 namespace DistIL.Analysis;
 
-using DistIL.IR;
-
 public class DominatorTree : IMethodAnalysis
 {
     readonly Dictionary<BasicBlock, Node> _block2node = new();
@@ -84,7 +82,7 @@ public class DominatorTree : IMethodAnalysis
     /// <summary> Creates the tree nodes and returns a list with them in DFS post order. </summary>
     private Node[] CreateNodes()
     {
-        Assert(Method.EntryBlock.Preds.Count == 0);
+        Debug.Assert(Method.EntryBlock.Preds.Count == 0);
 
         var nodes = new Node[Method.NumBlocks];
         int index = 0;
@@ -152,7 +150,7 @@ public class DominatorTree : IMethodAnalysis
             if (parent.FirstChild == null) {
                 parent.FirstChild = node;
             } else {
-                Assert(node.NextChild == null);
+                Debug.Assert(node.NextChild == null);
                 node.NextChild = parent.FirstChild.NextChild;
                 parent.FirstChild.NextChild = node;
             }

@@ -23,7 +23,7 @@ public class CallInst : Instruction
     public CallInst(MethodDesc method, Value[] args, bool isVirtual = false, TypeDesc? constraint = null)
         : base(args.Prepend(method).ToArray())
     {
-        Ensure(args.Length == method.Params.Length);
+        Ensure.That(args.Length == method.Params.Length);
         ResultType = method.ReturnType;
         IsVirtual = isVirtual;
         Constraint = constraint;
@@ -86,7 +86,7 @@ public class NewObjInst : Instruction
     public NewObjInst(MethodDesc ctor, Value[] args)
         : base(args.Prepend(ctor).ToArray())
     {
-        Ensure(args.Length == ctor.StaticParams.Length);
+        Ensure.That(args.Length == ctor.StaticParams.Length);
         ResultType = ctor.DeclaringType;
     }
 
@@ -105,7 +105,7 @@ public class FuncAddrInst : Instruction
     public Value? Object {
         get => IsVirtual ? Operands[1] : null;
         set {
-            Ensure(IsVirtual && value != null);
+            Ensure.That(IsVirtual && value != null);
             ReplaceOperand(1, value);
         }
     }

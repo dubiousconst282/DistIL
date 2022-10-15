@@ -26,7 +26,7 @@ public class CompareInst : Instruction
     public CompareInst(CompareOp op, Value left, Value right)
         : base(left, right)
     {
-        Ensure(left.ResultType.StackType == right.ResultType.StackType);
+        Ensure.That(left.ResultType.StackType == right.ResultType.StackType);
         ResultType = PrimType.Int32;
         Op = op;
     }

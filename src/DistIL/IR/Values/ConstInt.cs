@@ -14,7 +14,7 @@ public class ConstInt : Const
 
     private ConstInt(TypeDesc type, long value)
     {
-        Ensure(type.Kind.IsInt());
+        Ensure.That(type.Kind.IsInt());
         ResultType = type;
 
         //truncate

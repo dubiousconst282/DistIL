@@ -1,8 +1,5 @@
 namespace DistIL.CodeGen.Cil;
 
-using DistIL.AsmIO;
-using DistIL.IR;
-
 internal static class ILTables
 {
 #pragma warning disable format

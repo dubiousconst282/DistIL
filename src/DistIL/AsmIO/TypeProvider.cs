@@ -88,12 +88,12 @@ internal class TypeProvider : ISignatureTypeProvider<TypeDesc, GenericContext>, 
 
     public TypeDesc GetGenericMethodParameter(GenericContext context, int index)
     {
-        Assert(context.MethodArgs == null);
+        Debug.Assert(context.MethodArgs == null);
         return new GenericParamType(index, true);
     }
     public TypeDesc GetGenericTypeParameter(GenericContext context, int index)
     {
-        Assert(context.TypeArgs == null);
+        Debug.Assert(context.TypeArgs == null);
         return new GenericParamType(index, false);
     }
 

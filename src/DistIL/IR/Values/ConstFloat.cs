@@ -15,7 +15,7 @@ public class ConstFloat : Const
 
     public static ConstFloat Create(TypeDesc type, double value)
     {
-        Ensure(type.StackType == StackType.Float);
+        Ensure.That(type.StackType == StackType.Float);
         return new ConstFloat() { ResultType = type, Value = value };
     }
 

@@ -122,7 +122,7 @@ public class RefSet<T> where T : class
                     MemUtils.WriteInvariant(newSlots, index, value);
                     break;
                 }
-                Assert(newSlots[index] != value); //slots shouldn't have dupes
+                Debug.Assert(newSlots[index] != value); //slots shouldn't have dupes
             }
         }
     }
@@ -142,7 +142,7 @@ public class RefSet<T> where T : class
 
         public bool MoveNext()
         {
-            Ensure(!_owner._changed, "RefSet cannot be modified during enumeration");
+            Ensure.That(!_owner._changed, "RefSet cannot be modified during enumeration");
 
             while (_index < _slots.Length) {
                 Current = _slots[_index++]!;

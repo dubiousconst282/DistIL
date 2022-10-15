@@ -1,7 +1,5 @@
 namespace DistIL.Analysis;
 
-using DistIL.IR;
-
 public interface IAnalysis
 {
 }

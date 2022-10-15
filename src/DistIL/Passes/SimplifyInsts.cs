@@ -1,6 +1,5 @@
 namespace DistIL.Passes;
 
-using DistIL.IR;
 using DistIL.IR.Utils;
 
 using Bin = IR.BinaryOp;
@@ -32,7 +31,7 @@ public partial class SimplifyInsts : MethodPass
                     _ => false
                 };
             }
-            Ensure(itr++ < 128, "SimplifyInsts got stuck in an infinite loop");
+            Ensure.That(itr++ < 128, "SimplifyInsts got stuck in an infinite loop");
         }
     }
 

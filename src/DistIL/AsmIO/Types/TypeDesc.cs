@@ -1,7 +1,5 @@
 ﻿namespace DistIL.AsmIO;
 
-using DistIL.IR;
-
 /// <summary> The base class of all types. </summary>
 public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
 {
@@ -76,7 +74,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     /// <summary> Checks if this type inherits or implements the specified type. </summary>
     public bool Inherits(TypeDesc baseType)
     {
-        Assert(!baseType.IsInterface); //not implemented
+        Debug.Assert(!baseType.IsInterface); //not implemented
         for (var parent = BaseType; parent != null; parent = parent.BaseType) {
             if (parent == baseType) {
                 return true;

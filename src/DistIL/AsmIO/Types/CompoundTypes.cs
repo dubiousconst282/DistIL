@@ -1,7 +1,5 @@
 namespace DistIL.AsmIO;
 
-using DistIL.IR;
-
 /// <summary> Represents a type that has an element type (array, pointer, byref) </summary>
 public abstract class CompoundType : TypeDesc
 {

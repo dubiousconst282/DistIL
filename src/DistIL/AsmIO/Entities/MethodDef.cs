@@ -4,8 +4,6 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 
-using DistIL.IR;
-
 /// <summary> Base class for all method entities. </summary>
 public abstract class MethodDesc : MemberDesc
 {
@@ -39,7 +37,7 @@ public abstract class MethodDesc : MemberDesc
 
     public virtual MethodDesc GetSpec(GenericContext ctx)
     {
-        Assert(GenericParams.Length == 0, "GetSpec() must be overriden if the method can be instantiated");
+        Debug.Assert(GenericParams.Length == 0, "GetSpec() must be overriden if the method can be instantiated");
         return this;
     }
 }
@@ -71,7 +69,7 @@ public abstract class MethodDefOrSpec : MethodDesc, ModuleEntity
 
     public IReadOnlyCollection<CustomAttrib> GetParamCustomAttribs(ParamDef param)
     {
-        Assert(Params.Contains(param));
+        Debug.Assert(Params.Contains(param));
 
         return Module.GetCustomAttribs(new() {
             LinkType = CustomAttribLink.Type.MethodParam,
@@ -81,7 +79,7 @@ public abstract class MethodDefOrSpec : MethodDesc, ModuleEntity
     }
     public IReadOnlyCollection<CustomAttrib> GetGenericArgCustomAttribs(int index)
     {
-        Ensure(index >= 0 && index < GenericParams.Length);
+        Ensure.That(index >= 0 && index < GenericParams.Length);
 
         return Module.GetCustomAttribs(new() {
             LinkType = CustomAttribLink.Type.GenericParam,
@@ -158,7 +156,7 @@ public class MethodSpec : MethodDefOrSpec
         ImplAttribs = def.ImplAttribs;
 
         DeclaringType = declaringType;
-        Ensure(args.IsDefaultOrEmpty || def.IsGeneric);
+        Ensure.That(args.IsDefaultOrEmpty || def.IsGeneric);
         GenericParams = args.IsDefault ? def.GenericParams : args;
 
         var genCtx = new GenericContext(this);

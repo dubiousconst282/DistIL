@@ -7,6 +7,6 @@ global using System.Diagnostics;
 global using System.Diagnostics.CodeAnalysis;
 
 global using DistIL.Util;
-global using static DistIL.Util.AssertHelper;
 
 global using DistIL.AsmIO;
+global using DistIL.IR;

@@ -18,7 +18,7 @@ public class PhiInst : Instruction
         : base(InterleaveArgs(args))
     {
         ResultType = args[0].Value.ResultType;
-        Assert(args.All(a => a.Value.ResultType.IsStackAssignableTo(ResultType)));
+        Debug.Assert(args.All(a => a.Value.ResultType.IsStackAssignableTo(ResultType)));
     }
     
     /// <summary> Unchecked non-copying constructor. </summary>
@@ -75,7 +75,7 @@ public class PhiInst : Instruction
 
     public void RemoveArg(int index, bool removeTrivialPhi)
     {
-        Ensure(index >= 0 && index < NumArgs);
+        Ensure.That(index >= 0 && index < NumArgs);
         if (removeTrivialPhi && NumArgs == 2) {
             ReplaceWith(GetValue(1 - index));
             return;

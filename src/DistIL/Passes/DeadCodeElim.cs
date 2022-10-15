@@ -1,7 +1,5 @@
 namespace DistIL.Passes;
 
-using DistIL.IR;
-
 public class DeadCodeElim : MethodPass
 {
     public override void Run(MethodTransformContext ctx)

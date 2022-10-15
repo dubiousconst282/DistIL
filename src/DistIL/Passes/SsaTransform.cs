@@ -1,6 +1,5 @@
 namespace DistIL.Passes;
 
-using DistIL.IR;
 using DistIL.Analysis;
 
 //SSA transform implementation based on the standard dominance frontier algorithm.

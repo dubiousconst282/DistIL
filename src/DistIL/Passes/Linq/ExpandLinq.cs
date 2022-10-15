@@ -1,6 +1,5 @@
 namespace DistIL.Passes;
 
-using DistIL.IR;
 using DistIL.Passes.Linq;
 
 //TODO: should we handle consumed/iterated queries?

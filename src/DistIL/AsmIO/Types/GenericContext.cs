@@ -11,7 +11,7 @@ public readonly struct GenericContext
 
     public GenericContext(IReadOnlyList<TypeDesc>? typeArgs = null, IReadOnlyList<TypeDesc>? methodArgs = null)
     {
-        Ensure(typeArgs != null || methodArgs != null, "Either `typeArgs` or `methodArgs` must be non-null");
+        Ensure.That(typeArgs != null || methodArgs != null, "Either `typeArgs` or `methodArgs` must be non-null");
         TypeArgs = typeArgs ?? Array.Empty<TypeDesc>();
         MethodArgs = methodArgs ?? Array.Empty<TypeDesc>();
     }

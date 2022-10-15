@@ -1,7 +1,5 @@
 namespace DistIL.AsmIO;
 
-using DistIL.IR;
-
 public interface Entity
 {
     string Name { get; }

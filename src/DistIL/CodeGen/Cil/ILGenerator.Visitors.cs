@@ -1,8 +1,5 @@
 namespace DistIL.CodeGen.Cil;
 
-using DistIL.AsmIO;
-using DistIL.IR;
-
 partial class ILGenerator
 {
     public void Visit(BinaryInst inst)

@@ -10,7 +10,7 @@ public unsafe class MemUtils
     /// <summary> Reads a T value from the span. Bounds check is not guaranteed to happen. </summary>
     public static T Read<T>(ReadOnlySpan<byte> buf, int pos) where T : unmanaged
     {
-        Assert((uint)(pos + sizeof(T)) < (uint)buf.Length);
+        Debug.Assert((uint)(pos + sizeof(T)) < (uint)buf.Length);
         return Unsafe.ReadUnaligned<T>(ref Unsafe.AddByteOffset(ref MemoryMarshal.GetReference(buf), (IntPtr)pos));
     }
 
@@ -35,7 +35,7 @@ public unsafe class MemUtils
     {
         //Based on https://github.com/dotnet/coreclr/pull/23571
         //This is probably not very portable, but worth the risk.
-        Assert(typeof(T[]) == array.GetType());
+        Debug.Assert(typeof(T[]) == array.GetType());
         Unsafe.As<ObjWrapper[]>(array)[index].Value = value;
     }
     struct ObjWrapper { public object? Value; }

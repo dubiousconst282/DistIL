@@ -1,7 +1,5 @@
 namespace DistIL.Passes;
 
-using DistIL.IR;
-
 /// <summary> Inline object/structs into local variables. aka "Scalar Replacement of Aggregates" </summary>
 public class ScalarReplacement : MethodPass
 {

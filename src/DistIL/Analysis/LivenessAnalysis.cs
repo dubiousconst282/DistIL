@@ -1,6 +1,5 @@
 namespace DistIL.Analysis;
 
-using DistIL.IR;
 using InstSet = RefSet<IR.Instruction>;
 
 /// <summary>

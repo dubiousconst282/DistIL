@@ -1,8 +1,6 @@
 namespace DistIL.Passes;
 
 using DistIL.Analysis;
-using DistIL.IR;
-
 //This pass is based on "Revisiting Out-of-SSA Translation for Correctness, Code Quality, and Efficiency"
 //by Boissinot et al. (https://hal.inria.fr/inria-00349925v1/document)
 //
@@ -133,7 +131,7 @@ public class RemovePhis : MethodPass
                 var srcList = GetMergeList(src);
 
                 if (dstList != srcList && !Intersect(dstList, srcList)) {
-                    Assert(!SlowCorrectIntersect(dstList, srcList));
+                    Debug.Assert(!SlowCorrectIntersect(dstList, srcList));
                     MergeLists(dstList, srcList);
 
                     //Update nearest ancestor to "max(in, out)" based on the pre-dfs index
@@ -331,7 +329,7 @@ public class RemovePhis : MethodPass
     //Checks if `a` and `b` have overlapping live ranges, assuming `a` dominates `b`.
     private bool Intersect(MergeNode a, MergeNode b)
     {
-        Assert(Dominates(a.Def, b.Def));
+        Debug.Assert(Dominates(a.Def, b.Def));
 
         var (def, pos) = (a.Def, b.Def);
         var (liveIn, liveOut) = _liveness.GetLive(pos.Block);

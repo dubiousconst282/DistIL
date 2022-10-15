@@ -3,8 +3,6 @@ namespace DistIL.AsmIO;
 using System.Reflection;
 using System.Reflection.Metadata;
 
-using DistIL.IR;
-
 /// <summary> Represents a placeholder for a generic type argument. </summary>
 public class GenericParamType : TypeDesc
 {

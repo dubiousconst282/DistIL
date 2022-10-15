@@ -1,7 +1,5 @@
 namespace DistIL.Passes.Linq;
 
-using DistIL.IR;
-
 public class QuerySynthesizer
 {
     public readonly MethodBody Method;
@@ -87,7 +85,7 @@ public class QuerySynthesizer
     }
     public void Replace()
     {
-        Assert(_result != null);
+        Debug.Assert(_result != null);
 
         var startBlock = EndStage.Call.Block;
         var endBlock = startBlock.Split(EndStage.Call);
@@ -119,7 +117,7 @@ public class QuerySynthesizer
 
     public void SetResult(Value value)
     {
-        Assert(_result == null);
+        Debug.Assert(_result == null);
         _result = value;
 
         if (PreExit.Block.Last is not BranchInst) {

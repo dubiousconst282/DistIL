@@ -2,8 +2,6 @@ namespace DistIL.AsmIO;
 
 using System.Reflection;
 
-using DistIL.IR;
-
 public class PropertyDef : MemberDesc
 {
     public override TypeDef DeclaringType { get; }

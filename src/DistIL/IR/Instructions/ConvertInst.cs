@@ -17,7 +17,7 @@ public class ConvertInst : Instruction
     public ConvertInst(Value srcValue, TypeDesc dstType, bool checkOverflow = false, bool srcUnsigned = false)
         : base(srcValue)
     {
-        Ensure(dstType.Kind.IsFloat() ? !checkOverflow : true);
+        Ensure.That(dstType.Kind.IsFloat() ? !checkOverflow : true);
 
         ResultType = dstType;
         CheckOverflow = checkOverflow;

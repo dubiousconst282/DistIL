@@ -1,7 +1,5 @@
 namespace DistIL.Analysis;
 
-using DistIL.IR;
-
 //https://llvm.org/docs/LoopTerminology.html
 //https://pages.cs.wisc.edu/~fischer/cs701.f14/finding.loops.html
 

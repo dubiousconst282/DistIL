@@ -1,7 +1,5 @@
 namespace DistIL.IR;
 
-using System.Text;
-
 public class IntrinsicInst : Instruction
 {
     public IntrinsicId Id { get; set; }

@@ -15,7 +15,7 @@ public class IRBuilder
     public Instruction? Position {
         get => _last;
         set {
-            Ensure(!_delayed && value != null);
+            Ensure.That(!_delayed && value != null);
             _last = value!;
         }
     }
@@ -105,7 +105,7 @@ public class IRBuilder
         } else if (_last != null) {
             inst.InsertAfter(_last);
         } else {
-            Ensure(_block != null, "Cannot add new instructions when position is unset in immediate IRBuilder");
+            Ensure.That(_block != null, "Cannot add new instructions when position is unset in immediate IRBuilder");
             _block.InsertLast(inst);
         }
         _last = inst;
@@ -115,7 +115,7 @@ public class IRBuilder
     /// <summary> Resets this delayed builder. </summary>
     public void Clear()
     {
-        Ensure(_delayed, "Cannot clear immediate IRBuilder");
+        Ensure.That(_delayed, "Cannot clear immediate IRBuilder");
         _first = _last = null!;
     }
 

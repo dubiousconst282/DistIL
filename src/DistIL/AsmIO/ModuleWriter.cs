@@ -172,9 +172,9 @@ internal class ModuleWriter
             firstFieldHandle,
             firstMethodHandle
         );
-        Assert(_handleMap[type] == handle);
-        Assert(type.Fields.Count == 0 || _handleMap[type.Fields[0]] == firstFieldHandle);
-        Assert(type.Methods.Count == 0 || _handleMap[type.Methods[0]] == firstMethodHandle);
+        Debug.Assert(_handleMap[type] == handle);
+        Debug.Assert(type.Fields.Count == 0 || _handleMap[type.Fields[0]] == firstFieldHandle);
+        Debug.Assert(type.Methods.Count == 0 || _handleMap[type.Methods[0]] == firstMethodHandle);
 
         if (type.GenericParams.Length > 0) {
             _genericDefs.Add(type);
@@ -233,7 +233,7 @@ internal class ModuleWriter
             AddString(field.Name),
             EncodeFieldSig(field)
         );
-        Assert(_handleMap[field] == handle);
+        Debug.Assert(_handleMap[field] == handle);
 
         if (field.MappedData != null) {
             _fieldDataStream ??= new();
@@ -268,7 +268,7 @@ internal class ModuleWriter
             AddString(method.Name),
             signature, bodyOffset, firstParamHandle
         );
-        Assert(_handleMap[method] == handle);
+        Debug.Assert(_handleMap[method] == handle);
 
         if (method.GenericParams.Length > 0) {
             _genericDefs.Add(method);
@@ -377,19 +377,19 @@ internal class ModuleWriter
             }
             case ILOperandType.Var: {
                 int varIndex = (int)inst.Operand!;
-                Assert(varIndex == (ushort)varIndex);
+                Debug.Assert(varIndex == (ushort)varIndex);
                 bw.WriteUInt16((ushort)varIndex);
                 break;
             }
             case ILOperandType.ShortBrTarget: {
                 int offset = (int)inst.Operand! - inst.GetEndOffset();
-                Assert(offset == (sbyte)offset);
+                Debug.Assert(offset == (sbyte)offset);
                 bw.WriteSByte((sbyte)offset);
                 break;
             }
             case ILOperandType.ShortI: {
                 int value = (int)inst.Operand!;
-                Assert(value == (sbyte)value);
+                Debug.Assert(value == (sbyte)value);
                 bw.WriteSByte((sbyte)value);
                 break;
             }
@@ -399,12 +399,12 @@ internal class ModuleWriter
             }
             case ILOperandType.ShortVar: {
                 int varIndex = (int)inst.Operand!;
-                Assert(varIndex == (byte)varIndex);
+                Debug.Assert(varIndex == (byte)varIndex);
                 bw.WriteByte((byte)varIndex);
                 break;
             }
             default: {
-                Assert(inst.Operand == null);
+                Debug.Assert(inst.Operand == null);
                 break;
             }
         }

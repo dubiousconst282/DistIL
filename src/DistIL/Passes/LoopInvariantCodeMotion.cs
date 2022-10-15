@@ -1,8 +1,6 @@
 namespace DistIL.Passes;
 
 using DistIL.Analysis;
-using DistIL.IR;
-
 public class LoopInvariantCodeMotion : MethodPass
 {
     public override void Run(MethodTransformContext ctx)

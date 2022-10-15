@@ -1,9 +1,6 @@
 namespace DistIL.AsmIO;
 
 using System.Reflection.Metadata;
-using System.Text;
-
-using DistIL.IR;
 
 public class FuncPtrType : TypeDesc
 {
@@ -41,7 +38,7 @@ public class FuncPtrType : TypeDesc
 
     internal FuncPtrType(in MethodSignature<TypeDesc> sig)
     {
-        Ensure(sig.GenericParameterCount == 0);
+        Ensure.That(sig.GenericParameterCount == 0);
         var header = sig.Header;
         ReturnType = sig.ReturnType;
         ArgTypes = sig.ParameterTypes;

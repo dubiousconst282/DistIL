@@ -196,7 +196,7 @@ public class BitSet : IEquatable<BitSet>
     public Enumerator GetEnumerator() => new(_data, 0, _data.Length * 64);
     public Enumerator GetRangeEnumerator(int start, int end)
     {
-        Ensure((uint)start <= (uint)end);
+        Ensure.That((uint)start <= (uint)end);
         return new Enumerator(_data, start, Math.Min(end, _data.Length * 64));
     }
 
@@ -210,7 +210,7 @@ public class BitSet : IEquatable<BitSet>
 
         internal Enumerator(ulong[] data, int start, int end)
         {
-            Assert(start >= 0 && (end >> 6) <= data.Length);
+            Debug.Assert(start >= 0 && (end >> 6) <= data.Length);
             _data = data;
             _end = end;
 

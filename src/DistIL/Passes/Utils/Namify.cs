@@ -1,7 +1,5 @@
 namespace DistIL.Passes.Utils;
 
-using DistIL.IR;
-
 /// <summary> Generate names for anonymous (unnamed) blocks and instructions to allow easy diffing. </summary>
 public class NamifyIR : MethodPass
 {

@@ -1,7 +1,5 @@
 namespace DistIL.IR;
 
-using DistIL.AsmIO;
-
 public class MethodBody
 {
     public MethodDef Definition { get; }
@@ -54,7 +52,7 @@ public class MethodBody
     /// <summary> Removes a block from the method without cleanup. </summary>
     internal bool RemoveBlock(BasicBlock block)
     {
-        Ensure(block.Method == this && block != EntryBlock);
+        Ensure.That(block.Method == this && block != EntryBlock);
 
         block.Prev!.Next = block.Next;
 

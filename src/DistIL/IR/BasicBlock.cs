@@ -34,7 +34,7 @@ public class BasicBlock : TrackedValue
     /// <summary> Adds a successor to this block. </summary>
     public void Connect(BasicBlock succ)
     {
-        Ensure(!succ.Preds.Contains(this));
+        Ensure.That(!succ.Preds.Contains(this));
         //Allow calls with duplicated edges, but don't dupe in the list (SwitchInst)
         if (!Succs.Contains(succ)) {
             Succs.Add(succ);
@@ -99,7 +99,7 @@ public class BasicBlock : TrackedValue
     {
         //Set parent block for range
         for (var inst = rangeFirst; true; inst = inst.Next!) {
-            Ensure(inst.Block != this); //prevent creating cycles
+            Ensure.That(inst.Block != this); //prevent creating cycles
             inst.Block = this;
             if (inst == rangeLast) break;
         }
@@ -111,7 +111,7 @@ public class BasicBlock : TrackedValue
             if (pos.Next != null) {
                 pos.Next.Prev = rangeLast;
             } else {
-                Assert(pos == Last);
+                Debug.Assert(pos == Last);
                 Last = rangeLast;
             }
             pos.Next = rangeFirst;
@@ -129,8 +129,8 @@ public class BasicBlock : TrackedValue
     /// <summary> Moves a range of instructions from this block to `newParent`, after `newParentPos` (null means before the first instruction in `newParent`). </summary>
     public void MoveRange(BasicBlock newParent, Instruction? newParentPos, Instruction first, Instruction last)
     {
-        Ensure(newParentPos == null || newParentPos?.Block == newParent);
-        Ensure(first.Block == this && last.Block == this);
+        Ensure.That(newParentPos == null || newParentPos?.Block == newParent);
+        Ensure.That(first.Block == this && last.Block == this);
 
         UnlinkRange(first, last);
         newParent.InsertRange(newParentPos, first, last);
@@ -138,7 +138,7 @@ public class BasicBlock : TrackedValue
 
     public void Remove(Instruction inst)
     {
-        Ensure(inst.Block == this);
+        Ensure.That(inst.Block == this);
         inst.Block = null!; //prevent inst from being removed again
 
         UnlinkRange(inst, inst);
@@ -176,7 +176,7 @@ public class BasicBlock : TrackedValue
     /// </summary>
     public BasicBlock Split(Instruction pos)
     {
-        Ensure(pos.Block == this && !pos.IsHeader);
+        Ensure.That(pos.Block == this && !pos.IsHeader);
 
         var newBlock = Method.CreateBlock();
         MoveRange(newBlock, null, pos, Last);
@@ -225,7 +225,7 @@ public class BasicBlock : TrackedValue
     /// </summary>
     public void SetBranch(Instruction newBranch)
     {
-        Ensure(newBranch.IsBranch);
+        Ensure.That(newBranch.IsBranch);
 
         if (Last != null && Last.IsBranch) {
             DisconnectBranch(Last);

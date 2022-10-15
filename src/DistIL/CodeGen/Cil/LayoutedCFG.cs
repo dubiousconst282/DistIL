@@ -1,7 +1,5 @@
 namespace DistIL.CodeGen.Cil;
 
-using DistIL.IR;
-
 /// <summary>
 /// Represents a flat list of basic blocks, ordered in such a way that maximizes the
 /// number of fallthrough blocks, and groups together blocks in the same (protected) regions.
@@ -20,7 +18,7 @@ public class LayoutedCFG
         int blockIdx = 0, regionIdx = 0;
 
         Recurse(method.EntryBlock, null!);
-        Assert(blockIdx == blocks.Length);
+        Debug.Assert(blockIdx == blocks.Length);
 
         Array.Resize(ref regions, regionIdx);
 
@@ -40,7 +38,7 @@ public class LayoutedCFG
             while (worklist.TryPop(out var block)) {
                 //Recurse into new regions
                 if (block != entry && block.Guards().Any()) {
-                    //Mark handler blocks as visited to prevent them from being visited
+                    //Mark handler blocks as visited to prevent them from being visited again
                     foreach (var guard in block.Guards()) {
                         visited.Add(guard.HandlerBlock);
                         if (guard.HasFilter) {

@@ -25,7 +25,8 @@ public class BasicBlock : TrackedValue
         get {
             int count = 0;
             for (var inst = First; inst is GuardInst; inst = inst.Next) {
-                count++;
+                //Guard has exactly one or two blocks: [handlerBlock, filterBlock?]
+                count += inst.Operands.Length;
             }
             if (IsBranchLike(Last)) {
                 //Uncond branches only have one operand, cond and switches have at least 2.
@@ -45,7 +46,7 @@ public class BasicBlock : TrackedValue
         }
     }
 
-    /// <summary> Whether the block starts with a <see cref="PhiInst"/> or <see cref-"GuardInst"/>. </summary>
+    /// <summary> Whether the block starts with a <see cref="PhiInst"/> or <see cref="GuardInst"/>. </summary>
     public bool HasHeader => First != null && First.IsHeader;
 
     internal BasicBlock(MethodBody method)

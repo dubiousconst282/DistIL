@@ -24,7 +24,7 @@ public class Verifier
 
     private void VerifyEdges()
     {
-        if (_method.EntryBlock.Preds.Count > 0) {
+        if (_method.EntryBlock.NumPreds > 0) {
             Error(_method.EntryBlock, "Entry block should not have predecessors");
         }
         var expPreds = new Dictionary<BasicBlock, List<BasicBlock>>();
@@ -32,7 +32,7 @@ public class Verifier
         foreach (var block in _method) {
             var succs = CalculateSuccs(block);
 
-            if (!AreSetsEqual(succs, block.Succs)) {
+            if (!AreSetsEqual(succs, block.Succs.AsEnumerator())) {
                 Error(block, "Invalid successor list");
             }
             foreach (var succ in succs) {
@@ -42,7 +42,7 @@ public class Verifier
         }
         //Verify preds
         foreach (var (block, preds) in expPreds) {
-            if (!AreSetsEqual(preds, block.Preds)) {
+            if (!AreSetsEqual(preds, block.Preds.AsEnumerator())) {
                 Error(block, "Invalid predecessor list");
             }
         }
@@ -93,7 +93,7 @@ public class Verifier
                         Error(phi, "Phi should not have duplicated block arguments");
                     }
                 }
-                phiPreds.SymmetricExceptWith(block.Preds);
+                phiPreds.SymmetricExceptWith(block.Preds.AsEnumerator());
                 if (phiPreds.Count != 0) {
                     Error(phi, "Phi must have one argument for each predecessor in the parent block");
                 }
@@ -156,7 +156,7 @@ public class Verifier
         }
     }
 
-    private static bool AreSetsEqual<T>(ICollection<T> list1, ICollection<T> list2, IEqualityComparer<T>? comparer = null)
+    private static bool AreSetsEqual<T>(IEnumerable<T> list1, IEnumerable<T> list2, IEqualityComparer<T>? comparer = null)
     {
         var set = new HashSet<T>(list1, comparer);
         set.SymmetricExceptWith(list2);

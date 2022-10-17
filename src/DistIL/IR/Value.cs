@@ -90,12 +90,12 @@ public abstract class TrackedValue : Value
     }
 
     /// <summary> Returns an enumerator of instructions using this value. Neither order nor uniqueness is guaranteed. </summary>
-    public ValueUserEnumerator Users() => new() { _use = _firstUse };
+    public ValueUserIterator Users() => new() { _use = _firstUse };
     /// <summary> Returns an enumerator of operands using this value. </summary>
-    public ValueUseEnumerator Uses() => new() { _use = _firstUse };
+    public ValueUseIterator Uses() => new() { _use = _firstUse };
 }
 
-public struct ValueUserEnumerator
+public struct ValueUserIterator : Iterator<Instruction>
 {
     internal UseRef _use;
     public Instruction Current { get; private set; }
@@ -109,10 +109,8 @@ public struct ValueUserEnumerator
         }
         return false;
     }
-
-    public ValueUserEnumerator GetEnumerator() => this;
 }
-public struct ValueUseEnumerator
+public struct ValueUseIterator : Iterator<(Instruction Inst, int OperIdx)>
 {
     internal UseRef _use;
     public (Instruction Inst, int OperIdx) Current { get; private set; }
@@ -126,8 +124,6 @@ public struct ValueUseEnumerator
         }
         return false;
     }
-
-    public ValueUseEnumerator GetEnumerator() => this;
 }
 
 internal struct UseRef

@@ -57,7 +57,6 @@ internal class BlockState
     private BasicBlock AddSucc(int offset)
     {
         var succ = _importer.GetBlock(offset);
-        Block.Connect(succ.EntryBlock);
         _succStates.Add(succ);
         return succ.EntryBlock;
     }

@@ -69,8 +69,8 @@ public class IRPrinter
 
         foreach (var block in method) {
             pc.Print($"{block}:");
-            if (block.Preds.Count > 0) {
-                pc.Print($" //preds: {string.Join(" ", block.Preds)}");
+            if (block.NumPreds > 0) {
+                pc.Print($" //preds: {string.Join(" ", block.Preds.AsEnumerator())}");
             }
             pc.Push();
 

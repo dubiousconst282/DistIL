@@ -4,15 +4,37 @@ public class BasicBlock : TrackedValue
 {
     public MethodBody Method { get; internal set; }
 
-    public List<BasicBlock> Preds { get; } = new();
-    public List<BasicBlock> Succs { get; } = new();
+    /// <remarks> Note: <see cref="SwitchInst"/> may cause the same block to be yielded more than once. </remarks>
+    public PredIterator Preds => new(this);
+    /// <remarks> Note: <see cref="SwitchInst"/> may cause the same block to be yielded more than once. </remarks>
+    public SuccIterator Succs => new(this);
 
     public Instruction First { get; private set; } = null!;
-    public Instruction Last { get; private set; } = null!; //Either a BranchInst or ReturnInst
+    /// <remarks> May be one of: 
+    /// <see cref="ReturnInst"/>, <see cref="BranchInst"/>, <see cref="SwitchInst"/>,
+    /// <see cref="ThrowInst"/>, <see cref="LeaveInst"/>, or <see cref="ContinueInst"/>. </remarks>
+    public Instruction Last { get; private set; } = null!;
 
     public BasicBlock? Prev { get; set; }
     public BasicBlock? Next { get; set; }
 
+    public int NumPreds {
+        get => Users().Count(u => u is not PhiInst);
+    }
+    public int NumSuccs {
+        get {
+            int count = 0;
+            for (var inst = First; inst is GuardInst; inst = inst.Next) {
+                count++;
+            }
+            if (IsBranchLike(Last)) {
+                //Uncond branches only have one operand, cond and switches have at least 2.
+                int numOpers = Last.Operands.Length;
+                count += numOpers - (numOpers >= 2 ? 1 : 0);
+            }
+            return count;
+        }
+    }
     public Instruction FirstNonPhi {
         get {
             var inst = First;
@@ -23,64 +45,12 @@ public class BasicBlock : TrackedValue
         }
     }
 
-    /// <summary> Whether the block starts with a `PhiInst` or `GuardInst`. </summary>
-    public bool HasHeader => First is PhiInst or GuardInst;
+    /// <summary> Whether the block starts with a <see cref="PhiInst"/> or <see cref-"GuardInst"/>. </summary>
+    public bool HasHeader => First != null && First.IsHeader;
 
     internal BasicBlock(MethodBody method)
     {
         Method = method;
-    }
-
-    /// <summary> Adds a successor to this block. </summary>
-    public void Connect(BasicBlock succ)
-    {
-        Ensure.That(!succ.Preds.Contains(this));
-        //Allow calls with duplicated edges, but don't dupe in the list (SwitchInst)
-        if (!Succs.Contains(succ)) {
-            Succs.Add(succ);
-        }
-        succ.Preds.Add(this);
-    }
-
-    /// <summary> Removes a successor from this block. </summary>
-    public void Disconnect(BasicBlock succ)
-    {
-        Succs.Remove(succ);
-        succ.Preds.Remove(this);
-    }
-
-    public void Reconnect(BasicBlock prevSucc, BasicBlock newSucc)
-    {
-        Disconnect(prevSucc);
-        Connect(newSucc);
-    }
-
-    /// <summary> Remove edges from the branch targets. </summary>
-    /// <param name="redirectPhisTo"> If not null, incomming blocks for phis of branch successors will be replaced with this block; otherwise, the argument will be removed. </param>
-    public void DisconnectBranch(Instruction branch, BasicBlock? redirectPhisTo = null)
-    {
-        foreach (var oper in branch.Operands) {
-            if (oper is not BasicBlock succ) continue;
-
-            Disconnect(succ);
-
-            foreach (var phi in succ.Phis()) {
-                if (redirectPhisTo != null) {
-                    phi.ReplaceOperands(this, redirectPhisTo);
-                } else {
-                    phi.RemoveArg(this, true);
-                }
-            }
-        }
-    }
-    /// <summary> Create edges to the branch targets. </summary>
-    public void ConnectBranch(Instruction branch)
-    {
-        foreach (var oper in branch.Operands) {
-            if (oper is not BasicBlock succ) continue;
-
-            Connect(succ);
-        }
     }
 
     /// <summary> Inserts `newInst` before the first instruction in this block. </summary>
@@ -180,13 +150,6 @@ public class BasicBlock : TrackedValue
 
         var newBlock = Method.CreateBlock();
         MoveRange(newBlock, null, pos, Last);
-
-        //Move edges to new block
-        foreach (var succ in Succs) {
-            succ.Preds.Remove(this);
-            newBlock.Connect(succ);
-        }
-        Succs.Clear();
         //Add branch to new block
         SetBranch(newBlock);
         return newBlock;
@@ -195,21 +158,13 @@ public class BasicBlock : TrackedValue
     /// <summary> Insert intermediate blocks between critical predecessor edges. </summary>
     public void SplitCriticalEdges()
     {
-        if (Preds.Count < 2) return;
+        if (NumPreds < 2) return;
 
-        for (int i = 0; i < Preds.Count; i++) {
-            var pred = Preds[i];
-            if (pred.Succs.Count < 2) continue;
+        foreach (var pred in Preds) {
+            if (pred.NumSuccs < 2) continue;
 
-            //Create an intermediate block jumping to this
-            //(can't use SetBranch() because we're looping through the edges)
             var intermBlock = Method.CreateBlock(insertAfter: pred).SetName("CritEdge");
-            intermBlock.InsertLast(new BranchInst(this));
-            //Create `interm<->block` edge
-            intermBlock.Succs.Add(this);
-            Preds[i] = intermBlock;
-            //Create `pred<->interm` edge
-            pred.Reconnect(this, intermBlock);
+            intermBlock.SetBranch(this);
 
             //Redirect branches/phis to the intermediate block
             pred.Last.ReplaceOperands(this, intermBlock);
@@ -219,25 +174,27 @@ public class BasicBlock : TrackedValue
         }
     }
 
-    /// <summary> 
-    /// Removes the last branch instruction from the block (if it exists),
-    /// then adds `newBranch` (assumming it is a Branch/Switch/Return), and update edges accordingly.
-    /// </summary>
+    /// <summary> Replaces the incomming block of all phis in successor blocks from _this block_ with `newPred`. </summary>
+    public void RedirectSuccPhis(BasicBlock newPred)
+    {
+        foreach (var succ in Succs) {
+            foreach (var phi in succ.Phis()) {
+                phi.ReplaceOperands(this, newPred);
+            }
+        }
+    }
+
+    /// <summary> Replaces the block terminator with `newBranch`. </summary>
     public void SetBranch(Instruction newBranch)
     {
         Ensure.That(newBranch.IsBranch);
 
         if (Last != null && Last.IsBranch) {
-            DisconnectBranch(Last);
             Last.Remove();
         }
-        ConnectBranch(newBranch);
         InsertLast(newBranch);
     }
-    /// <summary> 
-    /// Replaces the last instruction in the block with a unconditional branch to `target`, 
-    /// and update edges accordingly. 
-    /// </summary>
+    /// <summary> Replaces the block terminator with a unconditional branch to `target`. </summary>
     public void SetBranch(BasicBlock target)
     {
         SetBranch(new BranchInst(target));
@@ -251,15 +208,6 @@ public class BasicBlock : TrackedValue
         foreach (var inst in this) {
             inst.RemoveOperandUses();
         }
-        foreach (var succ in Succs) {
-            succ.Preds.Remove(this);
-        }
-        foreach (var pred in Preds) {
-            pred.Succs.Remove(this);
-        }
-        Succs.Clear();
-        Preds.Clear();
-
         Method.RemoveBlock(this);
     }
 
@@ -303,9 +251,11 @@ public class BasicBlock : TrackedValue
             inst = inst.Next!;
         }
     }
+    /// <summary> Enumerates all <see cref="GuardInst"/> in this block. </summary>
+    /// <remarks> Blocks with guards (entry of a region) should not have phi instructions. </remarks>
     public IEnumerable<GuardInst> Guards()
     {
-        var inst = FirstNonPhi;
+        var inst = First;
         while (inst is GuardInst guard) {
             yield return guard;
             inst = inst.Next!;
@@ -321,6 +271,83 @@ public class BasicBlock : TrackedValue
             yield return inst;
             if (inst == last) break;
             inst = inst.Next!;
+        }
+    }
+
+    private static bool IsBranchLike(Instruction? inst)
+        => inst is BranchInst or SwitchInst or LeaveInst;
+
+    //Enumerating block users (ignoring phis) will lead directly to predecessors.
+    //GuardInst`s will not yield duplicates because handler blocks can only have one predecessor guard;
+    //this is not the case for SwitchInst, since there might be duplicates and Users() don't guarantee uniqueness.
+    public struct PredIterator : Iterator<BasicBlock>
+    {
+        ValueUserIterator _users;
+
+        public BasicBlock Current => _users.Current.Block;
+
+        internal PredIterator(BasicBlock block)
+            => _users = block.Users();
+
+        public bool MoveNext()
+        {
+            while (_users.MoveNext()) {
+                if (_users.Current is not PhiInst) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+    //Enumerating guard and branch instruction operands will directly lead to successors.
+    public struct SuccIterator : Iterator<BasicBlock>
+    {
+        BasicBlock _block;
+        Instruction? _currInst;
+        int _operIdx;
+
+        public BasicBlock Current { get; private set; } = null!;
+
+        internal SuccIterator(BasicBlock block)
+        {
+            _block = block;
+            _currInst = block.Last;
+
+            if (!IsBranchLike(_currInst)) {
+                _currInst = _block.First as GuardInst;
+            }
+            Debug.Assert(_block.Last is not GuardInst);
+        }
+
+        public bool MoveNext()
+        {
+            Debug.Assert(IsBranchLike(_currInst) || _currInst is GuardInst or null);
+
+            while (true) {
+                if (_currInst == null) {
+                    return false;
+                }
+                //Uncond branches only have one operand, cond and switches have at least 2.
+                //  Branch: [thenBlock]
+                //  CondBr: [cond, thenBlock, elseBlock]
+                //  Switch: [value, defaultBlock, case0?, case1?, ...]
+                //  Guard:  [handlerBlock, filterBlock?]
+                //  Leave:  [targetBlock]
+                var opers = _currInst.Operands;
+                int offset = opers.Length >= 2 && _currInst is not GuardInst ? 1 : 0;
+
+                if (_operIdx + offset < opers.Length) {
+                    Current = (BasicBlock)opers[_operIdx + offset];
+                    _operIdx++;
+                    return true;
+                }
+                var nextInst = 
+                    _currInst.Next == null && _currInst != _block.First
+                        ? _block.First //(if `_currInst` is the terminator)
+                        : _currInst.Next;
+                _currInst = nextInst as GuardInst;
+                _operIdx = 0;
+            }
         }
     }
 }

@@ -1,7 +1,6 @@
-using System.Collections.Immutable;
-
 using DistIL.AsmIO;
 using DistIL.IR;
+using DistIL.Util;
 
 public class BasicBlockTests
 {
@@ -83,20 +82,16 @@ public class BasicBlockTests
         block1.InsertLast(inst2);
         block1.InsertLast(inst3);
         block1.InsertLast(inst4);
-        block1.Connect(block2);
-        block1.Connect(block3);
 
         var inst5 = new BinaryInst(BinaryOp.Mul, inst1, inst2);
         var inst6 = new BranchInst(block4);
         block2.InsertLast(inst5);
         block2.InsertLast(inst6);
-        block2.Connect(block4);
 
         var inst7 = new BinaryInst(BinaryOp.Add, inst1, inst2);
         var inst8 = new BranchInst(block4);
         block3.InsertLast(inst7);
         block3.InsertLast(inst8);
-        block3.Connect(block4);
 
         var inst9 = new PhiInst((block2, inst5), (block3, inst7));
         var instA = new ReturnInst(inst4);
@@ -106,11 +101,11 @@ public class BasicBlockTests
         var newBlock = block1.Split(inst4);
         Assert.True(block1.Last is BranchInst br && br.Then == newBlock);
 
-        Assert.Equal(new[] { newBlock }, block1.Succs);
-        Assert.Equal(new[] { newBlock }, block2.Preds);
-        Assert.Equal(new[] { newBlock }, block3.Preds);
+        Assert.Equal(new[] { newBlock }, block1.Succs.ToList());
+        Assert.Equal(new[] { newBlock }, block2.Preds.ToList());
+        Assert.Equal(new[] { newBlock }, block3.Preds.ToList());
 
-        Assert.Equal(new[] { block2, block3 }, newBlock.Succs);
+        Assert.Equal(new[] { block2, block3 }, newBlock.Succs.ToList());
 
         Assert.Equal(inst4, newBlock.First);
         Assert.Equal(inst4, newBlock.Last);

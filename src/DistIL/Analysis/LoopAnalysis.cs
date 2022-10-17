@@ -46,7 +46,7 @@ public class LoopAnalysis : IMethodAnalysis
         var preHeader = default(BasicBlock);
         int numFound = 0;
         foreach (var pred in header.Preds) {
-            if (pred.Succs.Count == 1 && !body.Contains(pred) && domTree.Dominates(pred, header)) {
+            if (pred.NumSuccs == 1 && !body.Contains(pred) && domTree.Dominates(pred, header)) {
                 preHeader = pred;
                 numFound++;
             }

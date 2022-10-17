@@ -40,22 +40,21 @@ public class GraphTraversal
         Action<BasicBlock>? postVisit = null
     )
     {
-        var pending = new ArrayStack<(BasicBlock Node, int Index)>();
+        var pending = new ArrayStack<(BasicBlock Node, BasicBlock.SuccIterator Itr)>();
         var visited = new RefSet<BasicBlock>();
 
         visited.Add(entry);
-        pending.Push((entry, 0));
+        pending.Push((entry, entry.Succs));
         preVisit?.Invoke(entry);
 
         while (!pending.IsEmpty) {
             ref var top = ref pending.Top;
-            var children = top.Node.Succs;
 
-            if (top.Index < children.Count) {
-                var child = children[top.Index++];
+            if (top.Itr.MoveNext()) {
+                var child = top.Itr.Current;
 
                 if (visited.Add(child)) {
-                    pending.Push((child, 0));
+                    pending.Push((child, child.Succs));
                     preVisit?.Invoke(child);
                 }
             } else {

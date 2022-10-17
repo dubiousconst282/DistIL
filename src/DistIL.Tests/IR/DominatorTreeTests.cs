@@ -1,5 +1,5 @@
-using DistIL.IR;
 using DistIL.Analysis;
+using DistIL.IR;
 
 public class DomTreeTests
 {
@@ -82,13 +82,12 @@ public class DomTreeTests
         //1 -> 2 -> 3 --\       |
         //     \ -> 4 -> 5 -> 6 |
         //          \-----------/
-        b1.Connect(b2);
-        b2.Connect(b3);
-        b2.Connect(b4);
-        b3.Connect(b5);
-        b4.Connect(b5);
-        b4.Connect(b2);
-        b5.Connect(b6);
+        var cond = ConstInt.CreateI(1);
+        b1.SetBranch(b2);
+        b2.SetBranch(new BranchInst(cond, b3, b4));
+        b3.SetBranch(b5);
+        b4.SetBranch(new BranchInst(cond, b5, b2));
+        b5.SetBranch(b6);
 
         return new Data() {
             Method = method,
@@ -113,21 +112,18 @@ public class DomTreeTests
         var BB_51 = method.CreateBlock();
         var BB_56 = method.CreateBlock();
         var BB_62 = method.CreateBlock();
-        BB_01.Connect(BB_41);
-        BB_02.Connect(BB_13);
-        BB_02.Connect(BB_11);
-        BB_11.Connect(BB_15);
-        BB_13.Connect(BB_15);
-        BB_15.Connect(BB_38);
-        BB_15.Connect(BB_26);
-        BB_26.Connect(BB_38);
-        BB_38.Connect(BB_41);
-        BB_41.Connect(BB_02);
-        BB_41.Connect(BB_47);
-        BB_47.Connect(BB_56);
-        BB_51.Connect(BB_56);
-        BB_56.Connect(BB_51);
-        BB_56.Connect(BB_62);
+        var cond = ConstInt.CreateI(1);
+        BB_01.SetBranch(BB_41);
+        BB_02.SetBranch(new BranchInst(cond, BB_13, BB_11));
+        BB_11.SetBranch(BB_15);
+        BB_13.SetBranch(BB_15);
+        BB_15.SetBranch(new BranchInst(cond, BB_38, BB_26));
+        BB_26.SetBranch(BB_38);
+        BB_38.SetBranch(BB_41);
+        BB_41.SetBranch(new BranchInst(cond, BB_02, BB_47));
+        BB_47.SetBranch(BB_56);
+        BB_51.SetBranch(BB_56);
+        BB_56.SetBranch(new BranchInst(cond, BB_51, BB_62));
         return new Data() {
             Method = method,
             Blocks = new[] { BB_01, BB_02, BB_11, BB_13, BB_15, BB_26, BB_38, BB_41, BB_47, BB_51, BB_56, BB_62 },

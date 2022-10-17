@@ -76,7 +76,6 @@ public class ILImporter
 
             var guard = new GuardInst(kind, handlerBlock.Block, region.CatchType, filterBlock?.Block);
             startBlock.InsertBefore(startBlock.Last, guard);
-            startBlock.Connect(handlerBlock.Block); //dummy edge to avoid unreachable blocks
             mappings.Add(guard, region);
 
             //Push exception on handler/filter entry stack
@@ -85,7 +84,6 @@ public class ILImporter
             }
             if (hasFilter) {
                 filterBlock!.PushNoEmit(guard);
-                startBlock.Connect(filterBlock.Block);
             }
         }
 
@@ -100,9 +98,9 @@ public class ILImporter
             if (IsBlockNestedBy(region, state.EntryBlock)) {
                 var newBlock = _body.CreateBlock(insertAfter: state.EntryBlock.Prev);
 
-                //FIXME: stop hacking block edges!
-                foreach (var pred in state.EntryBlock.Preds.ToArray()) {
-                    Debug.Assert(pred.Succs.Count == 1);
+                //FIXME: Block.RedirectPreds()?
+                foreach (var pred in state.EntryBlock.Preds) {
+                    Debug.Assert(pred.NumSuccs == 1);
                     pred.SetBranch(newBlock);
                 }
                 newBlock.SetBranch(state.EntryBlock);

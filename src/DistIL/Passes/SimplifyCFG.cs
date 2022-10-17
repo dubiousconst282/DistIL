@@ -33,19 +33,12 @@ public class SimplifyCFG : MethodPass
     private bool MergeWithSucc(BasicBlock block, BranchInst jmp)
     {
         //succ can't start with a phi/guard, nor loop on itself, and we must be its only predecessor
-        if (!(jmp.Then is { HasHeader: false, Preds.Count: 1 } succ && succ != block)) return false;
+        if (!(jmp.Then is { HasHeader: false, NumPreds: 1 } succ && succ != block)) return false;
 
-        //Delete `block<->succ` edge
-        block.DisconnectBranch(jmp);
-        jmp.Remove();
-
-        //Create edge to succ's branch
-        if (succ.Last.IsBranch) {
-            succ.DisconnectBranch(succ.Last, redirectPhisTo: block);
-            block.ConnectBranch(succ.Last);
-        }
         //Move code
+        succ.RedirectSuccPhis(block);
         succ.MoveRange(block, block.Last, succ.First, succ.Last);
+        jmp.Remove();
         succ.Remove();
         return true;
     }
@@ -79,11 +72,11 @@ public class SimplifyCFG : MethodPass
         //both branches must be empty
         if (!(b1.First is BranchInst && b2.First is BranchInst)) return false;
         //both branches must jump to the same block
-        if (!(b1.Succs.Count == 1 && b2.Succs.Count == 1 && b1.Succs[0] == b2.Succs[0])) return false;
+        if (!(b1.NumSuccs == 1 && b2.NumSuccs == 1 && b1.Succs.First() == b2.Succs.First())) return false;
 
-        var finalBlock = b1.Succs[0]; //post dom of condBlock
+        var finalBlock = b1.Succs.First(); //post dom of condBlock
         //Check if final block is only reachable from b1 or b2
-        if (!(finalBlock.Preds.Count == 2)) return false;
+        if (!(finalBlock.NumPreds == 2)) return false;
 
         //If the final block starts with a phi, try convert it to a select
         if (finalBlock.First is PhiInst && !CreateSelects(finalBlock, br.Cond!, b1, b2)) return false;

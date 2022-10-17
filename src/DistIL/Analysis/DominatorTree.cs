@@ -82,7 +82,7 @@ public class DominatorTree : IMethodAnalysis
     /// <summary> Creates the tree nodes and returns a list with them in DFS post order. </summary>
     private Node[] CreateNodes()
     {
-        Debug.Assert(Method.EntryBlock.Preds.Count == 0);
+        Debug.Assert(Method.EntryBlock.NumPreds == 0);
 
         var nodes = new Node[Method.NumBlocks];
         int index = 0;
@@ -142,7 +142,7 @@ public class DominatorTree : IMethodAnalysis
         }
     }
 
-    private void ComputeChildren(Node[] nodes)
+    private static void ComputeChildren(Node[] nodes)
     {
         //Ignore entry node (^1) to avoid cycles in the children list
         foreach (var node in nodes.AsSpan()[..^1]) {
@@ -205,13 +205,13 @@ public class DominatorTree : IMethodAnalysis
 
 public class DominanceFrontier : IMethodAnalysis
 {
-    private static RefSet<BasicBlock> _emptySet = new();
-    private Dictionary<BasicBlock, RefSet<BasicBlock>> _df = new();
+    static readonly RefSet<BasicBlock> _emptySet = new();
+    readonly Dictionary<BasicBlock, RefSet<BasicBlock>> _df = new();
 
     public DominanceFrontier(DominatorTree domTree)
     {
         foreach (var block in domTree.Method) {
-            if (block.Preds.Count < 2) continue;
+            if (block.NumPreds < 2) continue;
 
             var blockDom = domTree.IDom(block);
 

@@ -36,13 +36,6 @@ public class Cloner
         foreach (var oldBlock in _oldBlocks) {
             var newBlock = (BasicBlock)_mappings[oldBlock];
 
-            //Clone edges
-            foreach (var succ in oldBlock.Succs) {
-                newBlock.Succs.Add(Remap(succ));
-            }
-            foreach (var pred in oldBlock.Preds) {
-                newBlock.Preds.Add(Remap(pred));
-            }
             //Clone instructions
             foreach (var inst in oldBlock) {
                 var newVal = _instCloner.Clone(inst);

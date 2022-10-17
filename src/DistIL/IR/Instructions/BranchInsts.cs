@@ -34,7 +34,9 @@ public class BranchInst : Instruction
     {
     }
     public BranchInst(Value cond, BasicBlock then, BasicBlock else_)
-        : base(cond, then, else_)
+        //Implicitly fold conditional branches with the same target, so that we can guarantee
+        //that there will be no duplicated yields when iterating block successors (except for SwitchInst).
+        : base(then == else_ ? new[] { then } : new[] { cond, then, else_ })
     {
     }
 

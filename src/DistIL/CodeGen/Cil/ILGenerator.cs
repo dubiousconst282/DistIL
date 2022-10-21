@@ -1,11 +1,11 @@
 namespace DistIL.CodeGen.Cil;
 
-using DistIL.IR.Utils;
+using DistIL.Analysis;
 
 public partial class ILGenerator : InstVisitor
 {
     MethodBody _method;
-    Forestifier _forest;
+    ForestAnalysis _forest;
     ILAssembler _asm = new();
     Dictionary<Instruction, Variable> _instSlots = new();
 
@@ -14,7 +14,7 @@ public partial class ILGenerator : InstVisitor
     public ILGenerator(MethodBody method)
     {
         _method = method;
-        _forest = new Forestifier(method);
+        _forest = new ForestAnalysis(method);
     }
 
     public ILMethodBody Process()
@@ -41,7 +41,7 @@ public partial class ILGenerator : InstVisitor
     {
         //Emit code for the rooted trees in the forest
         foreach (var inst in block) {
-            if (!_forest.IsRootedTree(inst) || inst is GuardInst) continue;
+            if (!_forest.IsTreeRoot(inst) || inst is GuardInst) continue;
 
             inst.Accept(this);
 

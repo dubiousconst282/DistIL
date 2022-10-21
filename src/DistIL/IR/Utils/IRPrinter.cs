@@ -3,6 +3,8 @@ namespace DistIL.IR.Utils;
 using System.IO;
 using System.Text.RegularExpressions;
 
+using DistIL.Analysis;
+
 public class IRPrinter
 {
     public static void ExportDot(MethodBody method, string filename)
@@ -138,7 +140,7 @@ public class IRPrinter
     public static void ExportForest(MethodBody method, TextWriter tw)
     {
         var pc = new PrintContext(tw, method.GetSymbolTable());
-        var forest = new Forestifier(method);
+        var forest = new ForestAnalysis(method);
 
         foreach (var block in method) {
             tw.Write($"{block}:");
@@ -146,7 +148,7 @@ public class IRPrinter
 
             int i = 0;
             foreach (var inst in block) {
-                if (!forest.IsRootedTree(inst)) continue;
+                if (!forest.IsTreeRoot(inst)) continue;
 
                 if (i++ > 0) pc.PrintLine();
 
@@ -171,7 +173,7 @@ public class IRPrinter
         }
         void PrintExpr_I(Instruction inst, int depth)
         {
-            if (depth > 0 && forest.IsRootedTree(inst)) {
+            if (depth > 0 && forest.IsTreeRoot(inst)) {
                 inst.PrintAsOperand(pc);
                 return;
             }

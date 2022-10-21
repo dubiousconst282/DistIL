@@ -1,11 +1,11 @@
-namespace DistIL.IR.Utils;
+namespace DistIL.Analysis;
 
-/// <summary> Computes information to help build expression trees from the linear IR. </summary>
-public class Forestifier
+/// <summary> Computes information that can be used to build expression trees from the linear IR. </summary>
+public class ForestAnalysis : IMethodAnalysis
 {
-    readonly RefSet<Instruction> _trees = new(); //tree instructions / statements
+    readonly RefSet<Instruction> _trees = new(); //expr tree roots / statements
 
-    public Forestifier(MethodBody method)
+    public ForestAnalysis(MethodBody method)
     {
         var interfs = new BlockInterfs();
 
@@ -22,23 +22,29 @@ public class Forestifier
         }
     }
 
-    private bool MustBeRooted(Instruction def, BlockInterfs interfs)
+    public static IMethodAnalysis Create(IMethodAnalysisManager mgr)
     {
-        //Void or unused insts don't need slots
+        return new ForestAnalysis(mgr.Method);
+    }
+
+    private static bool MustBeRooted(Instruction def, BlockInterfs interfs)
+    {
+        //Consider void or unused instructions on demand, to make the set smaller.
         if (!def.HasResult || def.NumUses == 0) return false;
 
-        //Def must have one use in the same block
+        //Def must have one use in the same block, with no interferences in between def and use
         if (def.NumUses >= 2 || def is PhiInst or GuardInst) return true;
 
         var use = def.GetFirstUser()!;
         return use.Block != def.Block || interfs.IsDefInterferedBeforeUse(def, use);
     }
 
-    /// <summary> Returns whether the specified instruction is a rooted tree or statement (i.e. must be emitted and/or assigned into a temp variable). </summary>
-    public bool IsRootedTree(Instruction inst) => _trees.Contains(inst) || !inst.HasResult || (inst.NumUses == 0 && inst.HasSideEffects);
+    /// <summary> Returns whether the specified instruction is a the root of a tree/statement (i.e. must be emitted and/or assigned into a temp variable). </summary>
+    public bool IsTreeRoot(Instruction inst) 
+        => _trees.Contains(inst) || !inst.HasResult || (inst.NumUses == 0 && inst.HasSideEffects);
 
-    /// <summary> Returns whether the specified instruction is a leaf (i.e. can be inlined into an operand). </summary>
-    public bool IsLeaf(Instruction inst) => !IsRootedTree(inst);
+    /// <summary> Returns whether the specified instruction is a leaf or branch (i.e. can be inlined into an operand). </summary>
+    public bool IsLeaf(Instruction inst) => !IsTreeRoot(inst);
 
     class BlockInterfs
     {
@@ -77,25 +83,25 @@ public class Forestifier
             int useIdx = _indices[use];
 
             if (def is LoadVarInst { Var: var var }) {
-                //If this variable is exposed, any store can change its value.
-                //Otherwise, we can use precise interferences.
+                //If this variable is exposed, assume that any store can change its value
                 if (var.IsExposed && _memInterfs.ContainsRange(defIdx, useIdx)) {
                     return true;
                 }
+                //...otherwise, we can use precise interferences
                 if (_varInterfs.TryGetValue(var, out var localInterfs)) {
                     return localInterfs.ContainsRange(defIdx, useIdx);
                 }
                 return false;
             }
-            //These can be aliased globally, so we can't have precise interferences,
-            //or at least not without more extensive tracking.
+            //Like exposed variables, these can be aliased globally and requires
+            //something like alias analysis for precise results, which we don't have yet.
             if (def is LoadArrayInst or LoadFieldInst or LoadPtrInst) {
                 return _memInterfs.ContainsRange(defIdx, useIdx);
             }
             //Assume that instructions with side-effects can interfere with anything else
             if (_sideEffects.ContainsRange(defIdx, useIdx)) {
                 foreach (var oper in def.Operands) {
-                    if (!IsImmutable(oper)) {
+                    if (!IsInvariant(oper)) {
                         return true;
                     }
                 }
@@ -103,9 +109,9 @@ public class Forestifier
             return false;
         }
 
-        private bool IsImmutable(Value oper)
+        private static bool IsInvariant(Value oper)
         {
-            //Instructions with more than two uses always have a immutable variable for its entire live range
+            //Instructions with more than two uses always have a invariant variable for its entire live range
             return oper is Const or Argument or Instruction { NumUses: >= 2 };
         }
     }

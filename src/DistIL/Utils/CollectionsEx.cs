@@ -81,33 +81,4 @@ public static class CollectionsEx
             ? builder.MoveToImmutable()
             : builder.ToImmutable();
     }
-
-    public static ReverseEnumerable<T> ReverseItr<T>(this T[] arr)
-        => new() { Span = arr.AsSpan() };
-
-    public static ReverseEnumerable<T> ReverseItr<T>(this List<T> list)
-        => new() { Span = CollectionsMarshal.AsSpan(list) };
-
-    public static ReverseEnumerable<T> ReverseItr<T>(this ReadOnlySpan<T> span)
-        => new() { Span = span };
-
-    public static ReverseEnumerable<T> ReverseItr<T>(this ImmutableArray<T> arr)
-        => new() { Span = arr.AsSpan() };
-
-    public ref struct ReverseEnumerable<T>
-    {
-        public ReadOnlySpan<T> Span;
-
-        public Enumerator GetEnumerator()
-            => new() { Span = Span, Index = Span.Length };
-
-        public ref struct Enumerator
-        {
-            public ReadOnlySpan<T> Span;
-            public int Index;
-
-            public ref readonly T Current => ref Span[Index];
-            public bool MoveNext() => --Index >= 0;
-        }
-    }
 }

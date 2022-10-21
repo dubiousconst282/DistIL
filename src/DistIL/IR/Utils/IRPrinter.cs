@@ -70,7 +70,7 @@ public class IRPrinter
         foreach (var block in method) {
             pc.Print($"{block}:");
             if (block.NumPreds > 0) {
-                pc.Print($" //preds: {string.Join(" ", block.Preds.AsEnumerator())}");
+                pc.Print($" //preds: {string.Join(" ", block.Preds.AsEnumerable())}");
             }
             pc.Push();
 

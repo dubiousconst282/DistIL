@@ -223,55 +223,35 @@ public class BasicBlock : TrackedValue
 
     public IEnumerator<Instruction> GetEnumerator()
     {
-        if (First == null) yield break;
-
-        var inst = First;
-        var last = Last; //copy to allow for removes while iterating
-        while (true) {
+        for (var inst = First; inst != null; inst = inst.Next) {
             yield return inst;
-            if (inst == last) break;
-            inst = inst.Next!;
         }
     }
     public IEnumerable<Instruction> Reversed()
     {
-        var inst = Last;
-        var first = First; //copy to allow for removes while iterating
-        while (true) {
+        for (var inst = Last; inst != null; inst = inst.Prev) {
             yield return inst;
-            if (inst == first) break;
-            inst = inst.Prev!;
         }
     }
 
     public IEnumerable<PhiInst> Phis()
     {
-        var inst = First;
-        while (inst is PhiInst phi) {
+        for (var inst = First; inst is PhiInst phi; inst = inst.Next) {
             yield return phi;
-            inst = inst.Next!;
         }
     }
     /// <summary> Enumerates all <see cref="GuardInst"/> in this block. </summary>
     /// <remarks> Blocks with guards (entry of a region) should not have phi instructions. </remarks>
     public IEnumerable<GuardInst> Guards()
     {
-        var inst = First;
-        while (inst is GuardInst guard) {
+        for (var inst = First; inst is GuardInst guard; inst = inst.Next) {
             yield return guard;
-            inst = inst.Next!;
         }
     }
     public IEnumerable<Instruction> NonPhis()
     {
-        var inst = FirstNonPhi;
-        if (inst == null) yield break;
-        var last = Last; //copy to allow for removes while iterating
-
-        while (true) {
+        for (var inst = FirstNonPhi; inst != null; inst = inst.Next) {
             yield return inst;
-            if (inst == last) break;
-            inst = inst.Next!;
         }
     }
 
@@ -299,6 +279,8 @@ public class BasicBlock : TrackedValue
             }
             return false;
         }
+
+        public override string ToString() => "[" + string.Join(", ", this.AsEnumerable()) + "]";
     }
     //Enumerating guard and branch instruction operands will directly lead to successors.
     public struct SuccIterator : Iterator<BasicBlock>
@@ -350,5 +332,7 @@ public class BasicBlock : TrackedValue
                 _operIdx = 0;
             }
         }
+
+        public override string ToString() => "[" + string.Join(", ", this.AsEnumerable()) + "]";
     }
 }

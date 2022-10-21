@@ -32,7 +32,7 @@ public class Verifier
         foreach (var block in _method) {
             var succs = CalculateSuccs(block);
 
-            if (!AreSetsEqual(succs, block.Succs.AsEnumerator())) {
+            if (!AreSetsEqual(succs, block.Succs.AsEnumerable())) {
                 Error(block, "Invalid successor list");
             }
             foreach (var succ in succs) {
@@ -42,7 +42,7 @@ public class Verifier
         }
         //Verify preds
         foreach (var (block, preds) in expPreds) {
-            if (!AreSetsEqual(preds, block.Preds.AsEnumerator())) {
+            if (!AreSetsEqual(preds, block.Preds.AsEnumerable())) {
                 Error(block, "Invalid predecessor list");
             }
         }
@@ -93,7 +93,7 @@ public class Verifier
                         Error(phi, "Phi should not have duplicated block arguments");
                     }
                 }
-                phiPreds.SymmetricExceptWith(block.Preds.AsEnumerator());
+                phiPreds.SymmetricExceptWith(block.Preds.AsEnumerable());
                 if (phiPreds.Count != 0) {
                     Error(phi, "Phi must have one argument for each predecessor in the parent block");
                 }

@@ -129,7 +129,23 @@ public class RefSet<T> where T : class
 
     public Enumerator GetEnumerator() => new(this);
 
-    public struct Enumerator
+    public override string ToString()
+    {
+        var sb = new StringBuilder("[");
+        int i = 0;
+        foreach (var elem in this) {
+            if (sb.Length > 1024) {
+                sb.Append(", ...");
+                break;
+            } else if (i++ > 0) {
+                sb.Append(", ");
+            }
+            sb.Append(elem);
+        }
+        return sb.Append("]").ToString();
+    }
+
+    public struct Enumerator : Iterator<T>
     {
         T?[] _slots;
         int _index;

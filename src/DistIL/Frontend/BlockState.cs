@@ -1,31 +1,38 @@
 namespace DistIL.Frontend;
+
 internal class BlockState
 {
     readonly ILImporter _importer;
     readonly MethodBody _body;
+    readonly int _startOffset;
+    readonly bool _isInsideEhRegion;
+
     private ModuleDef _mod => _body.Definition.Module;
 
-    public BasicBlock Block { get; }
+    public readonly BasicBlock Block;
     //A parent block that enters this one. Currently used to handle nested exception regions.
     public BasicBlock EntryBlock;
-    readonly ArrayStack<Value> _stack;
 
+    readonly ArrayStack<Value> _stack;
     //Variables that were left in the stack after the execution of a predecessor block.
     private ArrayStack<PhiInst>? _entryStack;
     readonly List<BlockState> _succStates = new();
 
     private InstFlags _prefixFlags = InstFlags.None;
     private TypeDesc? _callConstraint;
-    readonly bool _isInsideEhRegion;
 
-    public BlockState(ILImporter importer, bool isInsideEhRegion)
+    public BlockState(ILImporter importer, int startOffset)
     {
         _importer = importer;
         _body = importer._body;
+        _startOffset = startOffset;
+        
         Block = _body.CreateBlock();
         EntryBlock = Block;
-        _stack = new ArrayStack<Value>(_body.Definition.ILBody!.MaxStack);
-        _isInsideEhRegion = isInsideEhRegion;
+
+        var ilBody = importer.Method.ILBody!;
+        _stack = new ArrayStack<Value>(ilBody.MaxStack);
+        _isInsideEhRegion = importer._regionTree?.Contains(startOffset) ?? false;
     }
 
     public void Emit(Instruction inst)
@@ -663,18 +670,18 @@ internal class BlockState
 
     private void ImportLoadField(FieldDesc field, bool isStatic)
     {
-        var obj = field.IsStatic ? null : Pop();
+        var obj = isStatic ? null : Pop();
         Push(new LoadFieldInst(field, obj));
     }
     private void ImportStoreField(FieldDesc field, bool isStatic)
     {
         var value = Pop();
-        var obj = field.IsStatic ? null : Pop();
+        var obj = isStatic ? null : Pop();
         Emit(new StoreFieldInst(field, obj, value));
     }
     private void ImportFieldAddr(FieldDesc field, bool isStatic)
     {
-        var obj = field.IsStatic ? null : Pop();
+        var obj = isStatic ? null : Pop();
         Push(new FieldAddrInst(field, obj));
     }
 
@@ -721,12 +728,27 @@ internal class BlockState
     private void ImportLeave(int targetOffset)
     {
         Ensure.That(_isInsideEhRegion, "Leave instruction found outside protected region");
-        var targetBlock = AddSucc(targetOffset);
-        TerminateBlock(new LeaveInst(targetBlock));
+
+        var chainBlock = _importer.GetBlock(targetOffset).Block;
+        var depth = _importer._regionTree!.GetNestingDepth(_startOffset, targetOffset);
+
+        //Create a chain of blocks leaving all nested regions until target (in reverse order)
+        while (--depth > 0) {
+            //Try reuse an existing chain block
+            var nextBlock = chainBlock.Preds.FirstOrDefault(b => b.First is LeaveInst);
+
+            if (nextBlock == null) {
+                nextBlock = _body.CreateBlock(insertAfter: Block);
+                nextBlock.InsertLast(new LeaveInst(chainBlock!));
+            }
+            chainBlock = nextBlock;
+        }
+        //We don't need to call AddSucc() because the eval stack should be discarded.
+        TerminateBlock(new LeaveInst(chainBlock));
     }
     private void ImportContinue(bool isFromFilter)
     {
-        Ensure.That(_isInsideEhRegion, "Leave instruction found outside protected region");
+        Ensure.That(_isInsideEhRegion, "Endfinally/filter instruction found outside protected region");
         var filterResult = isFromFilter ? Pop() : null;
         TerminateBlock(new ContinueInst(filterResult));
     }

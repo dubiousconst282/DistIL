@@ -9,19 +9,20 @@ public class ILImporter
     internal MethodBody _body;
     internal VarFlags[] _varFlags; //Used to discover variables crossing try blocks/exposed address
     internal Variable[] _argSlots; //Argument variables
+    internal RegionNode? _regionTree;
 
     readonly Dictionary<int, BlockState> _blocks = new();
 
     public ILImporter(MethodDef method)
     {
+        Ensure.That(method.ILBody != null);
         Method = method;
-        if (method.ILBody == null) {
-            throw new ArgumentException("Method has no body to import");
-        }
+        _body = new MethodBody(method);
+
         int numVars = method.Params.Length + method.ILBody.Locals.Count;
         _argSlots = new Variable[method.Params.Length];
         _varFlags = new VarFlags[numVars];
-        _body = new MethodBody(method);
+        _regionTree = RegionNode.BuildTree(method.ILBody.ExceptionRegions);
     }
 
     public MethodBody ImportCode()
@@ -45,7 +46,7 @@ public class ILImporter
 
         int startOffset = 0;
         foreach (int endOffset in leaders) {
-            _blocks[startOffset] = new BlockState(this, IsInsideRegion(regions, startOffset));
+            _blocks[startOffset] = new BlockState(this, startOffset);
             startOffset = endOffset;
         }
         //Ensure that the entry block don't have predecessors
@@ -55,28 +56,27 @@ public class ILImporter
         }
     }
 
-    private void CreateGuards(List<ExceptionRegion> regions)
+    private void CreateGuards(List<ExceptionRegion> clauses)
     {
-        var mappings = new Dictionary<GuardInst, ExceptionRegion>(regions.Count);
-        
+        var mappings = new Dictionary<GuardInst, ExceptionRegion>(clauses.Count);
+
         //I.12.4.2.5 Overview of exception handling
-        foreach (var region in regions) {
-            var kind = region.Kind switch {
+        foreach (var clause in clauses) {
+            var kind = clause.Kind switch {
                 ExceptionRegionKind.Catch or
                 ExceptionRegionKind.Filter  => GuardKind.Catch,
                 ExceptionRegionKind.Finally => GuardKind.Finally,
                 ExceptionRegionKind.Fault   => GuardKind.Fault,
                 _ => throw new InvalidOperationException()
             };
-            bool hasFilter = region.Kind == ExceptionRegionKind.Filter;
+            bool hasFilter = clause.Kind == ExceptionRegionKind.Filter;
 
-            var startBlock = GetOrSplitStartBlock(region);
-            var handlerBlock = GetBlock(region.HandlerStart);
-            var filterBlock = hasFilter ? GetBlock(region.FilterStart) : null;
+            var startBlock = GetOrSplitStartBlock(clause);
+            var handlerBlock = GetBlock(clause.HandlerStart);
+            var filterBlock = hasFilter ? GetBlock(clause.FilterStart) : null;
 
-            var guard = new GuardInst(kind, handlerBlock.Block, region.CatchType, filterBlock?.Block);
-            startBlock.InsertBefore(startBlock.Last, guard);
-            mappings.Add(guard, region);
+            var guard = new GuardInst(kind, handlerBlock.Block, clause.CatchType, filterBlock?.Block);
+            startBlock.InsertAnteLast(guard);
 
             //Push exception on handler/filter entry stack
             if (kind == GuardKind.Catch) {
@@ -85,6 +85,7 @@ public class ILImporter
             if (hasFilter) {
                 filterBlock!.PushNoEmit(guard);
             }
+            mappings[guard] = clause;
         }
 
         BasicBlock GetOrSplitStartBlock(ExceptionRegion region)
@@ -95,6 +96,7 @@ public class ILImporter
             //Note that this code relies on the region table to be correctly ordered, as required by ECMA335:
             //  "If handlers are nested, the most deeply nested try blocks shall come
             //  before the try blocks that enclose them."
+            //TODO: consider using the region tree for this
             if (IsBlockNestedBy(region, state.EntryBlock)) {
                 var newBlock = _body.CreateBlock(insertAfter: state.EntryBlock.Prev);
 
@@ -124,14 +126,12 @@ public class ILImporter
     {
         //Insert argument copies to local vars on the entry block
         var entryBlock = _body.EntryBlock ?? GetBlock(0).Block;
-        var firstInst = entryBlock.First?.Prev;
         var args = _body.Args;
         for (int i = 0; i < args.Length; i++) {
             var arg = args[i];
             var slot = _argSlots[i] = new Variable(arg.ResultType, name: $"a_{arg.Name}");
             var store = new StoreVarInst(slot, arg);
-            entryBlock.InsertAfter(firstInst, store);
-            firstInst = store;
+            entryBlock.InsertAnteLast(store);
         }
 
         //Import code
@@ -142,15 +142,6 @@ public class ILImporter
             block.ImportCode(code[startIndex..endIndex]);
             startIndex = endIndex;
         }
-    }
-
-    private static bool IsInsideRegion(List<ExceptionRegion> regions, int offset)
-    {
-        return regions.Any(r =>
-            (offset >= r.TryStart && offset < r.TryEnd) ||
-            (offset >= r.HandlerStart && offset < r.HandlerEnd) ||
-            (r.Kind == ExceptionRegionKind.Filter && offset >= r.FilterStart && offset < r.FilterEnd)
-        );
     }
 
     //Returns a bitset containing all instruction offsets where a block starts (branch targets).

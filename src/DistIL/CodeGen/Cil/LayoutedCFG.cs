@@ -1,5 +1,7 @@
 namespace DistIL.CodeGen.Cil;
 
+using DistIL.Analysis;
+
 /// <summary>
 /// Represents a flat list of basic blocks, ordered in such a way that maximizes the
 /// number of fallthrough blocks, and groups together blocks in the same (protected) regions.
@@ -14,80 +16,77 @@ public class LayoutedCFG
     {
         var blocks = new BasicBlock[method.NumBlocks];
         var regions = Array.Empty<LayoutedRegion>();
-        var visited = new RefSet<BasicBlock>();
-        int blockIdx = 0, regionIdx = 0;
+        int blockIdx = 0, numGuards = 0;
 
-        Recurse(method.EntryBlock, null!);
-        Debug.Assert(blockIdx == blocks.Length);
+        foreach (var block in method) {
+            blocks[blockIdx++] = block;
+            numGuards += block.Guards().Count();
+        }
 
-        Array.Resize(ref regions, regionIdx);
+        if (numGuards > 0) {
+            var regionAnalysis = new ProtectedRegionAnalysis(method);
+            var clauseIndices = new Dictionary<GuardInst, int>(numGuards);
+            var blockIndices = new Dictionary<BasicBlock, int>(method.NumBlocks);
+            var orderedBlocks = blocks.AsSpan().ToArray(); //copy
+            regions = new LayoutedRegion[numGuards];
+            blockIdx = 0;
+
+            for (int i = 0; i < blocks.Length; i++) {
+                blockIndices[blocks[i]] = i;
+            }
+            LayoutRegion(regionAnalysis.Root);
+            
+            (int Start, int End) LayoutRegion(ProtectedRegion node)
+            {
+                int startIdx = blockIdx;
+
+                var remainingBlocks = new BitSet();
+                int firstBlockIdx = 0;
+                foreach (var block in node.Blocks) {
+                    remainingBlocks.Add(blockIndices[block]);
+                }
+
+                //Recurse into children regions
+                foreach (var child in node.Children) {
+                    PlaceAntecessorBlocks(child.StartBlock);
+                    var range = LayoutRegion(child);
+
+                    var guard = (GuardInst?)child.StartBlock.Users().FirstOrDefault(u => u is GuardInst);
+                    if (guard != null) {
+                        GetRegion(guard).UpdateRanges(child.StartBlock, range);
+                    }
+                }
+                PlaceAntecessorBlocks(null);
+
+                foreach (var guard in node.StartBlock.Guards()) {
+                    GetRegion(guard).UpdateRanges(node.StartBlock, (startIdx, blockIdx));
+                }
+                return (startIdx, blockIdx);
+
+                void PlaceAntecessorBlocks(BasicBlock? limit)
+                {
+                    int endIdx = limit != null ? blockIndices[limit] : blockIndices.Count;
+                    foreach (int idx in remainingBlocks.GetRangeEnumerator(firstBlockIdx, endIdx)) {
+                        blocks[blockIdx++] = orderedBlocks[idx];
+                    }
+                    firstBlockIdx = endIdx;
+                }
+            }
+            ref LayoutedRegion GetRegion(GuardInst guard)
+            {
+                ref int regionIdx = ref clauseIndices.GetOrAddRef(guard, out bool regionIdxExists);
+                if (!regionIdxExists) {
+                    regionIdx = clauseIndices.Count - 1;
+                    regions[regionIdx].Guard = guard;
+                }
+                return ref regions[regionIdx];
+            }
+        }
 
         return new LayoutedCFG() {
             Blocks = blocks,
             Regions = regions
         };
-
-        (int Start, int End) Recurse(BasicBlock entry, ArrayStack<BasicBlock> parentWorklist)
-        {
-            var worklist = new ArrayStack<BasicBlock>();
-            worklist.Push(entry);
-            visited.Add(entry);
-
-            int startIdx = blockIdx;
-
-            while (worklist.TryPop(out var block)) {
-                //Recurse into new regions
-                if (block != entry && block.Guards().Any()) {
-                    //Mark handler blocks as visited to prevent them from being visited again
-                    foreach (var guard in block.Guards()) {
-                        visited.Add(guard.HandlerBlock);
-                        if (guard.HasFilter) {
-                            visited.Add(guard.FilterBlock);
-                        }
-                    }
-                    var tryRange = Recurse(block, worklist);
-
-                    foreach (var guard in block.Guards()) {
-                        Array.Resize(ref regions, (regionIdx + 4) & ~3); //grow in steps of 4
-                        ref var region = ref regions[regionIdx++];
-                        
-                        region = new LayoutedRegion() {
-                            Guard = guard, TryRange = tryRange
-                        };
-                        //Filter region must be before the handler region (see ExceptionRegion struct)
-                        if (guard.HasFilter) {
-                            visited.Remove(guard.FilterBlock);
-                            region.FilterRange = Recurse(guard.FilterBlock, worklist);
-                        }
-                        visited.Remove(guard.HandlerBlock);
-                        region.HandlerRange = Recurse(guard.HandlerBlock, worklist);
-                    }
-                    continue;
-                }
-                blocks[blockIdx++] = block;
-
-                //Add succs into worklist (parent's if the block is leaving the current region)
-                var destList = block.Last is LeaveInst or ContinueInst ? parentWorklist : worklist;
-                foreach (var succ in block.Succs) {
-                    if (visited.Add(succ)) {
-                        destList.Push(succ);
-                    }
-                }
-            }
-            return (startIdx, blockIdx);
-        }
-    }
-
-    /// <summary> Returns the `GuardInst` whose catch/filter handler entry block is `block` </summary>
-    public GuardInst? GetCatchGuard(BasicBlock block)
-    {
-        foreach (ref var region in Regions.AsSpan()) {
-            var guard = region.Guard;
-            if (guard.Kind == GuardKind.Catch && (guard.HandlerBlock == block || guard.FilterBlock == block)) {
-                return guard;
-            }
-        }
-        return null;
     }
 
     public override string ToString()
@@ -106,4 +105,17 @@ public struct LayoutedRegion
 {
     public GuardInst Guard;
     public (int Start, int End) TryRange, HandlerRange, FilterRange;
+
+    internal void UpdateRanges(BasicBlock entryBlock, (int start, int end) range)
+    {
+        if (entryBlock == Guard.Block) {
+            TryRange = range;
+        } else if (entryBlock == Guard.HandlerBlock) {
+            HandlerRange = range;
+        } else if (entryBlock == Guard.FilterBlock) {
+            FilterRange = range;
+        } else {
+            throw new UnreachableException();
+        }
+    }
 }

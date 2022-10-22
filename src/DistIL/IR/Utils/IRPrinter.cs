@@ -16,6 +16,7 @@ public class IRPrinter
     public static void ExportDot(MethodBody method, TextWriter tw)
     {
         var pc = new GraphvizPrintContext(tw, method.GetSymbolTable());
+        bool hasGuards = false;
 
         tw.WriteLine("digraph {");
         tw.WriteLine("  node[shape=plaintext fontname=consolas fontsize=12 fontcolor=\"#D4D4D4\"]");
@@ -51,11 +52,41 @@ public class IRPrinter
                 foreach (var guard in block.Guards()) {
                     if (guard.HandlerBlock == succ || guard.FilterBlock == succ) {
                         (style, port) = ("[style=dashed color=gray]", "e");
+                        break;
                     }
                 }
                 tw.Write($"  {block}:{port} -> {succ}{style}\n");
             }
             tw.Write("\n");
+
+            hasGuards |= block.Guards().Any();
+        }
+
+        if (hasGuards) {
+            int clusterId = 0;
+            var regionAnalysis = new ProtectedRegionAnalysis(method);
+            PrintCluster(regionAnalysis.Root, "  ");
+
+            void PrintCluster(ProtectedRegion region, string indent)
+            {
+                tw.Write($"{indent}subgraph cluster_{++clusterId} {{\n{indent}  ");
+                if (region != regionAnalysis.Root) {
+                    bool isHandler = region.StartBlock.Users().Any(u => u is GuardInst);
+                    tw.Write($"bgcolor=\"{(isHandler ? "#0000FF08" : "#00FF000A")}\" ");
+                    tw.Write($"style=\"{(isHandler ? "dashed" : "solid")}\"\n");
+                } else {
+                    tw.Write($"style=\"invis\"\n");
+                }
+                tw.Write(indent + "  ");
+                foreach (var block in region.Blocks) {
+                    tw.Write(block + " ");
+                }
+                tw.Write("\n");
+                foreach (var child in region.Children) {
+                    PrintCluster(child, indent + "  ");
+                }
+                tw.Write($"{indent}}}\n");
+            }
         }
         tw.Write("}\n");
     }

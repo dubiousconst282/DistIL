@@ -26,9 +26,19 @@ public partial class ILGenerator : InstVisitor
             var block = blocks[i];
             _nextBlock = i + 1 < blocks.Length ? blocks[i + 1] : null;
 
+            //Insert nop to serve as an anchor if there's a loop outside this region, e.g:
+            //  while (true) { try { ... } }    ->  
+            //  BB_01: try; ...; leave BB_01;   ->
+            //  IL_00: nop; IL_01: ...; IL_xx: leave IL0;
+            //Blocks with a single jump are also considered, so this will occasionaly
+            //false trigger, but it should cover all cases and only cost a single byte.
+            if (block.First is GuardInst && block.Preds.Any(p => p.Last is LeaveInst || p.First is BranchInst { IsJump: true })) {
+                _asm.Emit(ILCode.Nop);
+            }
             _asm.StartBlock(block);
 
-            var guard = layout.GetCatchGuard(block);
+            //If this is the entry block of a handler/filter, pop the exception to the guard variable
+            var guard = block.Users().FirstOrDefault(u => u is GuardInst { Kind: not GuardKind.Finally });
             if (guard != null) {
                 _asm.EmitStore(GetSlot(guard));
             }

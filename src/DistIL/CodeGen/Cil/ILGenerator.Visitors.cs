@@ -192,26 +192,37 @@ partial class ILGenerator
 
     public void Visit(BranchInst inst)
     {
-        if (inst.IsConditional) {
-            //`br cmp.op(x, y), @then;`  ->  `br.op x, y, @then;`
-            if (inst.Cond is CompareInst cmp && _forest.IsLeaf(cmp) &&
-                ILTables.GetBranchCode(cmp.Op) is var code && code != default
-            ) {
-                Push(cmp.Left);
+        if (inst.IsJump) {
+            EmitFallthrough(inst.Then);
+            return;
+        }
+        //Invert condition if we can fallthrough one of its branches
+        bool invert = _nextBlock == inst.Then; 
+        var code = ILCode.Nop;
 
-                //`x eq/ne [0|null]`  ->  `brfalse/brtrue`
-                if (cmp is { Op: CompareOp.Eq or CompareOp.Ne, Right: ConstInt { Value: 0 } or ConstNull }) {
-                    code = cmp.Op == CompareOp.Eq ? ILCode.Brfalse : ILCode.Brtrue;
-                } else {
+        //`br cmp.op(x, y), @then;`  ->  `br.op x, y, @then;`
+        if (inst.Cond is CompareInst cmp && _forest.IsLeaf(cmp)) {
+            var op = invert ? cmp.Op.GetNegated() : cmp.Op;
+
+            //`x eq|ne [0|null]`  ->  `brfalse/brtrue`
+            if (op is CompareOp.Eq or CompareOp.Ne && cmp.Right is ConstInt { Value: 0 } or ConstNull) {
+                code = (op == CompareOp.Eq) ? ILCode.Brfalse : ILCode.Brtrue;
+                Push(cmp.Left);
+            } else {
+                code = ILTables.GetBranchCode(op);
+
+                if (code != ILCode.Nop) {
+                    Push(cmp.Left);
                     Push(cmp.Right);
                 }
-            } else {
-                Push(inst.Cond);
-                code = ILCode.Brtrue;
             }
-            _asm.Emit(code, inst.Then);
         }
-        EmitFallthrough(inst.IsJump ? inst.Then : inst.Else);
+        if (code == ILCode.Nop) {
+            Push(inst.Cond);
+            code = invert ? ILCode.Brfalse : ILCode.Brtrue;
+        }
+        _asm.Emit(code, invert ? inst.Else : inst.Then);
+        EmitFallthrough(invert ? inst.Then : inst.Else);
     }
     public void Visit(SwitchInst inst)
     {

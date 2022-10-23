@@ -17,7 +17,7 @@ public partial class ILGenerator : InstVisitor
         _forest = new ForestAnalysis(method);
     }
 
-    public ILMethodBody Process()
+    public ILMethodBody Generate()
     {
         var layout = LayoutedCFG.Compute(_method);
         var blocks = layout.Blocks;
@@ -29,9 +29,12 @@ public partial class ILGenerator : InstVisitor
             //Insert nop to serve as an anchor if there's a loop outside this region, e.g:
             //  while (true) { try { ... } }    ->  
             //  BB_01: try; ...; leave BB_01;   ->
-            //  IL_00: nop; IL_01: ...; IL_xx: leave IL0;
+            //  IL_00: nop; IL_01: ...; IL_xx: leave IL_00;
             //Blocks with a single jump are also considered, so this will occasionaly
             //false trigger, but it should cover all cases and only cost a single byte.
+            //FIXME: This may not work properly if there's no predecessor block,
+            //       we should check for this in the layoutizer or when assembling regions
+            //FIXME: Check if we actually need this (it looks perfectly fine, but ILSpy decomps it weirdly)
             if (block.First is GuardInst && block.Preds.Any(p => p.Last is LeaveInst || p.First is BranchInst { IsJump: true })) {
                 _asm.Emit(ILCode.Nop);
             }

@@ -38,10 +38,11 @@ public partial class ILGenerator : InstVisitor
             if (block.First is GuardInst && block.Preds.Any(p => p.Last is LeaveInst || p.First is BranchInst { IsJump: true })) {
                 _asm.Emit(ILCode.Nop);
             }
-            _asm.StartBlock(block);
-
             //If this is the entry block of a handler/filter, pop the exception to the guard variable
             var guard = block.Users().FirstOrDefault(u => u is GuardInst { Kind: not GuardKind.Finally });
+
+            _asm.StartBlock(block, guard != null);
+
             if (guard != null) {
                 _asm.EmitStore(GetSlot(guard));
             }

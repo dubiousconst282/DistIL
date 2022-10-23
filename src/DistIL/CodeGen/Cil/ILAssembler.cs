@@ -11,9 +11,14 @@ internal class ILAssembler
     int _stackDepth = 0, _maxStackDepth = 0;
 
     /// <summary> Specifies that next emitted instructions belongs to the specified block. </summary>
-    public void StartBlock(BasicBlock block)
+    public void StartBlock(BasicBlock block, bool isCatchEntry)
     {
         _blockStarts.Add(block, _insts.Count);
+
+        if (isCatchEntry) {
+            _stackDepth++;
+            _maxStackDepth = Math.Max(_maxStackDepth, _stackDepth);
+        }
     }
 
     public void Emit(ILCode op, object? operand = null)
@@ -23,17 +28,21 @@ internal class ILAssembler
         switch (op) {
             case ILCode.Call or ILCode.Callvirt or ILCode.Newobj: {
                 var method = (MethodDesc)operand!;
-                _stackDepth += method.Params.Length - (op == ILCode.Newobj ? 1 : 0);
-                _stackDepth -= method.HasResult ? 1 : 0;
+                _stackDepth -= method.Params.Length;
+                _stackDepth += method.ReturnType != PrimType.Void ? 1 : 0;
+                _stackDepth += (op == ILCode.Newobj) ? 2 : 0; //discount `this` parameter
                 break;
             }
             case ILCode.Ldfld or ILCode.Ldflda or ILCode.Stfld: {
                 var field = (FieldDesc)operand!;
                 _stackDepth -= field.IsInstance ? 1 : 0;
-                _stackDepth -= op == ILCode.Stfld ? 1 : 0;
+                _stackDepth += (op == ILCode.Stfld) ? -1 : +1;
                 break;
             }
-            case ILCode.Ret: break; //depth is reset after block terminators
+            case ILCode.Ret or ILCode.Leave or ILCode.Leave_S or ILCode.Throw or ILCode.Rethrow: {
+                _stackDepth = 0;
+                break;
+            }
             default: {
                 Debug.Assert(op.GetStackBehaviourPush() != ILStackBehaviour.Varpush);
                 Debug.Assert(op.GetStackBehaviourPop() != ILStackBehaviour.Varpop);
@@ -44,7 +53,8 @@ internal class ILAssembler
         _maxStackDepth = Math.Max(_maxStackDepth, _stackDepth);
 
         if (op.IsTerminator()) {
-            _stackDepth = 0;
+            //We don't generate code that leaves values on the stack yet.
+            Debug.Assert(_stackDepth == 0);
         }
     }
 
@@ -88,7 +98,7 @@ internal class ILAssembler
         ComputeOffsets();
         
         return new ILMethodBody() {
-            ExceptionRegions = ComputeEHRegions(layout),
+            ExceptionRegions = BuildEHClauses(layout),
             MaxStack = _maxStackDepth,
             Instructions = _insts,
             Locals = _varSlots.Keys.ToList(),
@@ -144,7 +154,7 @@ internal class ILAssembler
         return _insts[_blockStarts[block]].Offset;
     }
 
-    private List<ExceptionRegion> ComputeEHRegions(LayoutedCFG layout)
+    private List<ExceptionRegion> BuildEHClauses(LayoutedCFG layout)
     {
         var ehRegions = new List<ExceptionRegion>(layout.Regions.Length);
         foreach (ref var region in layout.Regions.AsSpan()) {

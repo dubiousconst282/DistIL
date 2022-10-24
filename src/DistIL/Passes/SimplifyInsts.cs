@@ -3,16 +3,29 @@ namespace DistIL.Passes;
 using DistIL.IR.Utils;
 
 using Bin = IR.BinaryOp;
+using CallOptEntry = ValueTuple<TypeDesc?, Func<MethodTransformContext, CallInst, bool>>;
 using Cmp = IR.CompareOp;
 
 /// <summary> Implements peepholes/combining/scalar transforms that don't affect control flow. </summary>
 public partial class SimplifyInsts : MethodPass
 {
-    readonly TypeDesc? t_Delegate;
+    readonly Dictionary<string, CallOptEntry[]> _callOpts = new();
 
     public SimplifyInsts(ModuleDef mod)
     {
-        t_Delegate = mod.Import(typeof(Delegate));
+#pragma warning disable format
+        AddCallOpt(typeof(Delegate),        "Invoke",           DirectizeLambda);
+        AddCallOpt(typeof(Dictionary<,>),   "ContainsKey",      SimplifyDictLookup);
+#pragma warning restore format
+
+        void AddCallOpt(Type declType, string methodName, Func<MethodTransformContext, CallInst, bool> run)
+        {
+            if (mod.Import(declType) is { } declTypeDesc) {
+                ref var entries = ref _callOpts.GetOrAddRef(methodName);
+                entries = new CallOptEntry[(entries?.Length ?? 0) + 1];
+                entries[^1] = (declTypeDesc, run);
+            }
+        }
     }
 
     public override void Run(MethodTransformContext ctx)
@@ -27,7 +40,7 @@ public partial class SimplifyInsts : MethodPass
                 changed |= inst switch {
                     BinaryInst c => TrySimplifyBinary(c),
                     CompareInst c => TrySimplifyCompare(c),
-                    CallInst c => TrySimplifyCall(c),
+                    CallInst c => TrySimplifyCall(ctx, c),
                     _ => false
                 };
             }
@@ -35,10 +48,21 @@ public partial class SimplifyInsts : MethodPass
         }
     }
 
-    private bool TrySimplifyCall(CallInst call)
+    private bool TrySimplifyCall(MethodTransformContext ctx, CallInst call)
     {
-        if (DirectizeLambda(call)) return true;
+        var method = call.Method;
 
+        if (_callOpts.TryGetValue(method.Name, out var entries)) {
+            foreach (var (reqType, run) in entries) {
+                var declType = method.DeclaringType;
+                if (declType is TypeSpec spec && reqType is TypeDef) {
+                    declType = spec.Definition;
+                }
+                if (reqType == null || declType.Inherits(reqType)) {
+                    return run(ctx, call);
+                }
+            }
+        }
         return false;
     }
 
@@ -52,11 +76,11 @@ public partial class SimplifyInsts : MethodPass
     }
     private Value? SimplifyBinary(BinaryInst inst)
     {
-        //`const op x`  ->  `x op const`, if op is commutative
+        //(const op x)  ->  (x op const), if op is commutative
         if (inst is { Left: Const, Right: not Const, IsCommutative: true } b) {
             (b.Left, b.Right) = (b.Right, b.Left);
         }
-        //`((x op const) op const)`  ->  `(x op (const op const))`, if op is associative
+        //((x op const) op const)  ->  (x op (const op const)), if op is associative
         if (inst is {
             Left: BinaryInst { Left: not Const, Right: Const } l_nc_c,
             Right: Const,
@@ -65,7 +89,7 @@ public partial class SimplifyInsts : MethodPass
             l_nc_c.Op == inst.Op &&
             ConstFolding.FoldBinary(inst.Op, l_nc_c.Right, inst.Right) is Value lr_op_r
         ) {
-            inst.Left = l_nc_c.Left;
+                inst.Left = l_nc_c.Left;
             inst.Right = lr_op_r;
         }
         return ConstFolding.FoldBinary(inst.Op, inst.Left, inst.Right);
@@ -81,8 +105,8 @@ public partial class SimplifyInsts : MethodPass
     }
     private Value? SimplifyCompare(CompareInst inst)
     {
-        //(x op y) eq 0  ->  (x !op y)
-        //(x op y) ne 0  ->  (x op y)
+        //((x op y) == 0)  ->  (x !op y)
+        //((x op y) != 0)  ->  (x op y)
         if (inst is {
             Op: Cmp.Eq or Cmp.Ne,
             Left: CompareInst { NumUses: 1 },

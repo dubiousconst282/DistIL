@@ -71,11 +71,11 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
         return null;
     }
 
-    /// <summary> Checks if this type inherits or implements the specified type. </summary>
+    /// <summary> Checks if this type is, inherits, or implements `baseType`. </summary>
     public bool Inherits(TypeDesc baseType)
     {
         Debug.Assert(!baseType.IsInterface); //not implemented
-        for (var parent = BaseType; parent != null; parent = parent.BaseType) {
+        for (var parent = this; parent != null; parent = parent.BaseType) {
             if (parent == baseType) {
                 return true;
             }

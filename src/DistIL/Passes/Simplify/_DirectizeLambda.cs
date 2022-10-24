@@ -2,7 +2,8 @@ namespace DistIL.Passes;
 
 partial class SimplifyInsts : MethodPass
 {
-    //Lambda with cache:
+    //Directize delegate invokes if target is known:
+    //
     //Func = Func`2[int, bool]
     //  BB_Header:
     //    Func r2 = ldfld Data::LambdaCache1
@@ -18,14 +19,13 @@ partial class SimplifyInsts : MethodPass
     //    Func r9 = phi [BB_Header -> r2], [BB_CacheLoad -> r7]
     //    ...
     //    bool r25 = callvirt Func::Invoke(this: r9, int: r24)
-    private bool DirectizeLambda(CallInst call)
+    //->
+    //  BB_Result:
+    //    Func r2 = ldfld Data::LambdaCache1
+    //    bool r25 = call Data::Lambda1(r2, r24)
+    private bool DirectizeLambda(MethodTransformContext ctx, CallInst call)
     {
-        var method = call.Method;
-        if (!(
-            method.Name == "Invoke" &&
-            t_Delegate != null && method.DeclaringType.Inherits(t_Delegate) &&
-            call is { IsStatic: false, Args: [var lambdaInstance, ..] }
-        )) return false;
+        if (call is not { Method.Name: "Invoke", IsStatic: false, Args: [var lambdaInstance, ..] }) return false;
 
         if (lambdaInstance is PhiInst { NumArgs: 2 } phi) {
             var phiArg1 = phi.GetValue(0);

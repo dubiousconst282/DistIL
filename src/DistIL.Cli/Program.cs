@@ -60,15 +60,16 @@ class DumpPass : MethodPass
     {
         var diags = Verifier.Diagnose(ctx.Method);
         if (diags.Count > 0) {
-            Console.WriteLine($"BadIR in {ctx.Method}: {string.Join(" | ", diags)}");
+            Console.WriteLine($"BadIR in {ctx.Method}:\n  {string.Join("\n  ", diags)}");
         }
         var def = ctx.Method.Definition;
         string name = $"{def.DeclaringType.Name}::{def.Name}";
         if (Filter == null || Regex.IsMatch(name, Filter)) {
-            var invalidNameChars = Path.GetInvalidFileNameChars();
-            name = new string(name.Select(c => Array.IndexOf(invalidNameChars, c) < 0 ? c : '_').ToArray());
+            //Escape all Windows forbidden characters to prevent issues with NTFS partitions on Linux
+            name = Regex.Replace(name, @"[\x00-\x1F:*?\/\\""<>|]", "_");
 
             Directory.CreateDirectory(BaseDir);
+            
             IRPrinter.ExportPlain(ctx.Method, $"{BaseDir}/{name}.txt");
             IRPrinter.ExportDot(ctx.Method, $"{BaseDir}/{name}.dot");
         }
@@ -98,7 +99,7 @@ class ExportPass : ModulePass
             if (method.Body == null) continue;
 
             try {
-                method.ILBody = new ILGenerator(method.Body).Process();
+                method.ILBody = new ILGenerator(method.Body).Generate();
             } catch (Exception ex) {
                 Console.WriteLine($"FailEmit: {method} {ex.Message}");
             }

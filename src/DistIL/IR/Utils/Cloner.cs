@@ -53,7 +53,14 @@ public class Cloner
         foreach (var value in _pendingValues) {
             var newValue = Remap(value) ??
                 throw new InvalidOperationException("No mapping for value " + value);
-            value.ReplaceUses(newValue);
+            
+            foreach (var (user, operIdx) in value.Uses()) {
+                //If we don't have a mapping for the block `user` is in, assume it's
+                //a newly cloned instruction and proceed replacing its operand
+                if (!_mappings.ContainsKey(user.Block)) {
+                    user.ReplaceOperand(operIdx, newValue);
+                }
+            }
         }
     }
 

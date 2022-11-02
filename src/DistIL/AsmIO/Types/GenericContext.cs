@@ -38,8 +38,6 @@ public readonly struct GenericContext
     public TypeDesc? GetArgument(int index, bool isMethodParam)
     {
         var args = isMethodParam ? MethodArgs : TypeArgs;
-        return args != null && index < args.Count
-            ? args[index]
-            : null;
+        return (args != null && index < args.Count) ? args[index] : null;
     }
 }

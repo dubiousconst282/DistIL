@@ -75,7 +75,7 @@ internal class ModuleLoader
         //Create MethodSpecs (they may reference MemberRefs)
         _entities.Create<MethodSpecification>(info => {
             var method = (MethodDefOrSpec)GetEntity(info.Method);
-            var genArgs = info.DecodeSignature(_typeProvider, default);
+            var genArgs = info.DecodeSignature(_typeProvider, new GenericContext(method));
             return new MethodSpec(method.DeclaringType, method.Definition, genArgs);
         });
         //Populate members
@@ -120,11 +120,11 @@ internal class ModuleLoader
     }
     private FieldDef CreateField(FieldDefinition info)
     {
-        var type = info.DecodeSignature(_typeProvider, default);
+        var declaringType = GetType(info.GetDeclaringType());
+        var type = info.DecodeSignature(_typeProvider, new GenericContext(declaringType));
 
         return new FieldDef(
-            GetType(info.GetDeclaringType()), 
-            type, _reader.GetString(info.Name), 
+            declaringType, type, _reader.GetString(info.Name), 
             info.Attributes,
             _reader.DecodeConst(info.GetDefaultValue()),
             info.GetOffset()
@@ -133,7 +133,8 @@ internal class ModuleLoader
     private MethodDef CreateMethod(MethodDefinition info)
     {
         var declaringType = GetType(info.GetDeclaringType());
-        var sig = info.DecodeSignature(_typeProvider, default);
+        var genericParams = CreateGenericParams(info.GetGenericParameters(), true);
+        var sig = info.DecodeSignature(_typeProvider, new GenericContext(declaringType.GenericParams, genericParams));
         string name = _reader.GetString(info.Name);
 
         var attribs = info.Attributes;
@@ -153,9 +154,7 @@ internal class ModuleLoader
         return new MethodDef(
             declaringType, 
             sig.ReturnType, pars.MoveToImmutable(),
-            name, 
-            attribs, info.ImplAttributes,
-            genericParams: CreateGenericParams(info.GetGenericParameters(), true)
+            name, attribs, info.ImplAttributes, genericParams
         );
     }
 

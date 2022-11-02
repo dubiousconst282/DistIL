@@ -44,4 +44,7 @@ public class GenericParamType : TypeDesc
 
     public override bool Equals(TypeDesc? other)
         => other is GenericParamType o && o.Index == Index && o.IsMethodParam == IsMethodParam;
+
+    public override int GetHashCode()
+        => (Index * 2) + (IsMethodParam ? 1 : 0);
 }

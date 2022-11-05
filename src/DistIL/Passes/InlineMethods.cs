@@ -118,7 +118,7 @@ public class InlineMethods : MethodPass
         }
         //Replace uses of the call with the returned value, or a phi for each returning block
         if (returnedVals.Count >= 2) {
-            var value = endBlock.AddPhi(new PhiInst(returnedVals.ToArray()));
+            var value = endBlock.InsertPhi(new PhiInst(returnedVals.ToArray()));
             call.ReplaceWith(value);
         } else if (returnedVals.Count == 1) {
             call.ReplaceWith(returnedVals[0].Value);

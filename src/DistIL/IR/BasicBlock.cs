@@ -132,7 +132,7 @@ public class BasicBlock : TrackedValue
         }
     }
 
-    public PhiInst AddPhi(PhiInst phi)
+    public PhiInst InsertPhi(PhiInst phi)
     {
         if (First != null) {
             InsertBefore(FirstNonPhi, phi);
@@ -141,7 +141,7 @@ public class BasicBlock : TrackedValue
         }
         return phi;
     }
-    public PhiInst AddPhi(TypeDesc resultType) => AddPhi(new PhiInst(resultType));
+    public PhiInst InsertPhi(TypeDesc resultType) => InsertPhi(new PhiInst(resultType));
 
     /// <summary>
     /// Splits this block, moving instructions starting from `pos` to the new block,

@@ -1,5 +1,7 @@
 namespace DistIL.Passes.Linq;
 
+using DistIL.IR.Utils;
+
 public class QuerySynthesizer
 {
     public readonly MethodBody Method;
@@ -129,7 +131,7 @@ public class QuerySynthesizer
     public Value InvokeLambda(IRBuilder ib, Value lambda, params Value[] args)
     {
         var invoker = lambda.ResultType.Methods.First(m => m.Name == "Invoke");
-        return ib.CreateVirtualCall(invoker, args);
+        return ib.CreateCallVirt(invoker, args);
     }
     public Value InvokeLambda_ItemAndIndex(IRBuilder ib, Value lambda)
     {
@@ -139,7 +141,7 @@ public class QuerySynthesizer
         var args = invoker.Params.Length == 3
             ? new Value[] { lambda, CurrItem, CurrIndex }
             : new Value[] { lambda, CurrItem };
-        return ib.CreateVirtualCall(invoker, args);
+        return ib.CreateCallVirt(invoker, args);
     }
 
     /// <summary> Emits `if !pred.Invoke(currItem) continue; <nextBody>` and returns `nextBody`. </summary>
@@ -159,7 +161,7 @@ public class QuerySynthesizer
     {
         return EmitGlobalCounter(ConstInt.CreateI(0), (body, curr) => body.CreateAdd(curr, ConstInt.CreateI(1)));
     }
-    public PhiInst EmitGlobalCounter(Value startVal, Func<IRBuilder, Value, Instruction> emitUpdate)
+    public PhiInst EmitGlobalCounter(Value startVal, Func<IRBuilder, Value, Value> emitUpdate)
     {
         //Header:
         //  int count = phi [PreHeader -> 0, Latch -> nextCount]

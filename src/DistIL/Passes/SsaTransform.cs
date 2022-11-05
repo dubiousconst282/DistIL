@@ -62,7 +62,7 @@ public class SsaTransform : MethodPass
                 foreach (var dom in domFrontier.Of(block)) {
                     if (!phiAdded.Add(dom)) continue;
                     
-                    var phi = dom.AddPhi(variable.ResultType);
+                    var phi = dom.InsertPhi(variable.ResultType);
                     _phiDefs.Add(phi, variable);
 
                     if (processed.Add(dom)) {

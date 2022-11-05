@@ -1,56 +1,85 @@
-namespace DistIL.IR;
+namespace DistIL.IR.Utils;
 
-/// <summary>
-/// Helper for building a sequence of intructions. This class has two modes of operation:  <br/>
-/// - Immediate: Instructions are created and added immediately after `Position`.  <br/>
-/// - Delayed: Instructions are created and stored internally, and can be added later by `MoveBefore()`/`MoveAfter()` or `PrependInto()`/`AppendInto()`.
-/// </summary>
+/// <summary> Helper for building a sequence of intructions. </summary>
 public class IRBuilder
 {
-    Instruction _first = null!, _last = null!;
-    bool _delayed = false;
-    BasicBlock? _block;
+    Instruction? _last;
+    BasicBlock _block = null!;
 
-    /// <summary> The instruction where new instructions are to be added after. </summary>
-    public Instruction? Position {
-        get => _last;
-        set {
-            Ensure.That(!_delayed && value != null);
-            _last = value!;
-        }
+    public BasicBlock Block => _block!;
+
+    /// <summary> Initializes a builder that inserts instructions before `inst`. </summary>
+    public IRBuilder(Instruction inst) => SetPosition(inst);
+    /// <summary> Initializes a builder that appends instructions into `block`. </summary>
+    public IRBuilder(BasicBlock block) => SetPosition(block);
+
+    public virtual void SetPosition(Instruction inst)
+    {
+        _last = inst;
+        _block = inst.Block;
     }
-    public BasicBlock Block => _block ?? _last.Block;
+    public virtual void SetPosition(BasicBlock block)
+    {
+        _block = block;
+    }
 
-    /// <summary> Initializes a new delayed or immediate. </summary>
-    public IRBuilder(bool delayed = false) { _delayed = delayed; }
-    /// <summary> Initializes a new immediate IRBuilder. </summary>
-    public IRBuilder(Instruction pos) { Position = pos; }
-    /// <summary> Initializes a new immediate IRBuilder. </summary>
-    public IRBuilder(BasicBlock pos) { _block = pos; }
-
-    public PhiInst CreatePhi(TypeDesc resultType)
-        => Block.AddPhi(new PhiInst(resultType));
+    public PhiInst CreatePhi(TypeDesc resultType) 
+        => _block.InsertPhi(resultType);
 
     public PhiInst CreatePhi(params PhiArg[] args)
-        => Block.AddPhi(new PhiInst(args));
+        => _block.InsertPhi(new PhiInst(args));
 
-    public BranchInst SetBranch(Value cond, BasicBlock then, BasicBlock else_)
-        => SetBranch(new BranchInst(cond, then, else_));
+    public void SetBranch(BasicBlock target) 
+        => _block.SetBranch(target);
 
-    public BranchInst SetBranch(BasicBlock target)
-        => SetBranch(new BranchInst(target));
+    public void SetBranch(Value cond, BasicBlock then, BasicBlock else_) 
+        => _block.SetBranch(new BranchInst(cond, then, else_));
 
-    public BranchInst SetBranch(BranchInst branch)
+    public Value CreateBin(BinaryOp op, Value left, Value right)
     {
-        Block.SetBranch(branch);
-        return branch;
+        return ConstFolding.FoldBinary(op, left, right) ??
+               Add(new BinaryInst(op, left, right));
     }
 
-    public BinaryInst CreateBin(BinaryOp op, Value left, Value right)
-        => Add(new BinaryInst(op, left, right));
+    public Value CreateAdd(Value left, Value right) => CreateBin(BinaryOp.Add, left, right);
+    public Value CreateSub(Value left, Value right) => CreateBin(BinaryOp.Sub, left, right);
+    public Value CreateMul(Value left, Value right) => CreateBin(BinaryOp.Mul, left, right);
+    public Value CreateAnd(Value left, Value right) => CreateBin(BinaryOp.And, left, right);
+    public Value CreateOr(Value left, Value right) => CreateBin(BinaryOp.Or, left, right);
+    public Value CreateXor(Value left, Value right) => CreateBin(BinaryOp.Xor, left, right);
+    public Value CreateShl(Value left, Value right) => CreateBin(BinaryOp.Shl, left, right);
+    public Value CreateShra(Value left, Value right) => CreateBin(BinaryOp.Shra, left, right);
+    public Value CreateShrl(Value left, Value right) => CreateBin(BinaryOp.Shrl, left, right);
 
-    public CompareInst CreateCmp(CompareOp op, Value left, Value right)
-        => Add(new CompareInst(op, left, right));
+    public Value CreateFAdd(Value left, Value right) => CreateBin(BinaryOp.FAdd, left, right);
+    public Value CreateFSub(Value left, Value right) => CreateBin(BinaryOp.FSub, left, right);
+    public Value CreateFMul(Value left, Value right) => CreateBin(BinaryOp.FMul, left, right);
+    public Value CreateFDiv(Value left, Value right) => CreateBin(BinaryOp.FDiv, left, right);
+    public Value CreateFRem(Value left, Value right) => CreateBin(BinaryOp.FRem, left, right);
+
+    public Value CreateCmp(CompareOp op, Value left, Value right)
+    {
+        return ConstFolding.FoldCompare(op, left, right) ??
+               Add(new CompareInst(op, left, right));
+    }
+    public Value CreateEq(Value left, Value right) => CreateCmp(CompareOp.Eq, left, right);
+    public Value CreateNe(Value left, Value right) => CreateCmp(CompareOp.Ne, left, right);
+    public Value CreateSlt(Value left, Value right) => CreateCmp(CompareOp.Slt, left, right);
+    public Value CreateSgt(Value left, Value right) => CreateCmp(CompareOp.Sgt, left, right);
+    public Value CreateSle(Value left, Value right) => CreateCmp(CompareOp.Sle, left, right);
+    public Value CreateSge(Value left, Value right) => CreateCmp(CompareOp.Sge, left, right);
+
+    public LoadFieldInst CreateFieldLoad(FieldDesc field, Value? obj = null)
+        => Add(new LoadFieldInst(field, obj));
+
+    public StoreFieldInst CreateFieldStore(FieldDesc field, Value? obj, Value value)
+        => Add(new StoreFieldInst(field, obj, value));
+
+    public CallInst CreateCall(MethodDesc method, params Value[] args)
+        => Add(new CallInst(method, args));
+
+    public CallInst CreateCallVirt(MethodDesc method, params Value[] args)
+        => Add(new CallInst(method, args, true));
 
     public ConvertInst CreateConvert(Value srcValue, TypeDesc dstType, bool checkOverflow = false, bool srcUnsigned = false)
         => Add(new ConvertInst(srcValue, dstType, checkOverflow, srcUnsigned));
@@ -67,81 +96,23 @@ public class IRBuilder
     public IntrinsicInst CreateNewArray(TypeDesc elemType, Value length)
         => Add(new IntrinsicInst(IntrinsicId.NewArray, elemType.CreateArray(), length));
 
-    public LoadFieldInst CreateFieldLoad(FieldDesc field, Value? obj = null)
-        => Add(new LoadFieldInst(field, obj));
-
-    public StoreFieldInst CreateFieldStore(FieldDesc field, Value? obj, Value value)
-        => Add(new StoreFieldInst(field, obj, value));
-
-    public CallInst CreateCall(MethodDesc method, params Value[] args)
-        => Add(new CallInst(method, args));
-
-    public CallInst CreateVirtualCall(MethodDesc method, params Value[] args)
-        => Add(new CallInst(method, args, true));
-
-    public BinaryInst CreateAdd(Value left, Value right) => CreateBin(BinaryOp.Add, left, right);
-    public BinaryInst CreateSub(Value left, Value right) => CreateBin(BinaryOp.Sub, left, right);
-    public BinaryInst CreateMul(Value left, Value right) => CreateBin(BinaryOp.Mul, left, right);
-    public BinaryInst CreateShl(Value left, Value right) => CreateBin(BinaryOp.Shl, left, right);
-    public BinaryInst CreateShra(Value left, Value right) => CreateBin(BinaryOp.Shra, left, right);
-    public BinaryInst CreateShrl(Value left, Value right) => CreateBin(BinaryOp.Shrl, left, right);
-
-    public CompareInst CreateEq(Value left, Value right) => CreateCmp(CompareOp.Eq, left, right);
-    public CompareInst CreateNe(Value left, Value right) => CreateCmp(CompareOp.Ne, left, right);
-    public CompareInst CreateSlt(Value left, Value right) => CreateCmp(CompareOp.Slt, left, right);
-
     public void CreateMarker(string text)
         => Add(new IntrinsicInst(IntrinsicId.Marker, PrimType.Void, ConstString.Create(text)));
 
-    /// <summary> Adds the specified instruction into the basic block. </summary>
+    /// <summary> Adds the specified instruction at the current position. </summary>
     public TInst Add<TInst>(TInst inst) where TInst : Instruction
     {
-        if (_delayed) {
-            _first ??= inst;
-            inst.Prev = _last;
-            if (_last != null) {
-                _last.Next = inst;
-            }
-        } else if (_last != null) {
-            inst.InsertAfter(_last);
-        } else {
-            Ensure.That(_block != null, "Cannot add new instructions when position is unset in immediate IRBuilder");
-            _block.InsertLast(inst);
-        }
-        _last = inst;
+        Append(inst);
         return inst;
     }
 
-    /// <summary> Resets this delayed builder. </summary>
-    public void Clear()
+    protected virtual void Append(Instruction inst)
     {
-        Ensure.That(_delayed, "Cannot clear immediate IRBuilder");
-        _first = _last = null!;
-    }
-
-    public void PrependInto(BasicBlock block)
-    {
-        if (_first != null) {
-            block.InsertRange(null, _first, _last);
+        if (_last != null) {
+            inst.InsertAfter(_last);
+        } else {
+            _block!.InsertLast(inst);
         }
-    }
-    public void AppendInto(BasicBlock block)
-    {
-        if (_first != null) {
-            block.InsertRange(block.Last, _first, _last);
-        }
-    }
-
-    public void MoveBefore(Instruction inst)
-    {
-        if (_first != null) {
-            inst.Block.InsertRange(inst.Prev, _first, _last);
-        }
-    }
-    public void MoveAfter(Instruction inst)
-    {
-        if (_first != null) {
-            inst.Block.InsertRange(inst, _first, _last);
-        }
+        _last = inst;
     }
 }

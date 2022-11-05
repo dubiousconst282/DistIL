@@ -74,16 +74,24 @@ public class SymbolTable
 
 public static class SymbolTableEx
 {
-    /// <summary> Sets the instruction name on its parent method slot tracker. </summary>
+    /// <summary> Sets the instruction name on its parent symbol table. </summary>
     public static TInst SetName<TInst>(this TInst inst, string name) where TInst : Instruction
     {
         inst.GetSymbolTable()!.SetName(inst, name);
         return inst;
     }
-    /// <summary> Sets the block name on its parent method slot tracker. </summary>
+    /// <summary> Sets the block name on its parent symbol table. </summary>
     public static BasicBlock SetName(this BasicBlock block, string name)
     {
         block.GetSymbolTable()!.SetName(block, name);
         return block;
+    }
+    /// <summary> Sets the value name on its parent symbol table (if it is a <see cref="TrackedValue"/>). </summary>
+    public static Value SetName(this Value value, string name)
+    {
+        if (value is TrackedValue trackedValue) {
+            value.GetSymbolTable()?.SetName(trackedValue, name);
+        }
+        return value;
     }
 }

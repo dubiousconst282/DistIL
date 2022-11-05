@@ -22,7 +22,7 @@ public class SimplifyCFG : MethodPass
 
         if (block.Last is BranchInst { IsConditional: true } br) {
             changed |= InvertCond(block, br);
-            changed |= ConvertToBranchless(block, br);
+            //changed |= ConvertToBranchless(block, br);
         }
         if (block.Last is BranchInst { IsJump: true } jmp) {
             changed |= MergeWithSucc(block, jmp);
@@ -57,6 +57,8 @@ public class SimplifyCFG : MethodPass
         return false;
     }
 
+    //TODO: check if it's worth introducing a `SelectInst`
+    /*
     //  BB_01: ... goto cond ? BB_03 : BB_04
     //  BB_04: goto BB_05
     //  BB_03: goto BB_05
@@ -141,4 +143,5 @@ public class SimplifyCFG : MethodPass
         }
         return null;
     }
+    */
 }

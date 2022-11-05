@@ -1,18 +1,16 @@
 namespace DistIL.IR.Utils;
 
-public class Cloner
+public class IRCloner
 {
-    readonly MethodBody _destMethod;
     //Mapping from old to new (clonned) values
     readonly Dictionary<Value, Value> _mappings = new();
     //Values that must be remapped and replaced last (they depend on defs in an unprocessed block).
     readonly RefSet<TrackedValue> _pendingValues = new();
     readonly InstCloner _instCloner;
-    readonly List<BasicBlock> _oldBlocks = new();
+    readonly List<BasicBlock> _srcBlocks = new();
 
-    public Cloner(MethodBody destMethod)
+    public IRCloner()
     {
-        _destMethod = destMethod;
         _instCloner = new(this);
     }
 
@@ -20,29 +18,27 @@ public class Cloner
     {
         _mappings.Add(oldVal, newVal);
     }
-    /// <summary> Schedules the cloning of the specified block, and adds its mapping. </summary>
-    /// <returns> The new (empty) block in which `oldBlock` will be cloned into. </returns> 
-    public BasicBlock AddBlock(BasicBlock oldBlock, BasicBlock? insertAfter = null)
+    /// <summary> Schedules the cloning of the specified block. </summary>
+    public void AddBlock(BasicBlock srcBlock, BasicBlock destBlock)
     {
-        var newBlock = _destMethod.CreateBlock(insertAfter);
-        _mappings.Add(oldBlock, newBlock);
-        _oldBlocks.Add(oldBlock);
-        return newBlock;
+        Ensure.That(destBlock.First == null, "Destination block must be empty");
+        _mappings.Add(srcBlock, destBlock);
+        _srcBlocks.Add(srcBlock);
     }
 
-    /// <summary> Clones pending blocks. </summary>
+    /// <summary> Clones all scheduled blocks. </summary>
     public void Run()
     {
-        foreach (var oldBlock in _oldBlocks) {
-            var newBlock = (BasicBlock)_mappings[oldBlock];
+        foreach (var block in _srcBlocks) {
+            var destBlock = (BasicBlock)_mappings[block];
 
             //Clone instructions
-            foreach (var inst in oldBlock) {
+            foreach (var inst in block) {
                 var newVal = _instCloner.Clone(inst);
                 //Clone() may fold constants: `add r10, 0` -> `r10`,
                 //so we can only insert a inst if it isn't already in a block.
                 if (newVal is Instruction { Block: null } newInst) {
-                    newBlock.InsertLast(newInst);
+                    destBlock.InsertLast(newInst);
                 }
                 if (newVal.HasResult) {
                     _mappings.Add(inst, newVal);
@@ -81,18 +77,13 @@ public class Cloner
         _pendingValues.Add((TrackedValue)value); 
         return null;
     }
-    private BasicBlock Remap(BasicBlock block)
-    {
-        return Remap((Value)block) as BasicBlock ?? 
-            throw new InvalidOperationException("No mapping for " + block);
-    }
 
     class InstCloner : InstVisitor
     {
-        readonly Cloner _ctx;
+        readonly IRCloner _ctx;
         Value _result = null!;
 
-        public InstCloner(Cloner ctx) => _ctx = ctx;
+        public InstCloner(IRCloner ctx) => _ctx = ctx;
 
         public Value Clone(Instruction inst)
         {

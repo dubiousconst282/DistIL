@@ -2,15 +2,24 @@ namespace DistIL.Passes;
 
 using DistIL.IR.Utils;
 
+using MethodAttrs = System.Reflection.MethodAttributes;
+
 public class InlineMethods : MethodPass
 {
+    readonly Options _opts;
+
+    public InlineMethods(Options? opts = null)
+    {
+        _opts = (opts ?? new());
+    }
+
     public override void Run(MethodTransformContext ctx)
     {
         var inlineableCalls = new List<CallInst>();
         var method = ctx.Method;
 
         foreach (var inst in method.Instructions()) {
-            if (inst is CallInst call && CanInline(method.Definition, call)) {
+            if (inst is CallInst call && CanBeInlined(method.Definition, call)) {
                 inlineableCalls.Add(call);
             }
         }
@@ -20,43 +29,58 @@ public class InlineMethods : MethodPass
         }
     }
 
-    private static bool CanInline(MethodDef caller, CallInst callInst)
+    private bool CanBeInlined(MethodDef caller, CallInst callInst)
     {
-        if (callInst.Method is not MethodDef callee) {
+        if (callInst.Method is not MethodDefOrSpec callee || callee == caller) {
             return false;
         }
-        if (callInst.IsVirtual && (callee.Attribs & System.Reflection.MethodAttributes.NewSlot) != 0) {
+        if (callInst.IsVirtual && (callee.Attribs & MethodAttrs.NewSlot) != 0) {
             return false;
         }
-        //TODO: better inlining heuristics
-        //FIXME: block inlining for methods with accesses to private members of different classes
-        return caller != callee && callee.Body?.NumBlocks <= 8;
+        if (callee.Definition.ILBody?.Instructions.Count > _opts.MaxCalleeSize) {
+            return false;
+        }
+        return true;
     }
 
-    public static void Inline(CallInst call)
-    {   
-        var callee = ((MethodDef)call.Method).Body!;
-        var cloner = new Cloner(call.Block.Method);
+    public static bool Inline(CallInst call)
+    {
+        if (call.Method is not MethodDefOrSpec { Definition.Body: MethodBody calleeBody } callee) {
+            return false;
+        }
+        var callerBody = call.Block.Method;
+        var cloner = new IRCloner();
 
         //Add argument mappings
-        for (int i = 0; i < callee.Args.Length; i++) {
-            cloner.AddMapping(callee.Args[i], call.GetArg(i));
+        for (int i = 0; i < calleeBody.Args.Length; i++) {
+            cloner.AddMapping(calleeBody.Args[i], call.GetArg(i));
+        }
+        //Add generic type mappings
+        if (callee.IsGenericSpec) {
+            var emptyParams = callee.Definition.GenericParams;
+            var filledArgs = callee.GenericParams;
+
+            for (int i = 0; i < filledArgs.Length; i++) {
+                cloner.AddMapping(emptyParams[i], filledArgs[i]);
+            }
         }
         //Clone blocks
         var newBlocks = new List<BasicBlock>();
-        foreach (var block in callee) {
-            var newBlock = cloner.AddBlock(block, insertAfter: newBlocks.LastOrDefault(call.Block));
+        foreach (var block in calleeBody) {
+            var newBlock = callerBody.CreateBlock(insertAfter: newBlocks.LastOrDefault(call.Block));
+            cloner.AddBlock(block, newBlock);
             newBlocks.Add(newBlock);
         }
         cloner.Run();
 
         if (newBlocks is [{ Last: ReturnInst }]) {
-            //opt: avoid creating new blocks for callees with a single block ending with a return
+            //Opt: avoid creating new blocks for callees with a single block ending with a return
             InlineOneBlock(call, newBlocks[0]);
             newBlocks[0].Remove();
         } else {
             InlineManyBlocks(call, newBlocks);
         }
+        return true;
     }
 
     private static void InlineOneBlock(CallInst call, BasicBlock block)
@@ -97,10 +121,24 @@ public class InlineMethods : MethodPass
             var value = endBlock.AddPhi(new PhiInst(returnedVals.ToArray()));
             call.ReplaceWith(value);
         } else if (returnedVals.Count == 1) {
-            var (exitBlock, retValue) = returnedVals[0];
-            call.ReplaceWith(retValue);
+            call.ReplaceWith(returnedVals[0].Value);
         } else {
             call.Remove();
         }
+    }
+
+    public class Options
+    {
+        /// <summary> Ignore callees whose number of IL instructions is greater than this. </summary>
+        public int MaxCalleeSize { get; init; } = 64;
+
+        /// <summary> If true, allows calls to methods from different assemblies to be inlined. </summary>
+        //public bool InlineCrossAssemblyCalls { get; init; } = false;
+
+        /// <summary> If true, private member accessed by callee will be exposed as public (if they are on the same assembly). </summary>
+        //public bool ExposePrivateCalleeMembers { get; init; } = true;
+
+        //Note that IACA is undocumented: https://github.com/dotnet/runtime/issues/37875
+        //public bool UseIgnoreAccessChecksAttribute { get; init; } = false;
     }
 }

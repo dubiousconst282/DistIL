@@ -2,12 +2,12 @@ namespace DistIL.IR.Utils;
 
 using DistIL.Analysis;
 
-public class Verifier
+public class IRVerifier
 {
     readonly MethodBody _method;
     readonly List<Diagnostic> _diags = new();
 
-    private Verifier(MethodBody method)
+    private IRVerifier(MethodBody method)
     {
         _method = method;
     }
@@ -15,7 +15,7 @@ public class Verifier
     /// <summary> Verifies the method body and returns a list of diagnostics. </summary>
     public static List<Diagnostic> Diagnose(MethodBody method)
     {
-        var v = new Verifier(method);
+        var v = new IRVerifier(method);
         v.VerifyEdges();
         v.VerifyPhis();
         v.VerifyUses();
@@ -24,64 +24,13 @@ public class Verifier
 
     private void VerifyEdges()
     {
-        if (_method.EntryBlock.NumPreds > 0) {
+        if (_method.EntryBlock.NumPreds != 0) {
             Error(_method.EntryBlock, "Entry block should not have predecessors");
         }
-        var expPreds = new Dictionary<BasicBlock, List<BasicBlock>>();
-        //Verify successors and build expected preds
         foreach (var block in _method) {
-            var succs = CalculateSuccs(block);
-
-            if (!AreSetsEqual(succs, block.Succs.AsEnumerable())) {
-                Error(block, "Invalid successor list");
+            if (!block.Last.IsBranch) {
+                Error(block, "Block must end with a valid terminator");
             }
-            foreach (var succ in succs) {
-                var preds = expPreds.GetOrAddRef(succ) ??= new();
-                preds.Add(block);
-            }
-        }
-        //Verify preds
-        foreach (var (block, preds) in expPreds) {
-            if (!AreSetsEqual(preds, block.Preds.AsEnumerable())) {
-                Error(block, "Invalid predecessor list");
-            }
-        }
-
-        List<BasicBlock> CalculateSuccs(BasicBlock block)
-        {
-            var succs = new List<BasicBlock>();
-            foreach (var guard in block.Guards()) {
-                succs.Add(guard.HandlerBlock);
-                if (guard.HasFilter) {
-                    succs.Add(guard.FilterBlock);
-                }
-            }
-
-            switch (block.Last) {
-                case BranchInst br: {
-                    succs.Add(br.Then);
-                    if (br.IsConditional) {
-                        succs.Add(br.Else);
-                    }
-                    break;
-                }
-                case SwitchInst sw: {
-                    succs.AddRange(sw.GetUniqueTargets());
-                    break;
-                }
-                case LeaveInst lv: {
-                    succs.Add(lv.Target);
-                    break;
-                }
-                case ReturnInst or ThrowInst or ContinueInst: {
-                    break;
-                }
-                default: {
-                    Error(block, "Invalid block terminator");
-                    break;
-                }
-            }
-            return succs;
         }
     }
 
@@ -98,7 +47,7 @@ public class Verifier
                 }
                 phiPreds.SymmetricExceptWith(block.Preds.AsEnumerable());
                 if (phiPreds.Count != 0) {
-                    Error(phi, "Phi must have one argument for each predecessor in the parent block");
+                    Error(phi, "Phi must have one argument for each block predecessor");
                 }
                 phiPreds.Clear();
             }

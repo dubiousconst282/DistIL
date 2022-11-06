@@ -58,7 +58,7 @@ class DumpPass : MethodPass
 
     public override void Run(MethodTransformContext ctx)
     {
-        var diags = Verifier.Diagnose(ctx.Method);
+        var diags = IRVerifier.Diagnose(ctx.Method);
         if (diags.Count > 0) {
             Console.WriteLine($"BadIR in {ctx.Method}:\n  {string.Join("\n  ", diags)}");
         }

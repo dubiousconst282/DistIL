@@ -30,4 +30,18 @@ public static class EntityExt
 {
     public static IReadOnlyCollection<CustomAttrib> GetCustomAttribs(this ModuleEntity entity)
         => entity.Module.GetCustomAttribs(new() { Entity = entity });
+
+    public static CustomAttrib? GetCustomAttrib(this ModuleEntity entity, string className)
+    {
+        int nsEnd = className.LastIndexOf('.');
+
+        return entity.GetCustomAttribs().FirstOrDefault(ca => {
+            var declType = ca.Constructor.DeclaringType;
+            if (nsEnd > 0) {
+                return className.AsSpan(0, nsEnd).Equals(declType.Namespace, StringComparison.Ordinal) &&
+                       className.AsSpan(nsEnd + 1).Equals(declType.Name, StringComparison.Ordinal);
+            }
+            return className.Equals(declType.Name);
+        });
+    }
 }

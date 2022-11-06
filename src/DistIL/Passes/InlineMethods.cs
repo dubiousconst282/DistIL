@@ -2,7 +2,7 @@ namespace DistIL.Passes;
 
 using DistIL.IR.Utils;
 
-using MethodAttrs = System.Reflection.MethodAttributes;
+using MethodAttribs = System.Reflection.MethodAttributes;
 
 public class InlineMethods : MethodPass
 {
@@ -31,16 +31,13 @@ public class InlineMethods : MethodPass
 
     private bool CanBeInlined(MethodDef caller, CallInst callInst)
     {
-        if (callInst.Method is not MethodDefOrSpec callee || callee == caller) {
-            return false;
-        }
-        if (callInst.IsVirtual && (callee.Attribs & MethodAttrs.NewSlot) != 0) {
-            return false;
-        }
-        if (callee.Definition.ILBody?.Instructions.Count > _opts.MaxCalleeSize) {
-            return false;
-        }
-        return true;
+        var blockedAttribs = MethodAttribs.NewSlot | MethodAttribs.Abstract | MethodAttribs.PinvokeImpl;
+
+        return callInst.Method is MethodDefOrSpec { Definition: var callee } && 
+            callee != caller &&
+            callee.ILBody?.Instructions.Count <= _opts.MaxCalleeSize &&
+            (callee.Attribs & blockedAttribs) == 0 &&
+            callee.GetCustomAttrib("System.Runtime.CompilerServices.IntrinsicAttribute") == null;
     }
 
     public static bool Inline(CallInst call)

@@ -79,9 +79,11 @@ internal class BlockState
         var exitStack = _stack;
         if (exitStack.Count == 0) return;
 
-        Debug.Assert(EntryBlock == Block); //Blocks should not have both phis and guards
-
         foreach (var succ in _succStates) {
+            Ensure.That(
+                succ.EntryBlock == succ.Block && succ.Block.First is not GuardInst, 
+                "Stack must be empty when entering a new region");
+
             var entryStack = succ._entryStack;
 
             if (entryStack == null) {
@@ -549,8 +551,8 @@ internal class BlockState
     }
     private CompareInst CreateCompare(CompareOp op, CompareOp fltOp, Value left, Value right)
     {
-        Debug.Assert(left.ResultType.StackType == right.ResultType.StackType); //TODO: check CompareInst operand types
-        return new CompareInst(op, left, right);
+        bool isFloat = left.ResultType.Kind.IsFloat() || right.ResultType.Kind.IsFloat();
+        return new CompareInst(isFloat ? fltOp : op, left, right);
     }
 
     private void ImportBranch(ref ILInstruction inst)
@@ -779,7 +781,7 @@ internal class BlockState
 
     private void ImportIsInst(TypeDesc destType)
     {
-        Push(new IntrinsicInst(IntrinsicId.AsInstance, destType, Pop()));
+        Push(new IntrinsicInst(IntrinsicId.AsInstance, destType.IsValueType ? PrimType.Object : destType, Pop()));
     }
     private void ImportCast(TypeDesc destType)
     {

@@ -26,9 +26,15 @@ public class CompareInst : Instruction
     public CompareInst(CompareOp op, Value left, Value right)
         : base(left, right)
     {
-        Ensure.That(left.ResultType.StackType == right.ResultType.StackType);
+        CheckOperandTypes(op, left.ResultType.StackType, right.ResultType.StackType);
         ResultType = PrimType.Int32;
         Op = op;
+    }
+
+    private static void CheckOperandTypes(CompareOp op, StackType typeL, StackType typeR)
+    {
+        Ensure.That(typeL == typeR);
+        Ensure.That((typeL != StackType.Float && typeR != StackType.Float) || op.IsFloat());
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
@@ -59,6 +65,8 @@ public enum CompareOp
 
     FOlt,   FOgt,   FOle,   FOge, FOeq,   FOne, //float ordered
     FUlt,   FUgt,   FUle,   FUge, FUeq,   FUne, //float unordered
+
+    //TODO: Maybe remove FOne/FUeq since they don't exist in CIL and don't seem to be used very often.
 }
 public static class CompareOps
 {
@@ -124,4 +132,21 @@ public static class CompareOps
             CompareOp.FUge => CompareOp.FUle
         };
     }
+
+    public static bool IsEquality(this CompareOp op)
+        => op is CompareOp.Eq or CompareOp.Ne or
+           CompareOp.FOeq or CompareOp.FOne or
+           CompareOp.FUeq or CompareOp.FUne;
+
+    /// <summary> Returns whether the operator expects operands to be float/double typed. </summary>
+    public static bool IsFloat(this CompareOp op)
+        => op is >= CompareOp.FOlt and <= CompareOp.FUne;
+
+    /// <summary> Returns whether the operator interprets operands as signed integers. </summary>
+    public static bool IsSigned(this CompareOp op)
+        => op is >= CompareOp.Slt and <= CompareOp.Sge;
+
+    /// <summary> Returns whether the operator interprets operands as unsigned integers. </summary>
+    public static bool IsUnsigned(this CompareOp op)
+        => op is >= CompareOp.Ult and <= CompareOp.Uge;
 }

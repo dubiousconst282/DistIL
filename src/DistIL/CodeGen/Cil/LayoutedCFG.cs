@@ -43,13 +43,12 @@ public class LayoutedCFG
         for (int i = 0; i < orderedBlocks.Length; i++) {
             blockIndices[orderedBlocks[i]] = i;
         }
-
         var regionAnalysis = new ProtectedRegionAnalysis(method);
         LayoutRegion(regionAnalysis.Root);
 
         (int Start, int End) LayoutRegion(ProtectedRegion node)
         {
-            int startIdx = blockIdx, firstBlockIdx = 0;
+            int startIdx = blockIdx;
             var regionBlockIndices = new BitSet();
 
             //Sort region blocks to their original order
@@ -57,6 +56,10 @@ public class LayoutedCFG
             foreach (var block in node.Blocks) {
                 regionBlockIndices.Add(blockIndices[block]);
             }
+
+            //Start block must always come first
+            laidBlocks[blockIdx++] = node.StartBlock;
+            regionBlockIndices.Remove(blockIndices[node.StartBlock]);
 
             //Recurse into child regions and place blocks appearing before them
             foreach (var child in node.Children) {
@@ -85,10 +88,10 @@ public class LayoutedCFG
             void PlaceAntecessorBlocks(BasicBlock? limit)
             {
                 int endIdx = limit != null ? blockIndices[limit] : blockIndices.Count;
-                foreach (int idx in regionBlockIndices.GetRangeEnumerator(firstBlockIdx, endIdx)) {
+                foreach (int idx in regionBlockIndices.GetRangeEnumerator(0, endIdx)) {
                     laidBlocks[blockIdx++] = orderedBlocks[idx];
+                    regionBlockIndices.Remove(idx);
                 }
-                firstBlockIdx = endIdx;
             }
         }
     }

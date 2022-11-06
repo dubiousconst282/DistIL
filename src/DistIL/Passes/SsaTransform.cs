@@ -157,17 +157,16 @@ public class SsaTransform : MethodPass
         //Initial marking phase
         foreach (var block in _method) {
             foreach (var phi in block.Phis()) {
-                //Remove phis with the same value in all args
-                if (IsTrivialPhi(phi)) {
-                    phi.ReplaceWith(phi.GetValue(0));
-                }
+                var peeledPhi = PeelTrivialPhi(phi);
                 //Enqueue phis with dependencies from non-phi instructions
-                else if (HasStrongDependencies(phi)) {
-                    propagationStack.Push(phi);
+                if (HasStrongDependencies(peeledPhi)) {
+                    if (usefulPhis.Add(peeledPhi)) {
+                        propagationStack.Push(peeledPhi);
+                    }
                 }
                 //This phi is not considered useful yet, enqueue for possible removal
                 else {
-                    pruneablePhis.Add(phi);
+                    pruneablePhis.Add(peeledPhi);
                 }
             }
         }
@@ -186,6 +185,28 @@ public class SsaTransform : MethodPass
             }
         }
         
+        static bool HasStrongDependencies(PhiInst phi)
+        {
+            foreach (var user in phi.Users()) {
+                if (user is not PhiInst) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        static PhiInst PeelTrivialPhi(PhiInst phi)
+        {
+            while (IsTrivialPhi(phi)) {
+                var value = phi.GetValue(0);
+                phi.ReplaceWith(value);
+
+                if (value is PhiInst nextPhi) {
+                    phi = nextPhi;
+                } else break;
+            }
+            return phi;
+        }
         static bool IsTrivialPhi(PhiInst phi)
         {
             var value = phi.GetValue(0);
@@ -195,15 +216,6 @@ public class SsaTransform : MethodPass
                 }
             }
             return true;
-        }
-        static bool HasStrongDependencies(PhiInst phi)
-        {
-            foreach (var user in phi.Users()) {
-                if (user is not PhiInst) {
-                    return true;
-                }
-            }
-            return false;
         }
     }
 }

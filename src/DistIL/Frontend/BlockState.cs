@@ -767,7 +767,7 @@ internal class BlockState
 
     private void ImportLoadToken(EntityDesc entity)
     {
-        var sys = _mod.SysTypes;
+        var sys = _mod.Resolver.SysTypes;
         var resultType = entity switch {
             MethodDesc => sys.RuntimeMethodHandle,
             FieldDesc  => sys.RuntimeFieldHandle,

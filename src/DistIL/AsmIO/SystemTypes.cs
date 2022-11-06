@@ -31,9 +31,9 @@ public class SystemTypes
     public TypeDef RuntimeFieldHandle { get; }
     public TypeDef RuntimeMethodHandle { get; }
 
-    internal SystemTypes(ModuleDef coreMod)
+    internal SystemTypes(ModuleDef coreLib)
     {
-        TypeDef Get(string name) => coreMod.FindType("System", name, throwIfNotFound: true);
+        TypeDef Get(string name) => coreLib.FindType("System", name, throwIfNotFound: true);
 
         Void = Get("Void");
         Bool = Get("Boolean");

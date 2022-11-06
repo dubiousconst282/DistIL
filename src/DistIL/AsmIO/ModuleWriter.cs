@@ -150,7 +150,7 @@ internal class ModuleWriter
     private EntityHandle GetTypeHandle(TypeDesc type)
     {
         if (type is PrimType primType) {
-            type = primType.GetDefinition(_mod);
+            type = primType.GetDefinition(_mod.Resolver);
         }
         return GetHandle(type);
     }

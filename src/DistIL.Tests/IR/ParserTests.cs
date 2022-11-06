@@ -19,7 +19,7 @@ public class ParserTests
     {
         var t_List = _corelib.FindType("System.Collections.Generic", "List`1", throwIfNotFound: true);
 
-        Check("System.Int32", _corelib.SysTypes.Int32);
+        Check("System.Int32", _modResolver.SysTypes.Int32);
         Check("int[]", PrimType.Int32.CreateArray());
         Check("int[][]", PrimType.Int32.CreateArray().CreateArray());
         Check("int*[]&", PrimType.Int32.CreatePointer().CreateArray().CreateByref());

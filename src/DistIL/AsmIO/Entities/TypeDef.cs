@@ -8,8 +8,8 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
     public abstract ModuleDef Module { get; }
     public TypeAttributes Attribs { get; set; }
 
-    public override bool IsValueType => BaseType == Module.SysTypes.ValueType;
-    public override bool IsEnum => BaseType == Module.SysTypes.Enum;
+    public override bool IsValueType => BaseType == Module.Resolver.SysTypes.ValueType;
+    public override bool IsEnum => BaseType == Module.Resolver.SysTypes.Enum;
     public override bool IsInterface => (Attribs & TypeAttributes.Interface) != 0;
     public override bool IsGeneric => GenericParams.Length > 0;
 

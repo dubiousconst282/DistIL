@@ -51,9 +51,6 @@ internal class ModuleLoader
         foreach (var handle in _reader.ExportedTypes) {
             _mod.ExportedTypes.Add(ResolveExportedType(handle));
         }
-        //If we're loading CoreLib, SysTypes will be null. Create it if that's the case
-        var coreLib = _resolver.CoreLib;
-        _mod.SysTypes = coreLib.SysTypes ?? new SystemTypes(coreLib);
     }
     private void LoadTypes()
     {

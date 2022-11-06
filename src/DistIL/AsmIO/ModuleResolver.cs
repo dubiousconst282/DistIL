@@ -13,6 +13,9 @@ public class ModuleResolver
     public ModuleDef CoreLib => _coreLib ??= Resolve("System.Private.CoreLib", throwIfNotFound: true);
     private ModuleDef? _coreLib;
 
+    public SystemTypes SysTypes => _sysTypes ??= new(CoreLib);
+    private SystemTypes? _sysTypes;
+
     public ModuleDef? Resolve(AssemblyName name, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
     {
         return Resolve(name.Name ?? throw new InvalidOperationException(), throwIfNotFound);

@@ -58,12 +58,11 @@ public class PrimType : TypeDesc
     }
 
     public static PrimType? GetFromAlias(string alias) => _fromAlias.GetValueOrDefault(alias);
+    public TypeDef GetDefinition(ModuleResolver resolver) => resolver.SysTypes.GetPrimitiveDef(Kind);
 
     public override ArrayType CreateArray() => _arrayType ??= new(this);
     public override PointerType CreatePointer() => _ptrType ??= new(this);
     public override ByrefType CreateByref() => _byrefType ??= new(this);
-
-    public TypeDef GetDefinition(ModuleDef module) => module.SysTypes.GetPrimitiveDef(Kind);
 
     public override void Print(PrintContext ctx, bool includeNs = true)
     {

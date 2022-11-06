@@ -16,8 +16,6 @@ public class ModuleDef : ModuleEntity
 
     public ModuleResolver Resolver { get; init; } = null!;
 
-    public SystemTypes SysTypes { get; internal set; } = null!;
-
     ModuleDef ModuleEntity.Module => this;
 
     internal Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); //root assemblies for references of forwarded types

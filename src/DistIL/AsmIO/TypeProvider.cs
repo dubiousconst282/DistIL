@@ -102,11 +102,11 @@ internal class TypeProvider : ISignatureTypeProvider<TypeDesc, GenericContext>, 
 
     public TypeDesc GetSystemType()
     {
-        return _loader._mod.SysTypes.Type;
+        return _loader._resolver.SysTypes.Type;
     }
     public bool IsSystemType(TypeDesc type)
     {
-        return type == _loader._mod.SysTypes.Type;
+        return type == _loader._resolver.SysTypes.Type;
     }
 
     public PrimitiveTypeCode GetUnderlyingEnumType(TypeDesc type)

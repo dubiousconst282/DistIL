@@ -33,7 +33,13 @@ public class CompareInst : Instruction
 
     private static void CheckOperandTypes(CompareOp op, StackType typeL, StackType typeR)
     {
-        Ensure.That(typeL == typeR);
+        //Sort types to reduce number of permutations
+        if (typeL > typeR) {
+            (typeL, typeR) = (typeR, typeL);
+        }
+        //ECMA allows comparisons between Int and NInt
+        Ensure.That(typeL == typeR || (typeL == StackType.Int && typeR == StackType.NInt));
+        //Float comparison ops don't exist in CIL, but we want to enforce typing
         Ensure.That((typeL != StackType.Float && typeR != StackType.Float) || op.IsFloat());
     }
 

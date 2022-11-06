@@ -36,7 +36,7 @@ public class BinaryInst : Instruction
         var sa = a.StackType;
         var sb = b.StackType;
 
-        //Shift allows any combination of <i4|i8|nint> op <i4|nint>
+        //Bit shift ops allows any combination of (i4/i8/nint op i4/nint)
         if (op is BinaryOp.Shl or BinaryOp.Shra or BinaryOp.Shrl &&
             sa is StackType.Int or StackType.Long or StackType.NInt &&
             sb is StackType.Int or StackType.NInt
@@ -56,9 +56,9 @@ public class BinaryInst : Instruction
             (StackType.NInt,    StackType.NInt, _)  => a == b ? a : PrimType.IntPtr, //pick pointer over nint
             (StackType.Int,     StackType.NInt, _)  => b,
             (StackType.ByRef,   StackType.ByRef, BinaryOp.Sub) => PrimType.IntPtr,   //& - & = nint
-            //& + int/nint = &
-            (StackType.ByRef,   StackType.Int or StackType.NInt, BinaryOp.Add or BinaryOp.AddOvf)
-                    => a,
+            //int/nint + & = &
+            (StackType.Int or StackType.NInt, StackType.ByRef, BinaryOp.Add or BinaryOp.AddOvf)
+                    => b,
             _ => null
         };
         #pragma warning restore format

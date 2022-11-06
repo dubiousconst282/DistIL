@@ -6,14 +6,16 @@ namespace DistIL.IR;
 public abstract class Const : Value, IEquatable<Const>
 {
     /// <summary> Returns a constant zero/null for the given primitive/object type. </summary>
+    /// <remarks> Note: This method returns an int32 constant for nint types. </remarks>
     public static Const CreateZero(TypeDesc type)
     {
         return type.StackType switch {
             StackType.Int or StackType.Long
                             => ConstInt.Create(type, 0),
+            StackType.NInt => ConstInt.Create(PrimType.Int32, 0),
             StackType.Float => ConstFloat.Create(type, 0),
             StackType.Object => ConstNull.Create(),
-            _ => throw new InvalidOperationException()
+            _ => throw new NotSupportedException()
         };
     }
 

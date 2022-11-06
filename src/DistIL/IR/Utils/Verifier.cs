@@ -66,17 +66,20 @@ public class Verifier
                     break;
                 }
                 case SwitchInst sw: {
-                    succs.AddRange(sw.GetTargets());
+                    succs.AddRange(sw.GetUniqueTargets());
                     break;
                 }
                 case LeaveInst lv: {
                     succs.Add(lv.Target);
                     break;
                 }
-                case ReturnInst or ContinueInst: break;
-                default:
+                case ReturnInst or ThrowInst or ContinueInst: {
+                    break;
+                }
+                default: {
                     Error(block, "Invalid block terminator");
                     break;
+                }
             }
             return succs;
         }

@@ -226,8 +226,8 @@ partial class ILGenerator
     }
     public void Visit(SwitchInst inst)
     {
-        Push(inst.Value);
-        _asm.Emit(ILCode.Switch, inst.GetTargets().Skip(1).ToArray());
+        Push(inst.TargetIndex);
+        _asm.Emit(ILCode.Switch, inst.GetIndexedTargets());
         EmitFallthrough(inst.DefaultTarget);
     }
     public void Visit(ReturnInst inst)

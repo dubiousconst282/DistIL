@@ -58,48 +58,76 @@ public class BranchInst : Instruction
     }
 }
 
-/// <summary>
-/// Represents a switch instruction:
-/// <code>goto (uint)Value &lt; NumTargets ? Targets[Value] : DefaultTarget;</code>
-/// </summary>
 public class SwitchInst : Instruction
 {
-    public Value Value {
+    public Value TargetIndex {
         get => Operands[0];
         set => ReplaceOperand(0, value);
     }
     public BasicBlock DefaultTarget {
-        get => (BasicBlock)Operands[1];
-        set => ReplaceOperand(1, value);
+        get => GetTarget(-1);
     }
-    public int NumTargets => Operands.Length - 2;
+    /// <summary> Maps a case index (<see cref="TargetIndex"/>) into a block index at <see cref="Instruction.Operands"/>. </summary>
+    /// <remarks> Target indices are offset by 1 in this array, the 0th element represents the default case. </remarks>
+    public int[] TargetMappings { get; }
+
+    public int NumTargets => TargetMappings.Length - 1;
 
     public override string InstName => "switch";
     public override bool IsBranch => true;
 
-    public SwitchInst(Value value, BasicBlock defaultTarget, params BasicBlock[] targets)
-        : base(targets.Prepend(defaultTarget).Prepend(value).ToArray())
+    public SwitchInst(Value targetIndex, BasicBlock defaultTarget, params BasicBlock[] targets)
+        : base(CreateOperands(targetIndex, defaultTarget, targets, out int[] mappings))
     {
+        TargetMappings = mappings;
     }
-    /// <summary> Unchecked non-copying constructor. </summary>
-    /// <param name="operands">
-    /// Operand array containing [Value, DefaultTarget, Targets...].
-    /// The instruction will take ownership of this array, its elements should not be modified after.
-    /// </param>
-    public SwitchInst(Value[] operands)
+    internal SwitchInst(Value[] operands, int[] targetMappings)
         : base(operands)
     {
+        TargetMappings = targetMappings;
     }
 
-    public BasicBlock GetTarget(int index) => (BasicBlock)Operands[index + 2];
-    public void SetTarget(int index, BasicBlock block) => ReplaceOperand(index + 2, block);
-
-    /// <summary> Returns all target blocks in this switch, including the default (first element). </summary>
-    public IEnumerable<BasicBlock> GetTargets()
+    private static Value[] CreateOperands(Value targetIndex, BasicBlock defaultTarget, BasicBlock[] targets, out int[] mappings)
     {
-        for (int i = 1; i < Operands.Length; i++) {
-            yield return (BasicBlock)Operands[i];
+        var blockMappings = new Dictionary<BasicBlock, int>(targets.Length + 1);
+        mappings = new int[targets.Length + 1];
+        var opers = new Value[targets.Length + 2];
+        int operIdx = 0;
+        opers[operIdx++] = targetIndex;
+
+        for (int i = -1; i < targets.Length; i++) {
+            var target = i >= 0 ? targets[i] : defaultTarget;
+            if (!blockMappings.TryGetValue(target, out int mappingIdx)) {
+                blockMappings[target] = mappingIdx = operIdx;
+                opers[operIdx++] = target;
+            }
+            mappings[i + 1] = mappingIdx;
         }
+        return operIdx == opers.Length ? opers : opers[0..operIdx]; //slicing always creates a copy
+    }
+
+    /// <summary> Returns the target block for case `index`. The default target is represented as `-1`. </summary>
+    public BasicBlock GetTarget(int index)
+    {
+        return (BasicBlock)_operands[TargetMappings[index + 1]];
+    }
+
+    /// <summary> Returns all unique target blocks in this switch. </summary>
+    public IEnumerable<BasicBlock> GetUniqueTargets()
+    {
+        for (int i = 1; i < _operands.Length; i++) {
+            yield return (BasicBlock)_operands[i];
+        }
+    }
+    
+    /// <summary> Returns a new array containing the target block for each case. </summary>
+    public BasicBlock[] GetIndexedTargets()
+    {
+        var targets = new BasicBlock[NumTargets];
+        for (int i = 0; i < targets.Length; i++) {
+            targets[i] = GetTarget(i);
+        }
+        return targets;
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
@@ -107,7 +135,7 @@ public class SwitchInst : Instruction
     public override void Print(PrintContext ctx)
     {
         ctx.Print("switch ", PrintToner.InstName);
-        Value.PrintAsOperand(ctx);
+        TargetIndex.PrintAsOperand(ctx);
         ctx.Push(", [");
 
         ctx.Print("_: ");

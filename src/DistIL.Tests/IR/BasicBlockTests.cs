@@ -145,6 +145,38 @@ public class BasicBlockTests
         Assert.Equal(insts.Except(new[] { insts[3] }), ToList(block.GetEnumerator()));
     }
 
+    [Fact]
+    public void TestSwitchEdgesAreUnique()
+    {
+        var method = Utils.CreateDummyMethodBody(PrimType.Void);
+        var block1 = method.CreateBlock();
+        var block2 = method.CreateBlock();
+        var block3 = method.CreateBlock();
+        var block4 = method.CreateBlock();
+
+        block1.InsertLast(new SwitchInst(ConstInt.CreateI(0), block4, block2, block3, block2, block3));
+        block2.SetBranch(block4);
+        block3.SetBranch(block4);
+        block4.InsertLast(new ReturnInst());
+
+        Assert.Equal(0, block1.NumPreds);
+        Assert.Equal(3, block1.NumSuccs);
+
+        Assert.Equal(3, block4.NumPreds);
+        Assert.Equal(0, block4.NumSuccs);
+
+        var edges1 = new[] { block2, block3, block4 }.ToHashSet();
+        edges1.SymmetricExceptWith(block1.Succs.ToList());
+        Assert.Empty(edges1);
+
+        var edges2 = new[] { block1, block2, block3 }.ToHashSet();
+        edges2.SymmetricExceptWith(block4.Preds.ToList());
+        Assert.Empty(edges2);
+
+        Assert.Equal(new[] { block1 }, block2.Preds.ToList());
+        Assert.Equal(new[] { block1 }, block3.Preds.ToList());
+    }
+
     private List<Instruction> GetDummyInsts(int count)
     {
         var insts = new List<Instruction>();

@@ -4,9 +4,7 @@ public class BasicBlock : TrackedValue
 {
     public MethodBody Method { get; internal set; }
 
-    /// <remarks> Note: <see cref="SwitchInst"/> may cause the same block to be yielded more than once. </remarks>
     public PredIterator Preds => new(this);
-    /// <remarks> Note: <see cref="SwitchInst"/> may cause the same block to be yielded more than once. </remarks>
     public SuccIterator Succs => new(this);
 
     public Instruction First { get; private set; } = null!;
@@ -29,7 +27,8 @@ public class BasicBlock : TrackedValue
                 count += inst.Operands.Length;
             }
             if (IsBranchLike(Last)) {
-                //Uncond branches only have one operand, cond and switches have at least 2.
+                //Unconditional branches only have one operand, cond and switches have at least 2.
+                //See comment in SuccIterator for details.
                 int numOpers = Last.Operands.Length;
                 count += numOpers - (numOpers >= 2 ? 1 : 0);
             }
@@ -262,8 +261,8 @@ public class BasicBlock : TrackedValue
         => inst is BranchInst or SwitchInst or LeaveInst;
 
     //Enumerating block users (ignoring phis) will lead directly to predecessors.
-    //GuardInst`s will not yield duplicates because handler blocks can only have one predecessor guard;
-    //this is not the case for SwitchInst, since there might be duplicates and Users() don't guarantee uniqueness.
+    //GuardInst`s will not yield duplicates because handler blocks can only have one predecessor guard.
+    //SwitchInst has an special representation to avoid duplicated block use edges.
     public struct PredIterator : Iterator<BasicBlock>
     {
         ValueUserIterator _users;
@@ -313,10 +312,10 @@ public class BasicBlock : TrackedValue
                 if (_currInst == null) {
                     return false;
                 }
-                //Uncond branches only have one operand, cond and switches have at least 2.
+                //Unconditional branches only have one operand, cond and switches have at least 2.
                 //  Branch: [thenBlock]
                 //  CondBr: [cond, thenBlock, elseBlock]
-                //  Switch: [value, defaultBlock, case0?, case1?, ...]
+                //  Switch: [value, targetBlock0, targetBlock1, ...]  (targets are never duplicated)
                 //  Guard:  [handlerBlock, filterBlock?]
                 //  Leave:  [targetBlock]
                 var opers = _currInst.Operands;

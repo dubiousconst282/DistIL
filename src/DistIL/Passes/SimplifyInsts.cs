@@ -30,25 +30,22 @@ public partial class SimplifyInsts : MethodPass
 
     public override void Run(MethodTransformContext ctx)
     {
-        int itr = 0;
-
-        bool changed = true;
-        while (changed) {
-            changed = false;
-
-            foreach (var inst in ctx.Method.Instructions()) {
-                changed |= inst switch {
-                    BinaryInst c => TrySimplifyBinary(c),
-                    CompareInst c => TrySimplifyCompare(c),
-                    CallInst c => TrySimplifyCall(ctx, c),
-                    _ => false
-                };
+        foreach (var inst in ctx.Method.Instructions()) {
+            var newValue = inst switch {
+                BinaryInst c    => SimplifyBinary(c),
+                CompareInst c   => SimplifyCompare(c),
+                UnaryInst c     => SimplifyUnary(c),
+                ConvertInst c   => SimplifyConvert(c),
+                CallInst c      => SimplifyCall(ctx, c),
+                _ => null
+            };
+            if (newValue != null) {
+                inst.ReplaceWith(newValue);
             }
-            Ensure.That(itr++ < 128, "SimplifyInsts got stuck in an infinite loop");
         }
     }
 
-    private bool TrySimplifyCall(MethodTransformContext ctx, CallInst call)
+    private Value? SimplifyCall(MethodTransformContext ctx, CallInst call)
     {
         var method = call.Method;
 
@@ -58,22 +55,16 @@ public partial class SimplifyInsts : MethodPass
                 if (declType is TypeSpec spec && reqType is TypeDef) {
                     declType = spec.Definition;
                 }
-                if (reqType == null || declType.Inherits(reqType)) {
-                    return run(ctx, call);
+                if (reqType != null && !declType.Inherits(reqType)) continue;
+
+                if (run(ctx, call)) {
+                    return null;
                 }
             }
         }
-        return false;
+        return ConstFolding.FoldCall(call.Method, call.Args);
     }
 
-    private bool TrySimplifyBinary(BinaryInst inst)
-    {
-        if (SimplifyBinary(inst) is Value folded) {
-            inst.ReplaceWith(folded);
-            return true;
-        }
-        return false;
-    }
     private Value? SimplifyBinary(BinaryInst inst)
     {
         //(const op x)  ->  (x op const), if op is commutative
@@ -89,22 +80,19 @@ public partial class SimplifyInsts : MethodPass
             l_nc_c.Op == inst.Op &&
             ConstFolding.FoldBinary(inst.Op, l_nc_c.Right, inst.Right) is Value lr_op_r
         ) {
-                inst.Left = l_nc_c.Left;
+            inst.Left = l_nc_c.Left;
             inst.Right = lr_op_r;
         }
         return ConstFolding.FoldBinary(inst.Op, inst.Left, inst.Right);
     }
 
-    private bool TrySimplifyCompare(CompareInst inst)
-    {
-        if (SimplifyCompare(inst) is Value folded) {
-            inst.ReplaceWith(folded);
-            return true;
-        }
-        return false;
-    }
     private Value? SimplifyCompare(CompareInst inst)
     {
+        //(const op x)  ->  (x swapped_op const)
+        if (inst is { Left: Const, Right: not Const }) {
+            inst.Op = inst.Op.GetSwapped();
+            (inst.Left, inst.Right) = (inst.Right, inst.Left);
+        }
         //((x op y) == 0)  ->  (x !op y)
         //((x op y) != 0)  ->  (x op y)
         if (inst is {
@@ -117,5 +105,21 @@ public partial class SimplifyInsts : MethodPass
             if (neg) inst.Op = inst.Op.GetNegated();
         }
         return ConstFolding.FoldCompare(inst.Op, inst.Left, inst.Right);
+    }
+
+    private Value? SimplifyUnary(UnaryInst inst)
+    {
+        // -(-x)  ->  x
+        if (inst.Value is UnaryInst sub && sub.Op == inst.Op && 
+            inst.Op is UnaryOp.Neg or UnaryOp.Not or UnaryOp.FNeg
+        ) {
+            return sub;
+        }
+        return ConstFolding.FoldUnary(inst.Op, inst.Value);
+    }
+
+    private Value? SimplifyConvert(ConvertInst inst)
+    {
+        return ConstFolding.FoldConvert(inst.Value, inst.ResultType, inst.CheckOverflow, inst.SrcUnsigned);
     }
 }

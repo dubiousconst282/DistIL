@@ -13,6 +13,12 @@ public interface ModuleEntity : Entity
 public abstract class EntityDesc : Value, Entity
 {
     public abstract string Name { get; }
+
+    [Obsolete("This property always returns `PrimType.Void` for `EntityDesc` objects, and can be confused with `MethodDesc.ReturnType`.")]
+    public new TypeDesc ResultType => base.ResultType;
+
+    [Obsolete("This property always returns `false` for `EntityDesc` objects.")]
+    public new bool HasResult => base.HasResult;
 }
 
 public abstract class MemberDesc : EntityDesc

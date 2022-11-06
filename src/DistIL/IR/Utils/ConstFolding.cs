@@ -10,6 +10,7 @@ public class ConstFolding
             UnaryInst u   => FoldUnary(u.Op, u.Value),
             ConvertInst c => FoldConvert(c.Value, c.ResultType, c.CheckOverflow, c.SrcUnsigned),
             CompareInst c => FoldCompare(c.Op, c.Left, c.Right),
+            CallInst c    => FoldCall(c.Method, c.Args),
             _ => null
         };
     }
@@ -34,7 +35,7 @@ public class ConstFolding
                     BinaryOp.Xor  => v1 ^ v2,
                     BinaryOp.Shl  => v1 << (int)v2,
                     BinaryOp.Shra => v1 >> (int)v2,
-                    BinaryOp.Shrl => (long)((ulong)v1 >> (int)v2),
+                    BinaryOp.Shrl => v1 >>> (int)v2,
                     _ => null
                 };
                 if (result != null) {
@@ -155,5 +156,110 @@ public class ConstFolding
             }
         }
         return r == null ? null : ConstInt.CreateI(r.Value ? 1 : 0);
+    }
+
+    public static Value? FoldCall(MethodDesc method, ReadOnlySpan<Value> args)
+    {
+        if (IsCoreLibMethod(method, out var methodDef) && AllConsts(args)) {
+            var declType = methodDef.DeclaringType;
+
+            object? result = (declType.Namespace, declType.Name, method.Name) switch {
+                ("System", "Math" or "MathF", _) => FoldMathCall(methodDef, args.ToArray()),
+                ("System", "String", _) => FoldStringCall(methodDef, args.ToArray()),
+                _ => null
+            };
+            return result switch {
+                double r => ConstFloat.Create(method.ReturnType, r),
+                long r   => ConstInt.Create(method.ReturnType, r),
+                string r => ConstString.Create(r),
+                _ => null
+            };
+        }
+        return null;
+    }
+
+    private static object? FoldMathCall(MethodDef method, Value[] args)
+    {
+#pragma warning disable format
+        return (method.Name, args) switch {
+            ("Sqrt",    [ConstFloat x]) => Math.Sqrt(x.Value),
+            ("Cbrt",    [ConstFloat x]) => Math.Cbrt(x.Value),
+            ("Log",     [ConstFloat x]) => Math.Log(x.Value),
+            ("Log2",    [ConstFloat x]) => Math.Log2(x.Value),
+            ("Log10",   [ConstFloat x]) => Math.Log10(x.Value),
+            ("Exp",     [ConstFloat x]) => Math.Exp(x.Value),
+            ("Floor",   [ConstFloat x]) => Math.Floor(x.Value),
+            ("Ceiling", [ConstFloat x]) => Math.Ceiling(x.Value),
+            ("Truncate",[ConstFloat x]) => Math.Truncate(x.Value),
+            ("Abs",     [ConstFloat x]) => Math.Abs(x.Value),
+
+            ("Sin",     [ConstFloat x]) => Math.Sin(x.Value),
+            ("Cos",     [ConstFloat x]) => Math.Cos(x.Value),
+            ("Tan",     [ConstFloat x]) => Math.Tan(x.Value),
+            ("Asin",    [ConstFloat x]) => Math.Asin(x.Value),
+            ("Acos",    [ConstFloat x]) => Math.Acos(x.Value),
+            ("Atan",    [ConstFloat x]) => Math.Atan(x.Value),
+            ("Asinh",   [ConstFloat x]) => Math.Asinh(x.Value),
+            ("Acosh",   [ConstFloat x]) => Math.Acosh(x.Value),
+            ("Atanh",   [ConstFloat x]) => Math.Atanh(x.Value),
+
+            ("Atan2",   [ConstFloat x, ConstFloat y]) => Math.Atan2(x.Value, y.Value),
+            ("Log",     [ConstFloat x, ConstFloat y]) => Math.Log(x.Value, y.Value),
+
+            ("Pow",     [ConstFloat x, ConstFloat y]) => Math.Pow(x.Value, y.Value),
+            ("Min",     [ConstFloat x, ConstFloat y]) => Math.Min(x.Value, y.Value),
+            ("Max",     [ConstFloat x, ConstFloat y]) => Math.Max(x.Value, y.Value),
+
+            ("CopySign",[ConstFloat x, ConstFloat y]) => Math.CopySign(x.Value, y.Value),
+
+            ("Round",   [ConstFloat x])                         => Math.Round(x.Value),
+            ("Round",   [ConstFloat x, ConstInt d])             => Math.Round(x.Value, (int)d.Value),
+            ("Round",   [ConstFloat x, ConstInt d, ConstInt m]) => Math.Round(x.Value, (int)d.Value, (MidpointRounding)m.Value),
+
+            //Abs() throws for T.MinValue, don't fold those.
+            ("Abs",     [ConstInt { Value: not (long.MinValue or int.MinValue) } x]) => Math.Abs(x.Value),
+            ("Min",     [ConstInt x, ConstInt y]) => Math.Min(x.Value, y.Value),
+            ("Max",     [ConstInt x, ConstInt y]) => Math.Max(x.Value, y.Value),
+            _ => null
+        };
+#pragma warning restore format
+    }
+    private static object? FoldStringCall(MethodDef methodDef, Value[] args)
+    {
+        return (methodDef.Name, args) switch {
+            ("get_Length", [ConstString str]) 
+                => (long)str.Value.Length,
+            
+            ("get_Chars", [ConstString str, ConstInt idx]) 
+                when idx.Value >= 0 && idx.Value < str.Value.Length
+                => (long)str.Value[(int)idx.Value],
+
+            ("Concat", _)
+                when args.All(a => a is ConstString)
+                => string.Concat(args.Select(a => ((ConstString)a).Value)),
+
+            ("Replace", [ConstString str, ConstString oldStr, ConstString newStr])
+                => str.Value.Replace(oldStr.Value, newStr.Value),
+
+            ("Replace", [ConstString str, ConstInt oldChar, ConstInt newChar])
+                => str.Value.Replace((char)oldChar.Value, (char)newChar.Value),
+
+            _ => null
+        };
+    }
+
+    private static bool IsCoreLibMethod(MethodDesc method, out MethodDef def)
+    {
+        def = (method as MethodDefOrSpec)?.Definition!;
+        return def != null && def.DeclaringType.Module == def.Module.Resolver.CoreLib;
+    }
+    private static bool AllConsts(ReadOnlySpan<Value> args)
+    {
+        foreach (var value in args) {
+            if (value is not Const) {
+                return false;
+            }
+        }
+        return true;
     }
 }

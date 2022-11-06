@@ -71,29 +71,57 @@ public static class CompareOps
         return op switch {
             CompareOp.Eq => CompareOp.Ne,
             CompareOp.Ne => CompareOp.Eq,
-            CompareOp.Ugt => CompareOp.Ule,
-            CompareOp.Ult => CompareOp.Uge,
-            CompareOp.Uge => CompareOp.Ult,
-            CompareOp.Ule => CompareOp.Ugt,
-            CompareOp.Sgt => CompareOp.Sle,
             CompareOp.Slt => CompareOp.Sge,
-            CompareOp.Sge => CompareOp.Slt,
+            CompareOp.Sgt => CompareOp.Sle,
             CompareOp.Sle => CompareOp.Sgt,
+            CompareOp.Sge => CompareOp.Slt,
+            CompareOp.Ult => CompareOp.Uge,
+            CompareOp.Ugt => CompareOp.Ule,
+            CompareOp.Ule => CompareOp.Ugt,
+            CompareOp.Uge => CompareOp.Ult,
 
             CompareOp.FOeq => CompareOp.FUne,
             CompareOp.FOne => CompareOp.FUeq,
-            CompareOp.FOgt => CompareOp.FUle,
             CompareOp.FOlt => CompareOp.FUge,
-            CompareOp.FOge => CompareOp.FUlt,
+            CompareOp.FOgt => CompareOp.FUle,
             CompareOp.FOle => CompareOp.FUgt,
+            CompareOp.FOge => CompareOp.FUlt,
             CompareOp.FUeq => CompareOp.FOne,
             CompareOp.FUne => CompareOp.FOeq,
-            CompareOp.FUgt => CompareOp.FOle,
             CompareOp.FUlt => CompareOp.FOge,
-            CompareOp.FUge => CompareOp.FOlt,
+            CompareOp.FUgt => CompareOp.FOle,
             CompareOp.FUle => CompareOp.FOgt,
+            CompareOp.FUge => CompareOp.FOlt
+        };
+    }
 
-            _ => throw new InvalidOperationException()
+    /// <summary> Returns the operator that gives the same result if the operands were swapped. </summary>
+    public static CompareOp GetSwapped(this CompareOp op)
+    {
+        return op switch {
+            CompareOp.Eq => CompareOp.Eq,
+            CompareOp.Ne => CompareOp.Ne,
+            CompareOp.Slt => CompareOp.Sgt,
+            CompareOp.Sgt => CompareOp.Slt,
+            CompareOp.Sle => CompareOp.Sge,
+            CompareOp.Sge => CompareOp.Sle,
+            CompareOp.Ult => CompareOp.Ugt,
+            CompareOp.Ugt => CompareOp.Ult,
+            CompareOp.Ule => CompareOp.Uge,
+            CompareOp.Uge => CompareOp.Ule,
+
+            CompareOp.FOeq => CompareOp.FOeq,
+            CompareOp.FOne => CompareOp.FOne,
+            CompareOp.FOlt => CompareOp.FOgt,
+            CompareOp.FOgt => CompareOp.FOlt,
+            CompareOp.FOle => CompareOp.FOge,
+            CompareOp.FOge => CompareOp.FOle,
+            CompareOp.FUeq => CompareOp.FUeq,
+            CompareOp.FUne => CompareOp.FUne,
+            CompareOp.FUlt => CompareOp.FUgt,
+            CompareOp.FUgt => CompareOp.FUlt,
+            CompareOp.FUle => CompareOp.FUge,
+            CompareOp.FUge => CompareOp.FUle
         };
     }
 }

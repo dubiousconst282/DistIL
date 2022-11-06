@@ -1,9 +1,9 @@
 namespace DistIL.AsmIO;
 
-/// <summary> Represents an internal reference to a known primitive or system type. </summary>
+/// <summary> Represents a reference to a known primitive or system type. </summary>
 public class PrimType : TypeDesc
 {
-    static readonly Dictionary<string, PrimType> _fromAlias = new();
+    static readonly Dictionary<(string Name, bool IsAlias), PrimType> _fromName = new();
 
 #pragma warning disable format
     public static readonly PrimType
@@ -53,11 +53,18 @@ public class PrimType : TypeDesc
         Alias = alias;
 
         if (alias != null) {
-            _fromAlias[alias] = this;
+            _fromName.Add((alias, true), this);
         }
+        _fromName.Add((name, false), this);
     }
 
-    public static PrimType? GetFromAlias(string alias) => _fromAlias.GetValueOrDefault(alias);
+    public static PrimType? GetFromAlias(string alias) => _fromName.GetValueOrDefault((alias, true));
+
+    public static PrimType? GetFromDefinition(TypeDef def)
+        => def.Module == def.Module.Resolver.CoreLib && def.Namespace == "System"
+            ? _fromName.GetValueOrDefault((def.Name, false))
+            : null;
+
     public TypeDef GetDefinition(ModuleResolver resolver) => resolver.SysTypes.GetPrimitiveDef(Kind);
 
     public override ArrayType CreateArray() => _arrayType ??= new(this);

@@ -8,7 +8,13 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
     public abstract ModuleDef Module { get; }
     public TypeAttributes Attribs { get; set; }
 
-    public override bool IsValueType => BaseType == Module.Resolver.SysTypes.ValueType;
+    public override bool IsValueType {
+        get {
+            var sys = Module.Resolver.SysTypes;
+            //System.Enum weirdly extends ValueType, but it's not actually one
+            return (BaseType == sys.ValueType && this != sys.Enum) || BaseType == sys.Enum;
+        }
+    }
     public override bool IsEnum => BaseType == Module.Resolver.SysTypes.Enum;
     public override bool IsInterface => (Attribs & TypeAttributes.Interface) != 0;
     public override bool IsGeneric => GenericParams.Length > 0;
@@ -108,8 +114,8 @@ public class TypeDef : TypeDefOrSpec
 
         //FIXME: TypeDef.Kind for String/Array/... and maybe primitives?
         _kind = IsEnum ? UnderlyingEnumType!.Kind :
-               IsValueType ? TypeKind.Struct : 
-               TypeKind.Object;
+                PrimType.GetFromDefinition(this)?.Kind ??
+                (IsValueType ? TypeKind.Struct : TypeKind.Object);
     }
 
     public override TypeDefOrSpec GetSpec(GenericContext context)

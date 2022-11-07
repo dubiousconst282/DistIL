@@ -24,8 +24,6 @@ public class IntrinsicInst : Instruction
         }
     }
 
-    public Value GetArg(int index) => _operands[index];
-
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
     public override void Print(PrintContext ctx)

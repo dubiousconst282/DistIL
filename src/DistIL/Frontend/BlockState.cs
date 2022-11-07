@@ -44,10 +44,13 @@ internal class BlockState
 
     public void PushNoEmit(Value value)
     {
+        Debug.Assert(value.HasResult);
         _stack.Push(value);
     }
     public void Push(Value value)
     {
+        Debug.Assert(value.HasResult);
+
         if (value is Instruction inst) {
             Emit(inst);
         }
@@ -219,6 +222,7 @@ internal class BlockState
                 case ILCode.Conv_R8: ImportConv(PrimType.Double,  F); break;
                 case ILCode.Conv_I:  ImportConv(PrimType.IntPtr,  F); break;
                 case ILCode.Conv_U:  ImportConv(PrimType.UIntPtr, F); break;
+                case ILCode.Conv_R_Un: ImportConv(PrimType.Double, F, T); break;
 
                 case ILCode.Conv_Ovf_I1: ImportConv(PrimType.SByte,   T); break;
                 case ILCode.Conv_Ovf_I2: ImportConv(PrimType.Int16,   T); break;
@@ -442,8 +446,21 @@ internal class BlockState
                 case ILCode.Unbox_Any:
                     ImportIntrinsic(CilIntrinsic.UnboxObj, (TypeDesc)inst.Operand!);
                     break;
-                case ILCode.Ldtoken:
-                    ImportLoadToken((EntityDesc)inst.Operand!);
+                case ILCode.Ldtoken: {
+                    var entity = (EntityDesc)inst.Operand!;
+                    Push(new IntrinsicInst(CilIntrinsic.LoadHandle(_mod.Resolver, entity), entity));
+                    break;
+                }
+                case ILCode.Initobj:
+                    //TODO: support volatile/unaligned in InitObj
+                    Debug.Assert(PopPointerFlags() == 0);
+                    ImportIntrinsic(CilIntrinsic.InitObj, (TypeDesc)inst.Operand!);
+                    break;
+                case ILCode.Sizeof:
+                    Push(new IntrinsicInst(CilIntrinsic.SizeOf, (TypeDesc)inst.Operand!));
+                    break;
+                case ILCode.Localloc:
+                    Push(new IntrinsicInst(CilIntrinsic.Alloca, Pop()));
                     break;
                 #endregion
 
@@ -563,7 +580,7 @@ internal class BlockState
         var left = Pop();
         Push(CreateCompare(op, fltOp, left, right));
     }
-    private CompareInst CreateCompare(CompareOp op, CompareOp fltOp, Value left, Value right)
+    private static CompareInst CreateCompare(CompareOp op, CompareOp fltOp, Value left, Value right)
     {
         bool isFloat = left.ResultType.Kind.IsFloat() || right.ResultType.Kind.IsFloat();
         return new CompareInst(isFloat ? fltOp : op, left, right);
@@ -778,12 +795,13 @@ internal class BlockState
     private void ImportIntrinsic(CilIntrinsic intrinsic, TypeDesc typeArg)
     {
         Debug.Assert(intrinsic.ParamTypes.Length == 2);
-        Push(new IntrinsicInst(intrinsic, typeArg, Pop()));
-    }
+        var inst = new IntrinsicInst(intrinsic, typeArg, Pop());
 
-    private void ImportLoadToken(EntityDesc entity)
-    {
-        Push(new IntrinsicInst(CilIntrinsic.LoadHandle(_mod.Resolver, entity), entity));
+        if (inst.HasResult) {
+            Push(inst);
+        } else {
+            Emit(inst);
+        }
     }
 
     private Exception Error(string? msg = null)

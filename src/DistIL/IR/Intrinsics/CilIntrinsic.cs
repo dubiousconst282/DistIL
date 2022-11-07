@@ -58,6 +58,13 @@ public class CilIntrinsic : IntrinsicDesc
             ParamTypes = ImmutableArray.Create(s_TypePar, PrimType.Void.CreatePointer()),
             ReturnType = PrimType.Void
         },
+        //int SizeOf<T>()
+        SizeOf = new() {
+            Id = CilIntrinsicId.SizeOf,
+            Opcode = ILCode.Sizeof,
+            ParamTypes = ImmutableArray.Create(s_TypePar),
+            ReturnType = PrimType.Int32
+        },
         //void* Alloca(nint size)
         Alloca = new() {
             Id = CilIntrinsicId.Alloca,
@@ -90,7 +97,7 @@ public enum CilIntrinsicId
     CastClass, AsInstance,
     Box, UnboxObj, UnboxRef,
     LoadHandle,
-    InitObj, LoadObj, StoreObj,
-    InitBlock, CopyBlock, FillBlock,
+    InitObj,
+    SizeOf,
     Alloca
 }

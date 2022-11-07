@@ -174,17 +174,23 @@ partial class ILGenerator
 
         switch (intrinsic.Id) {
             case CilIntrinsicId.NewArray:
-            case CilIntrinsicId.AsInstance:
             case CilIntrinsicId.CastClass:
+            case CilIntrinsicId.AsInstance:
             case CilIntrinsicId.Box:
+            case CilIntrinsicId.UnboxObj:
             case CilIntrinsicId.UnboxRef:
-            case CilIntrinsicId.UnboxObj: {
-                Push(inst.Args[1]);
-                _asm.Emit(intrinsic.Opcode, (TypeDesc)inst.Args[0]);
+            case CilIntrinsicId.LoadHandle:
+            case CilIntrinsicId.InitObj:
+            case CilIntrinsicId.SizeOf: {
+                if (inst.Args.Length >= 2) {
+                    Push(inst.Args[1]);
+                }
+                _asm.Emit(intrinsic.Opcode, inst.Args[0]);
                 break;
             }
-            case CilIntrinsicId.LoadHandle: {
-                _asm.Emit(ILCode.Ldtoken, inst.Args[0]);
+            case CilIntrinsicId.Alloca: {
+                Push(inst.Args[0]);
+                _asm.Emit(intrinsic.Opcode);
                 break;
             }
             default: throw new NotSupportedException($"Intrinsic {intrinsic}");

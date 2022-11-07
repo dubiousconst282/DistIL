@@ -1,6 +1,8 @@
 namespace DistIL.Passes;
 
 using DistIL.Analysis;
+using DistIL.IR.Intrinsics;
+
 //This pass is based on "Revisiting Out-of-SSA Translation for Correctness, Code Quality, and Efficiency"
 //by Boissinot et al. (https://hal.inria.fr/inria-00349925v1/document)
 //
@@ -83,7 +85,7 @@ public class RemovePhis : MethodPass
 
         IntrinsicInst CreateCopy(Value source, Instruction pos, bool atEnd)
         {
-            var copy = new IntrinsicInst(IntrinsicId.CopyDef, source.ResultType, source);
+            var copy = new IntrinsicInst(IRIntrinsic.CopyDef, source);
             if (atEnd) {
                 copy.InsertBefore(pos);
             } else {
@@ -173,7 +175,7 @@ public class RemovePhis : MethodPass
                 if (src is Instruction srcI) {
                     var srcSlot = GetMergeList(srcI).GetSlot();
                     //Copy source to its slot, and replace other uses with it
-                    if (srcI.Block != null && srcI is not IntrinsicInst { Id: IntrinsicId.CopyDef }) {
+                    if (srcI.Block != null && !srcI.Is(IRIntrinsicId.CopyDef)) {
                         srcI.ReplaceUses(srcSlot);
 
                         var store = new StoreVarInst(srcSlot, src);
@@ -319,9 +321,9 @@ public class RemovePhis : MethodPass
 
     private Value? GetValue(Instruction inst)
     {
-        var src = inst as Value;
-        while (src is IntrinsicInst { Id: IntrinsicId.CopyDef } copy) {
-            src = copy.Args[0];
+        Value? src = inst;
+        while (src is Instruction currInst && currInst.Is(IRIntrinsicId.CopyDef)) {
+            src = currInst.Operands[0];
         }
         return src;
     }

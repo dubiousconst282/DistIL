@@ -1,5 +1,7 @@
 namespace DistIL.IR.Utils;
 
+using DistIL.IR.Intrinsics;
+
 /// <summary> Helper for building a sequence of intructions. </summary>
 public class IRBuilder
 {
@@ -94,10 +96,10 @@ public class IRBuilder
         => Add(new StoreArrayInst(array, index, value, elemType ?? (array.ResultType as ArrayType)!.ElemType, flags));
 
     public IntrinsicInst CreateNewArray(TypeDesc elemType, Value length)
-        => Add(new IntrinsicInst(IntrinsicId.NewArray, elemType.CreateArray(), length));
+        => Add(new IntrinsicInst(CilIntrinsic.NewArray, elemType, length));
 
     public void CreateMarker(string text)
-        => Add(new IntrinsicInst(IntrinsicId.Marker, PrimType.Void, ConstString.Create(text)));
+        => Add(new IntrinsicInst(IRIntrinsic.Marker, ConstString.Create(text)));
 
     /// <summary> Adds the specified instruction at the current position. </summary>
     public TInst Add<TInst>(TInst inst) where TInst : Instruction

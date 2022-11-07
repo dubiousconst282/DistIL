@@ -1,5 +1,7 @@
 namespace DistIL.CodeGen.Cil;
 
+using DistIL.IR.Intrinsics;
+
 partial class ILGenerator
 {
     public void Visit(BinaryInst inst)
@@ -165,28 +167,27 @@ partial class ILGenerator
     }
     public void Visit(IntrinsicInst inst)
     {
-        switch (inst.Id) {
-            case IntrinsicId.Marker: break;
-            case IntrinsicId.NewArray: {
-                Push(inst.Args[0]);
-                _asm.Emit(ILCode.Newarr, (inst.ResultType as ArrayType)!.ElemType);
+        if (inst.Is(IRIntrinsicId.Marker)) return;
+
+        var intrinsic = (inst.Intrinsic as CilIntrinsic) ?? 
+            throw new InvalidOperationException("Only CilIntrinsic`s can be called during codegen");
+
+        switch (intrinsic.Id) {
+            case CilIntrinsicId.NewArray:
+            case CilIntrinsicId.AsInstance:
+            case CilIntrinsicId.CastClass:
+            case CilIntrinsicId.Box:
+            case CilIntrinsicId.UnboxRef:
+            case CilIntrinsicId.UnboxObj: {
+                Push(inst.Args[1]);
+                _asm.Emit(intrinsic.Opcode, (TypeDesc)inst.Args[0]);
                 break;
             }
-            case IntrinsicId.LoadToken: {
+            case CilIntrinsicId.LoadHandle: {
                 _asm.Emit(ILCode.Ldtoken, inst.Args[0]);
                 break;
             }
-            case IntrinsicId.AsInstance: {
-                Push(inst.Args[0]);
-                _asm.Emit(ILCode.Isinst, inst.ResultType);
-                break;
-            }
-            case IntrinsicId.CastClass: {
-                Push(inst.Args[0]);
-                _asm.Emit(ILCode.Castclass, inst.ResultType);
-                break;
-            }
-            default: throw new NotSupportedException($"Intrinsic {inst.Id}");
+            default: throw new NotSupportedException($"Intrinsic {intrinsic}");
         }
     }
 

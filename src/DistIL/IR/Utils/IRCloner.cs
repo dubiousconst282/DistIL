@@ -66,7 +66,8 @@ public class IRCloner
             return newValue;
         }
         if (value is Variable var) {
-            newValue = new Variable(var.Type, var.IsPinned);
+            var newType = Remap(var.Type) as TypeDesc ?? throw new InvalidOperationException();
+            newValue = new Variable(newType, var.IsPinned);
             _mappings.Add(value, newValue);
             return newValue;
         }
@@ -152,7 +153,7 @@ public class IRCloner
         public void Visit(CallInst inst) => Out(new CallInst(inst.Method, RemapArgs(inst.Args), inst.IsVirtual, inst.Constraint));
         public void Visit(NewObjInst inst) => Out(new NewObjInst(inst.Constructor, RemapArgs(inst.Args)));
         public void Visit(FuncAddrInst inst) => Out(new FuncAddrInst(inst.Method, inst.IsVirtual ? Remap(inst.Object) : null));
-        public void Visit(IntrinsicInst inst) => Out(new IntrinsicInst(inst.Id, inst.ResultType, RemapArgs(inst.Args)));
+        public void Visit(IntrinsicInst inst) => Out(new IntrinsicInst(inst.Intrinsic, RemapArgs(inst.Args)));
 
         public void Visit(ReturnInst inst) => Out(new ReturnInst(inst.HasValue ? Remap(inst.Value) : null));
         public void Visit(BranchInst inst) => Out(inst.IsJump ? new BranchInst(Remap(inst.Then)) : new BranchInst(Remap(inst.Cond), Remap(inst.Then), Remap(inst.Else)));

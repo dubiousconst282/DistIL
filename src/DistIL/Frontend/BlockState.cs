@@ -1,5 +1,7 @@
 namespace DistIL.Frontend;
 
+using DistIL.IR.Intrinsics;
+
 internal class BlockState
 {
     readonly ILImporter _importer;
@@ -420,16 +422,28 @@ internal class BlockState
 
                 #region Intrinsics
                 case ILCode.Newarr:
-                    ImportNewArray((TypeDesc)inst.Operand!);
+                    ImportIntrinsic(CilIntrinsic.NewArray, (TypeDesc)inst.Operand!);
+                    break;
+                case ILCode.Castclass:
+                    ImportIntrinsic(CilIntrinsic.CastClass, (TypeDesc)inst.Operand!);
+                    break;
+                case ILCode.Isinst: {
+                    //isinst returns the box object for structs
+                    var destType = (TypeDesc)inst.Operand!;
+                    ImportIntrinsic(CilIntrinsic.AsInstance, destType.IsValueType ? PrimType.Object : destType);
+                    break;
+                }
+                case ILCode.Box:
+                    ImportIntrinsic(CilIntrinsic.Box, (TypeDesc)inst.Operand!);
+                    break;
+                case ILCode.Unbox:
+                    ImportIntrinsic(CilIntrinsic.UnboxRef, (TypeDesc)inst.Operand!);
+                    break;
+                case ILCode.Unbox_Any:
+                    ImportIntrinsic(CilIntrinsic.UnboxObj, (TypeDesc)inst.Operand!);
                     break;
                 case ILCode.Ldtoken:
                     ImportLoadToken((EntityDesc)inst.Operand!);
-                    break;
-                case ILCode.Isinst:
-                    ImportIsInst((TypeDesc)inst.Operand!);
-                    break;
-                case ILCode.Castclass:
-                    ImportCast((TypeDesc)inst.Operand!);
                     break;
                 #endregion
 
@@ -761,31 +775,15 @@ internal class BlockState
         TerminateBlock(new ThrowInst(exception));
     }
 
-    private void ImportNewArray(TypeDesc elemType)
+    private void ImportIntrinsic(CilIntrinsic intrinsic, TypeDesc typeArg)
     {
-        var length = Pop();
-        Push(new IntrinsicInst(IntrinsicId.NewArray, elemType.CreateArray(), length));
+        Debug.Assert(intrinsic.ParamTypes.Length == 2);
+        Push(new IntrinsicInst(intrinsic, typeArg, Pop()));
     }
 
     private void ImportLoadToken(EntityDesc entity)
     {
-        var sys = _mod.Resolver.SysTypes;
-        var resultType = entity switch {
-            MethodDesc => sys.RuntimeMethodHandle,
-            FieldDesc  => sys.RuntimeFieldHandle,
-            TypeDesc   => sys.RuntimeTypeHandle,
-            _ => throw Error("Invalid token type for ldtoken")
-        };
-        Push(new IntrinsicInst(IntrinsicId.LoadToken, resultType, entity));
-    }
-
-    private void ImportIsInst(TypeDesc destType)
-    {
-        Push(new IntrinsicInst(IntrinsicId.AsInstance, destType.IsValueType ? PrimType.Object : destType, Pop()));
-    }
-    private void ImportCast(TypeDesc destType)
-    {
-        Push(new IntrinsicInst(IntrinsicId.CastClass, destType, Pop()));
+        Push(new IntrinsicInst(CilIntrinsic.LoadHandle(_mod.Resolver, entity), entity));
     }
 
     private Exception Error(string? msg = null)

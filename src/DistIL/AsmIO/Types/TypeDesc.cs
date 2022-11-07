@@ -31,9 +31,10 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
         if (t1 == t2) {
             return true;
         }
-        //Allow implicit conversion between nint/pointer and byref
-        return (t1 == StackType.NInt || t1 == StackType.ByRef) &&
-               (t2 == StackType.NInt || t2 == StackType.ByRef);
+        //Allow implicit conversions: nint/pointer <-> byref, int -> nint
+        return (t1 == StackType.NInt && t2 == StackType.ByRef) ||
+               (t1 == StackType.ByRef && t2 == StackType.NInt) ||
+               (t1 == StackType.Int && t2 == StackType.NInt);
     }
 
     /// <summary>

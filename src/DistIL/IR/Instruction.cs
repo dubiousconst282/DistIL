@@ -167,7 +167,7 @@ public abstract class Instruction : TrackedValue
     protected virtual void PrintPrefix(PrintContext ctx)
     {
         if (HasResult) {
-            ResultType.Print(ctx);
+            ctx.Print(ResultType);
             ctx.Print(" ");
             PrintAsOperand(ctx);
             ctx.Print(" = ");
@@ -179,7 +179,7 @@ public abstract class Instruction : TrackedValue
     {
         for (int i = 0; i < _operands.Length; i++) {
             ctx.Print(i == 0 ? " " : ", ");
-            _operands[i].PrintAsOperand(ctx);
+            ctx.PrintAsOperand(_operands[i]);
         }
     }
     public override SymbolTable? GetSymbolTable()

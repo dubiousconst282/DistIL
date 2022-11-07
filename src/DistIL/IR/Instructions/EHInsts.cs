@@ -44,10 +44,7 @@ public class GuardInst : Instruction
         HandlerBlock.Print(ctx);
 
         if (HasFilter) {
-            ctx.Print(", ");
-            ctx.Print("filter", PrintToner.InstName);
-            ctx.Print(" -> ");
-            FilterBlock.Print(ctx);
+            ctx.Print($", {PrintToner.InstName}filter {PrintToner.Default}-> {FilterBlock}");
         }
     }
 }

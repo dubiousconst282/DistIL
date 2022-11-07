@@ -16,11 +16,13 @@ public class PrintContext
         SymTable = symTable;
     }
 
+    public void Print(Value value) => value.Print(this);
+    public void PrintAsOperand(Value value) => value.PrintAsOperand(this);
+
     public virtual void Print(string str, PrintToner toner = default) => Output.Write(str);
 
-    public void Print([InterpolatedStringHandlerArgument("")] InterpolationHandler handler)
-    {
-    }
+    public void Print([InterpolatedStringHandlerArgument("")] InterpolationHandler handler) { }
+    
     public void PrintSequence<T>(string prefix, string postfix, IReadOnlyList<T> elems, Action<T> printElem)
     {
         Print(prefix);
@@ -61,27 +63,36 @@ public class PrintContext
     public ref struct InterpolationHandler
     {
         PrintContext _ctx;
+        PrintToner _nextToner = default;
 
         public InterpolationHandler(int literalLength, int formattedCount, PrintContext ctx)
         {
             _ctx = ctx;
         }
 
-        public void AppendLiteral(string str)
-        {
-            _ctx.Print(str);
-        }
-        public void AppendFormatted(string value)
-        {
-            _ctx.Print(value);
-        }
+        public void AppendLiteral(string str) => Print(str);
+        public void AppendFormatted(string str) => Print(str);
+    
+        public void AppendFormatted(PrintToner nextToner)
+            => _nextToner = nextToner;
+            
         public void AppendFormatted<T>(T value) where T : IFormattable
-        {
-            _ctx.Print(value.ToString(null, CultureInfo.InvariantCulture));
-        }
+            => Print(value.ToString(null, CultureInfo.InvariantCulture));
+
         public void AppendFormatted(Value value)
         {
-            value.PrintAsOperand(_ctx);
+            if (value is Instruction) {
+                value.PrintAsOperand(_ctx);
+            } else {
+                value.Print(_ctx);
+            }
+            _nextToner = default;
+        }
+
+        private void Print(string str)
+        {
+            _ctx.Print(str, _nextToner);
+            _nextToner = default;
         }
     }
 }

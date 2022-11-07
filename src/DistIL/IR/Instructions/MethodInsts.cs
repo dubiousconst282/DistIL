@@ -39,10 +39,7 @@ public class CallInst : Instruction
 
     internal static void PrintOperands(PrintContext ctx, MethodDesc method, ReadOnlySpan<Value> args, TypeDesc? constraint, bool isCtor = false)
     {
-        ctx.Print(" ");
-        method.DeclaringType.Print(ctx);
-        ctx.Print("::");
-        ctx.Print(method.Name, PrintToner.MethodName);
+        ctx.Print($" {method.DeclaringType}::{PrintToner.MethodName}{method.Name}");
         if (method is MethodSpec { GenericParams.Length: > 0 }) {
             ctx.PrintSequence("<", ">", method.GenericParams, p => p.Print(ctx));
         }

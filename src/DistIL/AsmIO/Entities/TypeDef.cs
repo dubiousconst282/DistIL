@@ -138,9 +138,7 @@ public class TypeDef : TypeDefOrSpec
     public override void Print(PrintContext ctx, bool includeNs = true)
     {
         if (DeclaringType != null) {
-            DeclaringType.Print(ctx, includeNs);
-            ctx.Print("+");
-            ctx.Print(Name, PrintToner.TypeName);
+            ctx.Print($"{DeclaringType}+{PrintToner.TypeName}{Name}");
         } else {
             base.Print(ctx, includeNs);
         }

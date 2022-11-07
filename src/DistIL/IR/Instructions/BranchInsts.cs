@@ -47,11 +47,7 @@ public class BranchInst : Instruction
         ctx.Print("goto ", PrintToner.InstName);
 
         if (IsConditional) {
-            Cond.PrintAsOperand(ctx);
-            ctx.Print(" ? ");
-            Then.PrintAsOperand(ctx);
-            ctx.Print(" : ");
-            Else.PrintAsOperand(ctx);
+            ctx.Print($"{Cond} ? {Then} : {Else}");
         } else {
             Then.PrintAsOperand(ctx);
         }
@@ -135,7 +131,7 @@ public class SwitchInst : Instruction
     public override void Print(PrintContext ctx)
     {
         ctx.Print("switch ", PrintToner.InstName);
-        TargetIndex.PrintAsOperand(ctx);
+        ctx.PrintAsOperand(DefaultTarget);
         ctx.Push(", [");
 
         ctx.Print("_: ");
@@ -144,7 +140,7 @@ public class SwitchInst : Instruction
         for (int i = 0; i < NumTargets; i++) {
             ctx.PrintLine(",");
             ctx.Print(i + ": ");
-            GetTarget(i).PrintAsOperand(ctx);
+            ctx.PrintAsOperand(GetTarget(i));
         }
         ctx.Pop("]");
     }

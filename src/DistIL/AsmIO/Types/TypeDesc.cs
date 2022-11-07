@@ -97,8 +97,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     }
     public override void PrintAsOperand(PrintContext ctx)
     {
-        ctx.Print("typeof", PrintToner.Keyword);
-        ctx.Print("(");
+        ctx.Print($"{PrintToner.Keyword}typeof{PrintToner.Default}(");
         Print(ctx, false);
         ctx.Print(")");
     }

@@ -24,15 +24,11 @@ public abstract class MethodDesc : MemberDesc
     public override void Print(PrintContext ctx)
     {
         if (IsStatic) ctx.Print("static ", PrintToner.Keyword);
-        ReturnType.Print(ctx);
-        ctx.Print(" ");
-        DeclaringType.Print(ctx);
-        ctx.Print("::");
-        ctx.Print(Name, PrintToner.MethodName);
+        ctx.Print($"{ReturnType} {DeclaringType}::{PrintToner.MethodName}{Name}(");
         if (IsGeneric) {
-            ctx.PrintSequence("<", ">", GenericParams, p => p.Print(ctx));
+            ctx.PrintSequence("<", ">", GenericParams, ctx.Print);
         }
-        ctx.PrintSequence("(", ")", Params, p => p.Type.Print(ctx));
+        ctx.PrintSequence("(", ")", Params, p => ctx.Print(p.Type));
     }
 
     public virtual MethodDesc GetSpec(GenericContext ctx)

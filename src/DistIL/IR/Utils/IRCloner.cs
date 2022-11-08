@@ -8,10 +8,12 @@ public class IRCloner
     readonly RefSet<TrackedValue> _pendingValues = new();
     readonly InstCloner _instCloner;
     readonly List<BasicBlock> _srcBlocks = new();
+    readonly GenericContext _genericContext;
 
-    public IRCloner()
+    public IRCloner(GenericContext genericContext = default)
     {
         _instCloner = new(this);
+        _genericContext = genericContext;
     }
 
     public void AddMapping(Value oldVal, Value newVal)
@@ -72,6 +74,13 @@ public class IRCloner
             return newValue;
         }
         if (value is Const or EntityDesc or Undef) {
+            if (!_genericContext.IsNull && value is EntityDesc) {
+                return _mappings[value] = value switch {
+                    TypeDesc c => c.GetSpec(_genericContext),
+                    MethodDesc c => c.GetSpec(_genericContext),
+                    FieldDesc c => c.GetSpec(_genericContext)
+                };
+            }
             return value;
         }
         //At this point, all non TrackedValue`s, must have been handled
@@ -94,9 +103,8 @@ public class IRCloner
 
         private void Out(Value val) => _result = val;
 
-        private Value Remap(Value val) => _ctx.Remap(val) ?? val;
-        private Variable Remap(Variable var) => (Variable)Remap((Value)var);
-        private BasicBlock Remap(BasicBlock block) => (BasicBlock)Remap((Value)block);
+        private V Remap<V>(V val) where V : Value
+            => (V)(_ctx.Remap(val) ?? val);
 
         private Value[] RemapArgs(ReadOnlySpan<Value> args)
         {
@@ -146,13 +154,13 @@ public class IRCloner
         public void Visit(StoreArrayInst inst) => Out(new StoreArrayInst(Remap(inst.Array), Remap(inst.Index), Remap(inst.Value), inst.ElemType, inst.Flags));
         public void Visit(ArrayAddrInst inst) => Out(new ArrayAddrInst(Remap(inst.Array), Remap(inst.Index), inst.ElemType, inst.Flags));
 
-        public void Visit(LoadFieldInst inst) => Out(new LoadFieldInst(inst.Field, inst.IsStatic ? null : Remap(inst.Obj)));
-        public void Visit(StoreFieldInst inst) => Out(new StoreFieldInst(inst.Field, inst.IsStatic ? null : Remap(inst.Obj), Remap(inst.Value)));
-        public void Visit(FieldAddrInst inst) => Out(new FieldAddrInst(inst.Field, inst.IsStatic ? null : Remap(inst.Obj)));
+        public void Visit(LoadFieldInst inst) => Out(new LoadFieldInst(Remap(inst.Field), inst.IsStatic ? null : Remap(inst.Obj)));
+        public void Visit(StoreFieldInst inst) => Out(new StoreFieldInst(Remap(inst.Field), inst.IsStatic ? null : Remap(inst.Obj), Remap(inst.Value)));
+        public void Visit(FieldAddrInst inst) => Out(new FieldAddrInst(Remap(inst.Field), inst.IsStatic ? null : Remap(inst.Obj)));
 
-        public void Visit(CallInst inst) => Out(new CallInst(inst.Method, RemapArgs(inst.Args), inst.IsVirtual, inst.Constraint));
-        public void Visit(NewObjInst inst) => Out(new NewObjInst(inst.Constructor, RemapArgs(inst.Args)));
-        public void Visit(FuncAddrInst inst) => Out(new FuncAddrInst(inst.Method, inst.IsVirtual ? Remap(inst.Object) : null));
+        public void Visit(CallInst inst) => Out(new CallInst(Remap(inst.Method), RemapArgs(inst.Args), inst.IsVirtual, inst.Constraint));
+        public void Visit(NewObjInst inst) => Out(new NewObjInst(Remap(inst.Constructor), RemapArgs(inst.Args)));
+        public void Visit(FuncAddrInst inst) => Out(new FuncAddrInst(Remap(inst.Method), inst.IsVirtual ? Remap(inst.Object) : null));
         public void Visit(IntrinsicInst inst) => Out(new IntrinsicInst(inst.Intrinsic, RemapArgs(inst.Args)));
 
         public void Visit(ReturnInst inst) => Out(new ReturnInst(inst.HasValue ? Remap(inst.Value) : null));

@@ -126,4 +126,9 @@ public class MDArrayMethod : MethodDesc
             return b.MoveToImmutable();
         }
     }
+
+    public override MethodDesc GetSpec(GenericContext ctx)
+    {
+        throw new UnreachableException();
+    }
 }

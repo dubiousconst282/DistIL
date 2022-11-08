@@ -46,21 +46,13 @@ public class InlineMethods : MethodPass
             return false;
         }
         var callerBody = call.Block.Method;
-        var cloner = new IRCloner();
+        var cloner = new IRCloner(new GenericContext(callee));
 
         //Add argument mappings
         for (int i = 0; i < calleeBody.Args.Length; i++) {
             cloner.AddMapping(calleeBody.Args[i], call.GetArg(i));
         }
-        //Add generic type mappings
-        if (callee.IsGenericSpec) {
-            var emptyParams = callee.Definition.GenericParams;
-            var filledArgs = callee.GenericParams;
 
-            for (int i = 0; i < filledArgs.Length; i++) {
-                cloner.AddMapping(emptyParams[i], filledArgs[i]);
-            }
-        }
         //Clone blocks
         var newBlocks = new List<BasicBlock>();
         foreach (var block in calleeBody) {

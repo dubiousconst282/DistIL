@@ -24,6 +24,8 @@ public abstract class FieldDesc : MemberDesc
         ctx.Print("::");
         ctx.Print(Name, PrintToner.MemberName);
     }
+
+    public abstract FieldDesc GetSpec(GenericContext ctx);
 }
 public abstract class FieldDefOrSpec : FieldDesc, ModuleEntity
 {
@@ -31,6 +33,14 @@ public abstract class FieldDefOrSpec : FieldDesc, ModuleEntity
     public ModuleDef Module => Definition.DeclaringType.Module;
 
     public abstract override TypeDefOrSpec DeclaringType { get; }
+
+    public override FieldDesc GetSpec(GenericContext ctx)
+    {
+        var newDeclType = DeclaringType.GetSpec(ctx);
+        return newDeclType != DeclaringType
+            ? new FieldSpec((TypeSpec)newDeclType, Definition)
+            : this;
+    }
 }
 
 public class FieldDef : FieldDefOrSpec
@@ -112,11 +122,10 @@ public class FieldSpec : FieldDefOrSpec
     }
     public override string Name => Definition.Name;
 
-    public FieldSpec(TypeSpec declaringType, FieldDef def)
+    internal FieldSpec(TypeSpec declaringType, FieldDef def)
     {
         DeclaringType = declaringType;
         Definition = def;
         Type = def.Type.GetSpec(new GenericContext(declaringType));
-        Attribs = def.Attribs;
     }
 }

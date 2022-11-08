@@ -15,7 +15,6 @@ public abstract class MethodDesc : MemberDesc
 
     public ImmutableArray<TypeDesc> GenericParams { get; protected set; } = ImmutableArray<TypeDesc>.Empty;
     public bool IsGeneric => GenericParams.Length > 0;
-    public bool IsGenericSpec => this is MethodSpec;
 
     public TypeDesc ReturnType { get; protected set; } = null!;
     public ImmutableArray<ParamDef> Params { get; protected set; }
@@ -31,11 +30,7 @@ public abstract class MethodDesc : MemberDesc
         ctx.PrintSequence("(", ")", Params, p => ctx.Print(p.Type));
     }
 
-    public virtual MethodDesc GetSpec(GenericContext ctx)
-    {
-        Debug.Assert(GenericParams.Length == 0, "GetSpec() must be overriden if the method can be instantiated");
-        return this;
-    }
+    public abstract MethodDesc GetSpec(GenericContext ctx);
 }
 public class ParamDef
 {
@@ -158,6 +153,11 @@ public class MethodSpec : MethodDefOrSpec
         var genCtx = new GenericContext(this);
         ReturnType = def.ReturnType.GetSpec(genCtx);
         Params = def.Params.Select(p => new ParamDef(p.Type.GetSpec(genCtx), p.Index, p.Name, p.Attribs)).ToImmutableArray();
+    }
+
+    public override MethodDesc GetSpec(GenericContext ctx)
+    {
+        return new MethodSpec((TypeDefOrSpec)DeclaringType.GetSpec(ctx), Definition, ctx.FillParams(GenericParams));
     }
 }
 

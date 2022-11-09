@@ -71,9 +71,9 @@ public class PrimType : TypeDesc
     public override PointerType CreatePointer() => _ptrType ??= new(this);
     public override ByrefType CreateByref() => _byrefType ??= new(this);
 
-    public override void Print(PrintContext ctx, bool includeNs = true)
+    public override void Print(PrintContext ctx, bool includeNs = false)
     {
-        if (Alias != null) {
+        if (Alias != null && !includeNs) {
             ctx.Print(Alias, PrintToner.Keyword);
         } else {
             base.Print(ctx, includeNs);

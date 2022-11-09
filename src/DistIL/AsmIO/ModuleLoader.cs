@@ -87,6 +87,9 @@ internal class ModuleLoader
     }
     private void LoadCustomAttribs()
     {
+        FillCustomAttribs(_reader.GetAssemblyDefinition().GetCustomAttributes(), new() { Entity = _mod });
+        FillCustomAttribs(_reader.GetModuleDefinition().GetCustomAttributes(), new() { Entity = _mod, LinkType = CustomAttribLink.Type.Module });
+
         _entities.Iterate<TypeDef, TypeDefinition>((type, info) => {
             FillCustomAttribs(info.GetCustomAttributes(), new() { Entity = type });
             //TODO: interface attribs
@@ -269,21 +272,9 @@ internal class ModuleLoader
 
         foreach (var handle in handleList) {
             var attrib = _reader.GetCustomAttribute(handle);
-            var value = attrib.DecodeValue(_typeProvider);
-
-            attribs[index++] = new CustomAttrib() {
-                Constructor = (MethodDesc)GetEntity(attrib.Constructor),
-                FixedArgs = value.FixedArguments.Select(a => new CustomAttrib.Argument() {
-                    Type = a.Type,
-                    Value = a.Value
-                }).ToImmutableArray(),
-                NamedArgs = value.NamedArguments.Select(a => new CustomAttrib.Argument() {
-                    Type = a.Type,
-                    Value = a.Value,
-                    Name = a.Name!,
-                    Kind = (CustomAttrib.ArgumentKind)a.Kind
-                }).ToImmutableArray()
-            };
+            var ctor = (MethodDesc)GetEntity(attrib.Constructor);
+            var blob = _reader.GetBlobBytes(attrib.Value);
+            attribs[index++] = new CustomAttrib(ctor, blob, _mod);
         }
         _mod._customAttribs.Add(link, attribs);
     }

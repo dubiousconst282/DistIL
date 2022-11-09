@@ -51,6 +51,9 @@ internal class ModuleWriter
         AllocHandles();
         EmitEntities();
 
+        EmitCustomAttribs(_mod, mainAsmHandle);
+        EmitCustomAttribs(_mod, mainModHandle, new() { LinkType = CustomAttribLink.Type.Module });
+
         SerializePE(peBlob);
     }
 
@@ -159,6 +162,19 @@ internal class ModuleWriter
         throw new NotImplementedException();
     }
 
+    private void EmitCustomAttribs(ModuleEntity entity, EntityHandle parentHandle, CustomAttribLink link = default)
+    {
+        link.Entity ??= entity;
+
+        foreach (var attrib in _mod.GetCustomAttribs(link)) {
+            _builder.AddCustomAttribute(
+                parentHandle,
+                GetHandle(attrib.Constructor),
+                _builder.GetOrAddBlob(attrib.GetEncodedBlob())
+            );
+        }
+    }
+
     private void EmitType(TypeDef type)
     {
         var firstFieldHandle = MetadataTokens.FieldDefinitionHandle(_builder.GetRowCount(TableIndex.Field) + 1);
@@ -217,6 +233,7 @@ internal class ModuleWriter
                 _builder.AddEventMap(handle, evtHandle);
             }
         }
+        EmitCustomAttribs(type, handle);
 
         void Link(EntityHandle assoc, MethodDef? method, MethodSemanticsAttributes kind)
         {
@@ -247,6 +264,7 @@ internal class ModuleWriter
         if (field.LayoutOffset >= 0) {
             _builder.AddFieldLayout(handle, field.LayoutOffset);
         }
+        EmitCustomAttribs(field, handle);
         //TODO: _builder.AddMarshallingDescriptor()
     }
 
@@ -468,33 +486,11 @@ internal class ModuleWriter
 
     private void EncodeType(SignatureTypeEncoder enc, TypeDesc type)
     {
-        //Bypassing the encoder api because it's kinda weird and inconsistent.
+        //Bypassing the encoder api because it's so goddamn awful, even though we'll probably get bitten sooner or later.
         //https://github.com/dotnet/runtime/blob/1ba0394d71a4ea6bee7f6b28a22d666b7b56f913/src/libraries/System.Reflection.Metadata/src/System/Reflection/Metadata/Ecma335/Encoding/BlobEncoders.cs#L809
         switch (type) {
             case PrimType t: {
-                var code = type.Kind switch {
-                    #pragma warning disable format
-                    TypeKind.Void   => SignatureTypeCode.Void,
-                    TypeKind.Bool   => SignatureTypeCode.Boolean,
-                    TypeKind.Char   => SignatureTypeCode.Char,
-                    TypeKind.SByte  => SignatureTypeCode.SByte,
-                    TypeKind.Byte   => SignatureTypeCode.Byte,
-                    TypeKind.Int16  => SignatureTypeCode.Int16,
-                    TypeKind.UInt16 => SignatureTypeCode.UInt16,
-                    TypeKind.Int32  => SignatureTypeCode.Int32,
-                    TypeKind.UInt32 => SignatureTypeCode.UInt32,
-                    TypeKind.Int64  => SignatureTypeCode.Int64,
-                    TypeKind.UInt64 => SignatureTypeCode.UInt64,
-                    TypeKind.Single => SignatureTypeCode.Single,
-                    TypeKind.Double => SignatureTypeCode.Double,
-                    TypeKind.IntPtr => SignatureTypeCode.IntPtr,
-                    TypeKind.UIntPtr => SignatureTypeCode.UIntPtr,
-                    TypeKind.String => SignatureTypeCode.String,
-                    TypeKind.Object => SignatureTypeCode.Object,
-                    _ => throw new NotSupportedException()
-                    #pragma warning restore format
-                };
-                enc.Builder.WriteByte((byte)code);
+                enc.Builder.WriteByte((byte)t.Kind.ToSrmTypeCode());
                 break;
             }
             case ArrayType t: {

@@ -31,9 +31,6 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
     /// <summary> The enclosing type of this nested type, or null if not nested. </summary>
     public TypeDefOrSpec? DeclaringType { get; set; }
 
-    [MemberNotNullWhen(true, nameof(IsEnum))]
-    public TypeDesc? UnderlyingEnumType => IsEnum ? Fields.First(f => f.IsInstance).Type : null;
-
     public override bool Equals(TypeDesc? other) => object.ReferenceEquals(this, other);
     public override int GetHashCode() => HashCode.Combine(Module, Name, GenericParams.Length);
 }
@@ -47,6 +44,8 @@ public class TypeDef : TypeDefOrSpec
     private TypeKind _kind;
     public override string? Namespace { get; }
     public override string Name { get; }
+
+    public override TypeDesc? UnderlyingEnumType => IsEnum ? Fields.First(f => f.IsInstance).Type : null;
 
     public int LayoutSize { get; set; }
     public int LayoutPack { get; set; }
@@ -126,7 +125,7 @@ public class TypeDef : TypeDefOrSpec
     }
     public TypeSpec GetSpec(ImmutableArray<TypeDesc> genArgs)
     {
-        Ensure.That(IsGeneric);
+        Ensure.That(IsGeneric && genArgs.Length == GenericParams.Length);
         return new TypeSpec(this, genArgs);
     }
 

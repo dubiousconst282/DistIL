@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DistIL\DistIL.csproj" />
+    <ProjectReference Include="..\DistIL.TestCases\DistIL.TestCases.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,26 +1,71 @@
 namespace DistIL.AsmIO;
 
-using System.Reflection.Metadata;
+using PropArray = ImmutableArray<CustomAttribProp>;
+using ValueArray = ImmutableArray<object?>;
 
-public class CustomAttrib
+public partial class CustomAttrib
 {
-    public required MethodDesc Constructor { get; init; }
-    public ImmutableArray<Argument> FixedArgs { get; init; }
-    public ImmutableArray<Argument> NamedArgs { get; init; }
+    ValueArray _fixedArgs;
+    PropArray _namedArgs;
+    
+    byte[]? _encodedBlob; //as specified in `II.23.3 Custom attributes`
+    ModuleDef? _parentModule;
+    bool _decoded = false;
 
-    public struct Argument
-    {
-        public TypeDesc Type { get; init; }
-        public object? Value { get; init; }
-        public string? Name { get; init; }
-        public ArgumentKind Kind { get; init; }
+    public MethodDesc Constructor { get; }
+    public ValueArray FixedArgs {
+        get {
+            EnsureDecoded();
+            return _fixedArgs;
+        }
     }
-    public enum ArgumentKind : byte
-    {
-        Fixed,
-        Field = CustomAttributeNamedArgumentKind.Field,
-        Property = CustomAttributeNamedArgumentKind.Property,
+    public PropArray NamedArgs {
+        get {
+            EnsureDecoded();
+            return _namedArgs;
+        }
     }
+
+    public CustomAttrib(MethodDesc ctor, byte[] encodedBlob, ModuleDef parentModule)
+    {
+        Constructor = ctor;
+        _encodedBlob = encodedBlob;
+        _parentModule = parentModule;
+    }
+    public CustomAttrib(MethodDesc ctor, ValueArray fixedArgs = default, PropArray namedArgs = default)
+    {
+        Constructor = ctor;
+        _fixedArgs = fixedArgs.EmptyIfDefault();
+        _namedArgs = namedArgs.EmptyIfDefault();
+        _decoded = true;
+    }
+    
+    public CustomAttribProp? GetNamedArg(string name)
+    {
+        return NamedArgs.FirstOrDefault(a => a.Name == name);
+    }
+
+    private void EnsureDecoded()
+    {
+        if (!_decoded) {
+            DecodeBlob();
+            _decoded = true;
+        }
+    }
+
+    public byte[] GetEncodedBlob()
+    {
+        return _encodedBlob ??= EncodeBlob();
+    }
+}
+public class CustomAttribProp
+{
+    public required TypeDesc Type { get; init; }
+    public required string Name { get; init; }
+    public required bool IsField { get; init; }
+    public required object? Value { get; init; }
+
+    public override string ToString() => $"{Name}: {Type} = '{Value}'";
 }
 
 /// <summary> Represents a key that links a custom attribute with an module entity. </summary>
@@ -45,6 +90,7 @@ internal struct CustomAttribLink : IEquatable<CustomAttribLink>
         MethodParam,
         InterfaceImpl,
         GenericParam,
-        GenericConstraint
+        GenericConstraint,
+        Module
     }
 }

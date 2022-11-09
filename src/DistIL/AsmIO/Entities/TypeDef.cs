@@ -51,7 +51,7 @@ public class TypeDef : TypeDefOrSpec
     public int LayoutPack { get; set; }
     public bool HasCustomLayout => LayoutSize != 0 || LayoutPack != 0;
 
-    private List<TypeDesc> _interfaces = new();
+    private List<TypeDesc> _interfaces = new(); //Note: CAs linked to indices
     private List<FieldDef> _fields = new();
     private List<MethodDef> _methods = new();
     private List<PropertyDef> _properties = new();
@@ -74,6 +74,18 @@ public class TypeDef : TypeDefOrSpec
         GenericParams = genericParams.EmptyIfDefault();
     }
 
+    internal static TypeDef Decode(ModuleLoader loader, TypeDefinition info)
+    {
+        var type = new TypeDef(
+            loader._mod,
+            loader._reader.GetOptString(info.Namespace),
+            loader._reader.GetString(info.Name),
+            info.Attributes,
+            loader.CreateGenericParams(info.GetGenericParameters(), false)
+        );
+        loader._mod.TypeDefs.Add(type);
+        return type;
+    }
     internal void Load1(ModuleLoader loader, TypeDefinition info)
     {
         if (!info.BaseType.IsNil) {
@@ -82,7 +94,6 @@ public class TypeDef : TypeDefOrSpec
         if (info.IsNested) {
             DeclaringType = loader.GetType(info.GetDeclaringType());
         }
-        loader.FillGenericParams(GenericParams, info.GetGenericParameters());
 
         var layout = info.GetLayout();
         LayoutPack = layout.PackingSize;
@@ -96,26 +107,30 @@ public class TypeDef : TypeDefOrSpec
         foreach (var handle in info.GetMethods()) {
             _methods.Add(loader.GetMethod(handle));
         }
-        foreach (var handle in info.GetProperties()) {
-            _properties.Add(loader.DecodeProperty(this, handle));
-        }
-        foreach (var handle in info.GetEvents()) {
-            _events.Add(loader.DecodeEvent(this, handle));
-        }
         foreach (var handle in info.GetNestedTypes()) {
             _nestedTypes.Add(loader.GetType(handle));
         }
 
-        foreach (var handle in info.GetInterfaceImplementations()) {
-            var itfInfo = loader._reader.GetInterfaceImplementation(handle);
-            var itf = (TypeDesc)loader.GetEntity(itfInfo.Interface);
-            _interfaces.Add(itf);
-        }
-
-        //FIXME: TypeDef.Kind for String/Array/... and maybe primitives?
         _kind = IsEnum ? UnderlyingEnumType!.Kind :
                 PrimType.GetFromDefinition(this)?.Kind ??
                 (IsValueType ? TypeKind.Struct : TypeKind.Object);
+    }
+    internal void Load3(ModuleLoader loader, TypeDefinition info)
+    {
+        foreach (var handle in info.GetProperties()) {
+            _properties.Add(PropertyDef.Decode3(loader, handle, this));
+        }
+        foreach (var handle in info.GetEvents()) {
+            _events.Add(EventDef.Decode3(loader, handle, this));
+        }
+        int itfIndex = 0;
+        foreach (var handle in info.GetInterfaceImplementations()) {
+            var itfInfo = loader._reader.GetInterfaceImplementation(handle);
+            loader.FillCustomAttribs(this, itfInfo.GetCustomAttributes(), CustomAttribLink.Type.InterfaceImpl, itfIndex++);
+            _interfaces.Add((TypeDesc)loader.GetEntity(itfInfo.Interface));
+        }
+        loader.FillGenericParams(this, GenericParams, info.GetGenericParameters());
+        loader.FillCustomAttribs(this, info.GetCustomAttributes());
     }
 
     public override TypeDefOrSpec GetSpec(GenericContext context)

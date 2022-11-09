@@ -48,7 +48,7 @@ public class ModuleDef : ModuleEntity
         return TypeDefs;
     }
 
-    internal CustomAttrib[] GetCustomAttribs(in CustomAttribLink link)
+    internal CustomAttrib[] GetLinkedCustomAttribs(in CustomAttribLink link)
         => _customAttribs.GetValueOrDefault(link, Array.Empty<CustomAttrib>());
 
     public void Save(Stream stream)

@@ -28,9 +28,22 @@ public class GenericParamType : TypeDesc
         Constraints = constraints.EmptyIfDefault();
     }
 
-    internal void Load(ModuleLoader loader, GenericParameter info)
+    internal void Load2(ModuleLoader loader, GenericParameter info)
     {
-        Constraints = loader.DecodeGenericConstraints(info.GetConstraints());
+        Constraints = DecodeGenericConstraints(loader, info.GetConstraints());
+    }
+    private static ImmutableArray<TypeDesc> DecodeGenericConstraints(ModuleLoader loader, GenericParameterConstraintHandleCollection handleList)
+    {
+        if (handleList.Count == 0) {
+            return ImmutableArray<TypeDesc>.Empty;
+        }
+        var builder = ImmutableArray.CreateBuilder<TypeDesc>(handleList.Count);
+        foreach (var handle in handleList) {
+            var info = loader._reader.GetGenericParameterConstraint(handle);
+            builder.Add((TypeDesc)loader.GetEntity(info.Type));
+            //TODO: generic parameter constraint CAs
+        }
+        return builder.MoveToImmutable();
     }
 
     public override void Print(PrintContext ctx, bool includeNs = true)

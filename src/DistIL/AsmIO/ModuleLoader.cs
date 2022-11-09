@@ -35,17 +35,19 @@ internal class ModuleLoader
     {
         //Modules are loaded via several passes over the unstructured data provided by SRM.
         //First we create all entities with as much data as possible (so that dependents can refer them),
-        //then we progressively fill remaining properties.
+        //then we progressively fill in remaining properties.
         CreateTypes();
         LoadTypes();
-        LoadCustomAttribs();
+
+        FillCustomAttribs(_mod, _reader.GetAssemblyDefinition().GetCustomAttributes());
+        FillCustomAttribs(_mod, _reader.GetModuleDefinition().GetCustomAttributes(), CustomAttribLink.Type.Module, 0);
     }
 
     private void CreateTypes()
     {
         _entities.Create<AssemblyReference>(info => _resolver.Resolve(info.GetAssemblyName(), throwIfNotFound: true));
         _entities.Create<TypeReference>(ResolveTypeRef);
-        _entities.Create<TypeDefinition>(CreateType);
+        _entities.Create<TypeDefinition>(info => TypeDef.Decode(this, info));
         _entities.Create<TypeSpecification>(info => info.DecodeSignature(_typeProvider, default));
 
         foreach (var handle in _reader.ExportedTypes) {
@@ -57,11 +59,12 @@ internal class ModuleLoader
         //Load props like BaseType/Kind (CreateMethod() depends on IsValueType)
         _entities.Iterate((TypeDef entity, TypeDefinition info) => entity.Load1(this, info));
 
-        _entities.Create<FieldDefinition>(CreateField);
-        _entities.Create<MethodDefinition>(CreateMethod);
+        _entities.Create<FieldDefinition>(info => FieldDef.Decode(this, info));
+        _entities.Create<MethodDefinition>(info => MethodDef.Decode(this, info));
 
-        //Populate types with their members
+        //Populate types with essential data (fields, methods and kind)
         _entities.Iterate((TypeDef entity, TypeDefinition info) => entity.Load2(this, info));
+
         //Resolve MemberRefs (they depend on type members)
         _entities.Create<MemberReference>(info => {
             return info.GetKind() switch {
@@ -69,15 +72,18 @@ internal class ModuleLoader
                 MemberReferenceKind.Method => ResolveMethod(info)
             };
         });
+
         //Create MethodSpecs (they may reference MemberRefs)
         _entities.Create<MethodSpecification>(info => {
             var method = (MethodDefOrSpec)GetEntity(info.Method);
             var genArgs = info.DecodeSignature(_typeProvider, new GenericContext(method));
             return new MethodSpec(method.DeclaringType, method.Definition, genArgs);
         });
-        //Populate members
-        _entities.Iterate((FieldDef entity, FieldDefinition info) => entity.Load(this, info));
-        _entities.Iterate((MethodDef entity, MethodDefinition info) => entity.Load(this, info));
+
+        //Populate entities with non-essential data (body, custom attrs, etc)
+        _entities.Iterate((TypeDef entity, TypeDefinition info) => entity.Load3(this, info));
+        _entities.Iterate((FieldDef entity, FieldDefinition info) => entity.Load3(this, info));
+        _entities.Iterate((MethodDef entity, MethodDefinition info) => entity.Load3(this, info));
 
         int entryPointToken = _pe.PEHeaders.CorHeader?.EntryPointTokenOrRelativeVirtualAddress ?? 0;
         if (entryPointToken != 0) {
@@ -85,80 +91,8 @@ internal class ModuleLoader
             _mod.EntryPoint = (MethodDef)GetEntity(handle);
         }
     }
-    private void LoadCustomAttribs()
-    {
-        FillCustomAttribs(_reader.GetAssemblyDefinition().GetCustomAttributes(), new() { Entity = _mod });
-        FillCustomAttribs(_reader.GetModuleDefinition().GetCustomAttributes(), new() { Entity = _mod, LinkType = CustomAttribLink.Type.Module });
 
-        _entities.Iterate<TypeDef, TypeDefinition>((type, info) => {
-            FillCustomAttribs(info.GetCustomAttributes(), new() { Entity = type });
-            //TODO: interface attribs
-            //TODO: generic attribs
-        });
-
-        _entities.Iterate<MethodDef, MethodDefinition>((method, info) => {
-            FillCustomAttribs(info.GetCustomAttributes(), new() { Entity = method });
-            //TODO: param attribs
-            //TODO: generic attribs
-        });
-
-        _entities.Iterate<FieldDef, FieldDefinition>((field, info)
-            => FillCustomAttribs(info.GetCustomAttributes(), new() { Entity = field }));
-    }
-
-    private TypeDef CreateType(TypeDefinition info)
-    {
-        var type = new TypeDef(
-            _mod,
-            _reader.GetOptString(info.Namespace),
-            _reader.GetString(info.Name),
-            info.Attributes,
-            CreateGenericParams(info.GetGenericParameters(), false)
-        );
-        _mod.TypeDefs.Add(type);
-        return type;
-    }
-    private FieldDef CreateField(FieldDefinition info)
-    {
-        var declaringType = GetType(info.GetDeclaringType());
-        var type = info.DecodeSignature(_typeProvider, new GenericContext(declaringType));
-
-        return new FieldDef(
-            declaringType, type, _reader.GetString(info.Name), 
-            info.Attributes,
-            _reader.DecodeConst(info.GetDefaultValue()),
-            info.GetOffset()
-        );
-    }
-    private MethodDef CreateMethod(MethodDefinition info)
-    {
-        var declaringType = GetType(info.GetDeclaringType());
-        var genericParams = CreateGenericParams(info.GetGenericParameters(), true);
-        var sig = info.DecodeSignature(_typeProvider, new GenericContext(declaringType.GenericParams, genericParams));
-        string name = _reader.GetString(info.Name);
-
-        var attribs = info.Attributes;
-        bool isInstance = (attribs & MethodAttributes.Static) == 0;
-        var pars = ImmutableArray.CreateBuilder<ParamDef>(sig.RequiredParameterCount + (isInstance ? 1 : 0));
-
-        if (isInstance) {
-            var thisType = declaringType as TypeDesc;
-            if (thisType.IsValueType) {
-                thisType = new ByrefType(thisType);
-            }
-            pars.Add(new ParamDef(thisType, 0, "this"));
-        }
-        foreach (var paramType in sig.ParameterTypes) {
-            pars.Add(new ParamDef(paramType, pars.Count, ""));
-        }
-        return new MethodDef(
-            declaringType, 
-            sig.ReturnType, pars.MoveToImmutable(),
-            name, attribs, info.ImplAttributes, genericParams
-        );
-    }
-
-    private ImmutableArray<TypeDesc> CreateGenericParams(GenericParameterHandleCollection handleList, bool isForMethod)
+    public ImmutableArray<TypeDesc> CreateGenericParams(GenericParameterHandleCollection handleList, bool isForMethod)
     {
         if (handleList.Count == 0) {
             return ImmutableArray<TypeDesc>.Empty;
@@ -241,86 +175,38 @@ internal class ModuleLoader
         throw new InvalidOperationException($"Could not resolve referenced field '{rootParent}::{name}'");
     }
 
-    public ImmutableArray<TypeDesc> DecodeGenericConstraints(GenericParameterConstraintHandleCollection handleList)
-    {
-        if (handleList.Count == 0) {
-            return ImmutableArray<TypeDesc>.Empty;
-        }
-        var builder = ImmutableArray.CreateBuilder<TypeDesc>(handleList.Count);
-        foreach (var handle in handleList) {
-            var info = _reader.GetGenericParameterConstraint(handle);
-            var constraint = (TypeDesc)GetEntity(info.Type);
-            builder.Add(constraint);
-        }
-        return builder.MoveToImmutable();
-    }
-    public void FillGenericParams(ImmutableArray<TypeDesc> genPars, GenericParameterHandleCollection handleList)
+    public void FillGenericParams(ModuleEntity parent, ImmutableArray<TypeDesc> genPars, GenericParameterHandleCollection handleList)
     {
         foreach (var handle in handleList) {
             var info = _reader.GetGenericParameter(handle);
             var param = (GenericParamType)genPars[info.Index];
-            param.Load(this, info);
+            param.Load2(this, info);
+            FillCustomAttribs(parent, info.GetCustomAttributes(), CustomAttribLink.Type.GenericParam, info.Index);
         }
     }
 
-    private void FillCustomAttribs(CustomAttributeHandleCollection handleList, in CustomAttribLink link)
+    public void FillCustomAttribs(ModuleEntity entity, CustomAttributeHandleCollection handleList, CustomAttribLink.Type linkType = default, int linkIndex = 0)
     {
         if (handleList.Count == 0) return;
 
         var attribs = new CustomAttrib[handleList.Count];
-        int index = 0;
+        int attribIndex = 0;
 
         foreach (var handle in handleList) {
             var attrib = _reader.GetCustomAttribute(handle);
             var ctor = (MethodDesc)GetEntity(attrib.Constructor);
             var blob = _reader.GetBlobBytes(attrib.Value);
-            attribs[index++] = new CustomAttrib(ctor, blob, _mod);
+            attribs[attribIndex++] = new CustomAttrib(ctor, blob, _mod);
         }
-        _mod._customAttribs.Add(link, attribs);
+        _mod._customAttribs.Add(new(entity, linkIndex, linkType), attribs);
     }
     public FuncPtrType DecodeMethodSig(StandaloneSignatureHandle handle)
     {
         var info = _reader.GetStandaloneSignature(handle);
         var sig = info.DecodeMethodSignature(_typeProvider, default);
+        
+        Ensure.That(info.GetCustomAttributes().Count == 0);
         return new FuncPtrType(sig);
-    }
-
-    public PropertyDef DecodeProperty(TypeDef parent, PropertyDefinitionHandle handle)
-    {
-        var info = _reader.GetPropertyDefinition(handle);
-        var sig = info.DecodeSignature(_typeProvider, default);
-        var accs = info.GetAccessors();
-        var otherAccessors = accs.Others.IsEmpty
-            ? default(ImmutableArray<MethodDef>)
-            : accs.Others.Select(GetMethod).ToImmutableArray();
-
-        return new PropertyDef(
-            parent, _reader.GetString(info.Name),
-            sig.ReturnType, sig.ParameterTypes, sig.Header.IsInstance,
-            accs.Getter.IsNil ? null : GetMethod(accs.Getter),
-            accs.Setter.IsNil ? null : GetMethod(accs.Setter),
-            otherAccessors,
-            _reader.DecodeConst(info.GetDefaultValue()),
-            info.Attributes
-        );
-    }
-    public EventDef DecodeEvent(TypeDef parent, EventDefinitionHandle handle)
-    {
-        var info = _reader.GetEventDefinition(handle);
-        var type = (TypeDesc)GetEntity(info.Type);
-        var accs = info.GetAccessors();
-        var otherAccessors = accs.Others.IsEmpty
-            ? default(ImmutableArray<MethodDef>)
-            : accs.Others.Select(GetMethod).ToImmutableArray();
-
-        return new EventDef(
-            parent, _reader.GetString(info.Name), type,
-            accs.Adder.IsNil ? null : GetMethod(accs.Adder),
-            accs.Remover.IsNil ? null : GetMethod(accs.Remover),
-            accs.Raiser.IsNil ? null : GetMethod(accs.Raiser),
-            otherAccessors,
-            info.Attributes
-        );
     }
 
     public Entity GetEntity(EntityHandle handle) => _entities.Get(handle);

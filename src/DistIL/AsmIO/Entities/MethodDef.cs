@@ -36,14 +36,12 @@ public class ParamDef
 {
     public TypeDesc Type { get; set; }
     public string Name { get; set; }
-    public int Index { get; }
     public ParameterAttributes Attribs { get; set; }
 
-    public ParamDef(TypeDesc type, int index, string name, ParameterAttributes attribs = default)
+    public ParamDef(TypeDesc type, string name, ParameterAttributes attribs = default)
     {
         Type = type;
         Name = name;
-        Index = index;
         Attribs = attribs;
     }
 
@@ -57,27 +55,6 @@ public abstract class MethodDefOrSpec : MethodDesc, ModuleEntity
     public ModuleDef Module => Definition.DeclaringType.Module;
 
     public abstract override TypeDefOrSpec DeclaringType { get; }
-
-    public IReadOnlyCollection<CustomAttrib> GetParamCustomAttribs(ParamDef param)
-    {
-        Debug.Assert(Params.Contains(param));
-
-        return Module.GetCustomAttribs(new() {
-            LinkType = CustomAttribLink.Type.MethodParam,
-            Entity = Definition,
-            Index = param.Index
-        });
-    }
-    public IReadOnlyCollection<CustomAttrib> GetGenericArgCustomAttribs(int index)
-    {
-        Ensure.That(index >= 0 && index < GenericParams.Length);
-
-        return Module.GetCustomAttribs(new() {
-            LinkType = CustomAttribLink.Type.GenericParam,
-            Entity = Definition,
-            Index = index
-        });
-    }
 }
 public class MethodDef : MethodDefOrSpec
 {
@@ -103,7 +80,41 @@ public class MethodDef : MethodDefOrSpec
         GenericParams = genericParams.EmptyIfDefault();
     }
 
-    internal void Load(ModuleLoader loader, MethodDefinition info)
+    public override MethodDesc GetSpec(GenericContext ctx)
+    {
+        return IsGeneric || DeclaringType.IsGeneric
+            ? new MethodSpec(DeclaringType.GetSpec(ctx), this, ctx.FillParams(GenericParams))
+            : this;
+    }
+
+    internal static MethodDef Decode(ModuleLoader loader, MethodDefinition info)
+    {
+        var declaringType = loader.GetType(info.GetDeclaringType());
+        var genericParams = loader.CreateGenericParams(info.GetGenericParameters(), true);
+        var sig = info.DecodeSignature(loader._typeProvider, new GenericContext(declaringType.GenericParams, genericParams));
+        string name = loader._reader.GetString(info.Name);
+
+        var attribs = info.Attributes;
+        bool isInstance = (attribs & MethodAttributes.Static) == 0;
+        var pars = ImmutableArray.CreateBuilder<ParamDef>(sig.RequiredParameterCount + (isInstance ? 1 : 0));
+
+        if (isInstance) {
+            var thisType = declaringType as TypeDesc;
+            if (thisType.IsValueType) {
+                thisType = new ByrefType(thisType);
+            }
+            pars.Add(new ParamDef(thisType, "this"));
+        }
+        foreach (var paramType in sig.ParameterTypes) {
+            pars.Add(new ParamDef(paramType, ""));
+        }
+        return new MethodDef(
+            declaringType,
+            sig.ReturnType, pars.MoveToImmutable(),
+            name, attribs, info.ImplAttributes, genericParams
+        );
+    }
+    internal void Load3(ModuleLoader loader, MethodDefinition info)
     {
         var reader = loader._reader;
         foreach (var parHandle in info.GetParameters()) {
@@ -113,22 +124,17 @@ public class MethodDef : MethodDefOrSpec
             if (index == 0) {
                 //TODO: return parameter
             } else if (index <= Params.Length) {
-                var par = Params[index - (IsStatic ? 1 : 0)]; //`this` is always implicit
+                var par = Params[index - (IsStatic ? 1 : 0)]; //we always have a `this` param
                 par.Name = reader.GetString(parInfo.Name);
                 par.Attribs = parInfo.Attributes;
             }
+            loader.FillCustomAttribs(this, parInfo.GetCustomAttributes(), CustomAttribLink.Type.MethodParam, index - (IsStatic ? 1 : 0));
         }
         if (info.RelativeVirtualAddress != 0) {
             ILBody = new ILMethodBody(loader, info.RelativeVirtualAddress);
         }
-        loader.FillGenericParams(GenericParams, info.GetGenericParameters());
-    }
-
-    public override MethodDesc GetSpec(GenericContext ctx)
-    {
-        return IsGeneric || DeclaringType.IsGeneric
-            ? new MethodSpec(DeclaringType.GetSpec(ctx), this, ctx.FillParams(GenericParams))
-            : this;
+        loader.FillGenericParams(this, GenericParams, info.GetGenericParameters());
+        loader.FillCustomAttribs(this, info.GetCustomAttributes());
     }
 }
 
@@ -152,7 +158,7 @@ public class MethodSpec : MethodDefOrSpec
 
         var genCtx = new GenericContext(this);
         ReturnType = def.ReturnType.GetSpec(genCtx);
-        Params = def.Params.Select(p => new ParamDef(p.Type.GetSpec(genCtx), p.Index, p.Name, p.Attribs)).ToImmutableArray();
+        Params = def.Params.Select(p => new ParamDef(p.Type.GetSpec(genCtx), p.Name, p.Attribs)).ToImmutableArray();
     }
 
     public override MethodDesc GetSpec(GenericContext ctx)

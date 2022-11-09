@@ -59,6 +59,8 @@ public class FieldDef : FieldDefOrSpec
     /// <summary> Static data associated with the field. Attribs must have HasFieldRVA, and array length must be equal to the type layout size. </summary>
     public byte[]? MappedData { get; set; }
 
+    public byte[]? MarshallingDesc { get; set; }
+
     public FieldDef(
         TypeDef declaringType, TypeDesc type, string name, 
         FieldAttributes attribs = default, object? defaultValue = null,
@@ -73,7 +75,19 @@ public class FieldDef : FieldDefOrSpec
         MappedData = mappedData;
     }
 
-    internal void Load(ModuleLoader loader, FieldDefinition info)
+    internal static FieldDef Decode(ModuleLoader loader, FieldDefinition info)
+    {
+        var declaringType = loader.GetType(info.GetDeclaringType());
+        var type = info.DecodeSignature(loader._typeProvider, new GenericContext(declaringType));
+
+        return new FieldDef(
+            declaringType, type, loader._reader.GetString(info.Name),
+            info.Attributes,
+            loader._reader.DecodeConst(info.GetDefaultValue()),
+            info.GetOffset()
+        );
+    }
+    internal void Load3(ModuleLoader loader, FieldDefinition info)
     {
         if (Attribs.HasFlag(FieldAttributes.HasFieldRVA)) {
             int rva = info.GetRelativeVirtualAddress();
@@ -81,7 +95,11 @@ public class FieldDef : FieldDefOrSpec
             int size = GetMappedDataSize(Type);
             unsafe { MappedData = new Span<byte>(data.Pointer, size).ToArray(); }
         }
-        //TODO: info.GetMarshallingDescriptor()
+        var marshalDescHandle = info.GetMarshallingDescriptor();
+        if (!marshalDescHandle.IsNil) {
+            MarshallingDesc = loader._reader.GetBlobBytes(marshalDescHandle);
+        }
+        loader.FillCustomAttribs(this, info.GetCustomAttributes());
     }
 
     public static int GetMappedDataSize(TypeDesc type)

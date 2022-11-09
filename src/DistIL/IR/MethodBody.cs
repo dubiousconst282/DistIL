@@ -19,7 +19,7 @@ public class MethodBody
     public MethodBody(MethodDef def)
     {
         Definition = def;
-        Args = def.Params.Select(p => new Argument(p)).ToImmutableArray();
+        Args = def.Params.Select((p, i) => new Argument(p, i)).ToImmutableArray();
     }
 
     /// <summary> Creates and adds an empty block to this method. If the method is empty, this block will be set as the entry block. </summary>

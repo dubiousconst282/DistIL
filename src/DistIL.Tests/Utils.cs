@@ -1,5 +1,3 @@
-using System.Text;
-
 using DistIL.AsmIO;
 using DistIL.IR;
 
@@ -8,7 +6,7 @@ class Utils
     public static MethodBody CreateDummyMethodBody(TypeDesc? retType = null, params TypeDesc[] paramTypes)
     {
         var pars = paramTypes
-            .Select((t, i) => new ParamDef(t, i, "par" + i))
+            .Select((t, i) => new ParamDef(t, "par" + i))
             .ToImmutableArray();
         var def = new MethodDef(null!, retType ?? PrimType.Void, pars, "Dummy");
         return new MethodBody(def);

@@ -52,7 +52,7 @@ internal class ModuleWriter
         EmitEntities();
 
         EmitCustomAttribs(_mod, mainAsmHandle);
-        EmitCustomAttribs(_mod, mainModHandle, new() { LinkType = CustomAttribLink.Type.Module });
+        EmitCustomAttribs(_mod, mainModHandle, CustomAttribLink.Type.Module);
 
         SerializePE(peBlob);
     }
@@ -139,7 +139,7 @@ internal class ModuleWriter
                     return _builder.AddMemberReference(
                         GetHandle(field.DeclaringType),
                         AddString(field.Name),
-                        EncodeFieldSig(field)
+                        EncodeFieldSig(field.Definition)
                     );
                 }
                 case ModuleDef module: {
@@ -179,11 +179,9 @@ internal class ModuleWriter
         return _builder.AddStandaloneSignature(sigHandle);
     }
 
-    private void EmitCustomAttribs(ModuleEntity entity, EntityHandle parentHandle, CustomAttribLink link = default)
+    private void EmitCustomAttribs(ModuleEntity entity, EntityHandle parentHandle, CustomAttribLink.Type linkType = default, int linkIndex = 0)
     {
-        link.Entity ??= entity;
-
-        foreach (var attrib in _mod.GetCustomAttribs(link)) {
+        foreach (var attrib in _mod.GetLinkedCustomAttribs(new(entity, linkIndex, linkType))) {
             _builder.AddCustomAttribute(
                 parentHandle,
                 GetHandle(attrib.Constructor),
@@ -234,6 +232,7 @@ internal class ModuleWriter
             if (propIdx++ == 0) {
                 _builder.AddPropertyMap(handle, propHandle);
             }
+            EmitCustomAttribs(prop, propHandle);
         }
         int evtIdx = 0;
         foreach (var evt in type.Events) {
@@ -249,6 +248,7 @@ internal class ModuleWriter
             if (evtIdx++ == 0) {
                 _builder.AddEventMap(handle, evtHandle);
             }
+            EmitCustomAttribs(evt, evtHandle);
         }
         if (type.HasCustomLayout) {
             _builder.AddTypeLayout(handle, (ushort)type.LayoutPack, (uint)type.LayoutSize);
@@ -284,8 +284,10 @@ internal class ModuleWriter
         if (field.LayoutOffset >= 0) {
             _builder.AddFieldLayout(handle, field.LayoutOffset);
         }
+        if (field.MarshallingDesc != null) {
+            _builder.AddMarshallingDescriptor(handle, _builder.GetOrAddBlob(field.MarshallingDesc));
+        }
         EmitCustomAttribs(field, handle);
-        //TODO: _builder.AddMarshallingDescriptor()
     }
 
     private void EmitMethod(MethodDef method)
@@ -298,7 +300,7 @@ internal class ModuleWriter
         for (int i = 0; i < pars.Length; i++) {
             var par = pars[i];
             var parHandle = _builder.AddParameter(par.Attribs, AddString(par.Name), i + 1);
-            EmitCustomAttribs(method, parHandle, new() { LinkType = CustomAttribLink.Type.MethodParam, Index = i });
+            EmitCustomAttribs(method, parHandle, CustomAttribLink.Type.MethodParam, i);
         }
 
         var handle = _builder.AddMethodDefinition(
@@ -501,7 +503,7 @@ internal class ModuleWriter
         });
     }
 
-    private BlobHandle EncodeFieldSig(FieldDefOrSpec field)
+    private BlobHandle EncodeFieldSig(FieldDef field)
     {
         return EncodeSig(b => EncodeType(b.FieldSignature(), field.Type));
     }

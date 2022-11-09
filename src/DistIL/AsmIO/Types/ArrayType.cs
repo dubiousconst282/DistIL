@@ -104,24 +104,25 @@ public class MDArrayMethod : MethodDesc
         int dims = type.Rank;
 
 #pragma warning disable format
+        var readParams = CreateParams(dims);
         (ReturnType, Params) = kind switch {
-            Kind.SizeCtor  => (PrimType.Void, CreateParams(dims)),
+            Kind.SizeCtor  => (PrimType.Void, readParams),
             Kind.RangeCtor => (PrimType.Void, CreateParams(dims * 2)),
-            Kind.Get       => (type.ElemType, CreateParams(dims)),
+            Kind.Get       => (type.ElemType, readParams),
             Kind.Set       => (PrimType.Void, CreateParams(dims, true)),
-            Kind.Address   => (type.ElemType.CreateByref(), CreateParams(dims)),
+            Kind.Address   => (type.ElemType.CreateByref(), readParams),
         };
 #pragma warning restore format
 
         ImmutableArray<ParamDef> CreateParams(int count, bool isSetter = false)
         {
             var b = ImmutableArray.CreateBuilder<ParamDef>(count + (isSetter ? 2 : 1));
-            b.Add(new ParamDef(type, 0, "this"));
+            b.Add(new ParamDef(type, "this"));
             for (int i = 0; i < count; i++) {
-                b.Add(new ParamDef(PrimType.Int32, i + 1, "idx" + i));
+                b.Add(new ParamDef(PrimType.Int32, "idx" + i));
             }
             if (isSetter) {
-                b.Add(new ParamDef(type.ElemType, count + 1, "value"));
+                b.Add(new ParamDef(type.ElemType, "value"));
             }
             return b.MoveToImmutable();
         }

@@ -49,6 +49,7 @@ public class TypeDef : TypeDefOrSpec
 
     public int LayoutSize { get; set; }
     public int LayoutPack { get; set; }
+    public bool HasCustomLayout => LayoutSize != 0 || LayoutPack != 0;
 
     private List<TypeDesc> _interfaces = new();
     private List<FieldDef> _fields = new();

@@ -202,7 +202,7 @@ internal class ModuleLoader
             impl = parent.GetNestedType(name);
         } else {
             var asm = (ModuleDef)GetEntity(info.Implementation);
-            impl = asm.FindType(ns, name, includeExports: false) 
+            impl = asm.FindType(ns, name) 
                 ?? throw new NotImplementedException(); //FIXME: resolve recursive type exports
         }
         return impl ?? throw new InvalidOperationException($"Could not resolve forwarded type '{ns}.{name}'");

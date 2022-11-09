@@ -118,7 +118,7 @@ internal class ModuleWriter
                 case MethodSpec { GenericParams.Length: > 0 } method: {
                     return _builder.AddMethodSpecification(
                         GetHandle(method.Definition),
-                        EncodeMethodSig(method)
+                        EncodeMethodSpecSig(method)
                     );
                 }
                 case MethodDefOrSpec method: {
@@ -126,6 +126,13 @@ internal class ModuleWriter
                         GetHandle(method.DeclaringType),
                         AddString(method.Name),
                         EncodeMethodSig(method.Definition)
+                    );
+                }
+                case MDArrayMethod method: {
+                    return _builder.AddMemberReference(
+                        GetHandle(method.DeclaringType),
+                        AddString(method.Name),
+                        EncodeMethodSig(method)
                     );
                 }
                 case FieldDefOrSpec field: {
@@ -159,7 +166,17 @@ internal class ModuleWriter
     }
     private StandaloneSignatureHandle GetStandaloneSig(FuncPtrType type)
     {
-        throw new NotImplementedException();
+        var sigHandle = EncodeSig(b => {
+            b.MethodSignature(default, 0, type.IsInstance)
+                .Parameters(type.ArgTypes.Length, out var retTypeEnc, out var parsEnc);
+
+            EncodeType(retTypeEnc.Type(), type.ReturnType);
+            foreach (var type in type.ArgTypes) {
+                var parEnc = parsEnc.AddParameter();
+                EncodeType(parEnc.Type(), type);
+            }
+        });
+        return _builder.AddStandaloneSignature(sigHandle);
     }
 
     private void EmitCustomAttribs(ModuleEntity entity, EntityHandle parentHandle, CustomAttribLink link = default)
@@ -233,6 +250,9 @@ internal class ModuleWriter
                 _builder.AddEventMap(handle, evtHandle);
             }
         }
+        if (type.HasCustomLayout) {
+            _builder.AddTypeLayout(handle, (ushort)type.LayoutPack, (uint)type.LayoutSize);
+        }
         EmitCustomAttribs(type, handle);
 
         void Link(EntityHandle assoc, MethodDef? method, MethodSemanticsAttributes kind)
@@ -277,7 +297,8 @@ internal class ModuleWriter
         var pars = method.StaticParams;
         for (int i = 0; i < pars.Length; i++) {
             var par = pars[i];
-            _builder.AddParameter(par.Attribs, AddString(par.Name), i + 1);
+            var parHandle = _builder.AddParameter(par.Attribs, AddString(par.Name), i + 1);
+            EmitCustomAttribs(method, parHandle, new() { LinkType = CustomAttribLink.Type.MethodParam, Index = i });
         }
 
         var handle = _builder.AddMethodDefinition(
@@ -291,6 +312,7 @@ internal class ModuleWriter
         if (method.GenericParams.Length > 0) {
             _genericDefs.Add(method);
         }
+        EmitCustomAttribs(method, handle);
     }
 
     private int EmitBody(ILMethodBody? body)
@@ -438,7 +460,7 @@ internal class ModuleWriter
         }
     }
 
-    private BlobHandle EncodeMethodSig(MethodDef method)
+    private BlobHandle EncodeMethodSig(MethodDesc method)
     {
         return EncodeSig(b => {
             //TODO: callconv
@@ -453,7 +475,7 @@ internal class ModuleWriter
             }
         });
     }
-    private BlobHandle EncodeMethodSig(MethodSpec method)
+    private BlobHandle EncodeMethodSpecSig(MethodSpec method)
     {
         return EncodeSig(b => {
             var genArgEnc = b.MethodSpecificationSignature(method.GenericParams.Length);
@@ -571,16 +593,19 @@ internal class ModuleWriter
 
     private void SerializePE(BlobBuilder peBlob)
     {
-        var header = new PEHeaderBuilder();
+        var imageChars = 
+            Characteristics.LargeAddressAware |
+            Characteristics.ExecutableImage |
+            (_mod.EntryPoint == null ? Characteristics.Dll : 0);
 
-        var entryPoint = _mod.EntryPoint;
+        var header = new PEHeaderBuilder(imageCharacteristics: imageChars);
 
         var peBuilder = new ManagedPEBuilder(
             header: header,
             metadataRootBuilder: new MetadataRootBuilder(_builder),
             ilStream: _bodyEncoder.Builder,
             mappedFieldData: _fieldDataStream,
-            entryPoint: entryPoint == null ? default : (MethodDefinitionHandle)_handleMap[entryPoint]
+            entryPoint: _mod.EntryPoint == null ? default : (MethodDefinitionHandle)_handleMap[_mod.EntryPoint]
         );
         peBuilder.Serialize(peBlob);
     }

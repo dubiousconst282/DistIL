@@ -35,18 +35,6 @@ public class ModuleDef : ModuleEntity
         return null;
     }
 
-    public TypeDesc? Import(Type type, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
-    {
-        var mod = Resolver.Resolve(type.Assembly.GetName());
-        return mod?.FindType(type.Namespace, type.Name, throwIfNotFound);
-    }
-
-    /// <summary> Imports the module/assembly with the given name. </summary>
-    public ModuleDef? ImportModule(string name, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
-    {
-        return Resolver.Resolve(name, throwIfNotFound);
-    }
-
     public IEnumerable<MethodDef> AllMethods()
     {
         foreach (var type in AllTypes()) {

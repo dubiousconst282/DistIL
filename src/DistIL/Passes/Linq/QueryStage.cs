@@ -115,8 +115,8 @@ public class ToArrayStage : ReductionStage
     private MethodDesc GetArrayCopyMethod(QuerySynthesizer synther)
     {
         var mod = synther.Method.Definition.Module;
-        var t_Array = mod.Import(typeof(Array));
-        var copyMethod = t_Array?.FindMethod("Copy", new MethodSig(PrimType.Void, new[] { t_Array, t_Array, PrimType.Int32 }));
+        var t_Array = mod.Resolver.Import(typeof(Array));
+        var copyMethod = t_Array?.FindMethod("Copy", new MethodSig(PrimType.Void, new TypeDesc[] { t_Array, t_Array, PrimType.Int32 }));
         Ensure.That(copyMethod != null, "Missing Array.Copy() method");
         return copyMethod;
     }

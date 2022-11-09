@@ -29,6 +29,14 @@ public class ModuleResolver
         string searchPaths = (string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!;
         AddSearchPaths(searchPaths.Split(Path.PathSeparator).Select(Path.GetDirectoryName)!);
     }
+
+    public TypeDefOrSpec? Import(Type type, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
+    {
+        Debug.Assert(!type.IsGenericParameter && !type.IsNested); //not impl
+        var mod = Resolve(type.Assembly.GetName());
+        return mod?.FindType(type.Namespace, type.Name, throwIfNotFound);
+    }
+
     public ModuleDef? Resolve(AssemblyName name, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
     {
         return Resolve(name.Name ?? throw new InvalidOperationException(), throwIfNotFound);

@@ -13,7 +13,7 @@ public class ExpandLinq : MethodPass
 
     public ExpandLinq(ModuleDef mod)
     {
-        t_Enumerable = mod.Import(typeof(Enumerable));
+        t_Enumerable = mod.Resolver.Import(typeof(Enumerable));
     }
 
     public override void Run(MethodTransformContext ctx)

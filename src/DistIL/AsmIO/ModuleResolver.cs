@@ -16,6 +16,19 @@ public class ModuleResolver
     public SystemTypes SysTypes => _sysTypes ??= new(CoreLib);
     private SystemTypes? _sysTypes;
 
+    private string[] _searchPaths = { Environment.CurrentDirectory };
+
+    public void AddSearchPaths(IEnumerable<string> paths)
+    {
+        _searchPaths = _searchPaths.Concat(paths).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    public void AddTrustedSearchPaths()
+    {
+        //https://docs.microsoft.com/en-us/dotnet/core/dependency-loading/default-probing
+        string searchPaths = (string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!;
+        AddSearchPaths(searchPaths.Split(Path.PathSeparator).Select(Path.GetDirectoryName)!);
+    }
     public ModuleDef? Resolve(AssemblyName name, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
     {
         return Resolve(name.Name ?? throw new InvalidOperationException(), throwIfNotFound);
@@ -38,12 +51,9 @@ public class ModuleResolver
 
     protected virtual ModuleDef? ResolveImpl(string name)
     {
-        //https://docs.microsoft.com/en-us/dotnet/core/dependency-loading/default-probing
-        string searchPaths = (string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!;
-
-        foreach (string path in searchPaths.Split(Path.PathSeparator)) {
-            var fileName = Path.GetFileNameWithoutExtension(path.AsSpan());
-            if (fileName.EqualsIgnoreCase(name)) {
+        foreach (string basePath in _searchPaths) {
+            string path = Path.Combine(basePath, name + ".dll");
+            if (File.Exists(path)) {
                 return Load(path);
             }
         }

@@ -10,8 +10,9 @@ public class ParserTests
 
     public ParserTests()
     {
-        _modResolver = new();
-        _corelib = _modResolver.Resolve("System.Private.CoreLib", throwIfNotFound: true);
+        _modResolver = new ModuleResolver();
+        _modResolver.AddTrustedSearchPaths();
+        _corelib = _modResolver.CoreLib;
     }
 
     [Fact]
@@ -116,12 +117,21 @@ Block3: goto Block3
         var code = @"
 Block1:
     ThisTypeDoesNotExist x = add 1, 1
-    int y = call Int32::Parse(string: ""12"")";
+    int y = call Int32::Parse(string: ""12"")
+    ObviousSyntaxError
+    ";
         var ctx = new ParserContext(code, _modResolver);
         var program = new AstParser(ctx).ParseProgram();
 
         var errors = ctx.Errors.Select(e => e.GetDetailedMessage()).ToArray();
 
-        ;
+        Assert.True(errors.Length >= 2);
+
+        var insts = program.Blocks[0].Code;
+        Assert.Equal("add", insts[0].Opcode);
+        Assert.Equal(PrimType.Void, insts[0].ResultType);
+
+        Assert.Equal("call", insts[1].Opcode);
+        Assert.Equal(PrimType.Int32, insts[1].ResultType);
     }
 }

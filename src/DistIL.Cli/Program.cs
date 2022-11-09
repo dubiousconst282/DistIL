@@ -14,6 +14,8 @@ if (args.Length == 0) {
 }
 
 var resolver = new ModuleResolver();
+resolver.AddTrustedSearchPaths();
+resolver.AddSearchPaths(new[] { Path.GetDirectoryName(args[0])! });
 var module = resolver.Load(args[0]);
 
 var mp1 = new MethodPassManager();

@@ -32,7 +32,7 @@ internal class BlockState
         Block = _body.CreateBlock();
         EntryBlock = Block;
 
-        var ilBody = importer.Method.ILBody!;
+        var ilBody = importer._method.ILBody!;
         _stack = new ArrayStack<Value>(ilBody.MaxStack);
         _isInsideEhRegion = importer._regionTree?.Contains(startOffset) ?? false;
     }
@@ -49,12 +49,12 @@ internal class BlockState
     }
     public void Push(Value value)
     {
-        Debug.Assert(value.HasResult);
-
         if (value is Instruction inst) {
             Emit(inst);
         }
-        _stack.Push(value);
+        if (value.HasResult) {
+            _stack.Push(value);
+        }
     }
     public Value Pop()
     {
@@ -129,8 +129,7 @@ internal class BlockState
                 case >= ILCode.Ldc_I4_M1 and <= ILCode.Ldc_I4_8:
                     ImportConst(ConstInt.CreateI((int)opcode - (int)ILCode.Ldc_I4_0));
                     break;
-                case ILCode.Ldc_I4_S:
-                case ILCode.Ldc_I4:
+                case ILCode.Ldc_I4_S or ILCode.Ldc_I4:
                     ImportConst(ConstInt.CreateI((int)inst.Operand!));
                     break;
                 case ILCode.Ldc_I8: ImportConst(ConstInt.CreateL((long)inst.Operand!)); break;
@@ -141,42 +140,16 @@ internal class BlockState
                 #endregion
 
                 #region Load/Store Local/Argument
-                case >= ILCode.Ldloc_0 and <= ILCode.Ldloc_3:
-                    ImportVarLoad(opcode - ILCode.Ldloc_0);
-                    break;
-                case ILCode.Ldloc_S:
-                case ILCode.Ldloc:
-                    ImportVarLoad((int)inst.Operand!);
-                    break;
-
-                case >= ILCode.Stloc_0 and <= ILCode.Stloc_3:
-                    ImportVarStore(opcode - ILCode.Stloc_0);
-                    break;
-                case ILCode.Stloc_S:
-                case ILCode.Stloc:
-                    ImportVarStore((int)inst.Operand!);
-                    break;
-
                 case >= ILCode.Ldarg_0 and <= ILCode.Ldarg_3:
-                    ImportVarLoad(opcode - ILCode.Ldarg_0, true);
-                    break;
-                case ILCode.Ldarg_S:
-                case ILCode.Ldarg:
-                    ImportVarLoad((int)inst.Operand!, true);
-                    break;
-
-                case ILCode.Starg_S:
-                case ILCode.Starg:
-                    ImportVarStore((int)inst.Operand!, true);
-                    break;
-
-                case ILCode.Ldloca_S:
-                case ILCode.Ldloca:
-                    ImportVarAddr((int)inst.Operand!);
-                    break;
-                case ILCode.Ldarga_S:
-                case ILCode.Ldarga:
-                    ImportVarAddr((int)inst.Operand!, true);
+                case >= ILCode.Ldloc_0 and <= ILCode.Ldloc_3:
+                case >= ILCode.Stloc_0 and <= ILCode.Stloc_3:
+                case ILCode.Ldarg_S or ILCode.Ldarg:
+                case ILCode.Ldloc_S or ILCode.Ldloc:
+                case ILCode.Starg_S or ILCode.Starg:
+                case ILCode.Stloc_S or ILCode.Stloc:
+                case ILCode.Ldarga_S or ILCode.Ldarga:
+                case ILCode.Ldloca_S or ILCode.Ldloca:
+                    ImportVarInst(ref inst);
                     break;
                 #endregion
 
@@ -426,25 +399,25 @@ internal class BlockState
 
                 #region Intrinsics
                 case ILCode.Newarr:
-                    ImportIntrinsic(CilIntrinsic.NewArray, (TypeDesc)inst.Operand!);
+                    ImportGenericUnaryIntrinsic(CilIntrinsic.NewArray, inst.Operand);
                     break;
                 case ILCode.Castclass:
-                    ImportIntrinsic(CilIntrinsic.CastClass, (TypeDesc)inst.Operand!);
+                    ImportGenericUnaryIntrinsic(CilIntrinsic.CastClass, inst.Operand);
                     break;
-                case ILCode.Isinst: {
-                    //isinst returns the box object for structs
-                    var destType = (TypeDesc)inst.Operand!;
-                    ImportIntrinsic(CilIntrinsic.AsInstance, destType.IsValueType ? PrimType.Object : destType);
+                case ILCode.Isinst:
+                    ImportGenericUnaryIntrinsic(
+                        CilIntrinsic.AsInstance,
+                        //isinst returns the box object for structs
+                        inst.Operand is TypeDesc { IsValueType: true } ? PrimType.Object : inst.Operand);
                     break;
-                }
                 case ILCode.Box:
-                    ImportIntrinsic(CilIntrinsic.Box, (TypeDesc)inst.Operand!);
+                    ImportGenericUnaryIntrinsic(CilIntrinsic.Box, inst.Operand);
                     break;
                 case ILCode.Unbox:
-                    ImportIntrinsic(CilIntrinsic.UnboxRef, (TypeDesc)inst.Operand!);
+                    ImportGenericUnaryIntrinsic(CilIntrinsic.UnboxRef, inst.Operand);
                     break;
                 case ILCode.Unbox_Any:
-                    ImportIntrinsic(CilIntrinsic.UnboxObj, (TypeDesc)inst.Operand!);
+                    ImportGenericUnaryIntrinsic(CilIntrinsic.UnboxObj, inst.Operand);
                     break;
                 case ILCode.Ldtoken: {
                     var entity = (EntityDesc)inst.Operand!;
@@ -454,7 +427,7 @@ internal class BlockState
                 case ILCode.Initobj:
                     //TODO: support volatile/unaligned in InitObj
                     Debug.Assert(PopPointerFlags() == 0);
-                    ImportIntrinsic(CilIntrinsic.InitObj, (TypeDesc)inst.Operand!);
+                    ImportGenericUnaryIntrinsic(CilIntrinsic.InitObj, inst.Operand);
                     break;
                 case ILCode.Sizeof:
                     Push(new IntrinsicInst(CilIntrinsic.SizeOf, (TypeDesc)inst.Operand!));
@@ -507,32 +480,45 @@ internal class BlockState
         Push(cons);
     }
 
-    private void ImportVarLoad(int varIndex, bool isArg = false)
+    private void ImportVarInst(ref ILInstruction inst)
     {
-        var variable = GetVar(varIndex, isArg, VarFlags.Loaded);
-        Push(new LoadVarInst(variable));
-    }
-    private void ImportVarStore(int varIndex, bool isArg = false)
-    {
-        var value = Pop();
-        var variable = GetVar(varIndex, isArg, VarFlags.Stored);
-        Emit(new StoreVarInst(variable, value));
-    }
-    private void ImportVarAddr(int varIndex, bool isArg = false)
-    {
-        var variable = GetVar(varIndex, isArg, VarFlags.AddrTaken);
-        Push(new VarAddrInst(variable));
-    }
-    private Variable GetVar(int index, bool isArg, VarFlags flagsToAdd)
-    {
-        var variable = isArg ? _importer._argSlots[index] : _body.Definition.ILBody!.Locals[index];
-        ref var flags = ref _importer._varFlags[index + (isArg ? 0 : _body.Args.Length)];
-        flags |= flagsToAdd | (_isInsideEhRegion ? VarFlags.UsedInsideTry : VarFlags.UsedOutsideTry);
+        var (slot, flags, instOp) = _importer.GetVar(ref inst);
 
-        if ((flags & VarFlags.CrossesTry) == VarFlags.CrossesTry || (flags & VarFlags.AddrTaken) != 0) {
-            variable.IsExposed = true;
+        //Arguments that are only ever loaded don't need variables
+        if (slot is Argument) {
+            Debug.Assert((flags | instOp) == (VarFlags.IsArg | VarFlags.Loaded));
+            Push(slot);
+            return;
         }
-        return variable;
+        //Promote block local vars to SSA
+        bool isBlockLocal = (flags & ~VarFlags.MultipleStores) == (VarFlags.IsLocal | VarFlags.Loaded | VarFlags.Stored);
+        var slotVar = (Variable)slot;
+
+        switch (instOp & VarFlags.OpMask) {
+            case VarFlags.Loaded: {
+                if (isBlockLocal) {
+                    PushNoEmit(_importer.GetBlockLocalVarSlot(slotVar)!);
+                } else if (Block.Last is LoadVarInst prevLoad && prevLoad.Var == slotVar) {
+                    PushNoEmit(prevLoad);
+                } else {
+                    Push(new LoadVarInst(slotVar));
+                }
+                break;
+            }
+            case VarFlags.Stored: {
+                if (isBlockLocal) {
+                    _importer.GetBlockLocalVarSlot(slotVar) = Pop();
+                } else {
+                    Emit(new StoreVarInst(slotVar, Pop()));
+                }
+                break;
+            }
+            case VarFlags.AddrTaken: {
+                Push(new VarAddrInst(slotVar));
+                break;
+            }
+            default: throw new UnreachableException();
+        }
     }
 
     private void ImportBinary(BinaryOp op, BinaryOp opFlt = (BinaryOp)(-1))
@@ -723,12 +709,7 @@ internal class BlockState
         var args = PopCallArgs(method);
         var constraint = HasPrefix(InstFlags.Constrained) ? _callConstraint : null;
         var inst = new CallInst(method, args, isVirt, constraint);
-
-        if (method.ReturnType.Kind == TypeKind.Void) {
-            Emit(inst);
-        } else {
-            Push(inst);
-        }
+        Push(inst);
     }
     private void ImportLoadFuncPtr(MethodDesc method, bool isVirt)
     {
@@ -763,10 +744,11 @@ internal class BlockState
         Ensure.That(_isInsideEhRegion, "Leave instruction found outside protected region");
 
         var chainBlock = _importer.GetBlock(targetOffset).Block;
-        var depth = _importer._regionTree!.GetNestingDepth(_startOffset, targetOffset);
+        var currRegion = _importer._regionTree!.FindEnclosing(_startOffset).Parent!;
+        var parentRegion = _importer._regionTree!.FindEnclosing(targetOffset);
 
         //Create a chain of blocks leaving all nested regions until target (in reverse order)
-        while (--depth > 0) {
+        while (currRegion != parentRegion) {
             //Try reuse an existing chain block
             var nextBlock = chainBlock.Preds.FirstOrDefault(b => b.First is LeaveInst);
 
@@ -775,6 +757,7 @@ internal class BlockState
                 nextBlock.InsertLast(new LeaveInst(chainBlock!));
             }
             chainBlock = nextBlock;
+            currRegion = currRegion.Parent!;
         }
         //We don't need to call AddSucc() because the eval stack should be discarded.
         TerminateBlock(new LeaveInst(chainBlock));
@@ -792,16 +775,10 @@ internal class BlockState
         TerminateBlock(new ThrowInst(exception));
     }
 
-    private void ImportIntrinsic(CilIntrinsic intrinsic, TypeDesc typeArg)
+    private void ImportGenericUnaryIntrinsic(CilIntrinsic intrinsic, object? typeArg)
     {
-        Debug.Assert(intrinsic.ParamTypes.Length == 2);
-        var inst = new IntrinsicInst(intrinsic, typeArg, Pop());
-
-        if (inst.HasResult) {
-            Push(inst);
-        } else {
-            Emit(inst);
-        }
+        Debug.Assert(intrinsic.ParamTypes is [GenericParamType, _]);
+        Push(new IntrinsicInst(intrinsic, (TypeDesc)typeArg!, Pop()));
     }
 
     private Exception Error(string? msg = null)
@@ -810,6 +787,7 @@ internal class BlockState
     }
 }
 
+[Flags]
 internal enum InstFlags
 {
     None            = 0,
@@ -826,14 +804,21 @@ internal enum InstFlags
     NoRangeCheck    = 1 << 17,
     NoNullCheck     = 1 << 18,
 }
+[Flags]
 internal enum VarFlags
 {
-    None = 0,
-    Loaded          = 1 << 1,
-    Stored          = 1 << 2,
-    AddrTaken       = 1 << 3,
-    UsedInsideTry   = 1 << 4,
-    UsedOutsideTry  = 1 << 5,
+    None        = 0,
+    //Should not be combined
+    IsArg       = 1 << 0,
+    IsLocal     = 1 << 1,
 
-    CrossesTry = UsedInsideTry | UsedOutsideTry
+    Loaded      = 1 << 2,
+    Stored      = 1 << 3,
+    AddrTaken   = 1 << 4,
+    OpMask = Loaded | Stored | AddrTaken,
+
+    CrossesBlock    = 1 << 5,
+    CrossesRegions  = 1 << 6,
+    MultipleStores  = 1 << 7,
+    LoadBeforeStore = 1 << 8,
 }

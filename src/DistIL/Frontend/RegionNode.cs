@@ -28,6 +28,8 @@ internal class RegionNode
         return this;
     }
 
+    public RegionNode FindEnclosing(int offset) => FindEnclosing(offset, offset + 1);
+
     public bool Contains(int offset)
     {
         foreach (var child in Children) {
@@ -38,17 +40,9 @@ internal class RegionNode
         return false;
     }
 
-    public int GetNestingDepth(int originOffset, int targetOffset)
+    public bool AreOnSameRegion(int offset1, int offset2)
     {
-        var childNode = FindEnclosing(originOffset, originOffset + 1);
-        var parentNode = FindEnclosing(targetOffset, targetOffset + 1);
-        int depth = 0;
-
-        while (childNode != parentNode) {
-            depth++;
-            childNode = childNode.Parent!;
-        }
-        return depth;
+        return FindEnclosing(offset1) == FindEnclosing(offset2);
     }
 
     public static RegionNode? BuildTree(List<ExceptionRegion> clauses)

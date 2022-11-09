@@ -83,8 +83,7 @@ class ImportPass : ModulePass
         foreach (var method in ctx.Module.AllMethods()) {
             if (method.ILBody == null) continue;
             try {
-                var imp = new ILImporter(method);
-                method.Body = imp.ImportCode();
+                method.Body = ILImporter.ImportCode(method);
             } catch (Exception ex) {
                 Console.WriteLine($"FailImp: {method} {ex.Message}");
             }
@@ -99,7 +98,7 @@ class ExportPass : ModulePass
             if (method.Body == null) continue;
 
             try {
-                method.ILBody = new ILGenerator(method.Body).Generate();
+                method.ILBody = ILGenerator.Generate(method.Body);
             } catch (Exception ex) {
                 Console.WriteLine($"FailEmit: {method} {ex.Message}");
             }

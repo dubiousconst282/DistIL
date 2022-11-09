@@ -11,13 +11,18 @@ public partial class ILGenerator : InstVisitor
 
     BasicBlock? _nextBlock;
 
-    public ILGenerator(MethodBody method)
+    private ILGenerator(MethodBody method)
     {
         _method = method;
         _forest = new ForestAnalysis(method);
     }
 
-    public ILMethodBody Generate()
+    public static ILMethodBody Generate(MethodBody method)
+    {
+        return new ILGenerator(method).Generate();
+    }
+
+    private ILMethodBody Generate()
     {
         var layout = LayoutedCFG.Compute(_method);
         var blocks = layout.Blocks;
@@ -53,7 +58,7 @@ public partial class ILGenerator : InstVisitor
 
     private void EmitBlock(BasicBlock block)
     {
-        //Emit code for the rooted trees in the forest
+        //Emit code for all statements (tree roots)
         foreach (var inst in block) {
             if (!_forest.IsTreeRoot(inst) || inst is GuardInst) continue;
 

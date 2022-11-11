@@ -1,3 +1,5 @@
+namespace DistIL.Tests.IR;
+
 using DistIL.AsmIO;
 using DistIL.IR;
 
@@ -6,7 +8,7 @@ public class ConstTests
     [Fact]
     public void Test_CreateZero()
     {
-        void Check(Const c) => Assert.Equal(0, ((ConstInt)c).Value);
+        static void Check(Const c) => Assert.Equal(0, ((ConstInt)c).Value);
 
         Check(ConstInt.CreateZero(PrimType.Byte));
         Check(ConstInt.CreateZero(PrimType.UInt16));
@@ -17,7 +19,7 @@ public class ConstTests
     [Fact]
     public void Test_ConstInt_Normalization()
     {
-        void Check(PrimType type, long min, long max, ulong minU)
+        static void Check(PrimType type, long min, long max, ulong minU)
         {
             Assert.Equal(min, ConstInt.Create(type, min).Value);
             Assert.Equal(max, ConstInt.Create(type, max).Value);

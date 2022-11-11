@@ -19,7 +19,7 @@ internal static class Ensure
     }
 
     [DebuggerStepThrough]
-    public static void ValidIndex(int index, int length, string? msg = null)
+    public static void IndexValid(int index, int length, string? msg = null)
     {
         Debug.Assert(length >= 0);
 

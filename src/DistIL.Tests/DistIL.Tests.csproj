@@ -1,11 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Nullable>enable</Nullable>
-    <EnablePreviewFeatures>true</EnablePreviewFeatures>
-
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
@@ -24,7 +19,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DistIL\DistIL.csproj" />
-    <ProjectReference Include="..\DistIL.TestCases\DistIL.TestCases.csproj" />
+    <ProjectReference Include="..\DistIL.Tests.TestAsm\DistIL.Tests.TestAsm.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <OutputItemType>Content</OutputItemType>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </ProjectReference>
   </ItemGroup>
 
 </Project>

@@ -1,3 +1,5 @@
+namespace DistIL.Tests.Util;
+
 using DistIL.Util;
 
 public class RefSetTests
@@ -46,10 +48,7 @@ public class RefSetTests
 
         void CompareSeq(Item[] slice)
         {
-            var tmp = new HashSet<Item>(ReferenceEqualityComparer.Instance);
-            foreach (var val in set) {
-                tmp.Add(val);
-            }
+            var tmp = new HashSet<Item>(set.GetEnumerator().ToList(), ReferenceEqualityComparer.Instance);
             Assert.Equal(tmp.Count, set.Count);
             tmp.SymmetricExceptWith(slice);
             Assert.Empty(tmp);
@@ -58,7 +57,7 @@ public class RefSetTests
 
     public static IEnumerable<object[]> GetData()
     {
-        foreach (int len in new[] { 1, 2, 3, 4, 7 }) {
+        foreach (int len in new[] { 1, 2, 3, 4, 7, 13, 31 }) {
             var items = new Item[len];
 
             for (int j = 0; j < len; j++) {

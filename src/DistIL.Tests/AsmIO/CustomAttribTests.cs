@@ -1,17 +1,18 @@
+namespace DistIL.Tests.AsmIO;
+
 using DistIL.AsmIO;
-using DistIL.TestCases;
 
 public class CustomAttribTests
 {
     [Fact]
-    public void TestDecode()
+    public void Test_DecodeCase1()
     {
         var resolver = new ModuleResolver();
         resolver.AddTrustedSearchPaths();
         var sys = resolver.SysTypes;
 
-        var type = (TypeDef)resolver.Import(typeof(CustomAttribCases))!;
-        var attrib = type.Methods.First(m => m.Name == nameof(CustomAttribCases.DecodeCase1)).GetCustomAttribs().First();
+        var type = resolver.Load("DistIL.Tests.TestAsm.dll").FindType(null, "CustomAttribs")!;
+        var attrib = type.Methods.First(m => m.Name == "DecodeCase1").GetCustomAttribs().First();
 
         Assert.Equal(type, ((TypeDef)attrib.Constructor.DeclaringType).DeclaringType);
         Assert.Equal(5, attrib.FixedArgs.Length);

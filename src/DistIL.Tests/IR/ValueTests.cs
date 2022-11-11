@@ -1,3 +1,5 @@
+namespace DistIL.Tests.IR;
+
 using DistIL.IR;
 using DistIL.Util;
 
@@ -51,7 +53,7 @@ public class ValueTests
     }
 
     [Fact]
-    public void Test_UseList_Reloc()
+    public void Test_UseList_Relocate()
     {
         var value1 = new DummyValue(123);
         var value2 = new DummyValue(456);

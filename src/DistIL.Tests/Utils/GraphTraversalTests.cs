@@ -1,10 +1,11 @@
+namespace DistIL.Tests.Util;
 
 using DistIL.Util;
 
 public class GraphTraversalTests
 {
     [Fact]
-    public void TestDFS1()
+    public void Test_DFS()
     {
         var a = new Node(1);
         var b = new Node(2);

@@ -1,3 +1,5 @@
+namespace DistIL.Tests.IR;
+
 using DistIL.AsmIO;
 using DistIL.IR;
 using DistIL.IR.Utils;

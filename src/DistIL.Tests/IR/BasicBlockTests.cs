@@ -1,3 +1,5 @@
+namespace DistIL.Tests.IR;
+
 using DistIL.AsmIO;
 using DistIL.IR;
 using DistIL.Util;
@@ -5,7 +7,7 @@ using DistIL.Util;
 public class BasicBlockTests
 {
     [Fact]
-    public void TestInstInserts()
+    public void Test_InstInserts()
     {
         var method = Utils.CreateDummyMethodBody(PrimType.Int32);
         var block = method.CreateBlock();
@@ -41,7 +43,7 @@ public class BasicBlockTests
     }
 
     [Fact]
-    public void TestEnumerate()
+    public void Test_Enumerate()
     {
         var method = Utils.CreateDummyMethodBody(PrimType.Int32);
         var block = method.CreateBlock();
@@ -67,7 +69,7 @@ public class BasicBlockTests
     }
 
     [Fact]
-    public void TestSplit()
+    public void Test_Split()
     {
         var method = Utils.CreateDummyMethodBody(PrimType.Int32);
         var block1 = method.CreateBlock();
@@ -113,7 +115,7 @@ public class BasicBlockTests
     }
 
     [Fact]
-    public void TestInsertRange()
+    public void Test_InsertRange()
     {
         var method = Utils.CreateDummyMethodBody(PrimType.Int32);
         var block = method.CreateBlock();
@@ -133,7 +135,7 @@ public class BasicBlockTests
     }
 
     [Fact]
-    public void TestRemove()
+    public void Test_Remove()
     {
         var method = Utils.CreateDummyMethodBody(PrimType.Int32);
         var block = method.CreateBlock();
@@ -146,7 +148,7 @@ public class BasicBlockTests
     }
 
     [Fact]
-    public void TestSwitchEdgesAreUnique()
+    public void Test_SwitchEdgesAreUnique()
     {
         var method = Utils.CreateDummyMethodBody(PrimType.Void);
         var block1 = method.CreateBlock();

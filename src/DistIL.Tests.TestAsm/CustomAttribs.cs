@@ -1,8 +1,6 @@
-namespace DistIL.TestCases;
-
-public class CustomAttribCases
+public class CustomAttribs
 {
-    [TestingAttr(
+    [TestAttrib(
         45, "CtorStr", typeof(string), new int[] { 1, 2, 3 }, 150,
         F_Type = typeof(int),
         F_Int = 550,
@@ -16,7 +14,7 @@ public class CustomAttribCases
     )]
     public static void DecodeCase1() { }
 
-    public class TestingAttr : Attribute
+    public class TestAttrib : Attribute
     {
         public Type F_Type;
         public int F_Int;
@@ -29,6 +27,6 @@ public class CustomAttribCases
         public long P_Long { get; set; }
 
 #pragma warning disable CS8618
-        public TestingAttr(int a1, string a2, Type a3, int[] a4, object a5) { }
+        public TestAttrib(int a1, string a2, Type a3, int[] a4, object a5) { }
     }
 }

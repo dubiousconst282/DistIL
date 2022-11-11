@@ -47,7 +47,7 @@ public class ScalarReplacement : MethodPass
                     variable = new Variable(field.Type, name: $"sroa{objId}_{field.Name}");
                     //TODO: initialize var
                     var initSt = new StoreVarInst(variable, ConstInt.CreateI(0));
-                    initSt.InsertAfter(info.Object as NewObjInst);
+                    initSt.InsertAfter((NewObjInst)info.Object);
                     info.Scalars[field] = variable;
                 }
                 if (access is LoadFieldInst) {

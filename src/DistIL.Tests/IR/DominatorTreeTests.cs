@@ -1,3 +1,5 @@
+namespace DistIL.Tests.Analysis;
+
 using DistIL.Analysis;
 using DistIL.IR;
 

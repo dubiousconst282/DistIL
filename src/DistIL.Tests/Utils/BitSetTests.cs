@@ -1,9 +1,11 @@
+namespace DistIL.Tests.Util;
+
 using DistIL.Util;
 
 public class BitSetTests
 {
     [Fact]
-    public void Test1()
+    public void Test_Everything()
     {
         var bs = new BitSet(130);
         int[] positions = { 1, 3, 4, 8, 12, 17, 32, 55, 63, 64, 65, 100, 126 };

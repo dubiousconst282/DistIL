@@ -21,7 +21,7 @@ public class ArrayStack<T>
 
     public ref T this[int index] {
         get {
-            Debug.Assert(index >= 0 && index < _head);
+            Ensure.IndexValid(index, _head);
             return ref _arr[index];
         }
     }

@@ -6,7 +6,7 @@ namespace DistIL.IR;
 /// </summary>
 public class PhiInst : Instruction
 {
-    public int NumArgs => Operands.Length / 2;
+    public int NumArgs => _operands.Length / 2;
     public override string InstName => "phi";
     public override bool IsHeader => true;
 
@@ -18,7 +18,10 @@ public class PhiInst : Instruction
         : base(InterleaveArgs(args))
     {
         ResultType = args[0].Value.ResultType;
-        Debug.Assert(args.All(a => a.Value.ResultType.IsStackAssignableTo(ResultType)));
+        
+        foreach (var arg in args) {
+            Ensure.That(arg.Value.ResultType.IsStackAssignableTo(ResultType));
+        }
     }
     
     /// <summary> Unchecked non-copying constructor. </summary>
@@ -26,14 +29,14 @@ public class PhiInst : Instruction
     /// Operand array containing pairs of [PredBlock, IncommingValue].
     /// The instruction will take ownership of this array, its elements should not be modified after.
     /// </param>
-    public PhiInst(TypeDesc resultType, Value[] operands)
+    internal PhiInst(TypeDesc resultType, Value[] operands)
         : base(operands)
     {
         ResultType = resultType;
     }
     
-    public BasicBlock GetBlock(int index) => (BasicBlock)Operands[index * 2 + 0];
-    public Value GetValue(int index) => Operands[index * 2 + 1];
+    public BasicBlock GetBlock(int index) => (BasicBlock)_operands[index * 2 + 0];
+    public Value GetValue(int index) => _operands[index * 2 + 1];
 
     /// <summary> Returns the incomming value for the given predecessor block. If it doesn't exist, an exception is thrown. </summary>
     public Value GetValue(BasicBlock block) => GetValue(FindArgIndex(block));
@@ -51,8 +54,8 @@ public class PhiInst : Instruction
 
     public PhiArg GetArg(int index)
     {
-        var block = Operands[index * 2 + 0];
-        var value = Operands[index * 2 + 1];
+        var block = _operands[index * 2 + 0];
+        var value = _operands[index * 2 + 1];
         return new PhiArg((BasicBlock)block, value);
     }
 
@@ -88,8 +91,8 @@ public class PhiInst : Instruction
 
     private int FindArgIndex(BasicBlock block)
     {
-        for (int i = 0; i < Operands.Length; i += 2) {
-            if (Operands[i] == block) {
+        for (int i = 0; i < _operands.Length; i += 2) {
+            if (_operands[i] == block) {
                 return i / 2;
             }
         }

@@ -8,7 +8,7 @@ using DistIL.IR.Intrinsics;
 //
 //The idea is to isolate phis (split live range of its dependencies) by inserting parallel copies 
 //for each argument into their respective predecessor blocks, and for each phi result (to solve the lost copy/swap problem).
-//Then, all non-interfering copies can be coalesced into the same "congruence class" (MergeList).
+//Then, all non-interfering copies can be coalesced into the same "congruence class/merge list".
 //
 //The paper describes an efficient algorithm to check for interferences in two merge lists, with
 //the notion of value interference (two variables with the same value don't interfere).
@@ -19,6 +19,7 @@ public class RemovePhis : MethodPass
 {
     MethodBody _method = null!;
     Dictionary<Instruction, MergeNode> _mergeNodes = new();
+    Dictionary<MergeNode[], Variable> _slotVars = new();
     Dictionary<BasicBlock, (List<IntrinsicInst> Phis, List<IntrinsicInst> Args)> _copies = new();
 
     DominatorTree _domTree = null!;
@@ -39,6 +40,7 @@ public class RemovePhis : MethodPass
         //Cleanup
         _method = null!;
         _mergeNodes.Clear();
+        _slotVars.Clear();
         _copies.Clear();
         _domTree = null!;
         _liveness = null!;
@@ -103,13 +105,28 @@ public class RemovePhis : MethodPass
     {
         foreach (var block in _method) {
             foreach (var phi in block.Phis()) {
-                var list = new MergeList();
-                AddMergeNode(list, phi);
+                int argCount = 0;
+                foreach (var arg in phi) {
+                    argCount += arg.Value is Instruction ? 1 : 0;
+                }
                 
-                foreach (var (_, arg) in phi) {
-                    if (arg is Instruction argI) {
-                        AddMergeNode(list, argI);
+                var mergeList = new MergeNode[argCount + 1];
+                int index = 0;
+                
+                foreach (var arg in phi) {
+                    if (arg.Value is Instruction argI) {
+                        AddNode(argI);
                     }
+                }
+                AddNode(phi);
+                
+                Array.Sort(mergeList, (a, b) => a == b ? 0 : ComesBefore(a.Def, b.Def) ? -1 : +1);
+
+                void AddNode(Instruction inst)
+                {
+                    var node = new MergeNode() { Def = inst, List = mergeList };
+                    _mergeNodes.Add(inst, node);
+                    mergeList[index++] = node;
                 }
             }
         }
@@ -132,19 +149,8 @@ public class RemovePhis : MethodPass
                 var dstList = GetMergeList(copy);
                 var srcList = GetMergeList(src);
 
-                if (dstList != srcList && !Intersect(dstList, srcList)) {
-                    Debug.Assert(!SlowCorrectIntersect(dstList, srcList));
-                    MergeLists(dstList, srcList);
-
-                    //Update nearest ancestor to "max(in, out)" based on the pre-dfs index
-                    //(Is this all the unexplained "pre computation" in the paper?)
-                    for (var node = dstList.First; node != null; node = node.Next) {
-                        var ancIn = node.EqualAncestorIn;
-                        var ancOut = node.EqualAncestorOut;
-                        if (ancIn == null || (ancOut != null && ComesBefore(ancIn.Def, ancOut.Def))) {
-                            node.EqualAncestorIn = ancOut;
-                        }
-                    }
+                if (dstList != srcList) {
+                    MergeIfNotIntersecting(dstList, srcList);
                 }
             }
         }
@@ -169,11 +175,11 @@ public class RemovePhis : MethodPass
             if (copies == null) return;
 
             foreach (var copy in copies) {
-                var dstSlot = GetMergeList(copy).GetSlot();
+                var dstSlot = GetSlotVar(copy);
                 var src = copy.Args[0];
 
                 if (src is Instruction srcI) {
-                    var srcSlot = GetMergeList(srcI).GetSlot();
+                    var srcSlot = GetSlotVar(srcI);
                     //Copy source to its slot, and replace other uses with it
                     if (srcI.Block != null && !srcI.Is(IRIntrinsicId.CopyDef)) {
                         srcI.ReplaceUses(srcSlot);
@@ -199,8 +205,137 @@ public class RemovePhis : MethodPass
         }
     }
 
-    //The algorithm given in the paper has a typo in the comparison to insert temporary
-    //copies, it should compare for inequality instead.
+    private MergeNode[] GetMergeList(Instruction def)
+    {
+        if (!_mergeNodes.TryGetValue(def, out var node)) {
+            _mergeNodes[def] = node = new MergeNode() { Def = def, List = new MergeNode[1] };
+            node.List[0] = node;
+        }
+        return node.List;
+    }
+    private Variable GetSlotVar(Instruction def)
+    {
+        return _slotVars.GetOrAddRef(_mergeNodes[def].List)
+                ??= new Variable(def.ResultType);
+    }
+
+    private bool MergeIfNotIntersecting(MergeNode[] listA, MergeNode[] listB)
+    {
+        //Note: It's very rare for two lists to interfere with each other (only ~4% do),
+        //so we always preallocate the merged result.
+        var dom = new ArrayStack<MergeNode>();
+        var mergedNodes = new MergeNode[listA.Length + listB.Length];
+        int indexA = 0, indexB = 0, indexC = 0;
+
+        //Traverse union of listA and listB, in ascending def order
+        while (indexA < listA.Length || indexB < listB.Length) {
+            bool currIsB = 
+                indexA >= listA.Length || 
+                (indexB < listB.Length && ComesBefore(listB[indexB].Def, listA[indexA].Def));
+
+            var curr = currIsB ? listB[indexB++] : listA[indexA++];
+
+            //Check if the current def is interferes with a dominating one
+            while (!dom.IsEmpty && !Dominates(dom.Top.Def, curr.Def)) {
+                dom.Pop();
+            }
+            if (!dom.IsEmpty && Interferes(curr, dom.Top)) {
+                return false;
+            }
+            dom.Push(curr);
+            Debug.Assert(indexC == 0 || ComesBefore(mergedNodes[indexC - 1].Def, curr.Def));
+            mergedNodes[indexC++] = curr;
+        }
+
+        //Update nodes and nearest ancestors to "max(in, out)" based on the pre-dfs index
+        //(Is this all the unexplained "pre computation" in the paper?)
+        foreach (var node in mergedNodes) {
+            var ancIn = node.EqualAncestorIn;
+            var ancOut = node.EqualAncestorOut;
+            if (ancIn == null || (ancOut != null && ComesBefore(ancIn.Def, ancOut.Def))) {
+                node.EqualAncestorIn = ancOut;
+            }
+            node.List = mergedNodes;
+        }
+        return true;
+    }
+
+    //Checks if `a` interferes (i.e., intersects and has a different value) with an already-visited variable.
+    //This method also update ancestor information, and assumes that `b` dominates `a`.
+    private bool Interferes(MergeNode a, MergeNode b)
+    {
+        a.EqualAncestorOut = null;
+        if (a.List == b.List) {
+            b = b.EqualAncestorOut!;
+            if (b == null) {
+                return false;
+            }
+        }
+        //Follow the chain of equal intersecting ancestors in the other set
+        var anc = b;
+        while (anc != null && !Intersects(anc.Def, a.Def)) {
+            anc = anc.EqualAncestorIn;
+        }
+
+        if (GetValue(a.Def) != GetValue(b.Def)) {
+            return anc != null;
+        } else {
+            //Update equal intersecting ancestor going up in the other set
+            a.EqualAncestorOut = anc;
+            return false;
+        }
+    }
+
+    //Checks if `a` and `b` have overlapping live ranges, assuming `a` dominates `b`.
+    private bool Intersects(Instruction a, Instruction b)
+    {
+        Debug.Assert(Dominates(a, b));
+
+        if (_liveness.IsLiveOut(b.Block, a)) {
+            //We should check if `a` is defined before `b`, but that doesn't seem to matter...
+            return true;
+        }
+        //If `a` is defined or liveIn in the same block as `b`, we need to check if it is used after it
+        if (a.Block == b.Block || _liveness.IsLiveIn(b.Block, a)) {
+            while ((b = b.Next!) != null) {
+                if (b.Operands.ContainsRef(a)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    
+    private bool Dominates(Instruction parent, Instruction child)
+    {
+        return parent.Block == child.Block 
+            ? ComesBefore(parent, child)
+            : _domTree.Dominates(parent.Block, child.Block);
+    }
+    //Checks if `a` is defined before `b` if they are on the same block, 
+    //or based on the pre order dfs index of the dom tree. 
+    private bool ComesBefore(Instruction a, Instruction b)
+    {
+        if (a.Block != b.Block) {
+            return _domTree.GetPreIndex(a.Block) < _domTree.GetPreIndex(b.Block);
+        }
+        for (; a != null; a = a.Prev!) {
+            if (a == b) return false;
+        }
+        return true;
+    }
+
+    private Value? GetValue(Instruction inst)
+    {
+        Value? src = inst;
+        while (src is Instruction currInst && currInst.Is(IRIntrinsicId.CopyDef)) {
+            src = currInst.Operands[0];
+        }
+        return src;
+    }
+
+    //The algorithm given in the paper has a typo in the comparison to insert temporary copies,
+    //it should compare for inequality instead: `pendingDst != Loc(Pred(pendingDst))`.
     //It also breaks if a source is used multiple times; that was fixed by only pushing to 
     //the pending queue if a dst is in loc.
     //More info: https://github.com/pfalcon/parcopy
@@ -215,7 +350,7 @@ public class RemovePhis : MethodPass
         var data = new Dictionary<Variable, (Variable? Pred, Variable? Loc)>();
         ref Variable? Loc(Variable var) => ref data.GetOrAddRef(var).Loc;
         ref Variable? Pred(Variable var) => ref data.GetOrAddRef(var).Pred;
-        
+
         foreach (var (dst, src) in copies) {
             Loc(src) = src;
             Pred(dst) = src;
@@ -256,211 +391,14 @@ public class RemovePhis : MethodPass
         }
     }
 
-    //Naive O(n^2) intersection test
-    private bool SlowCorrectIntersect(MergeList listA, MergeList listB)
-    {
-        for (var na = listA.First; na != null; na = na.Next) {
-            for (var nb = listB.First; nb != null; nb = nb.Next) {
-                if (Dominates(na.Def, nb.Def) && Intersect(na, nb) && GetValue(na.Def) != GetValue(nb.Def)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private bool Intersect(MergeList listA, MergeList listB)
-    {
-        var dom = new ArrayStack<MergeNode>();
-        var nodeA = listA.First;
-        var nodeB = listB.First;
-
-        //Traverse union of listA and listB, in order
-        while (nodeA != null || nodeB != null) {
-            var current = default(MergeNode);
-            if (nodeA == null || (nodeB != null && ComesBefore(nodeB.Def, nodeA.Def))) {
-                current = nodeB!;
-                nodeB = nodeB!.Next;
-            } else {
-                current = nodeA;
-                nodeA = nodeA.Next;
-            }
-
-            while (!dom.IsEmpty && !Dominates(dom.Top.Def, current.Def)) {
-                dom.Pop();
-            }
-            if (!dom.IsEmpty && Interfere(current, dom.Top)) {
-                return true;
-            }
-            dom.Push(current);
-        }
-        return false;
-    }
-
-    //Checks if `a` interferes (i.e., intersects and has a different value) with an already-visited variable.
-    //This method also update ancestor information, and assumes that `b` dominates `a`.
-    private bool Interfere(MergeNode a, MergeNode b)
-    {
-        a.EqualAncestorOut = null;
-        if (a.List == b.List) {
-            b = b.EqualAncestorOut!;
-        }
-        //Follow the chain of equal intersecting ancestors in the other set
-        var anc = b;
-        while (anc != null && !Intersect(anc, a)) {
-            anc = anc.EqualAncestorIn;
-        }
-        if (b != null && GetValue(a.Def) != GetValue(b.Def)) {
-            return anc != null;
-        } else {
-            //Update equal intersecting ancestor going up in the other set
-            a.EqualAncestorOut = anc;
-            return false;
-        }
-    }
-
-    private Value? GetValue(Instruction inst)
-    {
-        Value? src = inst;
-        while (src is Instruction currInst && currInst.Is(IRIntrinsicId.CopyDef)) {
-            src = currInst.Operands[0];
-        }
-        return src;
-    }
-
-    //Checks if `a` and `b` have overlapping live ranges, assuming `a` dominates `b`.
-    private bool Intersect(MergeNode a, MergeNode b)
-    {
-        Debug.Assert(Dominates(a.Def, b.Def));
-
-        var (def, pos) = (a.Def, b.Def);
-        var (liveIn, liveOut) = _liveness.GetLive(pos.Block);
-
-        if (liveOut.Contains(def)) {
-            //We should check if `def` is defined before `pos`, but that doesn't seem to matter...
-            return true;
-        }
-        //If `def` is defined or liveIn in `pos`'s block, we need to check if it is used after `pos`
-        if (def.Block == pos.Block || liveIn.Contains(def)) {
-            while ((pos = pos.Next) != null) {
-                if (pos.Operands.ContainsRef(def)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-    
-    private bool Dominates(Instruction parent, Instruction child)
-    {
-        return parent.Block == child.Block 
-            ? ComesBefore(parent, child)
-            : _domTree.Dominates(parent.Block, child.Block);
-    }
-    //Checks if `a` is defined before `b` if they are on the same block, 
-    //or based on the pre order dfs index of the dom tree. 
-    private bool ComesBefore(Instruction a, Instruction b)
-    {
-        if (a.Block != b.Block) {
-            return _domTree.GetPreIndex(a.Block) < _domTree.GetPreIndex(b.Block);
-        }
-        for (; a != null; a = a.Prev!) {
-            if (a == b) return false;
-        }
-        return true;
-    }
-
-    private void AddMergeNode(MergeList list, Instruction def)
-    {
-        var node = new MergeNode() { Def = def, List = list };
-        _mergeNodes.Add(def, node); //there can't be an existing node
-        MergeLists(list, node);
-    }
-    private MergeList GetMergeList(Instruction def)
-    {
-        if (!_mergeNodes.TryGetValue(def, out var node)) {
-            var list = new MergeList();
-            _mergeNodes[def] = node = new MergeNode() { Def = def, List = list };
-            list.First = node;
-        }
-        return node.List;
-    }
-
-    //Merges two lists while maintaining ascending pre dfs order of the dom tree
-    //TODO-OPT: we could speed this using a sorted tree
-    private void MergeLists(MergeList listA, MergeList listB)
-    {
-        MergeLists(listA, listB.First);
-        listB.First = null;
-    }
-    private void MergeLists(MergeList listA, MergeNode? other)
-    {
-        if (listA.First == null) {
-            listA.First = other;
-            for (; other != null; other = other.Next) {
-                other.List = listA;
-            }
-            return;
-        }
-        var prev = default(MergeNode);
-        var curr = listA.First;
-
-        while (other != null) {
-            if (ComesBefore(other.Def, curr.Def)) {
-                //Insert `other` before `curr`
-                if (prev != null) {
-                    prev.Next = other;
-                } else {
-                    listA.First = other;
-                }
-                var next = other.Next;
-                other.Next = curr;
-                other.List = listA;
-                //Advance other
-                prev = other;
-                other = next;
-            } else if (curr.Next != null) {
-                prev = curr;
-                curr = curr.Next!; //Advance curr
-            } else {
-                curr.Next = other; //Append other on end
-                for (; other != null; other = other.Next) {
-                    other.List = listA;
-                }
-                break;
-            }
-        }
-    }
-
-    //A list of variables that can be coalesced together, sorted based on the pre dfs order of the dom tree. 
-    //This is refered as "congruence class" in the paper, and "merge set" in the SSA book.
-    class MergeList
-    {
-        public MergeNode? First;
-        public Variable? Slot;
-
-        public Variable GetSlot() => Slot ??= new Variable(First!.Def.ResultType);
-
-        public override string ToString()
-        {
-            var sb = new StringBuilder("[");
-            //Find the sym table (looping because some insts will be removed from the method)
-            var symTable = default(SymbolTable)!;
-            for (var node = First; node != null && symTable == null; node = node.Next) {
-                symTable = node.Def.Block.Method.GetSymbolTable();
-            }
-            for (var node = First; node != null; node = node.Next) {
-                sb.Append(node == First ? "" : ", ");
-                sb.Append(symTable.GetName(node.Def));
-            }
-            return sb.Append("]").ToString();
-        }
-    }
     class MergeNode
     {
-        public MergeNode? Next;
-        public MergeList List = null!;
         public Instruction Def = null!;
+
+        //The "merge list" this node is in.
+        //It contains all defs that can be coalesced together, sorted based on the pre dfs order of the dom tree. 
+        //This is refered as "congruence class" in the paper, and "merge set" in the SSA book.
+        public MergeNode[] List = null!;
 
         public MergeNode? EqualAncestorIn; //Nearest ancestor that has the same value and intersects with this def
         public MergeNode? EqualAncestorOut; //Same as above, but in the other set

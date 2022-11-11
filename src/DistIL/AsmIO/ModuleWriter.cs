@@ -210,6 +210,15 @@ internal class ModuleWriter
         if (type.IsNested) {
             _builder.AddNestedType(handle, (TypeDefinitionHandle)GetHandle(type.DeclaringType));
         }
+        int itfIndex = 0;
+        foreach (var itf in type.Interfaces) {
+            var itfHandle = _builder.AddInterfaceImplementation(handle, GetHandle(itf));
+            EmitCustomAttribs(type, itfHandle, CustomAttribLink.Type.InterfaceImpl, itfIndex++);
+        }
+        foreach (var (decl, impl) in type.InterfaceMethodImpls) {
+            var implHandle = _builder.AddMethodImplementation(handle, GetHandle(impl), GetHandle(decl));
+            EmitCustomAttribs(impl, implHandle, CustomAttribLink.Type.InterfaceImpl);
+        }
         foreach (var field in type.Fields) {
             EmitField(field);
         }

@@ -51,12 +51,15 @@ public class TypeDef : TypeDefOrSpec
     public int LayoutPack { get; set; }
     public bool HasCustomLayout => LayoutSize != 0 || LayoutPack != 0;
 
-    private List<TypeDesc> _interfaces = new(); //Note: CAs linked to indices
+    private List<TypeDesc> _interfaces = new(); //Note: CAs are linked to indices, care must be taken when changing entries
     private List<FieldDef> _fields = new();
     private List<MethodDef> _methods = new();
     private List<PropertyDef> _properties = new();
     private List<EventDef> _events = new();
     private List<TypeDef> _nestedTypes = new();
+    private Dictionary<MethodDesc, MethodDef>? _itfMethodImpls;
+
+    private static readonly Dictionary<MethodDesc, MethodDef> s_EmptyItfMethodImpls = new();
 
     public override IReadOnlyList<TypeDesc> Interfaces => _interfaces;
     public override IReadOnlyList<FieldDef> Fields => _fields;
@@ -64,6 +67,7 @@ public class TypeDef : TypeDefOrSpec
     public IReadOnlyList<PropertyDef> Properties => _properties;
     public IReadOnlyList<EventDef> Events => _events;
     public IReadOnlyList<TypeDef> NestedTypes => _nestedTypes;
+    public IReadOnlyDictionary<MethodDesc, MethodDef> InterfaceMethodImpls => _itfMethodImpls ?? s_EmptyItfMethodImpls;
 
     public TypeDef(ModuleDef mod, string? ns, string name, TypeAttributes attribs = default, ImmutableArray<TypeDesc> genericParams = default)
     {
@@ -128,6 +132,15 @@ public class TypeDef : TypeDefOrSpec
             var itfInfo = loader._reader.GetInterfaceImplementation(handle);
             loader.FillCustomAttribs(this, itfInfo.GetCustomAttributes(), CustomAttribLink.Type.InterfaceImpl, itfIndex++);
             _interfaces.Add((TypeDesc)loader.GetEntity(itfInfo.Interface));
+        }
+        foreach (var handle in info.GetMethodImplementations()) {
+            var implInfo = loader._reader.GetMethodImplementation(handle);
+            var decl = (MethodDesc)loader.GetEntity(implInfo.MethodDeclaration);
+            var impl = (MethodDef)loader.GetEntity(implInfo.MethodBody);
+
+            Ensure.That(impl.DeclaringType == this);
+            (_itfMethodImpls ??= new()).Add(decl, impl);
+            loader.FillCustomAttribs(impl, implInfo.GetCustomAttributes(), CustomAttribLink.Type.InterfaceImpl);
         }
         loader.FillGenericParams(this, GenericParams, info.GetGenericParameters());
         loader.FillCustomAttribs(this, info.GetCustomAttributes());

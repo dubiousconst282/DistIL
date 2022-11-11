@@ -115,18 +115,15 @@ internal class ModuleWriter
                         EncodeSig(b => EncodeType(b.TypeSpecificationSignature(), type))
                     );
                 }
-                case MethodSpec { GenericParams.Length: > 0 } method: {
-                    return _builder.AddMethodSpecification(
-                        GetHandle(method.Definition),
-                        EncodeMethodSpecSig(method)
-                    );
-                }
                 case MethodDefOrSpec method: {
-                    return _builder.AddMemberReference(
+                    var refHandle = _builder.AddMemberReference(
                         GetHandle(method.DeclaringType),
                         AddString(method.Name),
                         EncodeMethodSig(method.Definition)
                     );
+                    return method is MethodSpec { GenericParams.Length: > 0 } spec
+                        ? _builder.AddMethodSpecification(refHandle, EncodeMethodSpecSig(spec))
+                        : refHandle;
                 }
                 case MDArrayMethod method: {
                     return _builder.AddMemberReference(
@@ -296,13 +293,6 @@ internal class ModuleWriter
         int bodyOffset = EmitBody(method.ILBody);
         var firstParamHandle = MetadataTokens.ParameterHandle(_builder.GetRowCount(TableIndex.Param) + 1);
 
-        var pars = method.StaticParams;
-        for (int i = 0; i < pars.Length; i++) {
-            var par = pars[i];
-            var parHandle = _builder.AddParameter(par.Attribs, AddString(par.Name), i + 1);
-            EmitCustomAttribs(method, parHandle, CustomAttribLink.Type.MethodParam, i);
-        }
-
         var handle = _builder.AddMethodDefinition(
             method.Attribs,
             method.ImplAttribs,
@@ -311,6 +301,20 @@ internal class ModuleWriter
         );
         Debug.Assert(_handleMap[method] == handle);
 
+        if (_mod.GetLinkedCustomAttribs(new(method, -1, CustomAttribLink.Type.MethodParam)).Length > 0) {
+            var parHandle = _builder.AddParameter(method.ReturnParam.Attribs, default, 0);
+            EmitCustomAttribs(method, parHandle, CustomAttribLink.Type.MethodParam, -1);
+        }
+        var pars = method.StaticParams;
+        for (int i = 0; i < pars.Length; i++) {
+            var par = pars[i];
+            var parHandle = _builder.AddParameter(par.Attribs, AddString(par.Name), i + 1);
+            EmitCustomAttribs(method, parHandle, CustomAttribLink.Type.MethodParam, i + (method.IsStatic ? 0 : 1));
+
+            if (par.Attribs.HasFlag(ParameterAttributes.HasDefault)) {
+                _builder.AddConstant(parHandle, par.DefaultValue);
+            }
+        }
         if (method.GenericParams.Length > 0) {
             _genericDefs.Add(method);
         }

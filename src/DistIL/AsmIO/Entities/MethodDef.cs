@@ -37,6 +37,7 @@ public class ParamDef
     public TypeDesc Type { get; set; }
     public string Name { get; set; }
     public ParameterAttributes Attribs { get; set; }
+    public object? DefaultValue { get; set; }
 
     public ParamDef(TypeDesc type, string name, ParameterAttributes attribs = default)
     {
@@ -62,6 +63,9 @@ public class MethodDef : MethodDefOrSpec
     public override TypeDef DeclaringType { get; }
     public override string Name { get; }
 
+    /// <summary> Represents a placeholder for the return value, which may contain custom attributes. </summary>
+    public ParamDef ReturnParam { get; }
+
     public ILMethodBody? ILBody { get; set; }
     public IR.MethodBody? Body { get; set; }
 
@@ -78,6 +82,7 @@ public class MethodDef : MethodDefOrSpec
         Attribs = attribs;
         ImplAttribs = implAttribs;
         GenericParams = genericParams.EmptyIfDefault();
+        ReturnParam = new ParamDef(ReturnType, "", ParameterAttributes.Retval);
     }
 
     public override MethodDesc GetSpec(GenericContext ctx)
@@ -121,14 +126,14 @@ public class MethodDef : MethodDefOrSpec
             var parInfo = reader.GetParameter(parHandle);
 
             int index = parInfo.SequenceNumber;
-            if (index == 0) {
-                //TODO: return parameter
-            } else if (index <= Params.Length) {
+            if (index > 0 && index <= Params.Length) {
                 var par = Params[index - (IsStatic ? 1 : 0)]; //we always have a `this` param
                 par.Name = reader.GetString(parInfo.Name);
                 par.Attribs = parInfo.Attributes;
+                par.DefaultValue = reader.DecodeConst(parInfo.GetDefaultValue());
             }
-            loader.FillCustomAttribs(this, parInfo.GetCustomAttributes(), CustomAttribLink.Type.MethodParam, index - (IsStatic ? 1 : 0));
+            int linkIndex = index == 0 ? -1 : (index - (IsStatic ? 1 : 0));
+            loader.FillCustomAttribs(this, parInfo.GetCustomAttributes(), CustomAttribLink.Type.MethodParam, linkIndex);
         }
         if (info.RelativeVirtualAddress != 0) {
             ILBody = new ILMethodBody(loader, info.RelativeVirtualAddress);

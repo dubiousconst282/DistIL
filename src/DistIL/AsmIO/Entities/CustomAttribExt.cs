@@ -6,18 +6,22 @@ public static class CustomAttribExt
         => entity.Module.GetLinkedCustomAttribs(new(entity));
 
     public static IReadOnlyCollection<CustomAttrib> GetCustomAttribs(this TypeDef type, GenericParamType param)
-        => GetLinkedAttribs(type, type.GenericParams.IndexOf(param), CustomAttribLink.Type.GenericParam);
+        => type.Module.GetLinkedCustomAttribs(
+                new(type, FindIndexOrThrow(type.GenericParams, param), CustomAttribLink.Type.GenericParam));
 
     public static IReadOnlyCollection<CustomAttrib> GetCustomAttribs(this MethodDef method, GenericParamType param)
-        => GetLinkedAttribs(method, method.GenericParams.IndexOf(param), CustomAttribLink.Type.GenericParam);
+        => method.Module.GetLinkedCustomAttribs(
+                new(method, FindIndexOrThrow(method.GenericParams, param), CustomAttribLink.Type.GenericParam));
 
     public static IReadOnlyCollection<CustomAttrib> GetCustomAttribs(this MethodDef method, ParamDef param)
-        => GetLinkedAttribs(method, method.Params.IndexOf(param), CustomAttribLink.Type.MethodParam);
+        => method.Module.GetLinkedCustomAttribs(
+                new(method, param == method.ReturnParam ? -1 : FindIndexOrThrow(method.Params, param), CustomAttribLink.Type.MethodParam));
 
-    private static IReadOnlyCollection<CustomAttrib> GetLinkedAttribs(ModuleEntity entity, int index, CustomAttribLink.Type type)
+    private static int FindIndexOrThrow<T>(ImmutableArray<T> arr, T value)
     {
+        int index = arr.IndexOf(value);
         Ensure.That(index >= 0, "Parameter does not exist in the specified method");
-        return entity.Module.GetLinkedCustomAttribs(new(entity, index, type));
+        return index;
     }
 
     public static CustomAttrib? GetCustomAttrib(this ModuleEntity entity, string className)

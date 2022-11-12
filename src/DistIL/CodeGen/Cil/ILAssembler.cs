@@ -98,10 +98,10 @@ internal class ILAssembler
         ComputeOffsets();
         
         return new ILMethodBody() {
+            Instructions = _insts,
+            Locals = _varSlots.Keys.ToArray(),
             ExceptionRegions = BuildEHClauses(layout),
             MaxStack = _maxStackDepth,
-            Instructions = _insts,
-            Locals = _varSlots.Keys.ToList(),
             InitLocals = true //TODO: preserve InitLocals
         };
     }
@@ -154,13 +154,15 @@ internal class ILAssembler
         return _insts[_blockStarts[block]].Offset;
     }
 
-    private List<ExceptionRegion> BuildEHClauses(LayoutedCFG layout)
+    private ExceptionRegion[] BuildEHClauses(LayoutedCFG layout)
     {
-        var ehRegions = new List<ExceptionRegion>(layout.Regions.Length);
-        foreach (ref var region in layout.Regions.AsSpan()) {
+        var ehRegions = new ExceptionRegion[layout.Regions.Length];
+
+        for (int i = 0; i < ehRegions.Length; i++) {
+            ref var region = ref layout.Regions[i];
             var guard = region.Guard;
-            
-            var ehr = new ExceptionRegion() {
+
+            var ehr = ehRegions[i] = new ExceptionRegion() {
                 Kind = guard.Kind switch {
                     GuardKind.Catch => guard.HasFilter ? EHRegionKind.Filter : EHRegionKind.Catch,
                     GuardKind.Fault => EHRegionKind.Fault,
@@ -178,16 +180,15 @@ internal class ILAssembler
                 Debug.Assert(GetBlockOffset(region.FilterRange.End) == ehr.HandlerStart);
                 ehr.FilterStart = GetBlockOffset(region.FilterRange.Start);
             }
-            ehRegions.Add(ehr);
         }
+        return ehRegions;
+
         int GetBlockOffset(int index)
         {
             return index < layout.Blocks.Length
                 ? GetLabelOffset(layout.Blocks[index])
                 : _insts[^1].GetEndOffset();
         }
-
-        return ehRegions;
     }
 
     public override string ToString()

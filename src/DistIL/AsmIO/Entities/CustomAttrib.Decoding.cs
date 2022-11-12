@@ -69,7 +69,7 @@ partial class CustomAttrib
 
         switch (code) {
             case >= SerializationTypeCode.Boolean and <= SerializationTypeCode.String: {
-                return TypeProvider.GetPrimitiveTypeFromCode((PrimitiveTypeCode)code);
+                return PrimType.GetFromSrmCode((PrimitiveTypeCode)code);
             }
             case SerializationTypeCode.SZArray: {
                 var elemType = DecodeElementType(ref reader);

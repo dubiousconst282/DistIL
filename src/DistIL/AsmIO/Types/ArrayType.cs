@@ -92,6 +92,8 @@ public class MDArrayMethod : MethodDesc
     public override string Name { get; }
     public Kind MethodKind { get; }
 
+    public override TypeSig ReturnSig { get; }
+
     internal MDArrayMethod(MDArrayType type, Kind kind)
     {
         bool isCtor = kind <= Kind.RangeCtor;
@@ -105,7 +107,7 @@ public class MDArrayMethod : MethodDesc
 
 #pragma warning disable format
         var readParams = CreateParams(dims);
-        (ReturnType, Params) = kind switch {
+        (ReturnSig, Params) = kind switch {
             Kind.SizeCtor  => (PrimType.Void, readParams),
             Kind.RangeCtor => (PrimType.Void, CreateParams(dims * 2)),
             Kind.Get       => (type.ElemType, readParams),

@@ -72,14 +72,14 @@ internal partial class Materializer
     private Value Materialize(VarNode node)
     {
         var prefix = node.Name[0];
-        var rawName = node.Name.AsSpan(1);
+        var name = node.Name.AsSpan(1);
 
         if (prefix == '#') {
-            if (int.TryParse(rawName, out int argIndex)) {
+            if (int.TryParse(name, out int argIndex)) {
                 return _method.Args[argIndex];
             }
             foreach (var arg in _method.Args) {
-                if (arg.Name != null && rawName.SequenceEqual(arg.Name)) {
+                if (arg.Name != null && name.SequenceEqual(arg.Name)) {
                     return arg;
                 }
             }
@@ -89,7 +89,7 @@ internal partial class Materializer
             if (node.Type == null) {
                 throw _ctx.Error(node, $"Variable must be loaded at least once for its type to be bound.");
             }
-            return new Variable(node.Type, false, rawName.ToString());
+            return new Variable(node.Type, name.ToString());
         }
         throw new InvalidOperationException("VarNode with unknown prefix");
     }

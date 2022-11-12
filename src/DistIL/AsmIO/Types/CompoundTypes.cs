@@ -67,20 +67,3 @@ public class ByrefType : CompoundType
     protected override CompoundType New(TypeDesc specElemType)
         => new ByrefType(specElemType);
 }
-/// <summary> Represents the type of a local variable that holds a pinned GC reference. </summary>
-/// <remarks> This type should only ever be used to encode local variable types. </remarks>
-public class PinnedType_ : CompoundType
-{
-    public override TypeKind Kind => ElemType.Kind;
-    public override StackType StackType => ElemType.StackType;
-
-    protected override string Postfix => "^";
-
-    public PinnedType_(TypeDesc elemType)
-        : base(elemType)
-    {
-    }
-
-    protected override CompoundType New(TypeDesc specElemType)
-        => throw new NotSupportedException();
-}

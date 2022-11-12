@@ -68,8 +68,8 @@ public class IRCloner
             return newValue;
         }
         if (value is Variable var) {
-            var newType = Remap(var.Type) as TypeDesc ?? throw new InvalidOperationException();
-            newValue = new Variable(newType, var.IsPinned);
+            var newType = Remap(var.ResultType) as TypeDesc ?? throw new InvalidOperationException();
+            newValue = new Variable(new TypeSig(newType, var.Sig.CustomMods), pinned: var.IsPinned);
             _mappings.Add(value, newValue);
             return newValue;
         }

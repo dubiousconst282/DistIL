@@ -23,7 +23,7 @@ public class ILImporter
         _argSlots = new Variable?[method.Params.Length];
         _regionTree = RegionNode.BuildTree(method.ILBody.ExceptionRegions);
 
-        _varFlags = new VarFlags[_body.Args.Length + method.ILBody!.Locals.Count];
+        _varFlags = new VarFlags[_body.Args.Length + method.ILBody!.Locals.Length];
     }
 
     public static MethodBody ImportCode(MethodDef method)
@@ -63,9 +63,9 @@ public class ILImporter
         }
     }
 
-    private void CreateGuards(List<ExceptionRegion> clauses)
+    private void CreateGuards(ExceptionRegion[] clauses)
     {
-        var mappings = new Dictionary<GuardInst, ExceptionRegion>(clauses.Count);
+        var mappings = new Dictionary<GuardInst, ExceptionRegion>(clauses.Length);
 
         //I.12.4.2.5 Overview of exception handling
         foreach (var clause in clauses) {
@@ -157,7 +157,7 @@ public class ILImporter
     {
         int blockStartIdx = 0;
         var localVars = _method.ILBody!.Locals;
-        var lastUseBlocks = new int[localVars.Count];
+        var lastUseBlocks = new int[localVars.Length];
 
         foreach (int endOffset in leaders) {
             int blockEndIdx = FindIndex(code, endOffset);
@@ -201,7 +201,7 @@ public class ILImporter
     }
 
     //Returns a bitset containing all instruction offsets where a block starts (branch targets).
-    private static BitSet FindLeaders(Span<ILInstruction> code, List<ExceptionRegion> ehRegions)
+    private static BitSet FindLeaders(Span<ILInstruction> code, ExceptionRegion[] ehRegions)
     {
         int codeSize = code[^1].GetEndOffset();
         var leaders = new BitSet(codeSize);

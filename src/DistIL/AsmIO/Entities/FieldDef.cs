@@ -6,7 +6,8 @@ using System.Reflection.Metadata;
 /// <summary> Base class for all field entities. </summary>
 public abstract class FieldDesc : MemberDesc
 {
-    public TypeDesc Type { get; set; } = null!;
+    public TypeSig Sig { get; set; } = null!;
+    public TypeDesc Type => Sig.Type;
     public abstract FieldAttributes Attribs { get; set; }
 
     public bool IsStatic => (Attribs & FieldAttributes.Static) != 0;
@@ -14,7 +15,7 @@ public abstract class FieldDesc : MemberDesc
 
     public override void Print(PrintContext ctx)
     {
-        Type.Print(ctx);
+        Sig.Print(ctx);
         ctx.Print(" ");
         PrintAsOperand(ctx);
     }
@@ -62,12 +63,12 @@ public class FieldDef : FieldDefOrSpec
     public byte[]? MarshallingDesc { get; set; }
 
     public FieldDef(
-        TypeDef declaringType, TypeDesc type, string name, 
+        TypeDef declaringType, TypeSig sig, string name, 
         FieldAttributes attribs = default, object? defaultValue = null,
         int layoutOffset = -1, byte[]? mappedData = null)
     {
         DeclaringType = declaringType;
-        Type = type;
+        Sig = sig;
         Name = name;
         Attribs = attribs;
         DefaultValue = defaultValue;
@@ -78,7 +79,9 @@ public class FieldDef : FieldDefOrSpec
     internal static FieldDef Decode(ModuleLoader loader, FieldDefinition info)
     {
         var declaringType = loader.GetType(info.GetDeclaringType());
-        var type = info.DecodeSignature(loader._typeProvider, new GenericContext(declaringType));
+        var type = new SignatureDecoder(loader, info.Signature, new GenericContext(declaringType))
+            .ExpectHeader(SignatureKind.Field)
+            .DecodeTypeSig();
 
         return new FieldDef(
             declaringType, type, loader._reader.GetString(info.Name),
@@ -144,6 +147,6 @@ public class FieldSpec : FieldDefOrSpec
     {
         DeclaringType = declaringType;
         Definition = def;
-        Type = def.Type.GetSpec(new GenericContext(declaringType));
+        Sig = def.Sig.GetSpec(new GenericContext(declaringType));
     }
 }

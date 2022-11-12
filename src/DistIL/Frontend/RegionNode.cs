@@ -45,9 +45,9 @@ internal class RegionNode
         return FindEnclosing(offset1) == FindEnclosing(offset2);
     }
 
-    public static RegionNode? BuildTree(List<ExceptionRegion> clauses)
+    public static RegionNode? BuildTree(ExceptionRegion[] clauses)
     {
-        if (clauses.Count == 0) {
+        if (clauses.Length == 0) {
             return null;
         }
         var root = new RegionNode() {

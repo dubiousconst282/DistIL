@@ -1,37 +1,48 @@
 namespace DistIL.AsmIO;
 
+using System.Collections.Generic;
 using System.Reflection.Metadata;
 
 /// <summary> Represents the signature of a method declared in a type. </summary>
-public readonly struct MethodSig
+public readonly struct MethodSig : IEquatable<MethodSig>
 {
-    public TypeDesc ReturnType { get; }
-    public IReadOnlyList<TypeDesc> ParamTypes { get; }
-    public int NumGenericParams { get; }
-    public bool? IsInstance { get; }
+    const SignatureAttributes kInvariantInstance = (SignatureAttributes)0x80;
 
-    internal MethodSig(in MethodSignature<TypeDesc> srmSig)
-    {
-        ReturnType = srmSig.ReturnType;
-        ParamTypes = srmSig.ParameterTypes;
-        NumGenericParams = srmSig.GenericParameterCount;
-        IsInstance = srmSig.Header.IsInstance;
-    }
+    public TypeSig ReturnType { get; }
+    public IReadOnlyList<TypeSig> ParamTypes { get; }
+
+    public int NumGenericParams { get; }
+
+    public bool? IsInstance => _header.Attributes.HasFlag(kInvariantInstance) ? null : _header.IsInstance;
+    public bool IsGeneric => _header.IsGeneric;
+    public CallConvention CallConv => (CallConvention)_header.CallingConvention;
+
+    readonly SignatureHeader _header;
 
     /// <remarks> Note that <paramref name="paramTypes"/> should not include the instance type (`this` parameter). </remarks>
-    public MethodSig(TypeDesc retType, IReadOnlyList<TypeDesc> paramTypes, bool? isInstance = null, int numGenPars = 0)
+    public MethodSig(TypeSig retType, IReadOnlyList<TypeSig> paramTypes, bool? isInstance = null, int numGenPars = 0)
     {
         ReturnType = retType;
         ParamTypes = paramTypes;
         NumGenericParams = numGenPars;
-        IsInstance = isInstance;
+        _header = new(SignatureKind.Method, default, isInstance == null ? (SignatureAttributes)0x80 : 0);
+    }
+
+    /// <remarks> Note that <paramref name="paramTypes"/> should not include the instance type (`this` parameter). </remarks>
+    public MethodSig(TypeSig retType, IReadOnlyList<TypeSig> paramTypes, SignatureHeader header, int numGenPars = 0)
+    {
+        ReturnType = retType;
+        ParamTypes = paramTypes;
+        NumGenericParams = numGenPars;
+        _header = header;
+        Ensure.That(!header.Attributes.HasFlag(kInvariantInstance));
     }
 
     public bool Matches(MethodDesc method, in GenericContext spec)
     {
         return method.GenericParams.Length == NumGenericParams &&
             (IsInstance == null || IsInstance == method.IsInstance) &&
-            method.ReturnType.GetSpec(spec) == ReturnType &&
+            method.ReturnSig.GetSpec(spec) == ReturnType &&
             CompareParams(method, spec);
     }
 
@@ -44,7 +55,7 @@ public readonly struct MethodSig
             return false;
         }
         for (int i = 0; i < pars1.Length; i++) {
-            var type1 = pars1[i].Type.GetSpec(spec);
+            var type1 = pars1[i].Sig.GetSpec(spec);
             var type2 = pars2[i];
             if (type1 != type2) {
                 return false;
@@ -52,4 +63,42 @@ public readonly struct MethodSig
         }
         return true;
     }
+
+    public bool Equals(MethodSig other)
+    {
+        throw new NotImplementedException();
+    }
+    public override bool Equals(object? obj)
+    {
+        throw new NotImplementedException();
+    }
+    public override int GetHashCode()
+    {
+        throw new NotImplementedException();
+    }
+}
+
+//Copied from SignatureCallingConvention
+/// <summary>
+/// Specifies how arguments in a given signature are passed from the caller to the
+/// callee. The underlying values of the fields in this type correspond to the representation
+/// in the leading signature byte represented by a System.Reflection.Metadata.SignatureHeader
+/// structure.
+/// </summary>
+public enum CallConvention : byte
+{
+    /// <summary> A managed calling convention with a fixed-length argument list. </summary>
+    Managed = 0,
+    /// <summary> An unmanaged C/C++ style calling convention where the call stack is cleaned by the caller. </summary>
+    CDecl = 1,
+    /// <summary> An unmanaged calling convention where the call stack is cleaned up by the callee. </summary>
+    StdCall = 2,
+    /// <summary> An unmanaged C++ style calling convention for calling instance member functions with a fixed argument list. </summary>
+    ThisCall = 3,
+    /// <summary> An unmanaged calling convention where arguments are passed in registers when possible. </summary>
+    FastCall = 4,
+    /// <summary> A managed calling convention for passing extra arguments. </summary>
+    VarArgs = 5,
+    /// <summary> Indicates that the specifics of the unmanaged calling convention are encoded as modopts. </summary>
+    Unmanaged = 9
 }

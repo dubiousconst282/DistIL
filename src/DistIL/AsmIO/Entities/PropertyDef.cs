@@ -11,9 +11,7 @@ public class PropertyDef : MemberDesc, ModuleEntity
     public PropertyAttributes Attribs { get; init; }
     public override string Name { get; }
     
-    public TypeDesc Type { get; }
-    public IReadOnlyList<TypeDesc> ParamTypes { get; }
-    public bool IsInstance { get; }
+    public MethodSig Sig { get; }
 
     public object? DefaultValue { get; }
 
@@ -22,8 +20,7 @@ public class PropertyDef : MemberDesc, ModuleEntity
     public IReadOnlyList<MethodDef> OtherAccessors { get; }
 
     public PropertyDef(
-        TypeDef declaryingType, string name,
-        TypeDesc type, ImmutableArray<TypeDesc> paramTypes = default, bool? isInstance = null,
+        TypeDef declaryingType, string name, MethodSig sig,
         MethodDef? getter = null, MethodDef? setter = null,
         ImmutableArray<MethodDef> otherAccessors = default,
         object? defaultValue = null,
@@ -31,9 +28,7 @@ public class PropertyDef : MemberDesc, ModuleEntity
     {
         DeclaringType = declaryingType;
         Name = name;
-        Type = type;
-        ParamTypes = paramTypes.EmptyIfDefault();
-        IsInstance = isInstance ?? (getter ?? setter)!.IsInstance;
+        Sig = sig;
         Getter = getter;
         Setter = setter;
         OtherAccessors = otherAccessors.EmptyIfDefault();
@@ -52,15 +47,14 @@ public class PropertyDef : MemberDesc, ModuleEntity
     internal static PropertyDef Decode3(ModuleLoader loader, PropertyDefinitionHandle handle, TypeDef parent)
     {
         var info = loader._reader.GetPropertyDefinition(handle);
-        var sig = info.DecodeSignature(loader._typeProvider, default);
+        var sig = new SignatureDecoder(loader, info.Signature, new GenericContext(parent)).DecodeMethodSig();
         var accs = info.GetAccessors();
         var otherAccessors = accs.Others.IsEmpty
             ? default(ImmutableArray<MethodDef>)
             : accs.Others.Select(loader.GetMethod).ToImmutableArray();
 
         var prop = new PropertyDef(
-            parent, loader._reader.GetString(info.Name),
-            sig.ReturnType, sig.ParameterTypes, sig.Header.IsInstance,
+            parent, loader._reader.GetString(info.Name), sig,
             accs.Getter.IsNil ? null : loader.GetMethod(accs.Getter),
             accs.Setter.IsNil ? null : loader.GetMethod(accs.Setter),
             otherAccessors,

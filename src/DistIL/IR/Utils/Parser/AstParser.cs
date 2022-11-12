@@ -283,7 +283,7 @@ internal class AstParser
         }
         //Call    = "(" Seq{CallArg}? ")"
         //CallArg = ("this" | Type)  ":"  Value
-        var pars = new List<TypeDesc>();
+        var pars = new List<TypeSig>();
         bool isInstance = false;
 
         ParseDelimSeq(TokenType.LParen, TokenType.RParen, () => {

@@ -4,20 +4,21 @@
 /// <remarks> The actual value of a variable can be accessed using LoadVarInst, StoreVarInst, and VarAddrInst. </remarks>
 public class Variable : TrackedValue
 {
-    public TypeDesc Type => ResultType;
+    public TypeSig Sig { get; }
+    public bool IsPinned { get; }
     public string? Name { get; set; }
-    public bool IsPinned { get; set; }
     /// <summary>
-    /// Whether this variable's address has been exposed, or if it is alive across try regions.
-    /// Setting to true disables SSA renaming.
+    /// Whether this variable's address has been exposed, or if it is alive across protected regions.
+    /// Setting to true disables SSA enregistration.
     /// </summary>
     public bool IsExposed { get; set; }
 
-    public Variable(TypeDesc type, bool isPinned = false, string? name = null)
+    public Variable(TypeSig sig, string? name = null, bool pinned = false)
     {
-        ResultType = type;
+        ResultType = sig.Type;
+        Sig = sig;
+        IsPinned = pinned;
         Name = name;
-        IsPinned = isPinned;
     }
 
     public override void Print(PrintContext ctx)

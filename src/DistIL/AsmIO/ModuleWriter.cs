@@ -88,7 +88,17 @@ internal class ModuleWriter
             var handle = _handleMap[entity];
             var genPars = (entity as TypeDef)?.GenericParams ?? ((MethodDef)entity).GenericParams;
             foreach (var par in genPars.Cast<GenericParamType>()) {
-                _builder.AddGenericParameter(handle, par.Attribs, AddString(par.Name), par.Index);
+                var parHandle = _builder.AddGenericParameter(handle, par.Attribs, AddString(par.Name), par.Index);
+                EmitCustomAttribs(parHandle, par.GetCustomAttribs());
+
+                for (int i = 0; i < par.Constraints.Length; i++) {
+                    var constraintHandle = _builder.AddGenericParameterConstraint(parHandle, GetHandle(par.Constraints[i].Type));
+
+                    var constraintAttribs = par._constraintCustomAttribs?.ElementAtOrDefault(i);
+                    if (constraintAttribs != null) {
+                        EmitCustomAttribs(constraintHandle, constraintAttribs);
+                    }
+                }
             }
         }
     }
@@ -163,22 +173,18 @@ internal class ModuleWriter
     }
     private StandaloneSignatureHandle GetStandaloneSig(FuncPtrType type)
     {
-        var sigHandle = EncodeSig(b => {
-            b.MethodSignature(default, 0, type.IsInstance)
-                .Parameters(type.ArgTypes.Length, out var retTypeEnc, out var parsEnc);
-
-            EncodeType(retTypeEnc.Type(), type.ReturnType);
-            foreach (var type in type.ArgTypes) {
-                var parEnc = parsEnc.AddParameter();
-                EncodeType(parEnc.Type(), type);
-            }
-        });
-        return _builder.AddStandaloneSignature(sigHandle);
+        return _builder.AddStandaloneSignature(EncodeMethodSig(type.Signature));
     }
 
     private void EmitCustomAttribs(ModuleEntity entity, EntityHandle parentHandle, CustomAttribLink.Type linkType = default, int linkIndex = 0)
     {
-        foreach (var attrib in _mod.GetLinkedCustomAttribs(new(entity, linkIndex, linkType))) {
+        var attribs = _mod.GetLinkedCustomAttribs(new(entity, linkIndex, linkType));
+        EmitCustomAttribs(parentHandle, attribs);
+    }
+
+    private void EmitCustomAttribs(EntityHandle parentHandle, IReadOnlyCollection<CustomAttrib> attribs)
+    {
+        foreach (var attrib in attribs) {
             _builder.AddCustomAttribute(
                 parentHandle,
                 GetHandle(attrib.Constructor),
@@ -227,7 +233,7 @@ internal class ModuleWriter
         }
         int propIdx = 0;
         foreach (var prop in type.Properties) {
-            var propHandle = _builder.AddProperty(prop.Attribs, AddString(prop.Name), EncodePropertySig(prop));
+            var propHandle = _builder.AddProperty(prop.Attribs, AddString(prop.Name), EncodeMethodSig(prop.Sig));
 
             Link(propHandle, prop.Getter, MethodSemanticsAttributes.Getter);
             Link(propHandle, prop.Setter, MethodSemanticsAttributes.Setter);
@@ -338,12 +344,12 @@ internal class ModuleWriter
         var localVarSigs = default(StandaloneSignatureHandle);
         var attribs = body.InitLocals ? MethodBodyAttributes.InitLocals : 0;
 
-        if (body.Locals.Count > 0) {
+        if (body.Locals.Length > 0) {
             var sigBlobHandle = EncodeSig(b => {
-                var sigEnc = b.LocalVariableSignature(body.Locals.Count);
+                var sigEnc = b.LocalVariableSignature(body.Locals.Length);
                 foreach (var localVar in body.Locals) {
                     var typeEnc = sigEnc.AddVariable().Type(false, localVar.IsPinned);
-                    EncodeType(typeEnc, localVar.Type);
+                    EncodeType(typeEnc, localVar.Sig);
                 }
             });
             localVarSigs = _builder.AddStandaloneSignature(sigBlobHandle);
@@ -351,7 +357,7 @@ internal class ModuleWriter
         int codeSize = body.Instructions[^1].GetEndOffset();
         var enc = _bodyEncoder.AddMethodBody(
             codeSize, body.MaxStack,
-            body.ExceptionRegions.Count,
+            body.ExceptionRegions.Length,
             hasSmallExceptionRegions: false, //TODO
             localVarSigs, attribs
         );
@@ -475,43 +481,45 @@ internal class ModuleWriter
         }
     }
 
+    private BlobHandle EncodeMethodSig(MethodSig sig)
+    {
+        return EncodeSig(b => {
+            var pars = sig.ParamTypes;
+            b.MethodSignature(
+                (SignatureCallingConvention)sig.CallConv, sig.NumGenericParams,
+                sig.IsInstance ?? throw new InvalidOperationException()
+            ).Parameters(pars.Count, out var retTypeEnc, out var parsEnc);
+
+            EncodeType(retTypeEnc.Type(), sig.ReturnType);
+
+            foreach (var par in pars) {
+                EncodeType(parsEnc.AddParameter().Type(), par.Type);
+            }
+        });
+    }
+
     private BlobHandle EncodeMethodSig(MethodDesc method)
     {
         return EncodeSig(b => {
-            //TODO: callconv
             var pars = method.StaticParams;
             b.MethodSignature(default, method.GenericParams.Length, method.IsInstance)
                 .Parameters(pars.Length, out var retTypeEnc, out var parsEnc);
 
-            EncodeType(retTypeEnc.Type(), method.ReturnType);
+            EncodeType(retTypeEnc.Type(), method.ReturnSig);
+
             foreach (var par in pars) {
-                var parEnc = parsEnc.AddParameter();
-                EncodeType(parEnc.Type(), par.Type);
+                EncodeType(parsEnc.AddParameter().Type(), par.Type);
             }
         });
     }
+
     private BlobHandle EncodeMethodSpecSig(MethodSpec method)
     {
         return EncodeSig(b => {
             var genArgEnc = b.MethodSpecificationSignature(method.GenericParams.Length);
             
             foreach (var par in method.GenericParams) {
-                var parEnc = genArgEnc.AddArgument();
-                EncodeType(parEnc, par);
-            }
-        });
-    }
-
-    private BlobHandle EncodePropertySig(PropertyDef prop)
-    {
-        return EncodeSig(b => {
-            b.PropertySignature(prop.IsInstance)
-                .Parameters(prop.ParamTypes.Count, out var retTypeEnc, out var parsEnc);
-
-            EncodeType(retTypeEnc.Type(), prop.Type);
-            foreach (var par in prop.ParamTypes) {
-                var parEnc = parsEnc.AddParameter();
-                EncodeType(parEnc.Type(), par);
+                EncodeType(genArgEnc.AddArgument(), par);
             }
         });
     }
@@ -521,11 +529,14 @@ internal class ModuleWriter
         return EncodeSig(b => EncodeType(b.FieldSignature(), field.Type));
     }
 
-    private void EncodeType(SignatureTypeEncoder enc, TypeDesc type)
+    private void EncodeType(SignatureTypeEncoder enc, TypeSig sig)
     {
+        foreach (var mod in sig.CustomMods) {
+            enc.CustomModifiers().AddModifier(GetHandle(mod.Type), !mod.IsRequired);
+        }
         //Bypassing the encoder api because it's so goddamn awful, even though we'll probably get bitten sooner or later.
         //https://github.com/dotnet/runtime/blob/1ba0394d71a4ea6bee7f6b28a22d666b7b56f913/src/libraries/System.Reflection.Metadata/src/System/Reflection/Metadata/Ecma335/Encoding/BlobEncoders.cs#L809
-        switch (type) {
+        switch (sig.Type) {
             case PrimType t: {
                 enc.Builder.WriteByte((byte)t.Kind.ToSrmTypeCode());
                 break;
@@ -535,10 +546,9 @@ internal class ModuleWriter
                 break;
             }
             case MDArrayType t: {
-                enc.Array(
-                    e => EncodeType(e, t.ElemType),
-                    s => s.Shape(t.Rank, t.Sizes, t.LowerBounds)
-                );
+                enc.Array(out var elemTypeEnc, out var shapeEnc);
+                EncodeType(elemTypeEnc, t.ElemType);
+                shapeEnc.Shape(t.Rank, t.Sizes, t.LowerBounds);
                 break;
             }
             case PointerType t: {
@@ -562,19 +572,7 @@ internal class ModuleWriter
                 break;
             }
             case FuncPtrType t: {
-                var attrs =
-                    (t.HasExplicitThis ? FunctionPointerAttributes.HasExplicitThis : 0) |
-                    (t.IsInstance ? FunctionPointerAttributes.HasThis : 0);
-
-                var sigEnc = enc.FunctionPointer((SignatureCallingConvention)t.CallConv, attrs);
-                sigEnc.Parameters(t.ArgTypes.Length, out var retTypeEnc, out var paramsEnc);
-
-                EncodeType(retTypeEnc.Type(), t.ReturnType);
-
-                foreach (var argType in t.ArgTypes) {
-                    var paramEnc = paramsEnc.AddParameter();
-                    EncodeType(paramEnc.Type(), argType);
-                }
+                EncodeMethodSig(t.Signature);
                 break;
             }
             case GenericParamType t: {

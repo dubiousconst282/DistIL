@@ -16,14 +16,17 @@ public abstract class MethodDesc : MemberDesc
     public ImmutableArray<TypeDesc> GenericParams { get; protected set; } = ImmutableArray<TypeDesc>.Empty;
     public bool IsGeneric => GenericParams.Length > 0;
 
-    public TypeDesc ReturnType { get; protected set; } = null!;
+    public abstract TypeSig ReturnSig { get; }
+    public TypeDesc ReturnType => ReturnSig.Type;
+
     public ImmutableArray<ParamDef> Params { get; protected set; }
     public ReadOnlySpan<ParamDef> StaticParams => Params.AsSpan(IsStatic ? 0 : 1);
 
     public override void Print(PrintContext ctx)
     {
         if (IsStatic) ctx.Print("static ", PrintToner.Keyword);
-        ctx.Print($"{ReturnType} {DeclaringType}::{PrintToner.MethodName}{Name}(");
+        ReturnSig.Print(ctx);
+        ctx.Print($" {DeclaringType}::{PrintToner.MethodName}{Name}(");
         if (IsGeneric) {
             ctx.PrintSequence("<", ">", GenericParams, ctx.Print);
         }
@@ -34,19 +37,21 @@ public abstract class MethodDesc : MemberDesc
 }
 public class ParamDef
 {
-    public TypeDesc Type { get; set; }
+    public TypeSig Sig { get; set; }
     public string Name { get; set; }
     public ParameterAttributes Attribs { get; set; }
     public object? DefaultValue { get; set; }
 
-    public ParamDef(TypeDesc type, string name, ParameterAttributes attribs = default)
+    public TypeDesc Type => Sig.Type;
+
+    public ParamDef(TypeSig sig, string name, ParameterAttributes attribs = default)
     {
-        Type = type;
+        Sig = sig;
         Name = name;
         Attribs = attribs;
     }
 
-    public override string ToString() => Type.ToString();
+    public override string ToString() => Sig.ToString();
 }
 
 public abstract class MethodDefOrSpec : MethodDesc, ModuleEntity
@@ -65,24 +70,24 @@ public class MethodDef : MethodDefOrSpec
 
     /// <summary> Represents a placeholder for the return value, which may contain custom attributes. </summary>
     public ParamDef ReturnParam { get; }
+    public override TypeSig ReturnSig => ReturnParam.Sig;
 
     public ILMethodBody? ILBody { get; set; }
     public IR.MethodBody? Body { get; set; }
 
     public MethodDef(
-        TypeDef declaringType, TypeDesc retType, 
-        ImmutableArray<ParamDef> pars, string name,
+        TypeDef declaringType,
+        TypeSig retSig, ImmutableArray<ParamDef> pars, string name,
         MethodAttributes attribs = default, MethodImplAttributes implAttribs = default,
         ImmutableArray<TypeDesc> genericParams = default)
     {
         DeclaringType = declaringType;
-        ReturnType = retType;
+        ReturnParam = new ParamDef(retSig, "", ParameterAttributes.Retval);
         Params = pars;
         Name = name;
         Attribs = attribs;
         ImplAttribs = implAttribs;
         GenericParams = genericParams.EmptyIfDefault();
-        ReturnParam = new ParamDef(ReturnType, "", ParameterAttributes.Retval);
     }
 
     public override MethodDesc GetSpec(GenericContext ctx)
@@ -96,27 +101,36 @@ public class MethodDef : MethodDefOrSpec
     {
         var declaringType = loader.GetType(info.GetDeclaringType());
         var genericParams = loader.CreateGenericParams(info.GetGenericParameters(), true);
-        var sig = info.DecodeSignature(loader._typeProvider, new GenericContext(declaringType.GenericParams, genericParams));
         string name = loader._reader.GetString(info.Name);
 
-        var attribs = info.Attributes;
-        bool isInstance = (attribs & MethodAttributes.Static) == 0;
-        var pars = ImmutableArray.CreateBuilder<ParamDef>(sig.RequiredParameterCount + (isInstance ? 1 : 0));
+        var genCtx = new GenericContext(declaringType.GenericParams, genericParams);
 
-        if (isInstance) {
-            var thisType = declaringType as TypeDesc;
-            if (thisType.IsValueType) {
-                thisType = new ByrefType(thisType);
-            }
-            pars.Add(new ParamDef(thisType, "this"));
+        //II.2.3.2.1 MethodDefSig
+        var decoder = new SignatureDecoder(loader, info.Signature, genCtx);
+
+        var header = decoder.Reader.ReadSignatureHeader();
+        Ensure.That(header.Kind == SignatureKind.Method);
+        Debug.Assert(!header.HasExplicitThis); //not impl
+        Debug.Assert(header.IsInstance == !info.Attributes.HasFlag(MethodAttributes.Static));
+
+        if (header.IsGeneric) {
+            Ensure.That(decoder.Reader.ReadCompressedInteger() == genericParams.Length);
         }
-        foreach (var paramType in sig.ParameterTypes) {
-            pars.Add(new ParamDef(paramType, ""));
+        int numParams = decoder.Reader.ReadCompressedInteger();
+        var retSig = decoder.DecodeTypeSig();
+
+        var pars = ImmutableArray.CreateBuilder<ParamDef>(numParams + (header.IsInstance ? 1 : 0));
+
+        if (header.IsInstance) {
+            var instanceType = declaringType as TypeDesc;
+            pars.Add(new ParamDef(instanceType.IsValueType ? instanceType.CreateByref() : instanceType, "this"));
+        }
+        for (int i = 0; i < numParams; i++) {
+            pars.Add(new ParamDef(decoder.DecodeTypeSig(), "", 0));
         }
         return new MethodDef(
-            declaringType,
-            sig.ReturnType, pars.MoveToImmutable(),
-            name, attribs, info.ImplAttributes, genericParams
+            declaringType, retSig, pars.MoveToImmutable(),
+            name, info.Attributes, info.ImplAttributes, genericParams
         );
     }
     internal void Load3(ModuleLoader loader, MethodDefinition info)
@@ -151,18 +165,20 @@ public class MethodSpec : MethodDefOrSpec
     public override TypeDefOrSpec DeclaringType { get; }
     public override string Name => Definition.Name;
 
-    internal MethodSpec(TypeDefOrSpec declaringType, MethodDef def, ImmutableArray<TypeDesc> args = default)
+    public override TypeSig ReturnSig { get; }
+
+    internal MethodSpec(TypeDefOrSpec declaringType, MethodDef def, ImmutableArray<TypeDesc> genArgs = default)
     {
         Definition = def;
         Attribs = def.Attribs;
         ImplAttribs = def.ImplAttribs;
 
         DeclaringType = declaringType;
-        Ensure.That(args.IsDefaultOrEmpty || def.IsGeneric);
-        GenericParams = args.IsDefault ? def.GenericParams : args;
+        Ensure.That(genArgs.IsDefaultOrEmpty || def.IsGeneric);
+        GenericParams = genArgs.IsDefault ? def.GenericParams : genArgs;
 
         var genCtx = new GenericContext(this);
-        ReturnType = def.ReturnType.GetSpec(genCtx);
+        ReturnSig = def.ReturnSig.GetSpec(genCtx);
         Params = def.Params.Select(p => new ParamDef(p.Type.GetSpec(genCtx), p.Name, p.Attribs)).ToImmutableArray();
     }
 
@@ -174,9 +190,9 @@ public class MethodSpec : MethodDefOrSpec
 
 public class ILMethodBody
 {
-    public required List<ExceptionRegion> ExceptionRegions { get; set; }
     public required List<ILInstruction> Instructions { get; set; }
-    public required List<Variable> Locals { get; set; }
+    public required Variable[] Locals { get; set; }
+    public required ExceptionRegion[] ExceptionRegions { get; set; }
     public int MaxStack { get; set; }
     public bool InitLocals { get; set; }
 
@@ -185,9 +201,9 @@ public class ILMethodBody
     {
         var block = loader._pe.GetMethodBody(rva);
 
-        ExceptionRegions = DecodeExceptionRegions(loader, block);
         Instructions = DecodeInsts(loader, block.GetILReader());
         Locals = DecodeLocals(loader, block);
+        ExceptionRegions = DecodeExceptionRegions(loader, block);
         MaxStack = block.MaxStack;
         InitLocals = block.LocalVariablesInitialized;
     }
@@ -222,9 +238,9 @@ public class ILMethodBody
             ILOperandType.Type 
                 => loader.GetEntity(MetadataTokens.EntityHandle(reader.ReadInt32())),
             ILOperandType.Sig
-                //We convert "StandaloneSignature" into "FuncPtrType" because it's only used by calli
-                //and it'd be inconvenient to have another obscure class.
-                //TODO: fix generic context?
+                //`StandaloneSignature` is only used by calli.
+                //We use `FuncPtrType` instead of `MethodSig` because it inherits `Value`.
+                //TODO: fix generic context (reuse generic parameters)
                 => loader.DecodeMethodSig(MetadataTokens.StandaloneSignatureHandle(reader.ReadInt32())),
             ILOperandType.String => loader._reader.GetUserString(MetadataTokens.UserStringHandle(reader.ReadInt32())),
             ILOperandType.I => reader.ReadInt32(),
@@ -257,11 +273,16 @@ public class ILMethodBody
         }
     }
 
-    private static List<ExceptionRegion> DecodeExceptionRegions(ModuleLoader loader, MethodBodyBlock block)
+    private static ExceptionRegion[] DecodeExceptionRegions(ModuleLoader loader, MethodBodyBlock block)
     {
-        var list = new List<ExceptionRegion>(block.ExceptionRegions.Length);
-        foreach (var region in block.ExceptionRegions) {
-            list.Add(new() {
+        if (block.ExceptionRegions.Length == 0) {
+            return Array.Empty<ExceptionRegion>();
+        }
+        var regions = new ExceptionRegion[block.ExceptionRegions.Length];
+        for (int i = 0; i < regions.Length; i++) {
+            var region = block.ExceptionRegions[i];
+
+            regions[i] = new() {
                 Kind = region.Kind,
                 CatchType = region.CatchType.IsNil ? null : (TypeDefOrSpec)loader.GetEntity(region.CatchType),
                 HandlerStart = region.HandlerOffset,
@@ -269,30 +290,18 @@ public class ILMethodBody
                 TryStart = region.TryOffset,
                 TryEnd = region.TryOffset + region.TryLength,
                 FilterStart = region.FilterOffset
-            });
+            };
         }
-        return list;
+        return regions;
     }
 
-    private static List<Variable> DecodeLocals(ModuleLoader loader, MethodBodyBlock block)
+    private static Variable[] DecodeLocals(ModuleLoader loader, MethodBodyBlock block)
     {
         if (block.LocalSignature.IsNil) {
-            return new List<Variable>();
+            return Array.Empty<Variable>();
         }
-        var sig = loader._reader.GetStandaloneSignature(block.LocalSignature);
-        var types = sig.DecodeLocalSignature(loader._typeProvider, default);
-        var vars = new List<Variable>(types.Length);
-
-        for (int i = 0; i < types.Length; i++) {
-            var type = types[i];
-            bool isPinned = false;
-            if (type is PinnedType_ pinnedType) {
-                type = pinnedType.ElemType;
-                isPinned = true;
-            }
-            vars.Add(new Variable(type, isPinned, "loc" + (i + 1)));
-        }
-        return vars;
+        var info = loader._reader.GetStandaloneSignature(block.LocalSignature);
+        return new SignatureDecoder(loader, info.Signature).DecodeLocals();
     }
 }
 public class ExceptionRegion

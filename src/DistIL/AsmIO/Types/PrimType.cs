@@ -1,5 +1,7 @@
 namespace DistIL.AsmIO;
 
+using System.Reflection.Metadata;
+
 /// <summary> Represents a reference to a known primitive or system type. </summary>
 public class PrimType : TypeDesc
 {
@@ -64,6 +66,31 @@ public class PrimType : TypeDesc
         => def.Module == def.Module.Resolver.CoreLib && def.Namespace == "System"
             ? _fromName.GetValueOrDefault((def.Name, false))
             : null;
+
+    internal static TypeDesc GetFromSrmCode(PrimitiveTypeCode typeCode)
+    {
+        return typeCode switch {
+            PrimitiveTypeCode.Void    => Void,
+            PrimitiveTypeCode.Boolean => Bool,
+            PrimitiveTypeCode.Char    => Char,
+            PrimitiveTypeCode.SByte   => SByte,
+            PrimitiveTypeCode.Byte    => Byte,
+            PrimitiveTypeCode.Int16   => Int16,
+            PrimitiveTypeCode.UInt16  => UInt16,
+            PrimitiveTypeCode.Int32   => Int32,
+            PrimitiveTypeCode.UInt32  => UInt32,
+            PrimitiveTypeCode.Int64   => Int64,
+            PrimitiveTypeCode.UInt64  => UInt64,
+            PrimitiveTypeCode.Single  => Single,
+            PrimitiveTypeCode.Double  => Double,
+            PrimitiveTypeCode.IntPtr  => IntPtr,
+            PrimitiveTypeCode.UIntPtr => UIntPtr,
+            PrimitiveTypeCode.String  => String,
+            PrimitiveTypeCode.Object  => Object,
+            PrimitiveTypeCode.TypedReference => TypedRef,
+            _ => throw new NotSupportedException()
+        };
+    }
 
     public TypeDef GetDefinition(ModuleResolver resolver) => resolver.SysTypes.GetPrimitiveDef(Kind);
 

@@ -1,6 +1,5 @@
 namespace DistIL.AsmIO;
 
-using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -10,7 +9,6 @@ internal class ModuleLoader
     public readonly PEReader _pe;
     public readonly MetadataReader _reader;
     public readonly ModuleResolver _resolver;
-    public readonly TypeProvider _typeProvider;
     public readonly ModuleDef _mod;
     private readonly EntityList _entities;
 
@@ -19,7 +17,6 @@ internal class ModuleLoader
         _pe = pe;
         _reader = pe.GetMetadataReader();
         _resolver = resolver;
-        _typeProvider = new TypeProvider(this);
         _mod = mod;
         _entities = new EntityList(_reader);
 
@@ -48,7 +45,12 @@ internal class ModuleLoader
         _entities.Create<AssemblyReference>(info => _resolver.Resolve(info.GetAssemblyName(), throwIfNotFound: true));
         _entities.Create<TypeReference>(ResolveTypeRef);
         _entities.Create<TypeDefinition>(info => TypeDef.Decode(this, info));
-        _entities.Create<TypeSpecification>(info => info.DecodeSignature(_typeProvider, default));
+        _entities.Create<TypeSpecification>(info => {
+            //Generic constraints may reference modified types in the TypeSpec table.
+            //Most GetEntity() consumers cast its result, and will crash if this case is not explicitly handled.
+            var sig = new SignatureDecoder(this, info.Signature).DecodeTypeSig();
+            return !sig.HasCustomMods ? sig.Type : new ModifiedTypeSpecTableWrapper_() { Sig = sig };
+        });
 
         foreach (var handle in _reader.ExportedTypes) {
             _mod.ExportedTypes.Add(ResolveExportedType(handle));
@@ -76,8 +78,9 @@ internal class ModuleLoader
         //Create MethodSpecs (they may reference MemberRefs)
         _entities.Create<MethodSpecification>(info => {
             var method = (MethodDefOrSpec)GetEntity(info.Method);
-            var genArgs = info.DecodeSignature(_typeProvider, new GenericContext(method));
-            return new MethodSpec(method.DeclaringType, method.Definition, genArgs);
+            var decoder = new SignatureDecoder(this, info.Signature, new GenericContext(method));
+            Ensure.That(decoder.Reader.ReadSignatureHeader().Kind == SignatureKind.MethodSpecification);
+            return new MethodSpec(method.DeclaringType, method.Definition, decoder.DecodeGenArgs());
         });
 
         //Populate entities with non-essential data (body, custom attrs, etc)
@@ -103,7 +106,7 @@ internal class ModuleLoader
             string name = _reader.GetString(info.Name);
             builder.Add(new GenericParamType(info.Index, isForMethod, name, info.Attributes));
         }
-        return builder.TakeImmutable();
+        return builder.MoveToImmutable();
     }
 
     private TypeDef ResolveTypeRef(TypeReference info)
@@ -146,7 +149,7 @@ internal class ModuleLoader
     {
         var rootParent = (TypeDesc)GetEntity(info.Parent);
         string name = _reader.GetString(info.Name);
-        var signature = new MethodSig(info.DecodeMethodSignature(_typeProvider, default));
+        var signature = new SignatureDecoder(this, info.Signature).DecodeMethodSig();
         var spec = GenericContext.Empty;
 
         for (var parent = rootParent; parent != null; parent = parent.BaseType) {
@@ -180,33 +183,38 @@ internal class ModuleLoader
         foreach (var handle in handleList) {
             var info = _reader.GetGenericParameter(handle);
             var param = (GenericParamType)genPars[info.Index];
-            param.Load2(this, info);
+            param.Load3(this, info);
             FillCustomAttribs(parent, info.GetCustomAttributes(), CustomAttribLink.Type.GenericParam, info.Index);
         }
     }
 
-    public void FillCustomAttribs(ModuleEntity entity, CustomAttributeHandleCollection handleList, CustomAttribLink.Type linkType = default, int linkIndex = 0)
+    public void FillCustomAttribs(ModuleEntity entity, CustomAttributeHandleCollection handles, CustomAttribLink.Type linkType = default, int linkIndex = 0)
     {
-        if (handleList.Count == 0) return;
+        if (handles.Count > 0) {
+            _mod._customAttribs.Add(new(entity, linkIndex, linkType), DecodeCustomAttribs(handles));
+        }
+    }
 
+    public CustomAttrib[] DecodeCustomAttribs(CustomAttributeHandleCollection handleList)
+    {
         var attribs = new CustomAttrib[handleList.Count];
-        int attribIndex = 0;
+        int index = 0;
 
         foreach (var handle in handleList) {
             var attrib = _reader.GetCustomAttribute(handle);
             var ctor = (MethodDesc)GetEntity(attrib.Constructor);
             var blob = _reader.GetBlobBytes(attrib.Value);
-            attribs[attribIndex++] = new CustomAttrib(ctor, blob, _mod);
+            attribs[index++] = new CustomAttrib(ctor, blob, _mod);
         }
-        _mod._customAttribs.Add(new(entity, linkIndex, linkType), attribs);
+        return attribs;
     }
+
     public FuncPtrType DecodeMethodSig(StandaloneSignatureHandle handle)
     {
         var info = _reader.GetStandaloneSignature(handle);
-        var sig = info.DecodeMethodSignature(_typeProvider, default);
-        
         Ensure.That(info.GetCustomAttributes().Count == 0);
-        return new FuncPtrType(sig);
+        
+        return new FuncPtrType(new SignatureDecoder(this, info.Signature).DecodeMethodSig());
     }
 
     public Entity GetEntity(EntityHandle handle) => _entities.Get(handle);
@@ -332,4 +340,10 @@ internal class ModuleLoader
             throw new NotImplementedException();
         }
     }
+}
+
+internal class ModifiedTypeSpecTableWrapper_ : Entity
+{
+    public TypeSig Sig = null!;
+    public string Name => "";
 }

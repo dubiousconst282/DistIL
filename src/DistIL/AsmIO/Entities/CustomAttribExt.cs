@@ -2,20 +2,42 @@ namespace DistIL.AsmIO;
 
 public static class CustomAttribExt
 {
-    public static IReadOnlyCollection<CustomAttrib> GetCustomAttribs(this ModuleEntity entity)
-        => entity.Module.GetLinkedCustomAttribs(new(entity));
+    public static IReadOnlyCollection<CustomAttrib> GetCustomAttribs(this Entity entity)
+    {
+        return entity switch {
+            ModuleEntity c
+                => c.Module.GetLinkedCustomAttribs(new(c)),
+
+            GenericParamType { _customAttribs: not null } c
+                => c._customAttribs,
+
+            _ => Array.Empty<CustomAttrib>()
+        };
+    }
 
     public static IReadOnlyCollection<CustomAttrib> GetCustomAttribs(this TypeDef type, GenericParamType param)
-        => type.Module.GetLinkedCustomAttribs(
-                new(type, FindIndexOrThrow(type.GenericParams, param), CustomAttribLink.Type.GenericParam));
+    {
+        int index = FindIndexOrThrow(type.GenericParams, param);
+        return type.Module.GetLinkedCustomAttribs(new(type, index, CustomAttribLink.Type.GenericParam));
+    }
 
     public static IReadOnlyCollection<CustomAttrib> GetCustomAttribs(this MethodDef method, GenericParamType param)
-        => method.Module.GetLinkedCustomAttribs(
-                new(method, FindIndexOrThrow(method.GenericParams, param), CustomAttribLink.Type.GenericParam));
+    {
+        int index = FindIndexOrThrow(method.GenericParams, param);
+        return method.Module.GetLinkedCustomAttribs(new(method, index, CustomAttribLink.Type.GenericParam));
+    }
 
     public static IReadOnlyCollection<CustomAttrib> GetCustomAttribs(this MethodDef method, ParamDef param)
-        => method.Module.GetLinkedCustomAttribs(
-                new(method, param == method.ReturnParam ? -1 : FindIndexOrThrow(method.Params, param), CustomAttribLink.Type.MethodParam));
+    {
+        int index = param == method.ReturnParam ? -1 : FindIndexOrThrow(method.Params, param);
+        return method.Module.GetLinkedCustomAttribs(new(method, index, CustomAttribLink.Type.MethodParam));
+    }
+
+    public static IReadOnlyCollection<CustomAttrib> GetCustomAttribs(this GenericParamType genPar, TypeSig constraint)
+    {
+        int index = FindIndexOrThrow(genPar.Constraints, constraint);
+        return genPar._constraintCustomAttribs?.ElementAtOrDefault(index) ?? Array.Empty<CustomAttrib>();
+    }
 
     private static int FindIndexOrThrow<T>(ImmutableArray<T> arr, T value)
     {
@@ -24,7 +46,7 @@ public static class CustomAttribExt
         return index;
     }
 
-    public static CustomAttrib? GetCustomAttrib(this ModuleEntity entity, string className)
+    public static CustomAttrib? GetCustomAttrib(this Entity entity, string className)
     {
         int nsEnd = className.LastIndexOf('.');
 

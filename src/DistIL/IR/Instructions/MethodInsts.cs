@@ -114,7 +114,7 @@ public class FuncAddrInst : Instruction
     public FuncAddrInst(MethodDesc method, Value? obj = null)
         : base(obj == null ? new Value[] { method } : new Value[] { method, obj })
     {
-        ResultType = new FuncPtrType(method);
+        ResultType = PrimType.Void.CreatePointer();
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);

@@ -47,7 +47,7 @@ public class FuncPtrType : TypeDesc
         HasExplicitThis = header.HasExplicitThis;
     }
 
-    public override void Print(PrintContext ctx, bool includeNs = true)
+    public override void Print(PrintContext ctx, bool includeNs = false)
     {
         ctx.Print($"delegate* ", PrintToner.Keyword);
         ctx.Print(CallConv.ToString().ToLower());

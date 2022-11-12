@@ -23,7 +23,7 @@ public abstract class CompoundType : TypeDesc
     }
     protected abstract CompoundType New(TypeDesc elemType);
 
-    public override void Print(PrintContext ctx, bool includeNs = true)
+    public override void Print(PrintContext ctx, bool includeNs = false)
     {
         ElemType.Print(ctx, includeNs);
         ctx.Print(Postfix);

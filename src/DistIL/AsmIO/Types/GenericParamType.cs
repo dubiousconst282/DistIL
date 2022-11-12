@@ -46,7 +46,7 @@ public class GenericParamType : TypeDesc
         return builder.MoveToImmutable();
     }
 
-    public override void Print(PrintContext ctx, bool includeNs = true)
+    public override void Print(PrintContext ctx, bool includeNs = false)
     {
         ctx.Print(IsMethodParam ? "!!" : "!");
         base.Print(ctx, includeNs);

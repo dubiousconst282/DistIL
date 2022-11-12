@@ -10,12 +10,11 @@ public abstract class Value
 
     public abstract void Print(PrintContext ctx);
     public virtual void PrintAsOperand(PrintContext ctx) => Print(ctx);
-    public virtual SymbolTable? GetSymbolTable() => null;
 
     public override string ToString()
     {
         var sw = new StringWriter();
-        Print(new PrintContext(sw, GetSymbolTable() ?? new()));
+        Print(new PrintContext(sw, (this as TrackedValue)?.GetSymbolTable() ?? SymbolTable.Detached));
         return sw.ToString();
     }
 
@@ -93,6 +92,8 @@ public abstract class TrackedValue : Value
     public ValueUserIterator Users() => new() { _use = _firstUse };
     /// <summary> Returns an enumerator of operands using this value. </summary>
     public ValueUseIterator Uses() => new() { _use = _firstUse };
+
+    public virtual SymbolTable? GetSymbolTable() => null;
 }
 
 public struct ValueUserIterator : Iterator<Instruction>

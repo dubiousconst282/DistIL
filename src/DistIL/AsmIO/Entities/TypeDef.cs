@@ -163,7 +163,7 @@ public class TypeDef : TypeDefOrSpec
         return _nestedTypes.Find(e => e.Name == name);
     }
 
-    public override void Print(PrintContext ctx, bool includeNs = true)
+    public override void Print(PrintContext ctx, bool includeNs = false)
     {
         if (DeclaringType != null) {
             ctx.Print($"{DeclaringType}+{PrintToner.TypeName}{Name}");
@@ -222,7 +222,7 @@ public class TypeSpec : TypeDefOrSpec
         return new TypeSpec(Definition, context.FillParams(GenericParams));
     }
 
-    public override void Print(PrintContext ctx, bool includeNs = true)
+    public override void Print(PrintContext ctx, bool includeNs = false)
     {
         Definition.Print(ctx, includeNs);
         ctx.PrintSequence("[", "]", GenericParams, v => v.Print(ctx, includeNs));

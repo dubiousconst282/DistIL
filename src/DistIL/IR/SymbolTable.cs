@@ -5,6 +5,9 @@ using System.Runtime.CompilerServices;
 /// <summary> Tracks and provides names for values defined/used in a method. </summary>
 public class SymbolTable
 {
+    /// <summary> A read-only symbol table which is not attached to any method, and only provides a static dummy name. </summary>
+    public static SymbolTable Detached { get; } = new();
+
     readonly MethodBody? _method;
     readonly bool _forceSeqNames;
 
@@ -20,6 +23,8 @@ public class SymbolTable
 
     public void SetName(TrackedValue value, string name)
     {
+        Ensure.That(this != Detached);
+
         //Pick an unique name
         string origName = name;
         int counter = 2;
@@ -41,6 +46,9 @@ public class SymbolTable
 
     private string GetName(TrackedValue value, string format)
     {
+        if (this == Detached) {
+            return string.Format(format, 0);
+        }
         if (!_tags.TryGetValue(value, out var tag)) {
             if (_forceSeqNames && value is Instruction or BasicBlock) {
                 UpdateSeqNames();
@@ -72,25 +80,13 @@ public class SymbolTable
     }
 }
 
-public static class SymbolTableEx
+public static class SymbolTableExt
 {
-    /// <summary> Sets the instruction name on its parent symbol table. </summary>
-    public static TInst SetName<TInst>(this TInst inst, string name) where TInst : Instruction
-    {
-        inst.GetSymbolTable()!.SetName(inst, name);
-        return inst;
-    }
-    /// <summary> Sets the block name on its parent symbol table. </summary>
-    public static BasicBlock SetName(this BasicBlock block, string name)
-    {
-        block.GetSymbolTable()!.SetName(block, name);
-        return block;
-    }
     /// <summary> Sets the value name on its parent symbol table (if it is a <see cref="TrackedValue"/>). </summary>
-    public static Value SetName(this Value value, string name)
+    public static V SetName<V>(this V value, string name) where V : Value
     {
         if (value is TrackedValue trackedValue) {
-            value.GetSymbolTable()?.SetName(trackedValue, name);
+            trackedValue.GetSymbolTable()?.SetName(trackedValue, name);
         }
         return value;
     }

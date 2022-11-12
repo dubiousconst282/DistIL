@@ -5,7 +5,9 @@ using EHRegionKind = System.Reflection.Metadata.ExceptionRegionKind;
 /// <summary> Helper for building a list of <see cref="ILInstruction"/>s. </summary>
 internal class ILAssembler
 {
-    List<ILInstruction> _insts = new();
+    ILInstruction[] _insts = new ILInstruction[16];
+    int _index = 0;
+
     Dictionary<Variable, int> _varSlots = new();
     Dictionary<BasicBlock, int> _blockStarts = new();
     int _stackDepth = 0, _maxStackDepth = 0;
@@ -13,7 +15,7 @@ internal class ILAssembler
     /// <summary> Specifies that next emitted instructions belongs to the specified block. </summary>
     public void StartBlock(BasicBlock block, bool isCatchEntry)
     {
-        _blockStarts.Add(block, _insts.Count);
+        _blockStarts.Add(block, _index);
 
         if (isCatchEntry) {
             _stackDepth++;
@@ -23,7 +25,10 @@ internal class ILAssembler
 
     public void Emit(ILCode op, object? operand = null)
     {
-        _insts.Add(new ILInstruction(op, operand));
+        if (_index >= _insts.Length) {
+            Array.Resize(ref _insts, _insts.Length * 2);
+        }
+        _insts[_index++] = new ILInstruction(op, operand);
 
         switch (op) {
             case ILCode.Call or ILCode.Callvirt or ILCode.Newobj: {
@@ -98,7 +103,7 @@ internal class ILAssembler
         ComputeOffsets();
         
         return new ILMethodBody() {
-            Instructions = _insts,
+            Instructions = new ArraySegment<ILInstruction>(_insts, 0, _index),
             Locals = _varSlots.Keys.ToArray(),
             ExceptionRegions = BuildEHClauses(layout),
             MaxStack = _maxStackDepth,
@@ -108,7 +113,7 @@ internal class ILAssembler
 
     private void ComputeOffsets()
     {
-        var insts = _insts.AsSpan();
+        var insts = GetInstructions();
 
         //Calculate initial offsets
         int currOffset = 0;
@@ -149,11 +154,6 @@ internal class ILAssembler
         }
     }
 
-    private int GetLabelOffset(BasicBlock block)
-    {
-        return _insts[_blockStarts[block]].Offset;
-    }
-
     private ExceptionRegion[] BuildEHClauses(LayoutedCFG layout)
     {
         var ehRegions = new ExceptionRegion[layout.Regions.Length];
@@ -187,14 +187,20 @@ internal class ILAssembler
         {
             return index < layout.Blocks.Length
                 ? GetLabelOffset(layout.Blocks[index])
-                : _insts[^1].GetEndOffset();
+                : _insts[_index - 1].GetEndOffset();
         }
     }
+
+    private Span<ILInstruction> GetInstructions()
+        => _insts.AsSpan(0, _index);
+
+    private int GetLabelOffset(BasicBlock block)
+        => _insts[_blockStarts[block]].Offset;
 
     public override string ToString()
     {
         var sb = new StringBuilder();
-        foreach (ref var inst in _insts.AsSpan()) {
+        foreach (ref var inst in GetInstructions()) {
             sb.AppendLine(inst.ToString());
         }
         return sb.ToString();

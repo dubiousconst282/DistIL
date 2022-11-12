@@ -117,6 +117,8 @@ internal struct SignatureDecoder
         return new TypeSig(type, customMods);
     }
 
+    static readonly string[] s_DefaultLocalNames4 = { "loc1", "loc2", "loc3", "loc4" };
+
     public Variable[] DecodeLocals()
     {
         ExpectHeader(SignatureKind.LocalVariables);
@@ -130,8 +132,9 @@ internal struct SignatureDecoder
                 Reader.Offset--;
             }
             var type = DecodeType();
+            string name = i < 4 ? s_DefaultLocalNames4[i] : "loc" + (i + 1);
 
-            vars[i] = new Variable(new TypeSig(type, customMods), "loc" + (i + 1), isPinned);
+            vars[i] = new Variable(new TypeSig(type, customMods), name, isPinned);
         }
         return vars;
     }

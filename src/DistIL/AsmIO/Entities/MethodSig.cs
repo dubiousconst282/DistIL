@@ -13,7 +13,7 @@ public readonly struct MethodSig : IEquatable<MethodSig>
 
     public int NumGenericParams { get; }
 
-    public bool? IsInstance => _header.Attributes.HasFlag(kInvariantInstance) ? null : _header.IsInstance;
+    public bool? IsInstance => (_header.RawValue & (byte)kInvariantInstance) != 0 ? null : _header.IsInstance;
     public bool IsGeneric => _header.IsGeneric;
     public CallConvention CallConv => (CallConvention)_header.CallingConvention;
 

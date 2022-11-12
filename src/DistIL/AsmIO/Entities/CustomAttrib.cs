@@ -86,7 +86,7 @@ internal readonly struct CustomAttribLink : IEquatable<CustomAttribLink>
         => other._entity == _entity && other._type == _type && other._index == _index;
 
     public override int GetHashCode()
-        => HashCode.Combine(_entity, _type, _index);
+        => HashCode.Combine(_entity, (int)_type << 4 | _index);
 
     public override bool Equals(object? obj)
         => obj is CustomAttribLink other && Equals(other);

@@ -2,7 +2,6 @@ namespace DistIL.AsmIO;
 
 public interface Entity
 {
-    string Name { get; }
 }
 /// <summary> Represents an entity defined in a module. </summary>
 public interface ModuleEntity : Entity

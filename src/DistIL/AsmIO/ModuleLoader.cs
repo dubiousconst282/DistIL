@@ -25,7 +25,7 @@ internal class ModuleLoader
         _mod.AsmFlags = asmDef.Flags;
         
         var modDef = _reader.GetModuleDefinition();
-        _mod.Name = _reader.GetString(modDef.Name);
+        _mod.ModName = _reader.GetString(modDef.Name);
     }
 
     public void Load()
@@ -53,8 +53,10 @@ internal class ModuleLoader
         });
 
         foreach (var handle in _reader.ExportedTypes) {
-            _mod.ExportedTypes.Add(ResolveExportedType(handle));
+            _mod._exportedTypes.Add(ResolveExportedType(handle));
         }
+
+        _mod._customAttribs.EnsureCapacity(_reader.CustomAttributes.Count);
     }
     private void LoadTypes()
     {
@@ -90,8 +92,7 @@ internal class ModuleLoader
 
         int entryPointToken = _pe.PEHeaders.CorHeader?.EntryPointTokenOrRelativeVirtualAddress ?? 0;
         if (entryPointToken != 0) {
-            var handle = MetadataTokens.EntityHandle(entryPointToken);
-            _mod.EntryPoint = (MethodDef)GetEntity(handle);
+            _mod.EntryPoint = GetMethod(MetadataTokens.MethodDefinitionHandle(entryPointToken));
         }
     }
 

@@ -19,17 +19,11 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
     public override bool IsInterface => (Attribs & TypeAttributes.Interface) != 0;
     public override bool IsGeneric => GenericParams.Length > 0;
 
-    [MemberNotNullWhen(true, nameof(DeclaringType))]
-    public bool IsNested => (Attribs & TypeAttributes.NestedFamANDAssem) != 0;
-    
     protected TypeDefOrSpec? _baseType;
     public override TypeDefOrSpec? BaseType => _baseType;
 
     public abstract IReadOnlyList<TypeDesc> Interfaces { get; }
     public ImmutableArray<TypeDesc> GenericParams { get; protected set; }
-
-    /// <summary> The enclosing type of this nested type, or null if not nested. </summary>
-    public TypeDefOrSpec? DeclaringType { get; set; }
 
     public override bool Equals(TypeDesc? other) => object.ReferenceEquals(this, other);
     public override int GetHashCode() => HashCode.Combine(Module, Name, GenericParams.Length);
@@ -45,28 +39,36 @@ public class TypeDef : TypeDefOrSpec
     public override string? Namespace { get; }
     public override string Name { get; }
 
+    /// <summary> The enclosing type of this nested type, or null if not nested. </summary>
+    public TypeDef? DeclaringType { get; set; }
+
+    [MemberNotNullWhen(true, nameof(DeclaringType))]
+    public bool IsNested => (Attribs & TypeAttributes.NestedFamANDAssem) != 0;
+
     public override TypeDesc? UnderlyingEnumType => IsEnum ? Fields.First(f => f.IsInstance).Type : null;
 
     public int LayoutSize { get; set; }
     public int LayoutPack { get; set; }
     public bool HasCustomLayout => LayoutSize != 0 || LayoutPack != 0;
 
-    private List<TypeDesc> _interfaces = new(); //Note: CAs are linked to indices, care must be taken when changing entries
     private List<FieldDef> _fields = new();
     private List<MethodDef> _methods = new();
-    private List<PropertyDef> _properties = new();
-    private List<EventDef> _events = new();
-    private List<TypeDef> _nestedTypes = new();
+
+    private List<TypeDesc>? _interfaces; //Note: CAs are linked to indices, care must be taken when changing entries
+    private List<PropertyDef>? _properties;
+    private List<EventDef>? _events;
+    private List<TypeDef>? _nestedTypes;
     private Dictionary<MethodDesc, MethodDef>? _itfMethodImpls;
 
     private static readonly Dictionary<MethodDesc, MethodDef> s_EmptyItfMethodImpls = new();
+    private static IReadOnlyList<T> EmptyIfNull<T>(List<T>? list) => list ?? (IReadOnlyList<T>)Array.Empty<T>();
 
-    public override IReadOnlyList<TypeDesc> Interfaces => _interfaces;
+    public override IReadOnlyList<TypeDesc> Interfaces => EmptyIfNull(_interfaces);
     public override IReadOnlyList<FieldDef> Fields => _fields;
     public override IReadOnlyList<MethodDef> Methods => _methods;
-    public IReadOnlyList<PropertyDef> Properties => _properties;
-    public IReadOnlyList<EventDef> Events => _events;
-    public IReadOnlyList<TypeDef> NestedTypes => _nestedTypes;
+    public IReadOnlyList<PropertyDef> Properties => EmptyIfNull(_properties);
+    public IReadOnlyList<EventDef> Events => EmptyIfNull(_events);
+    public IReadOnlyList<TypeDef> NestedTypes => EmptyIfNull(_nestedTypes);
     public IReadOnlyDictionary<MethodDesc, MethodDef> InterfaceMethodImpls => _itfMethodImpls ?? s_EmptyItfMethodImpls;
 
     public TypeDef(ModuleDef mod, string? ns, string name, TypeAttributes attribs = default, ImmutableArray<TypeDesc> genericParams = default)
@@ -87,7 +89,7 @@ public class TypeDef : TypeDefOrSpec
             info.Attributes,
             loader.CreateGenericParams(info.GetGenericParameters(), false)
         );
-        loader._mod.TypeDefs.Add(type);
+        loader._mod._typeDefs.Add(type);
         return type;
     }
     internal void Load1(ModuleLoader loader, TypeDefinition info)
@@ -97,22 +99,24 @@ public class TypeDef : TypeDefOrSpec
         }
         if (info.IsNested) {
             DeclaringType = loader.GetType(info.GetDeclaringType());
+            (DeclaringType._nestedTypes ??= new()).Add(this);
         }
-
         var layout = info.GetLayout();
         LayoutPack = layout.PackingSize;
         LayoutSize = layout.Size;
     }
     internal void Load2(ModuleLoader loader, TypeDefinition info)
     {
-        foreach (var handle in info.GetFields()) {
+        var fieldHandles = info.GetFields();
+        _fields.EnsureCapacity(fieldHandles.Count);
+        foreach (var handle in fieldHandles) {
             _fields.Add(loader.GetField(handle));
         }
-        foreach (var handle in info.GetMethods()) {
+
+        var methodHandles = info.GetMethods();
+        _methods.EnsureCapacity(methodHandles.Count);
+        foreach (var handle in methodHandles) {
             _methods.Add(loader.GetMethod(handle));
-        }
-        foreach (var handle in info.GetNestedTypes()) {
-            _nestedTypes.Add(loader.GetType(handle));
         }
 
         _kind = IsEnum ? UnderlyingEnumType!.Kind :
@@ -121,26 +125,48 @@ public class TypeDef : TypeDefOrSpec
     }
     internal void Load3(ModuleLoader loader, TypeDefinition info)
     {
-        foreach (var handle in info.GetProperties()) {
-            _properties.Add(PropertyDef.Decode3(loader, handle, this));
-        }
-        foreach (var handle in info.GetEvents()) {
-            _events.Add(EventDef.Decode3(loader, handle, this));
-        }
-        int itfIndex = 0;
-        foreach (var handle in info.GetInterfaceImplementations()) {
-            var itfInfo = loader._reader.GetInterfaceImplementation(handle);
-            loader.FillCustomAttribs(this, itfInfo.GetCustomAttributes(), CustomAttribLink.Type.InterfaceImpl, itfIndex++);
-            _interfaces.Add((TypeDesc)loader.GetEntity(itfInfo.Interface));
-        }
-        foreach (var handle in info.GetMethodImplementations()) {
-            var implInfo = loader._reader.GetMethodImplementation(handle);
-            var decl = (MethodDesc)loader.GetEntity(implInfo.MethodDeclaration);
-            var impl = (MethodDef)loader.GetEntity(implInfo.MethodBody);
+        var propHandles = info.GetProperties();
+        if (propHandles.Count > 0) {
+            _properties = new List<PropertyDef>(propHandles.Count);
 
-            Ensure.That(impl.DeclaringType == this);
-            (_itfMethodImpls ??= new()).Add(decl, impl);
-            loader.FillCustomAttribs(impl, implInfo.GetCustomAttributes(), CustomAttribLink.Type.InterfaceImpl);
+            foreach (var handle in propHandles) {
+                _properties.Add(PropertyDef.Decode3(loader, handle, this));
+            }
+        }
+
+        var evtHandles = info.GetEvents();
+        if (evtHandles.Count > 0) {
+            _events = new List<EventDef>(evtHandles.Count);
+
+            foreach (var handle in evtHandles) {
+                _events.Add(EventDef.Decode3(loader, handle, this));
+            }
+        }
+
+        var itfHandles = info.GetInterfaceImplementations();
+        if (itfHandles.Count > 0) {
+            _interfaces = new List<TypeDesc>(itfHandles.Count);
+
+            foreach (var handle in itfHandles) {
+                var itfInfo = loader._reader.GetInterfaceImplementation(handle);
+                loader.FillCustomAttribs(this, itfInfo.GetCustomAttributes(), CustomAttribLink.Type.InterfaceImpl, _interfaces.Count);
+                _interfaces.Add((TypeDesc)loader.GetEntity(itfInfo.Interface));
+            }
+        }
+
+        var implHandles = info.GetMethodImplementations();
+        if (implHandles.Count > 0) {
+            _itfMethodImpls = new(implHandles.Count);
+
+            foreach (var handle in implHandles) {
+                var implInfo = loader._reader.GetMethodImplementation(handle);
+                var decl = (MethodDesc)loader.GetEntity(implInfo.MethodDeclaration);
+                var impl = (MethodDef)loader.GetEntity(implInfo.MethodBody);
+
+                Ensure.That(impl.DeclaringType == this);
+                _itfMethodImpls.Add(decl, impl);
+                loader.FillCustomAttribs(impl, implInfo.GetCustomAttributes(), CustomAttribLink.Type.InterfaceImpl);
+            }
         }
         loader.FillGenericParams(this, GenericParams, info.GetGenericParameters());
         loader.FillCustomAttribs(this, info.GetCustomAttributes());
@@ -160,7 +186,7 @@ public class TypeDef : TypeDefOrSpec
 
     public TypeDef? GetNestedType(string name)
     {
-        return _nestedTypes.Find(e => e.Name == name);
+        return _nestedTypes?.Find(e => e.Name == name);
     }
 
     public override void Print(PrintContext ctx, bool includeNs = false)

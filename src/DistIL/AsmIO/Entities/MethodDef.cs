@@ -19,6 +19,7 @@ public abstract class MethodDesc : MemberDesc
     public abstract TypeSig ReturnSig { get; }
     public TypeDesc ReturnType => ReturnSig.Type;
 
+    //TODO: expose `IROList<TypeSig> ParamSig` instead of `ImmutArray<ParamDef> Params`
     public ImmutableArray<ParamDef> Params { get; protected set; }
     public ReadOnlySpan<ParamDef> StaticParams => Params.AsSpan(IsStatic ? 0 : 1);
 
@@ -179,7 +180,22 @@ public class MethodSpec : MethodDefOrSpec
 
         var genCtx = new GenericContext(this);
         ReturnSig = def.ReturnSig.GetSpec(genCtx);
-        Params = def.Params.Select(p => new ParamDef(p.Type.GetSpec(genCtx), p.Name, p.Attribs)).ToImmutableArray();
+        Params = GetParamsSpec(genCtx);
+    }
+
+    private ImmutableArray<ParamDef> GetParamsSpec(GenericContext genCtx)
+    {
+        if (Definition.Params.Length == 0) {
+            return ImmutableArray<ParamDef>.Empty;
+        }
+        var builder = ImmutableArray.CreateBuilder<ParamDef>(Definition.Params.Length);
+        if (Definition.IsInstance) {
+            builder.Add(new ParamDef(DeclaringType.IsValueType ? DeclaringType.CreateByref() : DeclaringType, "this"));
+        }
+        foreach (var par in Definition.StaticParams) {
+            builder.Add(new ParamDef(par.Sig.GetSpec(genCtx), par.Name, par.Attribs));
+        }
+        return builder.MoveToImmutable();
     }
 
     public override MethodDesc GetSpec(GenericContext ctx)
@@ -190,7 +206,7 @@ public class MethodSpec : MethodDefOrSpec
 
 public class ILMethodBody
 {
-    public required List<ILInstruction> Instructions { get; set; }
+    public required ArraySegment<ILInstruction> Instructions { get; set; }
     public required Variable[] Locals { get; set; }
     public required ExceptionRegion[] ExceptionRegions { get; set; }
     public int MaxStack { get; set; }
@@ -200,7 +216,6 @@ public class ILMethodBody
     internal ILMethodBody(ModuleLoader loader, int rva)
     {
         var block = loader._pe.GetMethodBody(rva);
-
         Instructions = DecodeInsts(loader, block.GetILReader());
         Locals = DecodeLocals(loader, block);
         ExceptionRegions = DecodeExceptionRegions(loader, block);
@@ -212,30 +227,45 @@ public class ILMethodBody
     {
     }
 
-    private static List<ILInstruction> DecodeInsts(ModuleLoader loader, BlobReader reader)
+    private static ILInstruction[] DecodeInsts(ModuleLoader loader, BlobReader reader)
     {
-        var list = new List<ILInstruction>(reader.Length / 2);
-        while (reader.Offset < reader.Length) {
-            var inst = DecodeInst(loader, ref reader);
-            list.Add(inst);
+        //Doing two passes over the raw data is slightly more efficient than using a list,
+        //since it avoids extra allocations and copies due to resizes.
+        var insts = new ILInstruction[CountInsts(reader)];
+        for (int i = 0; i < insts.Length; i++) {
+            insts[i] = DecodeInst(loader, ref reader);
         }
-        return list;
+        return insts;
+    }
+
+    private static int CountInsts(BlobReader reader)
+    {
+        int count = 0;
+        while (reader.Offset < reader.Length) {
+            var opcode = DecodeOpcode(ref reader);
+
+            int operSize = opcode switch {
+                ILCode.Switch => reader.ReadInt32() * 4,
+                _ => opcode.GetOperandType().GetSize()
+            };
+            reader.Offset += operSize;
+            count++;
+        }
+        return count;
     }
 
     private static ILInstruction DecodeInst(ModuleLoader loader, ref BlobReader reader)
     {
-        int baseOffset = reader.Offset;
-        int code = reader.ReadByte();
-        if (code == 0xFE) {
-            code = (code << 8) | reader.ReadByte();
-        }
-        var opcode = (ILCode)code;
-        object? operand = opcode.GetOperandType() switch {
+        var inst = new ILInstruction() {
+            Offset = reader.Offset,
+            OpCode = DecodeOpcode(ref reader)
+        };
+        inst.Operand = inst.OperandType switch {
             ILOperandType.BrTarget => reader.ReadInt32() + reader.Offset,
             ILOperandType.Field or
             ILOperandType.Method or
             ILOperandType.Tok or
-            ILOperandType.Type 
+            ILOperandType.Type
                 => loader.GetEntity(MetadataTokens.EntityHandle(reader.ReadInt32())),
             ILOperandType.Sig
                 //`StandaloneSignature` is only used by calli.
@@ -254,11 +284,7 @@ public class ILMethodBody
             ILOperandType.ShortVar => (int)reader.ReadByte(),
             _ => null
         };
-        return new ILInstruction() {
-            OpCode = opcode,
-            Offset = baseOffset,
-            Operand = operand
-        };
+        return inst;
 
         static int[] ReadJumpTable(ref BlobReader reader)
         {
@@ -271,6 +297,12 @@ public class ILMethodBody
             }
             return targets;
         }
+    }
+
+    private static ILCode DecodeOpcode(ref BlobReader reader)
+    {
+        int b = reader.ReadByte();
+        return (ILCode)(b == 0xFE ? 0xFE00 | reader.ReadByte() : b);
     }
 
     private static ExceptionRegion[] DecodeExceptionRegions(ModuleLoader loader, MethodBodyBlock block)

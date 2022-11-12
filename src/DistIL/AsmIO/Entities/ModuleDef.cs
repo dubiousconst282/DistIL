@@ -6,47 +6,69 @@ using System.Reflection.Metadata;
 
 public class ModuleDef : ModuleEntity
 {
-    public string Name { get; set; } = null!;
+    public string ModName { get; set; } = null!;
     public AssemblyName AsmName { get; set; } = null!;
     public AssemblyFlags AsmFlags { get; set; }
 
     public MethodDef? EntryPoint { get; set; }
-    public List<TypeDef> TypeDefs { get; } = new();
-    public List<TypeDef> ExportedTypes { get; } = new();
+    public IReadOnlyList<TypeDef> TypeDefs => _typeDefs;
+    public IReadOnlyList<TypeDef> ExportedTypes => _exportedTypes;
 
     public ModuleResolver Resolver { get; init; } = null!;
 
     ModuleDef ModuleEntity.Module => this;
 
+    internal List<TypeDef> _typeDefs = new(), _exportedTypes = new();
+    internal bool _typesSorted = false;
+
     internal Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); //root assemblies for references of forwarded types
     internal Dictionary<CustomAttribLink, CustomAttrib[]> _customAttribs = new();
 
-    internal TypeDef? FindType(string? ns, string name, bool includeExports = true, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
+    public TypeDef? FindType(string? ns, string name, bool includeExports = true, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
     {
-        var availableTypes = includeExports ? TypeDefs.Concat(ExportedTypes) : TypeDefs;
-        foreach (var type in availableTypes) {
-            if (type.Name == name && type.Namespace == ns) {
-                return type;
-            }
+        if (!_typesSorted) {
+            _typesSorted = true;
+
+            Comparison<TypeDef> comparer = (a, b) => CompareTypeName(b, a.Namespace, a.Name);
+            _typeDefs.Sort(comparer);
+            _exportedTypes.Sort(comparer);
         }
-        if (throwIfNotFound) {
+        var type = SearchType(_typeDefs, ns, name);
+
+        if (type == null && includeExports) {
+            type = SearchType(_exportedTypes, ns, name);
+        }
+        if (type == null && throwIfNotFound) {
             throw new InvalidOperationException($"Type {ns}.{name} not found");
+        }
+        return type;
+    }
+
+    private static TypeDef? SearchType(List<TypeDef> types, string? ns, string name)
+    {
+        int min = 0, max = types.Count - 1;
+        while (min <= max) {
+            int mid = (min + max) >>> 1;
+            int c = CompareTypeName(types[mid], ns, name);
+
+            if (c < 0) {
+                max = mid - 1;
+            } else if (c > 0) {
+                min = mid + 1;
+            } else {
+                return types[mid];
+            }
         }
         return null;
     }
+    private static int CompareTypeName(TypeDef typeA, string? nsB, string nameB)
+    {
+        int c = string.CompareOrdinal(typeA.Name, nameB);
+        return c == 0 ? string.CompareOrdinal(typeA.Namespace, nsB) : c;
+    }
 
     public IEnumerable<MethodDef> AllMethods()
-    {
-        foreach (var type in AllTypes()) {
-            foreach (var method in type.Methods) {
-                yield return method;
-            }
-        }
-    }
-    public IEnumerable<TypeDef> AllTypes()
-    {
-        return TypeDefs;
-    }
+        => TypeDefs.SelectMany(t => t.Methods);
 
     internal CustomAttrib[] GetLinkedCustomAttribs(in CustomAttribLink link)
         => _customAttribs.GetValueOrDefault(link, Array.Empty<CustomAttrib>());

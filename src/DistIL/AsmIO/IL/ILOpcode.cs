@@ -65,6 +65,27 @@ public partial class ILCodes
     public static int GetSize(this ILCode code)
         => (int)code <= 0xFF ? 1 : 2;
 
+    /// <remarks> Note: this will return <see cref="int.MinValue"/> for <see cref="ILOperandType.Switch"/>. </remarks>
+    public static int GetSize(this ILOperandType type)
+    {
+        return type switch {
+            ILOperandType.None
+                => 0,
+            >= ILOperandType.I and <= ILOperandType.String
+                => 4,
+            ILOperandType.I8 or
+            ILOperandType.R
+                => 8,
+            ILOperandType.Var
+                => 2,
+            ILOperandType.ShortBrTarget or
+            ILOperandType.ShortI or
+            ILOperandType.ShortVar
+                => 1,
+            _ => int.MinValue // ILOperandType.Switch
+        };
+    }
+
     /// <summary> Checks whether the specified opcode terminates a basic block. </summary>
     public static bool IsTerminator(this ILCode code)
         => GetFlowControl(code) is
@@ -91,26 +112,24 @@ public partial class ILCodes
         return name;
     }
 }
-
 public enum ILOperandType
 {
-    BrTarget = 0,
-    Field = 1,
-    I = 2,
-    I8 = 3,
-    Method = 4,
-    None = 5,
-    R = 7,
-    Sig = 9,
-    String = 10,
-    Switch = 11,
-    Tok = 12,
-    Type = 13,
-    Var = 14,
-    ShortBrTarget = 15,
-    ShortI = 16,
-    ShortR = 17,
-    ShortVar = 18,
+    None,
+
+    ShortI,
+    ShortBrTarget,
+    ShortVar,
+
+    Var,
+
+    I, ShortR,
+    BrTarget,
+    Type, Field, Method, Tok, Sig,
+    String,
+
+    I8, R,
+
+    Switch,
 }
 public enum ILFlowControl
 {

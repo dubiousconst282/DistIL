@@ -21,33 +21,11 @@ public struct ILInstruction
 
     public int GetSize()
     {
-        int operandSize = OperandType switch {
-            ILOperandType.None
-                => 0,
-            ILOperandType.ShortBrTarget or
-            ILOperandType.ShortI or
-            ILOperandType.ShortVar
-                => 1,
-            ILOperandType.Var
-                => 2,
-            ILOperandType.BrTarget or
-            ILOperandType.Field or
-            ILOperandType.Method or
-            ILOperandType.Sig or
-            ILOperandType.String or
-            ILOperandType.Tok or
-            ILOperandType.Type or
-            ILOperandType.I or
-            ILOperandType.ShortR
-                => 4,
-            ILOperandType.I8 or
-            ILOperandType.R
-                => 8,
-            ILOperandType.Switch
-                => 4 + ((Array)Operand!).Length * 4,
-            _ => throw new InvalidOperationException()
+        int operSize = OpCode switch {
+            ILCode.Switch => 4 + ((Array)Operand!).Length * 4,
+            _ => OpCode.GetOperandType().GetSize()
         };
-        return OpCode.GetSize() + operandSize;
+        return OpCode.GetSize() + operSize;
     }
     public int GetEndOffset()
     {

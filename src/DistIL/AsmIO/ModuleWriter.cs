@@ -29,7 +29,7 @@ internal class ModuleWriter
         //https://github.com/dotnet/runtime/blob/main/src/libraries/System.Reflection.Metadata/tests/PortableExecutable/PEBuilderTests.cs
         var mainModHandle = _builder.AddModule(
             0, 
-            AddString(_mod.Name), 
+            AddString(_mod.ModName), 
             _builder.GetOrAddGuid(default),
             _builder.GetOrAddGuid(default),
             _builder.GetOrAddGuid(default)

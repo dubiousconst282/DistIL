@@ -64,13 +64,13 @@ partial class ILGenerator
         if (inst.Volatile) _asm.Emit(ILCode.Volatile_);
         if (inst.Unaligned) _asm.Emit(ILCode.Unaligned_, 1); //TODO: keep alignment in IR
 
-        var addTypeDesc = inst.Address.ResultType;
+        var addrType = inst.Address.ResultType;
         var interpType = inst.ElemType;
 
         var refCode = isLoad ? ILCode.Ldind_Ref : ILCode.Stind_Ref;
         var objCode = isLoad ? ILCode.Ldobj : ILCode.Stobj;
 
-        if (!interpType.IsValueType && addTypeDesc.ElemType == interpType) {
+        if (!interpType.IsValueType && interpType is not GenericParamType && addrType.ElemType == interpType) {
             _asm.Emit(refCode);
         } else {
             var code = ILTables.GetPtrAccessCode(interpType, isLoad);

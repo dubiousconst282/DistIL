@@ -44,7 +44,7 @@ public partial class ILGenerator : InstVisitor
                 _asm.Emit(ILCode.Nop);
             }
             //If this is the entry block of a handler/filter, pop the exception to the guard variable
-            var guard = block.Users().FirstOrDefault(u => u is GuardInst { Kind: not GuardKind.Finally });
+            var guard = block.Users().FirstOrDefault(u => u is GuardInst { Kind: GuardKind.Catch });
 
             _asm.StartBlock(block, guard != null);
 

@@ -27,7 +27,7 @@ public abstract class MethodDesc : MemberDesc
     {
         if (IsStatic) ctx.Print("static ", PrintToner.Keyword);
         ReturnSig.Print(ctx);
-        ctx.Print($" {DeclaringType}::{PrintToner.MethodName}{Name}(");
+        ctx.Print($" {DeclaringType}::{PrintToner.MethodName}{Name}");
         if (IsGeneric) {
             ctx.PrintSequence("<", ">", GenericParams, ctx.Print);
         }

@@ -98,7 +98,9 @@ public class IRPrinter
     }
     public static void ExportPlain(MethodBody method, TextWriter tw)
     {
-        var pc = new PrintContext(tw, method.GetSymbolTable());
+        var pc = tw == Console.Out //TODO: better api for this
+            ? new VTAnsiPrintContext(tw, method.GetSymbolTable()) 
+            : new PrintContext(tw, method.GetSymbolTable());
 
         foreach (var block in method) {
             pc.Print($"{block}:");
@@ -150,16 +152,50 @@ public class IRPrinter
         }
 
         static readonly Dictionary<PrintToner, string> _colors = new() {
-            //VSCode Dark+ palette
-            { PrintToner.Keyword,   "#569cd6" },
-            { PrintToner.Comment,   "#6a9955" },
-            { PrintToner.VarName,   "#9cdcfe" },
-            { PrintToner.InstName,  "#c586c0" },
-            { PrintToner.TypeName,  "#4ec9b0" },
-            { PrintToner.MemberName,"#4fc1ff" },
-            { PrintToner.MethodName,"#dcdcaa" },
-            { PrintToner.String,    "#ce9178" },
-            { PrintToner.Number,    "#b5cea8" },
+            //VS Dark palette
+            { PrintToner.Keyword,    "#569cd6" },
+            { PrintToner.Comment,    "#6a9955" },
+            { PrintToner.VarName,    "#9cdcfe" },
+            { PrintToner.InstName,   "#c586c0" },
+            { PrintToner.ClassName,  "#4ec9b0" },
+            { PrintToner.StructName, "#86C691" },
+            { PrintToner.MemberName, "#4fc1ff" },
+            { PrintToner.MethodName, "#dcdcaa" },
+            { PrintToner.String,     "#ce9178" },
+            { PrintToner.Number,     "#b5cea8" },
+        };
+    }
+    class VTAnsiPrintContext : PrintContext
+    {
+        const string Esc = "\x1B[";
+
+        public VTAnsiPrintContext(TextWriter output, SymbolTable symTable)
+            : base(output, symTable)
+        {
+        }
+
+        public override void Print(string str, PrintToner toner = PrintToner.Default)
+        {
+            string? color = null;
+            if (toner != PrintToner.Default && _colors.TryGetValue(toner, out color)) {
+                Output.Write(color);
+            }
+            Output.Write(str);
+
+            if (color != null) Output.Write(Esc + "0m"); //reset
+        }
+
+        static readonly Dictionary<PrintToner, string> _colors = new() {
+            { PrintToner.Keyword,    Esc + "94m" }, //Bright Blue
+            { PrintToner.Comment,    Esc + "32m" }, //Dark Green
+            { PrintToner.VarName,    Esc + "97m" }, //White
+            { PrintToner.InstName,   Esc + "95m" }, //Bright Magenta
+            { PrintToner.ClassName,  Esc + "36m" }, //Cyan
+            { PrintToner.StructName, Esc + "96m" }, //Bright Cyan
+            { PrintToner.MemberName, Esc + "37m" }, //Light Gray
+            { PrintToner.MethodName, Esc + "93m" }, //Yellow
+            { PrintToner.String,     Esc + "92m" }, //Green
+            { PrintToner.Number,     Esc + "92m" }, //Green
         };
     }
 

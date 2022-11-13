@@ -94,10 +94,9 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     {
         var ns = Namespace;
         if (ns != null && includeNs) {
-            ctx.Print(ns, PrintToner.TypeName);
-            ctx.Print(".");
+            ctx.Print(ns + ".");
         }
-        ctx.Print(Name, PrintToner.TypeName);
+        ctx.Print(Name, IsValueType ? PrintToner.StructName : PrintToner.ClassName);
     }
     public override void PrintAsOperand(PrintContext ctx)
     {

@@ -192,7 +192,7 @@ public class TypeDef : TypeDefOrSpec
     public override void Print(PrintContext ctx, bool includeNs = false)
     {
         if (DeclaringType != null) {
-            ctx.Print($"{DeclaringType}+{PrintToner.TypeName}{Name}");
+            ctx.Print($"{DeclaringType}+{(IsValueType ? PrintToner.StructName : PrintToner.ClassName)}{Name}");
         } else {
             base.Print(ctx, includeNs);
         }

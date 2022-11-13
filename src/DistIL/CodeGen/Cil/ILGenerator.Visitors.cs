@@ -155,6 +155,9 @@ partial class ILGenerator
     }
     public void Visit(FuncAddrInst inst)
     {
+        if (inst.IsVirtual) {
+            Push(inst.Object);
+        }
         var code = inst.IsVirtual ? ILCode.Ldvirtftn : ILCode.Ldftn;
         _asm.Emit(code, inst.Method);
     }

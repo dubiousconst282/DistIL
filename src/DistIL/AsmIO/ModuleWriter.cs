@@ -5,16 +5,16 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
-internal class ModuleWriter
+internal partial class ModuleWriter
 {
     readonly ModuleDef _mod;
     readonly MetadataBuilder _builder;
     readonly MethodBodyStreamEncoder _bodyEncoder;
     private BlobBuilder? _fieldDataStream;
 
-    private Dictionary<Entity, EntityHandle> _handleMap = new();
-    //We need to write generic parameters in a later pass, since they must be sorted
-    private List<EntityDesc> _genericDefs = new();
+    readonly Dictionary<Entity, EntityHandle> _handleMap = new();
+    //Generic parameters must be sorted based on the coded parent entity handle, we do that in a later pass.
+    readonly List<EntityDesc> _genericDefs = new();
 
     public ModuleWriter(ModuleDef mod)
     {
@@ -57,140 +57,12 @@ internal class ModuleWriter
         SerializePE(peBlob);
     }
 
-    private void AllocHandles()
-    {
-        int typeIdx = 1, fieldIdx = 1, methodIdx = 1;
-
-        foreach (var type in _mod.TypeDefs) {
-            _handleMap.Add(type, MetadataTokens.TypeDefinitionHandle(typeIdx++));
-
-            foreach (var field in type.Fields) {
-                _handleMap.Add(field, MetadataTokens.FieldDefinitionHandle(fieldIdx++));
-            }
-            foreach (var method in type.Methods) {
-                _handleMap.Add(method, MetadataTokens.MethodDefinitionHandle(methodIdx++));
-            }
-        }
-    }
-
     private void EmitEntities()
     {
         foreach (var type in _mod.TypeDefs) {
             EmitType(type);
         }
-
-        _genericDefs.Sort((a, b) => {
-            int ai = CodedIndex.TypeOrMethodDef(_handleMap[a]);
-            int bi = CodedIndex.TypeOrMethodDef(_handleMap[b]);
-            return ai - bi;
-        });
-        foreach (var entity in _genericDefs) {
-            var handle = _handleMap[entity];
-            var genPars = (entity as TypeDef)?.GenericParams ?? ((MethodDef)entity).GenericParams;
-            foreach (var par in genPars.Cast<GenericParamType>()) {
-                var parHandle = _builder.AddGenericParameter(handle, par.Attribs, AddString(par.Name), par.Index);
-                EmitCustomAttribs(parHandle, par.GetCustomAttribs());
-
-                for (int i = 0; i < par.Constraints.Length; i++) {
-                    var constraintHandle = _builder.AddGenericParameterConstraint(parHandle, GetHandle(par.Constraints[i].Type));
-
-                    var constraintAttribs = par._constraintCustomAttribs?.ElementAtOrDefault(i);
-                    if (constraintAttribs != null) {
-                        EmitCustomAttribs(constraintHandle, constraintAttribs);
-                    }
-                }
-            }
-        }
-    }
-
-    private EntityHandle GetHandle(Entity entity)
-    {
-        if (!_handleMap.TryGetValue(entity, out var handle)) {
-            _handleMap[entity] = handle = CreateRef(entity);
-        }
-        return handle;
-
-        EntityHandle CreateRef(Entity entity)
-        {
-            switch (entity) {
-                case TypeDef type: {
-                    return _builder.AddTypeReference(
-                        GetHandle((Entity?)type.DeclaringType ?? _mod._typeRefRoots.GetValueOrDefault(type, type.Module)),
-                        AddString(type.Namespace),
-                        AddString(type.Name)
-                    );
-                }
-                case TypeDesc type: {
-                    return _builder.AddTypeSpecification(
-                        EncodeSig(b => EncodeType(b.TypeSpecificationSignature(), type))
-                    );
-                }
-                case MethodDefOrSpec method: {
-                    var refHandle = _builder.AddMemberReference(
-                        GetHandle(method.DeclaringType),
-                        AddString(method.Name),
-                        EncodeMethodSig(method.Definition)
-                    );
-                    return method is MethodSpec { GenericParams.Length: > 0 } spec
-                        ? _builder.AddMethodSpecification(refHandle, EncodeMethodSpecSig(spec))
-                        : refHandle;
-                }
-                case MDArrayMethod method: {
-                    return _builder.AddMemberReference(
-                        GetHandle(method.DeclaringType),
-                        AddString(method.Name),
-                        EncodeMethodSig(method)
-                    );
-                }
-                case FieldDefOrSpec field: {
-                    return _builder.AddMemberReference(
-                        GetHandle(field.DeclaringType),
-                        AddString(field.Name),
-                        EncodeFieldSig(field.Definition)
-                    );
-                }
-                case ModuleDef module: {
-                    var name = module.AsmName;
-                    return _builder.AddAssemblyReference(
-                        AddString(name.Name),
-                        name.Version!,
-                        AddString(name.CultureName),
-                        AddBlob(name.GetPublicKey() ?? name.GetPublicKeyToken()),
-                        (AssemblyFlags)name.Flags,
-                        default
-                    );
-                }
-                default: throw new NotImplementedException();
-            }
-        }
-    }
-    private EntityHandle GetTypeHandle(TypeDesc type)
-    {
-        if (type is PrimType primType) {
-            type = primType.GetDefinition(_mod.Resolver);
-        }
-        return GetHandle(type);
-    }
-    private StandaloneSignatureHandle GetStandaloneSig(FuncPtrType type)
-    {
-        return _builder.AddStandaloneSignature(EncodeMethodSig(type.Signature));
-    }
-
-    private void EmitCustomAttribs(ModuleEntity entity, EntityHandle parentHandle, CustomAttribLink.Type linkType = default, int linkIndex = 0)
-    {
-        var attribs = _mod.GetLinkedCustomAttribs(new(entity, linkIndex, linkType));
-        EmitCustomAttribs(parentHandle, attribs);
-    }
-
-    private void EmitCustomAttribs(EntityHandle parentHandle, IReadOnlyCollection<CustomAttrib> attribs)
-    {
-        foreach (var attrib in attribs) {
-            _builder.AddCustomAttribute(
-                parentHandle,
-                GetHandle(attrib.Constructor),
-                _builder.GetOrAddBlob(attrib.GetEncodedBlob())
-            );
-        }
+        EmitPendingGenericParams();
     }
 
     private void EmitType(TypeDef type)
@@ -225,6 +97,7 @@ internal class ModuleWriter
             var implHandle = _builder.AddMethodImplementation(handle, GetHandle(impl), GetHandle(decl));
             EmitCustomAttribs(impl, implHandle, CustomAttribLink.Type.InterfaceImpl);
         }
+        
         foreach (var field in type.Fields) {
             EmitField(field);
         }
@@ -233,40 +106,54 @@ internal class ModuleWriter
         }
         int propIdx = 0;
         foreach (var prop in type.Properties) {
-            var propHandle = _builder.AddProperty(prop.Attribs, AddString(prop.Name), EncodeMethodSig(prop.Sig));
+            var propHandle = EmitProp(prop);
 
-            Link(propHandle, prop.Getter, MethodSemanticsAttributes.Getter);
-            Link(propHandle, prop.Setter, MethodSemanticsAttributes.Setter);
-
-            foreach (var otherAcc in prop.OtherAccessors) {
-                Link(propHandle, otherAcc, MethodSemanticsAttributes.Other);
-            }
             if (propIdx++ == 0) {
                 _builder.AddPropertyMap(handle, propHandle);
             }
-            EmitCustomAttribs(prop, propHandle);
         }
+
         int evtIdx = 0;
         foreach (var evt in type.Events) {
-            var evtHandle = _builder.AddEvent(evt.Attribs, AddString(evt.Name), GetHandle(evt.Type));
+            var evtHandle = EmitEvent(evt);
 
-            Link(evtHandle, evt.Adder, MethodSemanticsAttributes.Adder);
-            Link(evtHandle, evt.Remover, MethodSemanticsAttributes.Remover);
-            Link(evtHandle, evt.Raiser, MethodSemanticsAttributes.Raiser);
-
-            foreach (var otherAcc in evt.OtherAccessors) {
-                Link(evtHandle, otherAcc, MethodSemanticsAttributes.Other);
-            }
             if (evtIdx++ == 0) {
                 _builder.AddEventMap(handle, evtHandle);
             }
-            EmitCustomAttribs(evt, evtHandle);
         }
         if (type.HasCustomLayout) {
             _builder.AddTypeLayout(handle, (ushort)type.LayoutPack, (uint)type.LayoutSize);
         }
         EmitCustomAttribs(type, handle);
 
+        PropertyDefinitionHandle EmitProp(PropertyDef prop)
+        {
+            var handle = _builder.AddProperty(prop.Attribs, AddString(prop.Name), EncodeMethodSig(prop.Sig));
+
+            Link(handle, prop.Getter, MethodSemanticsAttributes.Getter);
+            Link(handle, prop.Setter, MethodSemanticsAttributes.Setter);
+
+            foreach (var otherAcc in prop.OtherAccessors) {
+                Link(handle, otherAcc, MethodSemanticsAttributes.Other);
+            }
+            EmitCustomAttribs(prop, handle);
+
+            return handle;
+        }
+        EventDefinitionHandle EmitEvent(EventDef evt)
+        {
+            var handle = _builder.AddEvent(evt.Attribs, AddString(evt.Name), GetHandle(evt.Type));
+
+            Link(handle, evt.Adder, MethodSemanticsAttributes.Adder);
+            Link(handle, evt.Remover, MethodSemanticsAttributes.Remover);
+            Link(handle, evt.Raiser, MethodSemanticsAttributes.Raiser);
+
+            foreach (var otherAcc in evt.OtherAccessors) {
+                Link(handle, otherAcc, MethodSemanticsAttributes.Other);
+            }
+            EmitCustomAttribs(evt, handle);
+            return handle;
+        }
         void Link(EntityHandle assoc, MethodDef? method, MethodSemanticsAttributes kind)
         {
             if (method != null) {
@@ -305,30 +192,30 @@ internal class ModuleWriter
     private void EmitMethod(MethodDef method)
     {
         var signature = EncodeMethodSig(method);
-        int bodyOffset = EmitBody(method.ILBody);
+        int bodyOffset = EmitMethodBodyRVA(method.ILBody);
         var firstParamHandle = MetadataTokens.ParameterHandle(_builder.GetRowCount(TableIndex.Param) + 1);
 
         var handle = _builder.AddMethodDefinition(
-            method.Attribs,
-            method.ImplAttribs,
+            method.Attribs, method.ImplAttribs,
             AddString(method.Name),
             signature, bodyOffset, firstParamHandle
         );
         Debug.Assert(_handleMap[method] == handle);
 
-        if (_mod.GetLinkedCustomAttribs(new(method, -1, CustomAttribLink.Type.MethodParam)).Length > 0) {
+        var returnCAs = _mod.GetLinkedCustomAttribs(new(method, -1, CustomAttribLink.Type.MethodParam));
+        if (returnCAs.Length > 0) {
             var parHandle = _builder.AddParameter(method.ReturnParam.Attribs, default, 0);
-            EmitCustomAttribs(method, parHandle, CustomAttribLink.Type.MethodParam, -1);
+            EmitCustomAttribs(parHandle, returnCAs);
         }
         var pars = method.StaticParams;
         for (int i = 0; i < pars.Length; i++) {
             var par = pars[i];
             var parHandle = _builder.AddParameter(par.Attribs, AddString(par.Name), i + 1);
-            EmitCustomAttribs(method, parHandle, CustomAttribLink.Type.MethodParam, i + (method.IsStatic ? 0 : 1));
 
             if (par.Attribs.HasFlag(ParameterAttributes.HasDefault)) {
                 _builder.AddConstant(parHandle, par.DefaultValue);
             }
+            EmitCustomAttribs(method, parHandle, CustomAttribLink.Type.MethodParam, i + (method.IsStatic ? 0 : 1));
         }
         if (method.GenericParams.Length > 0) {
             _genericDefs.Add(method);
@@ -336,272 +223,49 @@ internal class ModuleWriter
         EmitCustomAttribs(method, handle);
     }
 
-    private int EmitBody(ILMethodBody? body)
+    private void EmitPendingGenericParams()
     {
-        if (body == null) {
-            return -1;
-        }
-        var localVarSigs = default(StandaloneSignatureHandle);
-        var attribs = body.InitLocals ? MethodBodyAttributes.InitLocals : 0;
+        _genericDefs.Sort((a, b) => {
+            int ai = CodedIndex.TypeOrMethodDef(_handleMap[a]);
+            int bi = CodedIndex.TypeOrMethodDef(_handleMap[b]);
+            return ai - bi;
+        });
 
-        if (body.Locals.Length > 0) {
-            var sigBlobHandle = EncodeSig(b => {
-                var sigEnc = b.LocalVariableSignature(body.Locals.Length);
-                foreach (var localVar in body.Locals) {
-                    var typeEnc = sigEnc.AddVariable().Type(false, localVar.IsPinned);
-                    EncodeType(typeEnc, localVar.Sig);
+        foreach (var entity in _genericDefs) {
+            var handle = _handleMap[entity];
+            var genPars = (entity as TypeDef)?.GenericParams ?? ((MethodDef)entity).GenericParams;
+
+            foreach (var par in genPars.Cast<GenericParamType>()) {
+                var parHandle = _builder.AddGenericParameter(handle, par.Attribs, AddString(par.Name), par.Index);
+                EmitCustomAttribs(parHandle, par.GetCustomAttribs());
+
+                for (int i = 0; i < par.Constraints.Length; i++) {
+                    var constrHandle = _builder.AddGenericParameterConstraint(parHandle, GetSigHandle(par.Constraints[i]));
+
+                    var constrAttribs = par._constraintCustomAttribs?.ElementAtOrDefault(i);
+                    if (constrAttribs != null) {
+                        EmitCustomAttribs(constrHandle, constrAttribs);
+                    }
                 }
-            });
-            localVarSigs = _builder.AddStandaloneSignature(sigBlobHandle);
+            }
         }
-        int codeSize = body.Instructions[^1].GetEndOffset();
-        var enc = _bodyEncoder.AddMethodBody(
-            codeSize, body.MaxStack,
-            body.ExceptionRegions.Length,
-            hasSmallExceptionRegions: false, //TODO
-            localVarSigs, attribs
-        );
-        EncodeInsts(body, new BlobWriter(enc.Instructions));
+    }
 
-        //Add exception regions
-        foreach (var ehr in body.ExceptionRegions) {
-            enc.ExceptionRegions.Add(
-                kind: ehr.Kind,
-                tryOffset: ehr.TryStart,
-                tryLength: ehr.TryEnd - ehr.TryStart,
-                handlerOffset: ehr.HandlerStart,
-                handlerLength: ehr.HandlerEnd - ehr.HandlerStart,
-                catchType: ehr.CatchType == null ? default : GetHandle(ehr.CatchType),
-                filterOffset: ehr.FilterStart
+    private void EmitCustomAttribs(ModuleEntity entity, EntityHandle parentHandle, CustomAttribLink.Type linkType = default, int linkIndex = 0)
+    {
+        var attribs = _mod.GetLinkedCustomAttribs(new(entity, linkIndex, linkType));
+        EmitCustomAttribs(parentHandle, attribs);
+    }
+
+    private void EmitCustomAttribs(EntityHandle parentHandle, IReadOnlyCollection<CustomAttrib> attribs)
+    {
+        foreach (var attrib in attribs) {
+            _builder.AddCustomAttribute(
+                parentHandle,
+                GetHandle(attrib.Constructor),
+                _builder.GetOrAddBlob(attrib.GetEncodedBlob())
             );
         }
-        return enc.Offset;
-    }
-
-    private void EncodeInsts(ILMethodBody body, BlobWriter writer)
-    {
-        foreach (ref var inst in body.Instructions.AsSpan()) {
-            EncodeInst(ref writer, ref inst);
-        }
-    }
-
-    private void EncodeInst(ref BlobWriter bw, ref ILInstruction inst)
-    {
-        int code = (int)inst.OpCode;
-        if ((code & 0xFF00) == 0xFE00) {
-            bw.WriteByte((byte)(code >> 8));
-        }
-        bw.WriteByte((byte)code);
-
-        switch (inst.OpCode.GetOperandType()) {
-            case ILOperandType.BrTarget: {
-                bw.WriteInt32((int)inst.Operand! - inst.GetEndOffset());
-                break;
-            }
-            case ILOperandType.Field:
-            case ILOperandType.Method:
-            case ILOperandType.Tok: {
-                var handle = GetHandle((Entity)inst.Operand!);
-                bw.WriteInt32(MetadataTokens.GetToken(handle));
-                break;
-            }
-            case ILOperandType.Sig: {
-                var handle = GetStandaloneSig((FuncPtrType)inst.Operand!);
-                bw.WriteInt32(MetadataTokens.GetToken(handle));
-                break;
-            }
-            case ILOperandType.Type: {
-                var handle = GetTypeHandle((TypeDesc)inst.Operand!);
-                bw.WriteInt32(MetadataTokens.GetToken(handle));
-                break;
-            }
-            case ILOperandType.String: {
-                var handle = _builder.GetOrAddUserString((string)inst.Operand!);
-                bw.WriteInt32(MetadataTokens.GetToken(handle));
-                break;
-            }
-            case ILOperandType.I: {
-                bw.WriteInt32((int)inst.Operand!);
-                break;
-            }
-            case ILOperandType.I8: {
-                bw.WriteInt64((long)inst.Operand!);
-                break;
-            }
-            case ILOperandType.R: {
-                bw.WriteDouble((double)inst.Operand!);
-                break;
-            }
-            case ILOperandType.Switch: {
-                WriteTumpTable(ref bw, ref inst);
-                break;
-            }
-            case ILOperandType.Var: {
-                int varIndex = (int)inst.Operand!;
-                Debug.Assert(varIndex == (ushort)varIndex);
-                bw.WriteUInt16((ushort)varIndex);
-                break;
-            }
-            case ILOperandType.ShortBrTarget: {
-                int offset = (int)inst.Operand! - inst.GetEndOffset();
-                Debug.Assert(offset == (sbyte)offset);
-                bw.WriteSByte((sbyte)offset);
-                break;
-            }
-            case ILOperandType.ShortI: {
-                int value = (int)inst.Operand!;
-                Debug.Assert(value == (sbyte)value);
-                bw.WriteSByte((sbyte)value);
-                break;
-            }
-            case ILOperandType.ShortR: {
-                bw.WriteSingle((float)inst.Operand!);
-                break;
-            }
-            case ILOperandType.ShortVar: {
-                int varIndex = (int)inst.Operand!;
-                Debug.Assert(varIndex == (byte)varIndex);
-                bw.WriteByte((byte)varIndex);
-                break;
-            }
-            default: {
-                Debug.Assert(inst.Operand == null);
-                break;
-            }
-        }
-        static void WriteTumpTable(ref BlobWriter bw, ref ILInstruction inst)
-        {
-            int baseOffset = inst.GetEndOffset();
-            var targets = (int[])inst.Operand!;
-
-            bw.WriteInt32(targets.Length);
-            for (int i = 0; i < targets.Length; i++) {
-                bw.WriteInt32(targets[i] - baseOffset);
-            }
-        }
-    }
-
-    private BlobHandle EncodeMethodSig(MethodSig sig)
-    {
-        return EncodeSig(b => {
-            var pars = sig.ParamTypes;
-            b.MethodSignature(
-                (SignatureCallingConvention)sig.CallConv, sig.NumGenericParams,
-                sig.IsInstance ?? throw new InvalidOperationException()
-            ).Parameters(pars.Count, out var retTypeEnc, out var parsEnc);
-
-            EncodeType(retTypeEnc.Type(), sig.ReturnType);
-
-            foreach (var par in pars) {
-                EncodeType(parsEnc.AddParameter().Type(), par.Type);
-            }
-        });
-    }
-
-    private BlobHandle EncodeMethodSig(MethodDesc method)
-    {
-        return EncodeSig(b => {
-            var pars = method.StaticParams;
-            b.MethodSignature(default, method.GenericParams.Length, method.IsInstance)
-                .Parameters(pars.Length, out var retTypeEnc, out var parsEnc);
-
-            EncodeType(retTypeEnc.Type(), method.ReturnSig);
-
-            foreach (var par in pars) {
-                EncodeType(parsEnc.AddParameter().Type(), par.Type);
-            }
-        });
-    }
-
-    private BlobHandle EncodeMethodSpecSig(MethodSpec method)
-    {
-        return EncodeSig(b => {
-            var genArgEnc = b.MethodSpecificationSignature(method.GenericParams.Length);
-            
-            foreach (var par in method.GenericParams) {
-                EncodeType(genArgEnc.AddArgument(), par);
-            }
-        });
-    }
-
-    private BlobHandle EncodeFieldSig(FieldDef field)
-    {
-        return EncodeSig(b => EncodeType(b.FieldSignature(), field.Type));
-    }
-
-    private void EncodeType(SignatureTypeEncoder enc, TypeSig sig)
-    {
-        foreach (var mod in sig.CustomMods) {
-            enc.CustomModifiers().AddModifier(GetHandle(mod.Type), !mod.IsRequired);
-        }
-        //Bypassing the encoder api because it's so goddamn awful, even though we'll probably get bitten sooner or later.
-        //https://github.com/dotnet/runtime/blob/1ba0394d71a4ea6bee7f6b28a22d666b7b56f913/src/libraries/System.Reflection.Metadata/src/System/Reflection/Metadata/Ecma335/Encoding/BlobEncoders.cs#L809
-        switch (sig.Type) {
-            case PrimType t: {
-                enc.Builder.WriteByte((byte)t.Kind.ToSrmTypeCode());
-                break;
-            }
-            case ArrayType t: {
-                EncodeType(enc.SZArray(), t.ElemType);
-                break;
-            }
-            case MDArrayType t: {
-                enc.Array(out var elemTypeEnc, out var shapeEnc);
-                EncodeType(elemTypeEnc, t.ElemType);
-                shapeEnc.Shape(t.Rank, t.Sizes, t.LowerBounds);
-                break;
-            }
-            case PointerType t: {
-                EncodeType(enc.Pointer(), t.ElemType);
-                break;
-            }
-            case ByrefType t: {
-                enc.Builder.WriteByte((byte)SignatureTypeCode.ByReference);
-                EncodeType(enc, t.ElemType);
-                break;
-            }
-            case TypeDef t: {
-                enc.Type(GetHandle(t), t.IsValueType);
-                break;
-            }
-            case TypeSpec t: {
-                var argEnc = enc.GenericInstantiation(GetHandle(t.Definition), t.GenericParams.Length, t.IsValueType);
-                foreach (var arg in t.GenericParams) {
-                    EncodeType(argEnc.AddArgument(), arg);
-                }
-                break;
-            }
-            case FuncPtrType t: {
-                EncodeMethodSig(t.Signature);
-                break;
-            }
-            case GenericParamType t: {
-                if (t.IsMethodParam) {
-                    enc.GenericMethodTypeParameter(t.Index);
-                } else {
-                    enc.GenericTypeParameter(t.Index);
-                }
-                break;
-            }
-            default: throw new NotImplementedException();
-        }
-    }
-
-    private BlobHandle EncodeSig(Action<BlobEncoder> encode)
-    {
-        var builder = new BlobBuilder();
-        var encoder = new BlobEncoder(builder);
-        encode(encoder);
-        return _builder.GetOrAddBlob(builder);
-    }
-
-    private StringHandle AddString(string? str)
-    {
-        return str == null ? default : _builder.GetOrAddString(str);
-    }
-    private BlobHandle AddBlob(byte[]? data)
-    {
-        return data == null ? default : _builder.GetOrAddBlob(data);
     }
 
     private void SerializePE(BlobBuilder peBlob)

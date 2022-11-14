@@ -207,8 +207,8 @@ public class MethodSpec : MethodDefOrSpec
 public class ILMethodBody
 {
     public required ArraySegment<ILInstruction> Instructions { get; set; }
-    public required Variable[] Locals { get; set; }
-    public required ExceptionRegion[] ExceptionRegions { get; set; }
+    public Variable[] Locals { get; set; } = Array.Empty<Variable>();
+    public ExceptionRegion[] ExceptionRegions { get; set; } = Array.Empty<ExceptionRegion>();
     public int MaxStack { get; set; }
     public bool InitLocals { get; set; }
 

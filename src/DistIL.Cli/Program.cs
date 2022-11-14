@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using System.Reflection;
 using System.Text.RegularExpressions;
 
 using DistIL.AsmIO;
@@ -50,6 +52,21 @@ modPm.Add(mp3);
 modPm.Add(new ExportPass());
 
 modPm.Run(module);
+
+var ignoreAccChecksAttrib = module.FindOrCreateType(
+    "System.Runtime.CompilerServices", "IgnoresAccessChecksToAttribute", 
+    TypeAttributes.BeforeFieldInit | TypeAttributes.Class,
+    resolver.CoreLib.FindType("System", "Attribute")
+);
+var ignoreAccChecksCtor = ignoreAccChecksAttrib.CreateMethod(
+    ".ctor", PrimType.Void, 
+    ImmutableArray.Create(new ParamDef(ignoreAccChecksAttrib, "this"), new ParamDef(PrimType.String, "assemblyName")), 
+    MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig
+);
+ignoreAccChecksCtor.ILBody = new ILMethodBody() {
+    Instructions = new[] { new ILInstruction(ILCode.Ret) }
+};
+module.AddCustomAttrib(new CustomAttrib(ignoreAccChecksCtor, ImmutableArray.Create<object?>(module.AsmName.Name)));
 
 if (args.Length >= 2) {
     using var outStream = File.Create(args[1]);

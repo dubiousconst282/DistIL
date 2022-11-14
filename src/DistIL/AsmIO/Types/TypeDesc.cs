@@ -87,8 +87,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
         return false;
     }
 
-    public sealed override void Print(PrintContext ctx)
-        => Print(ctx);
+    public sealed override void Print(PrintContext ctx) => Print(ctx, false);
 
     public virtual void Print(PrintContext ctx, bool includeNs = false)
     {

@@ -71,26 +71,71 @@ public class TypeDef : TypeDefOrSpec
     public IReadOnlyList<TypeDef> NestedTypes => EmptyIfNull(_nestedTypes);
     public IReadOnlyDictionary<MethodDesc, MethodDef> InterfaceMethodImpls => _itfMethodImpls ?? s_EmptyItfMethodImpls;
 
-    public TypeDef(ModuleDef mod, string? ns, string name, TypeAttributes attribs = default, ImmutableArray<TypeDesc> genericParams = default)
+    internal TypeDef(
+        ModuleDef mod, string? ns, string name, 
+        TypeAttributes attribs = default,
+        ImmutableArray<TypeDesc> genericParams = default,
+        TypeDefOrSpec? baseType = null)
     {
         Module = mod;
         Namespace = ns;
         Name = name;
         Attribs = attribs;
         GenericParams = genericParams.EmptyIfDefault();
+        _baseType = baseType;
+    }
+
+    public override TypeDefOrSpec GetSpec(GenericContext context)
+    {
+        return IsGeneric
+            ? new TypeSpec(this, context.FillParams(GenericParams))
+            : this;
+    }
+    public TypeSpec GetSpec(ImmutableArray<TypeDesc> genArgs)
+    {
+        Ensure.That(IsGeneric && genArgs.Length == GenericParams.Length);
+        return new TypeSpec(this, genArgs);
+    }
+
+    public TypeDef? GetNestedType(string name)
+    {
+        return _nestedTypes?.Find(e => e.Name == name);
+    }
+
+    public MethodDef CreateMethod(
+        string name, TypeSig retSig, ImmutableArray<ParamDef> paramSig, 
+        MethodAttributes attribs = MethodAttributes.Public | MethodAttributes.HideBySig,
+        ImmutableArray<GenericParamType> genericPars = default)
+    {
+        var existingMethod = FindMethod(name, new MethodSig(retSig, paramSig.Select(p => p.Sig).ToList()));
+        Ensure.That(existingMethod == null, "A method with the same signature already exists");
+
+        var method = new MethodDef(
+            this, retSig, paramSig, name, attribs, 
+            genericParams: genericPars.IsDefault ? default : genericPars.CastArray<TypeDesc>()
+        );
+        _methods.Add(method);
+        return method;
+    }
+
+    public override void Print(PrintContext ctx, bool includeNs = false)
+    {
+        if (DeclaringType != null) {
+            ctx.Print($"{DeclaringType}+{(IsValueType ? PrintToner.StructName : PrintToner.ClassName)}{Name}");
+        } else {
+            base.Print(ctx, includeNs);
+        }
     }
 
     internal static TypeDef Decode(ModuleLoader loader, TypeDefinition info)
     {
-        var type = new TypeDef(
+        return new TypeDef(
             loader._mod,
             loader._reader.GetOptString(info.Namespace),
             loader._reader.GetString(info.Name),
             info.Attributes,
             loader.CreateGenericParams(info.GetGenericParameters(), false)
         );
-        loader._mod._typeDefs.Add(type);
-        return type;
     }
     internal void Load1(ModuleLoader loader, TypeDefinition info)
     {
@@ -170,32 +215,6 @@ public class TypeDef : TypeDefOrSpec
         }
         loader.FillGenericParams(this, GenericParams, info.GetGenericParameters());
         loader.FillCustomAttribs(this, info.GetCustomAttributes());
-    }
-
-    public override TypeDefOrSpec GetSpec(GenericContext context)
-    {
-        return IsGeneric 
-            ? new TypeSpec(this, context.FillParams(GenericParams)) 
-            : this;
-    }
-    public TypeSpec GetSpec(ImmutableArray<TypeDesc> genArgs)
-    {
-        Ensure.That(IsGeneric && genArgs.Length == GenericParams.Length);
-        return new TypeSpec(this, genArgs);
-    }
-
-    public TypeDef? GetNestedType(string name)
-    {
-        return _nestedTypes?.Find(e => e.Name == name);
-    }
-
-    public override void Print(PrintContext ctx, bool includeNs = false)
-    {
-        if (DeclaringType != null) {
-            ctx.Print($"{DeclaringType}+{(IsValueType ? PrintToner.StructName : PrintToner.ClassName)}{Name}");
-        } else {
-            base.Print(ctx, includeNs);
-        }
     }
 }
 

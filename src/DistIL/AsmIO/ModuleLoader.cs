@@ -42,21 +42,27 @@ internal class ModuleLoader
 
     private void CreateTypes()
     {
+        _mod._typeDefs.EnsureCapacity(_reader.TypeDefinitions.Count);
+        _mod._exportedTypes.EnsureCapacity(_reader.ExportedTypes.Count);
+        _mod._customAttribs.EnsureCapacity(_reader.CustomAttributes.Count);
+
         _entities.Create<AssemblyReference>(info => _resolver.Resolve(info.GetAssemblyName(), throwIfNotFound: true));
         _entities.Create<TypeReference>(ResolveTypeRef);
-        _entities.Create<TypeDefinition>(info => TypeDef.Decode(this, info));
+        _entities.Create<TypeDefinition>(info => {
+            var type = TypeDef.Decode(this, info);
+            _mod._typeDefs.Add(type);
+            return type;
+        });
         _entities.Create<TypeSpecification>(info => {
             //Generic constraints may reference modified types in the TypeSpec table.
             //Most GetEntity() consumers cast its result, and will crash if this case is not explicitly handled.
             var sig = new SignatureDecoder(this, info.Signature).DecodeTypeSig();
             return !sig.HasCustomMods ? sig.Type : new ModifiedTypeSpecTableWrapper_() { Sig = sig };
         });
-
         foreach (var handle in _reader.ExportedTypes) {
             _mod._exportedTypes.Add(ResolveExportedType(handle));
         }
-
-        _mod._customAttribs.EnsureCapacity(_reader.CustomAttributes.Count);
+        _mod.SortTypes();
     }
     private void LoadTypes()
     {

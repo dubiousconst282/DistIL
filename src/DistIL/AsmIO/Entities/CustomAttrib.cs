@@ -38,6 +38,8 @@ public partial class CustomAttrib
         _fixedArgs = fixedArgs.EmptyIfDefault();
         _namedArgs = namedArgs.EmptyIfDefault();
         _decoded = true;
+
+        Ensure.That(_fixedArgs.Length == ctor.StaticParams.Length);
     }
     
     public CustomAttribProp? GetNamedArg(string name)

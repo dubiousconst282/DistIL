@@ -59,4 +59,11 @@ public static class CustomAttribExt
             return className.Equals(declType.Name);
         });
     }
+    
+    public static void AddCustomAttrib(this ModuleEntity entity, CustomAttrib attrib)
+    {
+        ref var linkedAttribs = ref entity.Module._customAttribs.GetOrAddRef(new(entity));
+        Array.Resize(ref linkedAttribs, (linkedAttribs?.Length ?? 0) + 1);
+        linkedAttribs[^1] = attrib;
+    }
 }

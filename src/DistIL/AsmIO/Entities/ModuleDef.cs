@@ -19,20 +19,12 @@ public class ModuleDef : ModuleEntity
     ModuleDef ModuleEntity.Module => this;
 
     internal List<TypeDef> _typeDefs = new(), _exportedTypes = new();
-    internal bool _typesSorted = false;
 
     internal Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); //root assemblies for references of forwarded types
     internal Dictionary<CustomAttribLink, CustomAttrib[]> _customAttribs = new();
 
     public TypeDef? FindType(string? ns, string name, bool includeExports = true, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
     {
-        if (!_typesSorted) {
-            _typesSorted = true;
-
-            Comparison<TypeDef> comparer = (a, b) => CompareTypeName(b, a.Namespace, a.Name);
-            _typeDefs.Sort(comparer);
-            _exportedTypes.Sort(comparer);
-        }
         var type = SearchType(_typeDefs, ns, name);
 
         if (type == null && includeExports) {
@@ -44,7 +36,54 @@ public class ModuleDef : ModuleEntity
         return type;
     }
 
+    public TypeDef FindOrCreateType(
+        string? ns, string name, 
+        TypeAttributes attrs = TypeAttributes.Public,
+        TypeDefOrSpec? baseType = null,
+        ImmutableArray<GenericParamType> genericParams = default)
+    {
+        var index = SearchTypeIndex(_typeDefs, ns, name);
+        if (index >= 0) {
+            return _typeDefs[index];
+        }
+        var type = new TypeDef(
+            this, ns, name, attrs, 
+            genericParams.IsDefault ? default : genericParams.CastArray<TypeDesc>(),
+            baseType ?? Resolver.SysTypes.Object
+        );
+        _typeDefs.Insert(~index, type);
+        return type;
+    }
+
+    public IEnumerable<MethodDef> AllMethods()
+        => TypeDefs.SelectMany(t => t.Methods);
+
+    public void Save(Stream stream)
+    {
+        var builder = new BlobBuilder();
+        new ModuleWriter(this).Emit(builder);
+        builder.WriteContentTo(stream);
+    }
+
+    public override string ToString()
+        => AsmName.ToString();
+
+    internal CustomAttrib[] GetLinkedCustomAttribs(in CustomAttribLink link)
+        => _customAttribs.GetValueOrDefault(link, Array.Empty<CustomAttrib>());
+
+    internal void SortTypes()
+    {
+        Comparison<TypeDef> comparer = (a, b) => CompareTypeName(b, a.Namespace, a.Name);
+        _typeDefs.Sort(comparer);
+        _exportedTypes.Sort(comparer);
+    }
+
     private static TypeDef? SearchType(List<TypeDef> types, string? ns, string name)
+    {
+        int index = SearchTypeIndex(types, ns, name);
+        return index < 0 ? null : types[index];
+    }
+    private static int SearchTypeIndex(List<TypeDef> types, string? ns, string name)
     {
         int min = 0, max = types.Count - 1;
         while (min <= max) {
@@ -56,29 +95,14 @@ public class ModuleDef : ModuleEntity
             } else if (c > 0) {
                 min = mid + 1;
             } else {
-                return types[mid];
+                return mid;
             }
         }
-        return null;
+        return ~min;
     }
     private static int CompareTypeName(TypeDef typeA, string? nsB, string nameB)
     {
         int c = string.CompareOrdinal(typeA.Name, nameB);
         return c == 0 ? string.CompareOrdinal(typeA.Namespace, nsB) : c;
     }
-
-    public IEnumerable<MethodDef> AllMethods()
-        => TypeDefs.SelectMany(t => t.Methods);
-
-    internal CustomAttrib[] GetLinkedCustomAttribs(in CustomAttribLink link)
-        => _customAttribs.GetValueOrDefault(link, Array.Empty<CustomAttrib>());
-
-    public void Save(Stream stream)
-    {
-        var builder = new BlobBuilder();
-        new ModuleWriter(this).Emit(builder);
-        builder.WriteContentTo(stream);
-    }
-
-    public override string ToString() => AsmName.ToString();
 }

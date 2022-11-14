@@ -31,13 +31,15 @@ public class InlineMethods : MethodPass
 
     private bool CanBeInlined(MethodDef caller, CallInst callInst)
     {
+        //TODO: proper checks - II.10.3 Introducing and overriding virtual methods
         var blockedAttribs = MethodAttribs.NewSlot | MethodAttribs.Abstract | MethodAttribs.PinvokeImpl;
 
-        return callInst.Method is MethodDefOrSpec { Definition: var callee } && 
+        return callInst.Method is MethodDefOrSpec { Definition: var callee } &&
             callee != caller &&
             callee.ILBody?.Instructions.Count <= _opts.MaxCalleeSize &&
             (callee.Attribs & blockedAttribs) == 0 &&
-            callee.GetCustomAttrib("System.Runtime.CompilerServices.IntrinsicAttribute") == null;
+            callee.GetCustomAttrib("System.Runtime.CompilerServices.IntrinsicAttribute") == null &&
+            callee.GetCustomAttrib("System.Runtime.CompilerServices.AsyncStateMachine") == null;
     }
 
     public static bool Inline(CallInst call)
@@ -123,12 +125,12 @@ public class InlineMethods : MethodPass
     public class Options
     {
         /// <summary> Ignore callees whose number of IL instructions is greater than this. </summary>
-        public int MaxCalleeSize { get; init; } = 64;
+        public int MaxCalleeSize { get; init; } = 32;
 
         /// <summary> If true, allows calls to methods from different assemblies to be inlined. </summary>
         //public bool InlineCrossAssemblyCalls { get; init; } = false;
 
-        /// <summary> If true, private member accessed by callee will be exposed as public (if they are on the same assembly). </summary>
+        /// <summary> If true, private members accessed by callee will be exposed as public (if they are on the same assembly). </summary>
         //public bool ExposePrivateCalleeMembers { get; init; } = true;
 
         //Note that IACA is undocumented: https://github.com/dotnet/runtime/issues/37875

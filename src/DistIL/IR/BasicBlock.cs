@@ -152,8 +152,8 @@ public class BasicBlock : TrackedValue
         Ensure.That(pos.Block == this && !pos.IsHeader);
 
         var newBlock = Method.CreateBlock();
+        RedirectSuccPhis(newBlock);
         MoveRange(newBlock, null, pos, Last);
-        //Add branch to new block
         SetBranch(newBlock);
         return newBlock;
     }
@@ -184,6 +184,13 @@ public class BasicBlock : TrackedValue
             foreach (var phi in succ.Phis()) {
                 phi.ReplaceOperands(this, newPred);
             }
+        }
+    }
+
+    public void RemovePredFromPhis(BasicBlock oldPred, bool removeTrivialPhis = true)
+    {
+        foreach (var phi in Phis()) {
+            phi.RemoveArg(oldPred, removeTrivialPhis);
         }
     }
 

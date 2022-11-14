@@ -27,10 +27,10 @@ mp2.Add(new ExpandLinq(module));
 mp2.Add(new SimplifyInsts(module)); //lambdas and devirtualization
 mp2.Add(new InlineMethods());
 mp2.Add(new SimplifyInsts(module));
-mp2.Add(new LoopInvariantCodeMotion());
+//mp2.Add(new LoopInvariantCodeMotion());
 mp2.Add(new DeadCodeElim());
 mp2.Add(new SimplifyCFG());
-mp2.Add(new ValueNumbering());
+//mp2.Add(new ValueNumbering());
 
 if (args.Length >= 3) {
     mp2.Add(new DumpPass() {
@@ -38,12 +38,15 @@ if (args.Length >= 3) {
         Filter = args.Length >= 4 ? args[3] : null
     });
 }
-mp2.Add(new RemovePhis());
+
+var mp3 = new MethodPassManager();
+mp3.Add(new RemovePhis());
 
 var modPm = new ModulePassManager();
 modPm.Add(new ImportPass());
 modPm.Add(mp1);
 modPm.Add(mp2);
+modPm.Add(mp3);
 modPm.Add(new ExportPass());
 
 modPm.Run(module);

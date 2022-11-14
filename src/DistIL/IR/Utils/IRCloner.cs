@@ -146,19 +146,19 @@ public class IRCloner
         public void Visit(StoreVarInst inst) => Out(new StoreVarInst(Remap(inst.Var), Remap(inst.Value)));
         public void Visit(VarAddrInst inst) => Out(new VarAddrInst(Remap(inst.Var)));
 
-        public void Visit(LoadPtrInst inst) => Out(new LoadPtrInst(Remap(inst.Address), inst.ElemType, inst.Flags));
-        public void Visit(StorePtrInst inst) => Out(new StorePtrInst(Remap(inst.Address), Remap(inst.Value), inst.ElemType, inst.Flags));
+        public void Visit(LoadPtrInst inst) => Out(new LoadPtrInst(Remap(inst.Address), Remap(inst.ElemType), inst.Flags));
+        public void Visit(StorePtrInst inst) => Out(new StorePtrInst(Remap(inst.Address), Remap(inst.Value), Remap(inst.ElemType), inst.Flags));
 
         public void Visit(ArrayLenInst inst) => Out(new ArrayLenInst(Remap(inst.Array)));
-        public void Visit(LoadArrayInst inst) => Out(new LoadArrayInst(Remap(inst.Array), Remap(inst.Index), inst.ElemType, inst.Flags));
-        public void Visit(StoreArrayInst inst) => Out(new StoreArrayInst(Remap(inst.Array), Remap(inst.Index), Remap(inst.Value), inst.ElemType, inst.Flags));
-        public void Visit(ArrayAddrInst inst) => Out(new ArrayAddrInst(Remap(inst.Array), Remap(inst.Index), inst.ElemType, inst.Flags));
+        public void Visit(LoadArrayInst inst) => Out(new LoadArrayInst(Remap(inst.Array), Remap(inst.Index), Remap(inst.ElemType), inst.Flags));
+        public void Visit(StoreArrayInst inst) => Out(new StoreArrayInst(Remap(inst.Array), Remap(inst.Index), Remap(inst.Value), Remap(inst.ElemType), inst.Flags));
+        public void Visit(ArrayAddrInst inst) => Out(new ArrayAddrInst(Remap(inst.Array), Remap(inst.Index), Remap(inst.ElemType), inst.Flags));
 
         public void Visit(LoadFieldInst inst) => Out(new LoadFieldInst(Remap(inst.Field), inst.IsStatic ? null : Remap(inst.Obj)));
         public void Visit(StoreFieldInst inst) => Out(new StoreFieldInst(Remap(inst.Field), inst.IsStatic ? null : Remap(inst.Obj), Remap(inst.Value)));
         public void Visit(FieldAddrInst inst) => Out(new FieldAddrInst(Remap(inst.Field), inst.IsStatic ? null : Remap(inst.Obj)));
 
-        public void Visit(CallInst inst) => Out(new CallInst(Remap(inst.Method), RemapArgs(inst.Args), inst.IsVirtual, inst.Constraint));
+        public void Visit(CallInst inst) => Out(new CallInst(Remap(inst.Method), RemapArgs(inst.Args), inst.IsVirtual, inst.Constraint == null ? null : Remap(inst.Constraint)));
         public void Visit(NewObjInst inst) => Out(new NewObjInst(Remap(inst.Constructor), RemapArgs(inst.Args)));
         public void Visit(FuncAddrInst inst) => Out(new FuncAddrInst(Remap(inst.Method), inst.IsVirtual ? Remap(inst.Object) : null));
         public void Visit(IntrinsicInst inst) => Out(new IntrinsicInst(inst.Intrinsic, RemapArgs(inst.Args)));
@@ -166,9 +166,9 @@ public class IRCloner
         public void Visit(ReturnInst inst) => Out(new ReturnInst(inst.HasValue ? Remap(inst.Value) : null));
         public void Visit(BranchInst inst) => Out(inst.IsJump ? new BranchInst(Remap(inst.Then)) : new BranchInst(Remap(inst.Cond), Remap(inst.Then), Remap(inst.Else)));
         public void Visit(SwitchInst inst) => Out(new SwitchInst(RemapArgs(inst.Operands), inst.TargetMappings.AsSpan().ToArray()));
-        public void Visit(PhiInst inst) => Out(new PhiInst(inst.ResultType, RemapArgs(inst.Operands)));
+        public void Visit(PhiInst inst) => Out(new PhiInst(Remap(inst.ResultType), RemapArgs(inst.Operands)));
 
-        public void Visit(GuardInst inst) => Out(new GuardInst(inst.Kind, Remap(inst.HandlerBlock), inst.CatchType, inst.HasFilter ? Remap(inst.FilterBlock) : null));
+        public void Visit(GuardInst inst) => Out(new GuardInst(inst.Kind, Remap(inst.HandlerBlock), inst.CatchType == null ? null : Remap(inst.CatchType), inst.HasFilter ? Remap(inst.FilterBlock) : null));
         public void Visit(ThrowInst inst) => Out(new ThrowInst(inst.IsRethrow ? null : Remap(inst.Exception)));
         public void Visit(LeaveInst inst) => Out(new LeaveInst(Remap(inst.Target)));
         public void Visit(ContinueInst inst) => Out(new ContinueInst(inst.IsFromFilter ? Remap(inst.FilterResult) : null));

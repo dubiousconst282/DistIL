@@ -80,6 +80,7 @@ public class SwitchInst : Instruction
     internal SwitchInst(Value[] operands, int[] targetMappings)
         : base(operands)
     {
+        Debug.Assert(operands.Distinct().Count() == operands.Length);
         TargetMappings = targetMappings;
     }
 
@@ -131,7 +132,7 @@ public class SwitchInst : Instruction
     public override void Print(PrintContext ctx)
     {
         ctx.Print("switch ", PrintToner.InstName);
-        ctx.PrintAsOperand(DefaultTarget);
+        ctx.PrintAsOperand(TargetIndex);
         ctx.Push(", [");
 
         ctx.Print("_: ");

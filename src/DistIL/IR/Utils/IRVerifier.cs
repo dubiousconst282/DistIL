@@ -12,81 +12,62 @@ public class IRVerifier
         _method = method;
     }
 
-    /// <summary> Verifies the method body and returns a list of diagnostics. </summary>
     public static List<Diagnostic> Diagnose(MethodBody method)
     {
         var v = new IRVerifier(method);
-        v.VerifyEdges();
-        v.VerifyPhis();
-        v.VerifyUses();
+        v.VerifyBlocks();
+        v.VerifyInstsAndUses();
         return v._diags;
     }
 
-    private void VerifyEdges()
+    private void VerifyBlocks()
     {
-        if (_method.EntryBlock.NumPreds != 0) {
-            Error(_method.EntryBlock, "Entry block should not have predecessors");
-        }
+        Check(_method.EntryBlock.NumPreds == 0, _method.EntryBlock, "Entry block should not have predecessors");
+
         foreach (var block in _method) {
-            if (!block.Last.IsBranch) {
-                Error(block, "Block must end with a valid terminator");
-            }
+            Check(!(block.First is PhiInst && block.FirstNonPhi is GuardInst), block, "Block should not have both phis and guards");
+            Check(block.Last.IsBranch, block, "Block must end with a valid terminator");
         }
     }
 
-    private void VerifyPhis()
+    private void VerifyInstsAndUses()
     {
-        var phiPreds = new HashSet<BasicBlock>();
-
-        foreach (var block in _method) {
-            foreach (var phi in block.Phis()) {
-                foreach (var arg in phi) {
-                    if (!phiPreds.Add(arg.Block)) {
-                        Error(phi, "Phi should not have duplicated block arguments");
-                    }
-                }
-                phiPreds.SymmetricExceptWith(block.Preds.AsEnumerable());
-                if (phiPreds.Count != 0) {
-                    Error(phi, "Phi must have one argument for each block predecessor");
-                }
-                phiPreds.Clear();
-            }
-        }
-    }
-
-    private void VerifyUses()
-    {
-        var values = new Dictionary<TrackedValue, HashSet<Instruction>>();
-        var blockIndices = new Dictionary<TrackedValue, int>();
+        var valueUsers = new Dictionary<TrackedValue, HashSet<Instruction>>();
+        var blockIndices = new Dictionary<Instruction, int>();
         var domTree = new DominatorTree(_method);
 
         foreach (var block in _method) {
             int index = 0;
+
             foreach (var inst in block) {
                 foreach (var oper in inst.Operands) {
-                    if (oper is TrackedValue trackedOper) {
-                        var expUsers = values.GetOrAddRef(trackedOper) ??= new();
+                    if (oper is Instruction instOper && instOper.Block?.Method != _method) {
+                        Error(inst, "Using an instruction that was removed or is declared outside the parent method");
+                    } else if (oper is TrackedValue trackedOper) {
+                        var expUsers = valueUsers.GetOrAddRef(trackedOper) ??= new();
                         expUsers.Add(inst);
                     }
+
+                    if (oper is Variable && inst is not VarAccessInst) {
+                        Error(inst, "Variables should only be used as operands by VarAccessInst (unless after RemovePhis)", DiagnosticSeverity.Warn);
+                    }
                 }
+                VerifyInst(inst);
                 blockIndices[inst] = index++;
             }
         }
-        foreach (var (val, expUsers) in values) {
+        
+        foreach (var (val, expUsers) in valueUsers) {
             //Check use list correctness
-            var actUsers = new HashSet<Instruction>();
-            foreach (var user in val.Users()) {
-                actUsers.Add(user);
-            }
+            var actUsers = new HashSet<Instruction>(val.Users().AsEnumerable());
             actUsers.SymmetricExceptWith(expUsers);
-            if (actUsers.Count != 0) {
-                Error(val, "Invalid value user set");
-            }
+            Check(actUsers.Count == 0, val, "Invalid value user set");
+
             //Check dominance
             if (val is Instruction defInst) {
                 foreach (var user in defInst.Users()) {
-                    if (user is Instruction userInst && !IsDominatedByDef(defInst, userInst)) {
-                        Error(user, "Using non-dominating instruction");
+                    if (user is Instruction userInst) {
+                        Check(IsDominatedByDef(defInst, userInst), user, "Using non-dominating instruction");
                     }
                 }
             }
@@ -101,45 +82,65 @@ public class IRVerifier
                 }
                 return true;
             }
-            if (user.Block == def.Block && blockIndices[def] >= blockIndices[user]) {
-                return false;
-            }
-            return domTree.Dominates(def.Block, user.Block);
+            return user.Block == def.Block 
+                ? blockIndices[def] < blockIndices[user] 
+                : domTree.Dominates(def.Block, user.Block);
         }
     }
 
-    private static bool AreSetsEqual<T>(IEnumerable<T> list1, IEnumerable<T> list2, IEqualityComparer<T>? comparer = null)
+    private void VerifyInst(Instruction inst)
     {
-        var set = new HashSet<T>(list1, comparer);
-        set.SymmetricExceptWith(list2);
-        return set.Count == 0;
+        switch (inst) {
+            case PhiInst phi: {
+                var phiPreds = new HashSet<BasicBlock>();
+
+                foreach (var arg in phi) {
+                    Check(phiPreds.Add(arg.Block), phi, "Phi should not have duplicated block arguments");
+                }
+                phiPreds.SymmetricExceptWith(phi.Block.Preds.AsEnumerable());
+                Check(phiPreds.Count == 0, phi, "Phi must have one argument for each block predecessor");
+                break;
+            }
+            case StoreVarInst { Var.ResultType: var dstType, Value.ResultType: var srcType }: {
+                if (!srcType.IsStackAssignableTo(dstType)) {
+                    Error(inst, $"Store to incompatible type: {srcType} -> {dstType}", DiagnosticSeverity.Warn);
+                }
+                break;
+            }
+        }
     }
 
-    private bool Error(Value location, string msg)
+    private void Error(Value location, string msg, DiagnosticSeverity severity = DiagnosticSeverity.Error)
     {
         _diags.Add(new Diagnostic() {
-            Kind = DiagnosticKind.Error,
+            Severity = severity,
             Location = location,
             Message = msg
         });
-        return true;
+    }
+    private void Check(bool cond, Value location, string msg, DiagnosticSeverity severity = DiagnosticSeverity.Error)
+    {
+        if (!cond) {
+            Error(location, msg, severity);
+        }
     }
 }
 
 public struct Diagnostic
 {
-    public DiagnosticKind Kind { get; init; }
+    public DiagnosticSeverity Severity { get; init; }
     /// <summary> The BasicBlock or Instruction originating this diagnostic. </summary>
     public Value Location { get; init; }
     public string? Message { get; init; }
 
     public override string ToString()
     {
-        return $"[{Kind}] {Message} ({Location})";
+        return $"[{Severity}] {Message} ({Location})";
     }
 }
-public enum DiagnosticKind
+public enum DiagnosticSeverity
 {
+    Info,
     Warn,
     Error,
 }

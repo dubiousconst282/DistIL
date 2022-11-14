@@ -32,7 +32,10 @@ public class DeadCodeElim : MethodPass
                 }
                 //`goto 1 ? T : F`  ->  `goto T`
                 if (block.Last is BranchInst { Cond: ConstInt { Value: var cond } } br) {
-                    block.SetBranch(cond != 0 ? br.Then : br.Else!);
+                    var (blockT, blockF) = cond != 0 ? (br.Then, br.Else!) : (br.Else!, br.Then);
+                    
+                    blockF.RemovePredFromPhis(block);
+                    block.SetBranch(blockT);
                 }
                 //Enqueue successors
                 foreach (var succ in block.Succs) {
@@ -45,10 +48,8 @@ public class DeadCodeElim : MethodPass
 
                 //Rewrite phis of reachable blocks
                 foreach (var succ in block.Succs) {
-                    if (!visitedBlocks.Contains(succ)) continue;
-
-                    foreach (var phi in succ.Phis()) {
-                        phi.RemoveArg(block, removeTrivialPhi: true);
+                    if (visitedBlocks.Contains(succ)) {
+                        succ.RemovePredFromPhis(block);
                     }
                 }
                 block.Remove();

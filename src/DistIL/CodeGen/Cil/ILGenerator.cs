@@ -31,23 +31,13 @@ public partial class ILGenerator : InstVisitor
             var block = blocks[i];
             _nextBlock = i + 1 < blocks.Length ? blocks[i + 1] : null;
 
-            //Insert nop to serve as an anchor if there's a loop outside this region, e.g:
-            //  while (true) { try { ... } }    ->  
-            //  BB_01: try; ...; leave BB_01;   ->
-            //  IL_00: nop; IL_01: ...; IL_xx: leave IL_00;
-            //Blocks with a single jump are also considered, so this will occasionaly
-            //false trigger, but it should cover all cases and only cost a single byte.
-            //FIXME: This may not work properly if there's no predecessor block,
-            //       we should check for this in the layoutizer or when assembling regions
-            //FIXME: Check if we actually need this (it looks perfectly fine, but ILSpy decomps it weirdly)
-            if (block.First is GuardInst && block.Preds.Any(p => p.Last is LeaveInst || p.First is BranchInst { IsJump: true })) {
-                _asm.Emit(ILCode.Nop);
-            }
-            //If this is the entry block of a handler/filter, pop the exception to the guard variable
+            //Note that ILSpy generates code with two loops for regions inside a loop. (BB_Head: guard; leave BB_Head;)
+            //Roslyn emits a nop before the head for such cases, but it does not seem to affect behavior.
+            //CoreCLR throws InvalidProgram if there's any instruction after leave/endfinally (incl. nop).
             var guard = block.Users().FirstOrDefault(u => u is GuardInst { Kind: GuardKind.Catch });
-
             _asm.StartBlock(block, guard != null);
 
+            //If this is the entry block of a handler/filter, pop the exception to the guard variable
             if (guard != null) {
                 _asm.EmitStore(GetSlot(guard));
             }

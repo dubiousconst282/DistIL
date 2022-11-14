@@ -101,8 +101,11 @@ public partial class SimplifyInsts : MethodPass
             Right: ConstInt { Value: 0 } or ConstNull
         }) {
             bool neg = inst.Op == Cmp.Eq;
-            inst = (CompareInst)inst.Left;
-            if (neg) inst.Op = inst.Op.GetNegated();
+            var innerCmp = (CompareInst)inst.Left;
+
+            if (neg) innerCmp.Op = innerCmp.Op.GetNegated();
+
+            return innerCmp;
         }
         return ConstFolding.FoldCompare(inst.Op, inst.Left, inst.Right);
     }

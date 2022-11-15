@@ -724,7 +724,7 @@ internal class BlockState
     }
     private Value[] PopCallArgs(MethodDesc method, bool ctor = false)
     {
-        var args = new Value[method.Params.Length - (ctor ? 1 : 0)];
+        var args = new Value[method.ParamSig.Count - (ctor ? 1 : 0)];
         for (int i = args.Length - 1; i >= 0; i--) {
             args[i] = Pop();
         }

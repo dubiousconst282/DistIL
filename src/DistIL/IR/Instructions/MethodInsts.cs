@@ -23,7 +23,7 @@ public class CallInst : Instruction
     public CallInst(MethodDesc method, Value[] args, bool isVirtual = false, TypeDesc? constraint = null)
         : base(args.Prepend(method).ToArray())
     {
-        Ensure.That(args.Length == method.Params.Length);
+        Ensure.That(args.Length == method.ParamSig.Count);
         ResultType = method.ReturnType;
         IsVirtual = isVirtual;
         Constraint = constraint;
@@ -50,7 +50,7 @@ public class CallInst : Instruction
             if (i == 0 && method.IsInstance && !isCtor) {
                 ctx.Print("this", PrintToner.Keyword);
             } else {
-                var paramType = method.Params[i + (isCtor ? 1 : 0)].Type;
+                var paramType = method.ParamSig[i + (isCtor ? 1 : 0)].Type;
                 paramType.Print(ctx);
             }
             ctx.Print(": ");
@@ -83,7 +83,7 @@ public class NewObjInst : Instruction
     public NewObjInst(MethodDesc ctor, Value[] args)
         : base(args.Prepend(ctor).ToArray())
     {
-        Ensure.That(args.Length == ctor.StaticParams.Length);
+        Ensure.That(!ctor.IsStatic && args.Length == (ctor.ParamSig.Count - 1));
         ResultType = ctor.DeclaringType;
     }
 

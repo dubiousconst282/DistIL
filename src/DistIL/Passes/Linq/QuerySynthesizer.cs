@@ -138,7 +138,7 @@ public class QuerySynthesizer
         var type = lambda.ResultType;
         var invoker = type.Methods.First(m => m.Name == "Invoke");
 
-        var args = invoker.Params.Length == 3
+        var args = invoker.ParamSig.Count == 3
             ? new Value[] { lambda, CurrItem, CurrIndex }
             : new Value[] { lambda, CurrItem };
         return ib.CreateCallVirt(invoker, args);

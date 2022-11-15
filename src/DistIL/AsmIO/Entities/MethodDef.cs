@@ -1,5 +1,6 @@
 namespace DistIL.AsmIO;
 
+using System.Collections;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
@@ -19,9 +20,7 @@ public abstract class MethodDesc : MemberDesc
     public abstract TypeSig ReturnSig { get; }
     public TypeDesc ReturnType => ReturnSig.Type;
 
-    //TODO: expose `IROList<TypeSig> ParamSig` instead of `ImmutArray<ParamDef> Params`
-    public ImmutableArray<ParamDef> Params { get; protected set; }
-    public ReadOnlySpan<ParamDef> StaticParams => Params.AsSpan(IsStatic ? 0 : 1);
+    public abstract IReadOnlyList<TypeSig> ParamSig { get; }
 
     public override void Print(PrintContext ctx)
     {
@@ -31,7 +30,7 @@ public abstract class MethodDesc : MemberDesc
         if (IsGeneric) {
             ctx.PrintSequence("<", ">", GenericParams, ctx.Print);
         }
-        ctx.PrintSequence("(", ")", Params, p => ctx.Print(p.Type));
+        ctx.PrintSequence("(", ")", ParamSig, p => p.Print(ctx));
     }
 
     public abstract MethodDesc GetSpec(GenericContext ctx);
@@ -42,6 +41,7 @@ public class ParamDef
     public string Name { get; set; }
     public ParameterAttributes Attribs { get; set; }
     public object? DefaultValue { get; set; }
+    public byte[]? MarshallingDesc { get; set; }
 
     public TypeDesc Type => Sig.Type;
 
@@ -71,7 +71,14 @@ public class MethodDef : MethodDefOrSpec
 
     /// <summary> Represents a placeholder for the return value, which may contain custom attributes. </summary>
     public ParamDef ReturnParam { get; }
+
+    //TODO: expose `IROList<TypeSig> ParamSig` instead of `ImmutArray<ParamDef> Params`
+    public ImmutableArray<ParamDef> Params { get; protected set; }
+    public ReadOnlySpan<ParamDef> StaticParams => Params.AsSpan(IsStatic ? 0 : 1);
+
     public override TypeSig ReturnSig => ReturnParam.Sig;
+    public override IReadOnlyList<TypeSig> ParamSig => _paramSig ??= new() { Method = this };
+    private ParamSigProxyList? _paramSig;
 
     public ILMethodBody? ILBody { get; set; }
     public IR.MethodBody? Body { get; set; }
@@ -141,11 +148,21 @@ public class MethodDef : MethodDefOrSpec
             var parInfo = reader.GetParameter(parHandle);
 
             int index = parInfo.SequenceNumber;
+            ParamDef par;
+
             if (index > 0 && index <= Params.Length) {
-                var par = Params[index - (IsStatic ? 1 : 0)]; //we always have a `this` param
+                par = Params[index - (IsStatic ? 1 : 0)]; //we always have a `this` param
                 par.Name = reader.GetString(parInfo.Name);
-                par.Attribs = parInfo.Attributes;
+            } else {
+                par = ReturnParam;
+            }
+            par.Attribs = parInfo.Attributes;
+
+            if (par.Attribs.HasFlag(ParameterAttributes.HasDefault)) {
                 par.DefaultValue = reader.DecodeConst(parInfo.GetDefaultValue());
+            }
+            if (par.Attribs.HasFlag(ParameterAttributes.HasFieldMarshal)) {
+                par.MarshallingDesc = reader.GetBlobBytes(parInfo.GetMarshallingDescriptor());
             }
             int linkIndex = index == 0 ? -1 : (index - (IsStatic ? 1 : 0));
             loader.FillCustomAttribs(this, parInfo.GetCustomAttributes(), CustomAttribLink.Type.MethodParam, linkIndex);
@@ -155,6 +172,17 @@ public class MethodDef : MethodDefOrSpec
         }
         loader.FillGenericParams(this, GenericParams, info.GetGenericParameters());
         loader.FillCustomAttribs(this, info.GetCustomAttributes());
+    }
+
+    class ParamSigProxyList : IReadOnlyList<TypeSig>
+    {
+        public MethodDef Method = null!;
+
+        public TypeSig this[int index] => Method.Params[index].Sig;
+        public int Count => Method.Params.Length;
+
+        public IEnumerator<TypeSig> GetEnumerator() => Method.Params.Select(p => p.Sig).GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }
 
@@ -167,6 +195,7 @@ public class MethodSpec : MethodDefOrSpec
     public override string Name => Definition.Name;
 
     public override TypeSig ReturnSig { get; }
+    public override IReadOnlyList<TypeSig> ParamSig { get; }
 
     internal MethodSpec(TypeDefOrSpec declaringType, MethodDef def, ImmutableArray<TypeDesc> genArgs = default)
     {
@@ -180,22 +209,24 @@ public class MethodSpec : MethodDefOrSpec
 
         var genCtx = new GenericContext(this);
         ReturnSig = def.ReturnSig.GetSpec(genCtx);
-        Params = GetParamsSpec(genCtx);
+        ParamSig = GetParamsSpec(genCtx);
     }
 
-    private ImmutableArray<ParamDef> GetParamsSpec(GenericContext genCtx)
+    private TypeSig[] GetParamsSpec(GenericContext genCtx)
     {
         if (Definition.Params.Length == 0) {
-            return ImmutableArray<ParamDef>.Empty;
+            return Array.Empty<TypeSig>();
         }
-        var builder = ImmutableArray.CreateBuilder<ParamDef>(Definition.Params.Length);
+        var types = new TypeSig[Definition.Params.Length];
+        int index = 0;
+
         if (Definition.IsInstance) {
-            builder.Add(new ParamDef(DeclaringType.IsValueType ? DeclaringType.CreateByref() : DeclaringType, "this"));
+            types[index++] = DeclaringType.IsValueType ? DeclaringType.CreateByref() : DeclaringType;
         }
         foreach (var par in Definition.StaticParams) {
-            builder.Add(new ParamDef(par.Sig.GetSpec(genCtx), par.Name, par.Attribs));
+            types[index++] = par.Sig.GetSpec(genCtx);
         }
-        return builder.MoveToImmutable();
+        return types;
     }
 
     public override MethodDesc GetSpec(GenericContext ctx)

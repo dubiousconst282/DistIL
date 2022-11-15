@@ -53,7 +53,7 @@ partial class SimplifyInsts : MethodPass
         static bool DirectizeWithCtorArgs(CallInst call, NewObjInst alloc)
         {
             if (alloc is not { Args: [LoadFieldInst ownerObj, FuncAddrInst funcAddr] }) return false;
-            if (call.NumArgs != funcAddr.Method.Params.Length) return false;
+            if (call.NumArgs != funcAddr.Method.ParamSig.Count) return false;
 
             call.Method = funcAddr.Method;
             call.SetArg(0, ownerObj);

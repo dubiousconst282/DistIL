@@ -215,6 +215,9 @@ internal partial class ModuleWriter
             if (par.Attribs.HasFlag(ParameterAttributes.HasDefault)) {
                 _builder.AddConstant(parHandle, par.DefaultValue);
             }
+            if (par.Attribs.HasFlag(ParameterAttributes.HasFieldMarshal)) {
+                _builder.AddMarshallingDescriptor(parHandle, _builder.GetOrAddBlob(par.MarshallingDesc!));
+            }
             EmitCustomAttribs(method, parHandle, CustomAttribLink.Type.MethodParam, i + (method.IsStatic ? 0 : 1));
         }
         if (method.GenericParams.Length > 0) {

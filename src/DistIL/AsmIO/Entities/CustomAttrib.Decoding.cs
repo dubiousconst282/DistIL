@@ -24,14 +24,14 @@ partial class CustomAttrib
 
     private ValueArray DecodeFixedArgs(ref BlobReader reader)
     {
-        int count = Constructor.StaticParams.Length;
-        if (count == 0) {
+        int count = Constructor.ParamSig.Count;
+        if (count < 2) {
             return ValueArray.Empty;
         }
 
         var builder = ImmutableArray.CreateBuilder<object?>(count);
         for (int i = 0; i < count; i++) {
-            builder.Add(DecodeElement(ref reader, Constructor.StaticParams[i].Type));
+            builder.Add(DecodeElement(ref reader, Constructor.ParamSig[i + 1].Type));
         }
         return builder.MoveToImmutable();
     }

@@ -48,16 +48,15 @@ public readonly struct MethodSig : IEquatable<MethodSig>
 
     private bool CompareParams(MethodDesc method, in GenericContext spec)
     {
-        var pars1 = method.StaticParams;
-        var pars2 = ParamTypes;
+        var pars1 = method.ParamSig;
+        int offset = method.IsInstance ? 1 : 0;
 
-        if (pars1.Length != pars2.Count) {
+        if ((pars1.Count - offset) != ParamTypes.Count) {
             return false;
         }
-        for (int i = 0; i < pars1.Length; i++) {
-            var type1 = pars1[i].Sig.GetSpec(spec);
-            var type2 = pars2[i];
-            if (type1 != type2) {
+        for (int i = 0; i < ParamTypes.Count; i++) {
+            var type1 = pars1[i + offset].GetSpec(spec);
+            if (type1 != ParamTypes[i]) {
                 return false;
             }
         }

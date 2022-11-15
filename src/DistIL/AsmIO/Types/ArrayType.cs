@@ -1,5 +1,6 @@
 namespace DistIL.AsmIO;
 
+using System.Collections;
 using System.Reflection;
 
 /// <summary> Represents a single dimensional array type. </summary>
@@ -35,10 +36,10 @@ public class MDArrayType : CompoundType
     public override IReadOnlyList<MDArrayMethod> Methods {
         get {
             if (_methods == null) {
-                int count = (int)MDArrayMethod.Kind.Count_;
+                int count = (int)MDArrayMethod.OpKind.Count_;
                 _methods = new List<MDArrayMethod>(count);
                 for (int i = 0; i < count; i++) {
-                    _methods.Add(new MDArrayMethod(this, (MDArrayMethod.Kind)i));
+                    _methods.Add(new MDArrayMethod(this, (MDArrayMethod.OpKind)i));
                 }
             }
             return _methods;
@@ -86,52 +87,83 @@ public class MDArrayType : CompoundType
 /// <summary> Represents a multi-dimensional array VES intrinsic (II.14.2) </summary>
 public class MDArrayMethod : MethodDesc
 {
-    public enum Kind { SizeCtor, RangeCtor, Get, Set, Address, Count_ }
+    public enum OpKind
+    {
+        SizeCtor,   //void .ctor(this, int len1, int len2, ...)
+        RangeCtor,  //void .ctor(this, int lo1, int hi1, int lo2, int hi2, ...)
+        Set,        //void   Set(this, int idx1, int idx2, T value)
+        Get,        //T      Get(this, int idx1, int idx2, ...)
+        Address,    //T& Address(this, int idx1, int idx2, ...)
+        Count_
+    }
 
     public override MDArrayType DeclaringType { get; }
     public override string Name { get; }
-    public Kind MethodKind { get; }
+    public OpKind Kind { get; }
 
     public override TypeSig ReturnSig { get; }
+    public override IReadOnlyList<TypeSig> ParamSig => _paramSig ??= new() { Method = this };
 
-    internal MDArrayMethod(MDArrayType type, Kind kind)
+    private ParamSigList? _paramSig;
+
+    internal MDArrayMethod(MDArrayType type, OpKind kind)
     {
-        bool isCtor = kind <= Kind.RangeCtor;
+        bool isCtor = kind <= OpKind.RangeCtor;
         DeclaringType = type;
         Name = isCtor ? ".ctor" : kind.ToString();
-        MethodKind = kind;
+        Kind = kind;
         Attribs = MethodAttributes.Public | (isCtor ? MethodAttributes.SpecialName : 0);
         ImplAttribs = MethodImplAttributes.InternalCall;
-
-        int dims = type.Rank;
-
-#pragma warning disable format
-        var readParams = CreateParams(dims);
-        (ReturnSig, Params) = kind switch {
-            Kind.SizeCtor  => (PrimType.Void, readParams),
-            Kind.RangeCtor => (PrimType.Void, CreateParams(dims * 2)),
-            Kind.Get       => (type.ElemType, readParams),
-            Kind.Set       => (PrimType.Void, CreateParams(dims, true)),
-            Kind.Address   => (type.ElemType.CreateByref(), readParams),
+        ReturnSig = kind switch {
+            <= OpKind.Set  => PrimType.Void,
+            OpKind.Get     => type.ElemType,
+            OpKind.Address => type.ElemType.CreateByref()
         };
-#pragma warning restore format
-
-        ImmutableArray<ParamDef> CreateParams(int count, bool isSetter = false)
-        {
-            var b = ImmutableArray.CreateBuilder<ParamDef>(count + (isSetter ? 2 : 1));
-            b.Add(new ParamDef(type, "this"));
-            for (int i = 0; i < count; i++) {
-                b.Add(new ParamDef(PrimType.Int32, "idx" + i));
-            }
-            if (isSetter) {
-                b.Add(new ParamDef(type.ElemType, "value"));
-            }
-            return b.MoveToImmutable();
-        }
     }
 
     public override MethodDesc GetSpec(GenericContext ctx)
     {
         throw new UnreachableException();
+    }
+
+    class ParamSigList : IReadOnlyList<TypeSig>
+    {
+        public MDArrayMethod Method = null!;
+
+        public TypeSig this[int index] {
+            get {
+                if (index == 0) {
+                    return Method.DeclaringType; //this
+                }
+                int rank = Method.DeclaringType.Rank;
+                return Method.Kind switch {
+                    OpKind.Set when index == rank + 1
+                        => Method.DeclaringType.ElemType,
+                    _ when index >= Count
+                        => throw new IndexOutOfRangeException(),
+                    _
+                        => PrimType.Int32
+                };
+            }
+        }
+
+        public int Count {
+            get {
+                int rank = Method.DeclaringType.Rank;
+                return Method.Kind switch {
+                    OpKind.RangeCtor => rank * 2 + 1,
+                    OpKind.Set => rank + 2,
+                    _ => rank + 1
+                };
+            }
+        }
+
+        public IEnumerator<TypeSig> GetEnumerator()
+        {
+            for (int i = 0; i < Count; i++) {
+                yield return this[i];
+            }
+        }
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

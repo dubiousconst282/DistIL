@@ -33,7 +33,7 @@ internal class ILAssembler
         switch (op) {
             case ILCode.Call or ILCode.Callvirt or ILCode.Newobj: {
                 var method = (MethodDesc)operand!;
-                _stackDepth -= method.Params.Length;
+                _stackDepth -= method.ParamSig.Count;
                 _stackDepth += method.ReturnType != PrimType.Void ? 1 : 0;
                 _stackDepth += (op == ILCode.Newobj) ? 2 : 0; //discount `this` parameter
                 break;

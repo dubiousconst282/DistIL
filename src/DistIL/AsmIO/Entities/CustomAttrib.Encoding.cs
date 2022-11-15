@@ -16,10 +16,8 @@ partial class CustomAttrib
 
     private void EncodeFixedArgs(BlobBuilder writer)
     {
-        int count = Constructor.StaticParams.Length;
-
-        for (int i = 0; i < count; i++) {
-            EncodeElement(writer, Constructor.StaticParams[i].Type, _fixedArgs[i]);
+        for (int i = 1; i < Constructor.ParamSig.Count; i++) {
+            EncodeElement(writer, Constructor.ParamSig[i].Type, _fixedArgs[i - 1]);
         }
     }
 

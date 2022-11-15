@@ -83,14 +83,16 @@ partial class ModuleWriter
     private BlobHandle EncodeMethodSig(MethodDesc method)
     {
         return EncodeSig(b => {
-            var pars = method.StaticParams;
+            var pars = method.ParamSig;
+            int offset = method.IsInstance ? 1 : 0;
+
             b.MethodSignature(default, method.GenericParams.Length, method.IsInstance)
-                .Parameters(pars.Length, out var retTypeEnc, out var parsEnc);
+                .Parameters(pars.Count - offset, out var retTypeEnc, out var parsEnc);
 
             EncodeType(retTypeEnc.Type(), method.ReturnSig);
 
-            foreach (var par in pars) {
-                EncodeType(parsEnc.AddParameter().Type(), par.Type);
+            for (int i = offset; i < pars.Count; i++) {
+                EncodeType(parsEnc.AddParameter().Type(), pars[i]);
             }
         });
     }

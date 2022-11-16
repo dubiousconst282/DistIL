@@ -144,17 +144,17 @@ public class BasicBlock : TrackedValue
 
     /// <summary>
     /// Splits this block, moving instructions starting from `pos` to the new block,
-    /// and adds a unconditional branch to the new block.
+    /// and adds a unconditional branch to the <paramref name="branchTo"/> or to new block.
     /// Note that `pos` cannot be a PhiInst/GuardInst and it must be in this block.
     /// </summary>
-    public BasicBlock Split(Instruction pos)
+    public BasicBlock Split(Instruction pos, BasicBlock? branchTo = null)
     {
         Ensure.That(pos.Block == this && !pos.IsHeader);
 
         var newBlock = Method.CreateBlock();
         RedirectSuccPhis(newBlock);
         MoveRange(newBlock, null, pos, Last);
-        SetBranch(newBlock);
+        SetBranch(branchTo ?? newBlock);
         return newBlock;
     }
 

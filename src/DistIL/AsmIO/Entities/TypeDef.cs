@@ -1,5 +1,6 @@
 namespace DistIL.AsmIO;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Metadata;
 
@@ -281,9 +282,9 @@ public class TypeSpec : TypeDefOrSpec
         GenericParams = args;
     }
 
-    public override MethodDesc? FindMethod(string name, in MethodSig sig, in GenericContext spec = default)
+    public override MethodDesc? FindMethod(string name, in MethodSig sig = default, in GenericContext spec = default, bool throwIfNotFound = false)
     {
-        var method = Definition.FindMethod(name, sig, spec.IsNull ? new GenericContext(this) : spec);
+        var method = Definition.FindMethod(name, sig, spec.IsNull ? new GenericContext(this) : spec, throwIfNotFound);
         return method != null ? new MethodSpec(this, (MethodDef)method) : null;
     }
 

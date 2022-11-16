@@ -55,12 +55,18 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     /// <summary> Creates a <see cref="ByrefType"/> of the current type. </summary>
     public virtual ByrefType CreateByref() => new(this);
 
-    public virtual MethodDesc? FindMethod(string name, in MethodSig sig, in GenericContext spec = default)
+    /// <summary> Searches for a method with the specified signature. </summary>
+    /// <param name="sig">The method signature to search for, or `default` to match any signature. Should not include the `this` parameter type. </param>
+    /// <param name="spec">A generic context used to specialize methods before matching with the signature.</param>
+    public virtual MethodDesc? FindMethod(string name, in MethodSig sig = default, in GenericContext spec = default, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
     {
         foreach (var method in Methods) {
-            if (method.Name == name && sig.Matches(method, spec)) {
+            if (method.Name == name && (sig.IsNull || sig.Matches(method, spec))) {
                 return method;
             }
+        }
+        if (throwIfNotFound) {
+            throw new InvalidOperationException($"Could not find method '{name}' in type '{Name}'.");
         }
         return null;
     }

@@ -19,6 +19,8 @@ public readonly struct MethodSig : IEquatable<MethodSig>
 
     readonly SignatureHeader _header;
 
+    public bool IsNull => ReturnType == null!;
+
     /// <remarks> Note that <paramref name="paramTypes"/> should not include the instance type (`this` parameter). </remarks>
     public MethodSig(TypeSig retType, IReadOnlyList<TypeSig> paramTypes, bool? isInstance = null, int numGenPars = 0)
     {

@@ -22,6 +22,7 @@ public class IRBuilder
     }
     public virtual void SetPosition(BasicBlock block)
     {
+        _last = null;
         _block = block;
     }
 
@@ -71,11 +72,9 @@ public class IRBuilder
     public Value CreateSle(Value left, Value right) => CreateCmp(CompareOp.Sle, left, right);
     public Value CreateSge(Value left, Value right) => CreateCmp(CompareOp.Sge, left, right);
 
-    public LoadFieldInst CreateFieldLoad(FieldDesc field, Value? obj = null)
-        => Add(new LoadFieldInst(field, obj));
+    public ConvertInst CreateConvert(Value srcValue, TypeDesc dstType, bool checkOverflow = false, bool srcUnsigned = false)
+        => Add(new ConvertInst(srcValue, dstType, checkOverflow, srcUnsigned));
 
-    public StoreFieldInst CreateFieldStore(FieldDesc field, Value? obj, Value value)
-        => Add(new StoreFieldInst(field, obj, value));
 
     public CallInst CreateCall(MethodDesc method, params Value[] args)
         => Add(new CallInst(method, args));
@@ -83,8 +82,16 @@ public class IRBuilder
     public CallInst CreateCallVirt(MethodDesc method, params Value[] args)
         => Add(new CallInst(method, args, true));
 
-    public ConvertInst CreateConvert(Value srcValue, TypeDesc dstType, bool checkOverflow = false, bool srcUnsigned = false)
-        => Add(new ConvertInst(srcValue, dstType, checkOverflow, srcUnsigned));
+    public NewObjInst CreateNewObj(MethodDesc ctor, params Value[] args)
+        => Add(new NewObjInst(ctor, args));
+
+
+    public LoadFieldInst CreateFieldLoad(FieldDesc field, Value? obj = null)
+        => Add(new LoadFieldInst(field, obj));
+
+    public StoreFieldInst CreateFieldStore(FieldDesc field, Value? obj, Value value)
+        => Add(new StoreFieldInst(field, obj, value));
+
 
     public ArrayLenInst CreateArrayLen(Value array)
         => Add(new ArrayLenInst(array));
@@ -97,6 +104,7 @@ public class IRBuilder
 
     public IntrinsicInst CreateNewArray(TypeDesc elemType, Value length)
         => Add(new IntrinsicInst(CilIntrinsic.NewArray, elemType, length));
+
 
     public void CreateMarker(string text)
         => Add(new IntrinsicInst(IRIntrinsic.Marker, ConstString.Create(text)));

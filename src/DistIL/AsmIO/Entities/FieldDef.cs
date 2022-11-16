@@ -8,7 +8,7 @@ public abstract class FieldDesc : MemberDesc
 {
     public TypeSig Sig { get; set; } = null!;
     public TypeDesc Type => Sig.Type;
-    public abstract FieldAttributes Attribs { get; set; }
+    public abstract FieldAttributes Attribs { get; }
 
     public bool IsStatic => (Attribs & FieldAttributes.Static) != 0;
     public bool IsInstance => !IsStatic;
@@ -48,8 +48,9 @@ public class FieldDef : FieldDefOrSpec
 {
     public override FieldDef Definition => this;
     public override TypeDef DeclaringType { get; }
-    public override FieldAttributes Attribs { get; set; }
     public override string Name { get; }
+
+    public override FieldAttributes Attribs { get; }
 
     public object? DefaultValue { get; set; }
     public bool HasDefaultValue => (Attribs & FieldAttributes.HasDefault) != 0;
@@ -61,6 +62,8 @@ public class FieldDef : FieldDefOrSpec
     public byte[]? MappedData { get; set; }
 
     public byte[]? MarshallingDesc { get; set; }
+
+    internal IList<CustomAttrib>? _customAttribs;
 
     public FieldDef(
         TypeDef declaringType, TypeSig sig, string name, 
@@ -76,12 +79,17 @@ public class FieldDef : FieldDefOrSpec
         MappedData = mappedData;
     }
 
+    public IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
+        => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
+
     internal static FieldDef Decode(ModuleLoader loader, FieldDefinition info)
     {
         var declaringType = loader.GetType(info.GetDeclaringType());
-        var type = new SignatureDecoder(loader, info.Signature, new GenericContext(declaringType))
-            .ExpectHeader(SignatureKind.Field)
-            .DecodeTypeSig();
+
+        var sigDecoder = new SignatureDecoder(loader, info.Signature, new GenericContext(declaringType));
+        sigDecoder.ExpectHeader(SignatureKind.Field);
+
+        var type = sigDecoder.DecodeTypeSig();
 
         return new FieldDef(
             declaringType, type, loader._reader.GetString(info.Name),
@@ -98,11 +106,10 @@ public class FieldDef : FieldDefOrSpec
             int size = GetMappedDataSize(Type);
             unsafe { MappedData = new Span<byte>(data.Pointer, size).ToArray(); }
         }
-        var marshalDescHandle = info.GetMarshallingDescriptor();
-        if (!marshalDescHandle.IsNil) {
-            MarshallingDesc = loader._reader.GetBlobBytes(marshalDescHandle);
+        if (Attribs.HasFlag(FieldAttributes.HasFieldMarshal)) {
+            MarshallingDesc = loader._reader.GetBlobBytes(info.GetMarshallingDescriptor());
         }
-        loader.FillCustomAttribs(this, info.GetCustomAttributes());
+        _customAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
     }
 
     public static int GetMappedDataSize(TypeDesc type)
@@ -137,10 +144,7 @@ public class FieldSpec : FieldDefOrSpec
     public override FieldDef Definition { get; }
     public override TypeSpec DeclaringType { get; }
 
-    public override FieldAttributes Attribs {
-        get => Definition.Attribs;
-        set => Definition.Attribs = value;
-    }
+    public override FieldAttributes Attribs => Definition.Attribs;
     public override string Name => Definition.Name;
 
     internal FieldSpec(TypeSpec declaringType, FieldDef def)

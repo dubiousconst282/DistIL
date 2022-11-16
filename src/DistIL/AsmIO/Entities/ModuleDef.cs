@@ -19,9 +19,8 @@ public class ModuleDef : ModuleEntity
     ModuleDef ModuleEntity.Module => this;
 
     internal List<TypeDef> _typeDefs = new(), _exportedTypes = new();
-
     internal Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); //root assemblies for references of forwarded types
-    internal Dictionary<CustomAttribLink, CustomAttrib[]> _customAttribs = new();
+    internal List<CustomAttrib> _asmCustomAttribs = new(), _modCustomAttribs = new();
 
     public TypeDef? FindType(string? ns, string name, bool includeExports = true, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
     {
@@ -36,7 +35,7 @@ public class ModuleDef : ModuleEntity
         return type;
     }
 
-    public TypeDef FindOrCreateType(
+    public TypeDef CreateType(
         string? ns, string name, 
         TypeAttributes attrs = TypeAttributes.Public,
         TypeDefOrSpec? baseType = null,
@@ -44,11 +43,11 @@ public class ModuleDef : ModuleEntity
     {
         var index = SearchTypeIndex(_typeDefs, ns, name);
         if (index >= 0) {
-            return _typeDefs[index];
+            throw new InvalidOperationException("A type with the same name already exists");
         }
         var type = new TypeDef(
             this, ns, name, attrs, 
-            genericParams.IsDefault ? default : genericParams.CastArray<TypeDesc>(),
+            genericParams.CastArray<TypeDesc>(),
             baseType ?? Resolver.SysTypes.Object
         );
         _typeDefs.Insert(~index, type);
@@ -57,6 +56,9 @@ public class ModuleDef : ModuleEntity
 
     public IEnumerable<MethodDef> AllMethods()
         => TypeDefs.SelectMany(t => t.Methods);
+
+    public List<CustomAttrib> GetCustomAttribs(bool forAssembly)
+        => forAssembly ? _asmCustomAttribs : _modCustomAttribs;
 
     public void Save(Stream stream)
     {
@@ -67,9 +69,6 @@ public class ModuleDef : ModuleEntity
 
     public override string ToString()
         => AsmName.ToString();
-
-    internal CustomAttrib[] GetLinkedCustomAttribs(in CustomAttribLink link)
-        => _customAttribs.GetValueOrDefault(link, Array.Empty<CustomAttrib>());
 
     internal void SortTypes()
     {

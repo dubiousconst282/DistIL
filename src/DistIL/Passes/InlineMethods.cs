@@ -38,8 +38,8 @@ public class InlineMethods : MethodPass
             callee != caller &&
             callee.ILBody?.Instructions.Count <= _opts.MaxCalleeSize &&
             (callee.Attribs & blockedAttribs) == 0 &&
-            callee.GetCustomAttrib("System.Runtime.CompilerServices.IntrinsicAttribute") == null &&
-            callee.GetCustomAttrib("System.Runtime.CompilerServices.AsyncStateMachine") == null;
+            callee.GetCustomAttribs().Find("System.Runtime.CompilerServices", "IntrinsicAttribute") == null &&
+            callee.GetCustomAttribs().Find("System.Runtime.CompilerServices", "AsyncStateMachine") == null;
     }
 
     public static bool Inline(CallInst call)

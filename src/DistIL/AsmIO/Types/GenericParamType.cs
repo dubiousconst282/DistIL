@@ -16,8 +16,7 @@ public class GenericParamType : TypeDesc
     public ImmutableArray<TypeSig> Constraints { get; private set; }
     public GenericParameterAttributes Attribs { get; }
 
-    internal CustomAttrib[]? _customAttribs;
-    internal CustomAttrib[]?[]? _constraintCustomAttribs;
+    internal CustomAttrib[]?[]? _customAttribs; //[0]: own, [1..]: constraints
 
     public int Index { get; }
     public bool IsMethodParam { get; }
@@ -33,31 +32,46 @@ public class GenericParamType : TypeDesc
 
     internal void Load3(ModuleLoader loader, GenericParameter info)
     {
-        Constraints = DecodeGenericConstraints(loader, info.GetConstraints());
-
-        var customAttribHandles = info.GetCustomAttributes();
-        if (customAttribHandles.Count > 0) {
-            _customAttribs = loader.DecodeCustomAttribs(customAttribHandles);
-        }
+        Constraints = DecodeConstraints(loader, info.GetConstraints());
+        AddCustomAttribs(0, loader.DecodeCustomAttribs(info.GetCustomAttributes()));
     }
-    private ImmutableArray<TypeSig> DecodeGenericConstraints(ModuleLoader loader, GenericParameterConstraintHandleCollection handleList)
+    private ImmutableArray<TypeSig> DecodeConstraints(ModuleLoader loader, GenericParameterConstraintHandleCollection handles)
     {
-        if (handleList.Count == 0) {
+        if (handles.Count == 0) {
             return ImmutableArray<TypeSig>.Empty;
         }
-        var builder = ImmutableArray.CreateBuilder<TypeSig>(handleList.Count);
-        foreach (var handle in handleList) {
+        var builder = ImmutableArray.CreateBuilder<TypeSig>(handles.Count);
+        foreach (var handle in handles) {
             var info = loader._reader.GetGenericParameterConstraint(handle);
             var constraint = loader.GetEntity(info.Type);
             builder.Add(constraint as TypeDesc ?? ((ModifiedTypeSpecTableWrapper_)constraint).Sig);
-
-            var customAttribHandles = info.GetCustomAttributes();
-            if (customAttribHandles.Count > 0) {
-                Array.Resize(ref _constraintCustomAttribs, builder.Count);
-                _constraintCustomAttribs[builder.Count - 1] = loader.DecodeCustomAttribs(customAttribHandles);
-            }
+            AddCustomAttribs(builder.Count, loader.DecodeCustomAttribs(info.GetCustomAttributes()));
         }
         return builder.MoveToImmutable();
+    }
+
+    public IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
+    {
+        Ensure.That(readOnly, "Not impl");
+        
+        return _customAttribs?[0] ?? Array.Empty<CustomAttrib>();
+    }
+
+    public IList<CustomAttrib> GetCustomAttribs(TypeSig constraint, bool readOnly = true)
+    {
+        Ensure.That(readOnly, "Not impl");
+
+        int index = Constraints.IndexOf(constraint);
+        Ensure.That(index >= 0, "Generic parameter is not constrainted by the specified type");
+        return _customAttribs?.ElementAtOrDefault(index + 1) ?? Array.Empty<CustomAttrib>();
+    }
+
+    private void AddCustomAttribs(int index, CustomAttrib[]? attribs)
+    {
+        if (attribs != null) {
+            Array.Resize(ref _customAttribs, index + 1);
+            _customAttribs[index] = attribs;
+        }
     }
 
     public override void Print(PrintContext ctx, bool includeNs = false)

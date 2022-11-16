@@ -7,9 +7,9 @@ public class EventDef : MemberDesc, ModuleEntity
 {
     public override TypeDef DeclaringType { get; }
     public ModuleDef Module => DeclaringType.Module;
+    public override string Name { get; }
 
     public EventAttributes Attribs { get; init; }
-    public override string Name { get; }
 
     public TypeDesc Type { get; }
 
@@ -17,6 +17,8 @@ public class EventDef : MemberDesc, ModuleEntity
     public MethodDef? Remover { get; }
     public MethodDef? Raiser { get; }
     public ImmutableArray<MethodDef> OtherAccessors { get; }
+
+    private IList<CustomAttrib>? _customAttribs;
 
     public EventDef(
         TypeDef declaryingType, string name, TypeDesc type,
@@ -34,6 +36,9 @@ public class EventDef : MemberDesc, ModuleEntity
         Attribs = attribs;
     }
 
+    public IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
+        => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
+    
     public override void Print(PrintContext ctx)
     {
         ctx.Print($"{DeclaringType.Name}::{Name} {{");
@@ -60,7 +65,7 @@ public class EventDef : MemberDesc, ModuleEntity
             otherAccessors,
             info.Attributes
         );
-        loader.FillCustomAttribs(evt, info.GetCustomAttributes());
+        evt._customAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
         return evt;
     }
 }

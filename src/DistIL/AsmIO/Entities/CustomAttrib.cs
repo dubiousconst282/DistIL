@@ -69,36 +69,3 @@ public class CustomAttribProp
 
     public override string ToString() => $"{Name}: {Type} = '{Value}'";
 }
-
-/// <summary> Represents a key that links a custom attribute with an module entity. </summary>
-internal readonly struct CustomAttribLink : IEquatable<CustomAttribLink>
-{
-    readonly ModuleEntity _entity;
-    readonly Type _type;
-    readonly int _index;
-
-    public CustomAttribLink(ModuleEntity entity, int index = 0, Type type = Type.Entity)
-    {
-        _entity = entity;
-        _type = type;
-        _index = index;
-    }
-
-    public bool Equals(CustomAttribLink other)
-        => other._entity == _entity && other._type == _type && other._index == _index;
-
-    public override int GetHashCode()
-        => HashCode.Combine(_entity, (int)_type << 4 | _index);
-
-    public override bool Equals(object? obj)
-        => obj is CustomAttribLink other && Equals(other);
-
-    public enum Type
-    {
-        Entity,
-        MethodParam,
-        InterfaceImpl,
-        GenericParam,
-        Module
-    }
-}

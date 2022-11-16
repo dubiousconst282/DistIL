@@ -36,15 +36,20 @@ internal class ModuleLoader
         CreateTypes();
         LoadTypes();
 
-        FillCustomAttribs(_mod, _reader.GetAssemblyDefinition().GetCustomAttributes());
-        FillCustomAttribs(_mod, _reader.GetModuleDefinition().GetCustomAttributes(), CustomAttribLink.Type.Module, 0);
+        var asmCustomAttribs = DecodeCustomAttribs(_reader.GetAssemblyDefinition().GetCustomAttributes());
+        if (asmCustomAttribs != null) {
+            _mod._asmCustomAttribs.AddRange(asmCustomAttribs);
+        }
+        var modCustomAttribs = DecodeCustomAttribs(_reader.GetModuleDefinition().GetCustomAttributes());
+        if (modCustomAttribs != null) {
+            _mod._modCustomAttribs.AddRange(modCustomAttribs);
+        }
     }
 
     private void CreateTypes()
     {
         _mod._typeDefs.EnsureCapacity(_reader.TypeDefinitions.Count);
         _mod._exportedTypes.EnsureCapacity(_reader.ExportedTypes.Count);
-        _mod._customAttribs.EnsureCapacity(_reader.CustomAttributes.Count);
 
         _entities.Create<AssemblyReference>(info => _resolver.Resolve(info.GetAssemblyName(), throwIfNotFound: true));
         _entities.Create<TypeReference>(ResolveTypeRef);
@@ -100,20 +105,6 @@ internal class ModuleLoader
         if (entryPointToken != 0) {
             _mod.EntryPoint = GetMethod(MetadataTokens.MethodDefinitionHandle(entryPointToken));
         }
-    }
-
-    public ImmutableArray<TypeDesc> CreateGenericParams(GenericParameterHandleCollection handleList, bool isForMethod)
-    {
-        if (handleList.Count == 0) {
-            return ImmutableArray<TypeDesc>.Empty;
-        }
-        var builder = ImmutableArray.CreateBuilder<TypeDesc>(handleList.Count);
-        foreach (var handle in handleList) {
-            var info = _reader.GetGenericParameter(handle);
-            string name = _reader.GetString(info.Name);
-            builder.Add(new GenericParamType(info.Index, isForMethod, name, info.Attributes));
-        }
-        return builder.MoveToImmutable();
     }
 
     private TypeDef ResolveTypeRef(TypeReference info)
@@ -185,29 +176,38 @@ internal class ModuleLoader
         throw new InvalidOperationException($"Could not resolve referenced field '{rootParent}::{name}'");
     }
 
-    public void FillGenericParams(ModuleEntity parent, ImmutableArray<TypeDesc> genPars, GenericParameterHandleCollection handleList)
+    public ImmutableArray<TypeDesc> CreateGenericParams(GenericParameterHandleCollection handleList, bool isForMethod)
     {
+        if (handleList.Count == 0) {
+            return ImmutableArray<TypeDesc>.Empty;
+        }
+        var builder = ImmutableArray.CreateBuilder<TypeDesc>(handleList.Count);
         foreach (var handle in handleList) {
+            var info = _reader.GetGenericParameter(handle);
+            string name = _reader.GetString(info.Name);
+            builder.Add(new GenericParamType(info.Index, isForMethod, name, info.Attributes));
+        }
+        return builder.MoveToImmutable();
+    }
+
+    public void FillGenericParams(ImmutableArray<TypeDesc> genPars, GenericParameterHandleCollection handles)
+    {
+        foreach (var handle in handles) {
             var info = _reader.GetGenericParameter(handle);
             var param = (GenericParamType)genPars[info.Index];
             param.Load3(this, info);
-            FillCustomAttribs(parent, info.GetCustomAttributes(), CustomAttribLink.Type.GenericParam, info.Index);
         }
     }
 
-    public void FillCustomAttribs(ModuleEntity entity, CustomAttributeHandleCollection handles, CustomAttribLink.Type linkType = default, int linkIndex = 0)
+    public CustomAttrib[]? DecodeCustomAttribs(CustomAttributeHandleCollection handles)
     {
-        if (handles.Count > 0) {
-            _mod._customAttribs.Add(new(entity, linkIndex, linkType), DecodeCustomAttribs(handles));
+        if (handles.Count == 0) {
+            return null;
         }
-    }
-
-    public CustomAttrib[] DecodeCustomAttribs(CustomAttributeHandleCollection handleList)
-    {
-        var attribs = new CustomAttrib[handleList.Count];
+        var attribs = new CustomAttrib[handles.Count];
         int index = 0;
 
-        foreach (var handle in handleList) {
+        foreach (var handle in handles) {
             var attrib = _reader.GetCustomAttribute(handle);
             var ctor = (MethodDesc)GetEntity(attrib.Constructor);
             var blob = _reader.GetBlobBytes(attrib.Value);

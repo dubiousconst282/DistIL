@@ -7,9 +7,9 @@ public class PropertyDef : MemberDesc, ModuleEntity
 {
     public override TypeDef DeclaringType { get; }
     public ModuleDef Module => DeclaringType.Module;
-
-    public PropertyAttributes Attribs { get; init; }
     public override string Name { get; }
+
+    public PropertyAttributes Attribs { get; }
     
     public MethodSig Sig { get; }
 
@@ -19,7 +19,9 @@ public class PropertyDef : MemberDesc, ModuleEntity
     public MethodDef? Setter { get; }
     public IReadOnlyList<MethodDef> OtherAccessors { get; }
 
-    public PropertyDef(
+    private IList<CustomAttrib>? _customAttribs;
+
+    internal PropertyDef(
         TypeDef declaryingType, string name, MethodSig sig,
         MethodDef? getter = null, MethodDef? setter = null,
         ImmutableArray<MethodDef> otherAccessors = default,
@@ -35,6 +37,9 @@ public class PropertyDef : MemberDesc, ModuleEntity
         DefaultValue = defaultValue;
         Attribs = attribs;
     }
+
+    public IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
+        => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
 
     public override void Print(PrintContext ctx)
     {
@@ -61,7 +66,7 @@ public class PropertyDef : MemberDesc, ModuleEntity
             loader._reader.DecodeConst(info.GetDefaultValue()),
             info.Attributes
         );
-        loader.FillCustomAttribs(prop, info.GetCustomAttributes());
+        prop._customAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
         return prop;
     }
 }

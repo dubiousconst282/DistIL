@@ -51,8 +51,8 @@ internal partial class ModuleWriter
         AllocHandles();
         EmitEntities();
 
-        EmitCustomAttribs(_mod, mainAsmHandle);
-        EmitCustomAttribs(_mod, mainModHandle, CustomAttribLink.Type.Module);
+        EmitCustomAttribs(mainAsmHandle, _mod.GetCustomAttribs(forAssembly: true));
+        EmitCustomAttribs(mainModHandle, _mod.GetCustomAttribs(forAssembly: false));
 
         SerializePE(peBlob);
     }
@@ -88,14 +88,13 @@ internal partial class ModuleWriter
         if (type.IsNested) {
             _builder.AddNestedType(handle, (TypeDefinitionHandle)GetHandle(type.DeclaringType));
         }
-        int itfIndex = 0;
         foreach (var itf in type.Interfaces) {
             var itfHandle = _builder.AddInterfaceImplementation(handle, GetHandle(itf));
-            EmitCustomAttribs(type, itfHandle, CustomAttribLink.Type.InterfaceImpl, itfIndex++);
+            EmitCustomAttribs(itfHandle, type.GetCustomAttribs(itf));
         }
         foreach (var (decl, impl) in type.InterfaceMethodImpls) {
             var implHandle = _builder.AddMethodImplementation(handle, GetHandle(impl), GetHandle(decl));
-            EmitCustomAttribs(impl, implHandle, CustomAttribLink.Type.InterfaceImpl);
+            EmitCustomAttribs(implHandle, type.GetCustomAttribs(impl, decl));
         }
         
         foreach (var field in type.Fields) {
@@ -124,7 +123,7 @@ internal partial class ModuleWriter
         if (type.HasCustomLayout) {
             _builder.AddTypeLayout(handle, (ushort)type.LayoutPack, (uint)type.LayoutSize);
         }
-        EmitCustomAttribs(type, handle);
+        EmitCustomAttribs(handle, type.GetCustomAttribs());
 
         PropertyDefinitionHandle EmitProp(PropertyDef prop)
         {
@@ -136,7 +135,7 @@ internal partial class ModuleWriter
             foreach (var otherAcc in prop.OtherAccessors) {
                 Link(handle, otherAcc, MethodSemanticsAttributes.Other);
             }
-            EmitCustomAttribs(prop, handle);
+            EmitCustomAttribs(handle, prop.GetCustomAttribs());
 
             return handle;
         }
@@ -151,7 +150,7 @@ internal partial class ModuleWriter
             foreach (var otherAcc in evt.OtherAccessors) {
                 Link(handle, otherAcc, MethodSemanticsAttributes.Other);
             }
-            EmitCustomAttribs(evt, handle);
+            EmitCustomAttribs(handle, evt.GetCustomAttribs());
             return handle;
         }
         void Link(EntityHandle assoc, MethodDef? method, MethodSemanticsAttributes kind)
@@ -186,7 +185,7 @@ internal partial class ModuleWriter
         if (field.MarshallingDesc != null) {
             _builder.AddMarshallingDescriptor(handle, _builder.GetOrAddBlob(field.MarshallingDesc));
         }
-        EmitCustomAttribs(field, handle);
+        EmitCustomAttribs(handle, field.GetCustomAttribs());
     }
 
     private void EmitMethod(MethodDef method)
@@ -202,28 +201,29 @@ internal partial class ModuleWriter
         );
         Debug.Assert(_handleMap[method] == handle);
 
-        var returnCAs = _mod.GetLinkedCustomAttribs(new(method, -1, CustomAttribLink.Type.MethodParam));
-        if (returnCAs.Length > 0) {
-            var parHandle = _builder.AddParameter(method.ReturnParam.Attribs, default, 0);
-            EmitCustomAttribs(parHandle, returnCAs);
-        }
+        EmitParam(method.ReturnParam, 0);
+
         var pars = method.StaticParams;
         for (int i = 0; i < pars.Length; i++) {
-            var par = pars[i];
-            var parHandle = _builder.AddParameter(par.Attribs, AddString(par.Name), i + 1);
-
-            if (par.Attribs.HasFlag(ParameterAttributes.HasDefault)) {
-                _builder.AddConstant(parHandle, par.DefaultValue);
-            }
-            if (par.Attribs.HasFlag(ParameterAttributes.HasFieldMarshal)) {
-                _builder.AddMarshallingDescriptor(parHandle, _builder.GetOrAddBlob(par.MarshallingDesc!));
-            }
-            EmitCustomAttribs(method, parHandle, CustomAttribLink.Type.MethodParam, i + (method.IsStatic ? 0 : 1));
+            EmitParam(pars[i], i + 1);
         }
         if (method.GenericParams.Length > 0) {
             _genericDefs.Add(method);
         }
-        EmitCustomAttribs(method, handle);
+        EmitCustomAttribs(handle, method.GetCustomAttribs());
+    }
+
+    private void EmitParam(ParamDef par, int index)
+    {
+        var handle = _builder.AddParameter(par.Attribs, AddString(par.Name), index);
+
+        if (par.Attribs.HasFlag(ParameterAttributes.HasDefault)) {
+            _builder.AddConstant(handle, par.DefaultValue);
+        }
+        if (par.Attribs.HasFlag(ParameterAttributes.HasFieldMarshal)) {
+            _builder.AddMarshallingDescriptor(handle, _builder.GetOrAddBlob(par.MarshallingDesc!));
+        }
+        EmitCustomAttribs(handle, par.GetCustomAttribs());
     }
 
     private void EmitPendingGenericParams()
@@ -240,28 +240,20 @@ internal partial class ModuleWriter
 
             foreach (var par in genPars.Cast<GenericParamType>()) {
                 var parHandle = _builder.AddGenericParameter(handle, par.Attribs, AddString(par.Name), par.Index);
-                EmitCustomAttribs(parHandle, par.GetCustomAttribs());
+                EmitCustomAttribs(parHandle, par._customAttribs?[0]);
 
                 for (int i = 0; i < par.Constraints.Length; i++) {
                     var constrHandle = _builder.AddGenericParameterConstraint(parHandle, GetSigHandle(par.Constraints[i]));
-
-                    var constrAttribs = par._constraintCustomAttribs?.ElementAtOrDefault(i);
-                    if (constrAttribs != null) {
-                        EmitCustomAttribs(constrHandle, constrAttribs);
-                    }
+                    EmitCustomAttribs(constrHandle, par._customAttribs?.ElementAtOrDefault(i));
                 }
             }
         }
     }
 
-    private void EmitCustomAttribs(ModuleEntity entity, EntityHandle parentHandle, CustomAttribLink.Type linkType = default, int linkIndex = 0)
+    private void EmitCustomAttribs(EntityHandle parentHandle, IList<CustomAttrib>? attribs)
     {
-        var attribs = _mod.GetLinkedCustomAttribs(new(entity, linkIndex, linkType));
-        EmitCustomAttribs(parentHandle, attribs);
-    }
+        if (attribs == null) return;
 
-    private void EmitCustomAttribs(EntityHandle parentHandle, IReadOnlyCollection<CustomAttrib> attribs)
-    {
         foreach (var attrib in attribs) {
             _builder.AddCustomAttribute(
                 parentHandle,

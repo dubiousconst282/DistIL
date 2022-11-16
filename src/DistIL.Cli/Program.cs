@@ -53,7 +53,7 @@ modPm.Add(new ExportPass());
 
 modPm.Run(module);
 
-var ignoreAccChecksAttrib = module.FindOrCreateType(
+var ignoreAccChecksAttrib = module.CreateType(
     "System.Runtime.CompilerServices", "IgnoresAccessChecksToAttribute", 
     TypeAttributes.BeforeFieldInit | TypeAttributes.Class,
     resolver.CoreLib.FindType("System", "Attribute")
@@ -66,7 +66,8 @@ var ignoreAccChecksCtor = ignoreAccChecksAttrib.CreateMethod(
 ignoreAccChecksCtor.ILBody = new ILMethodBody() {
     Instructions = new[] { new ILInstruction(ILCode.Ret) }
 };
-module.AddCustomAttrib(new CustomAttrib(ignoreAccChecksCtor, ImmutableArray.Create<object?>(module.AsmName.Name)));
+var asmCAs = module.GetCustomAttribs(forAssembly: true);
+asmCAs.Add(new CustomAttrib(ignoreAccChecksCtor, ImmutableArray.Create<object?>(module.AsmName.Name)));
 
 if (args.Length >= 2) {
     using var outStream = File.Create(args[1]);

@@ -99,10 +99,17 @@ public class MDArrayMethod : MethodDesc
 
     public override MDArrayType DeclaringType { get; }
     public override string Name { get; }
-    public OpKind Kind { get; }
+    
+    public override MethodAttributes Attribs
+        => MethodAttributes.Public | (Kind <= OpKind.RangeCtor ? MethodAttributes.SpecialName : 0);
+
+    public override MethodImplAttributes ImplAttribs
+        => MethodImplAttributes.InternalCall;
 
     public override TypeSig ReturnSig { get; }
     public override IReadOnlyList<TypeSig> ParamSig => _paramSig ??= new() { Method = this };
+
+    public OpKind Kind { get; }
 
     private ParamSigList? _paramSig;
 
@@ -112,8 +119,6 @@ public class MDArrayMethod : MethodDesc
         DeclaringType = type;
         Name = isCtor ? ".ctor" : kind.ToString();
         Kind = kind;
-        Attribs = MethodAttributes.Public | (isCtor ? MethodAttributes.SpecialName : 0);
-        ImplAttribs = MethodImplAttributes.InternalCall;
         ReturnSig = kind switch {
             <= OpKind.Set  => PrimType.Void,
             OpKind.Get     => type.ElemType,

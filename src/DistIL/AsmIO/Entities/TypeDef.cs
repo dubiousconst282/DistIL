@@ -25,7 +25,6 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
     public abstract IReadOnlyList<TypeDesc> Interfaces { get; }
     public ImmutableArray<TypeDesc> GenericParams { get; protected set; }
 
-    public override bool Equals(TypeDesc? other) => object.ReferenceEquals(this, other);
     public override int GetHashCode() => HashCode.Combine(Module, Name, GenericParams.Length);
 }
 
@@ -51,18 +50,6 @@ public class TypeDef : TypeDefOrSpec
     public int LayoutPack { get; set; }
     public bool HasCustomLayout => LayoutSize != 0 || LayoutPack != 0;
 
-    private List<FieldDef> _fields = new();
-    private List<MethodDef> _methods = new();
-
-    private List<TypeDesc>? _interfaces; //Note: CAs are linked to indices, care must be taken when changing entries
-    private List<PropertyDef>? _properties;
-    private List<EventDef>? _events;
-    private List<TypeDef>? _nestedTypes;
-    private Dictionary<MethodDesc, MethodDef>? _itfMethodImpls;
-
-    private static readonly Dictionary<MethodDesc, MethodDef> s_EmptyItfMethodImpls = new();
-    private static IReadOnlyList<T> EmptyIfNull<T>(List<T>? list) => list ?? (IReadOnlyList<T>)Array.Empty<T>();
-
     public override IReadOnlyList<TypeDesc> Interfaces => EmptyIfNull(_interfaces);
     public override IReadOnlyList<FieldDef> Fields => _fields;
     public override IReadOnlyList<MethodDef> Methods => _methods;
@@ -70,6 +57,21 @@ public class TypeDef : TypeDefOrSpec
     public IReadOnlyList<EventDef> Events => EmptyIfNull(_events);
     public IReadOnlyList<TypeDef> NestedTypes => EmptyIfNull(_nestedTypes);
     public IReadOnlyDictionary<MethodDesc, MethodDef> InterfaceMethodImpls => _itfMethodImpls ?? s_EmptyItfMethodImpls;
+
+    private List<FieldDef> _fields = new();
+    private List<MethodDef> _methods = new();
+
+    private List<TypeDesc>? _interfaces;
+    private List<PropertyDef>? _properties;
+    private List<EventDef>? _events;
+    private List<TypeDef>? _nestedTypes;
+    private Dictionary<MethodDesc, MethodDef>? _itfMethodImpls;
+
+    private IList<CustomAttrib>? _customAttribs;
+    private Dictionary<(Entity, Entity?), IList<CustomAttrib>>? _itfCustomAttribs;
+
+    private static readonly Dictionary<MethodDesc, MethodDef> s_EmptyItfMethodImpls = new();
+    private static IReadOnlyList<T> EmptyIfNull<T>(List<T>? list) => list ?? (IReadOnlyList<T>)Array.Empty<T>();
 
     internal TypeDef(
         ModuleDef mod, string? ns, string name, 
@@ -118,6 +120,32 @@ public class TypeDef : TypeDefOrSpec
         return method;
     }
 
+    public IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
+        => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
+
+    public IList<CustomAttrib> GetCustomAttribs(TypeDesc interface_, bool readOnly = true)
+        => GetItfCustomAttribs((interface_, null), readOnly);
+
+    public IList<CustomAttrib> GetCustomAttribs(MethodDef impl, MethodDesc decl, bool readOnly = true)
+    {
+        Ensure.That(impl.DeclaringType == this);
+        return GetItfCustomAttribs((impl, decl), readOnly);
+    }
+
+    private IList<CustomAttrib> GetItfCustomAttribs((Entity, Entity?) key, bool readOnly)
+    {
+        return readOnly
+            ? _itfCustomAttribs?.GetValueOrDefault(key) ?? Array.Empty<CustomAttrib>()
+            : CustomAttribExt.GetOrInitList(ref (_itfCustomAttribs ??= new()).GetOrAddRef(key), readOnly);
+    }
+
+    private void SetItfCustomAttribs((Entity, Entity?) key, IList<CustomAttrib>? list)
+    {
+        if (list != null) {
+            (_itfCustomAttribs ??= new()).Add(key, list);
+        }
+    }
+
     public override void Print(PrintContext ctx, bool includeNs = false)
     {
         if (DeclaringType != null) {
@@ -126,6 +154,8 @@ public class TypeDef : TypeDefOrSpec
             base.Print(ctx, includeNs);
         }
     }
+
+    public override bool Equals(TypeDesc? other) => object.ReferenceEquals(this, other);
 
     internal static TypeDef Decode(ModuleLoader loader, TypeDefinition info)
     {
@@ -194,8 +224,9 @@ public class TypeDef : TypeDefOrSpec
 
             foreach (var handle in itfHandles) {
                 var itfInfo = loader._reader.GetInterfaceImplementation(handle);
-                loader.FillCustomAttribs(this, itfInfo.GetCustomAttributes(), CustomAttribLink.Type.InterfaceImpl, _interfaces.Count);
-                _interfaces.Add((TypeDesc)loader.GetEntity(itfInfo.Interface));
+                var itfType = (TypeDesc)loader.GetEntity(itfInfo.Interface);
+                _interfaces.Add(itfType);
+                SetItfCustomAttribs((itfType, null), loader.DecodeCustomAttribs(itfInfo.GetCustomAttributes()));
             }
         }
 
@@ -210,11 +241,11 @@ public class TypeDef : TypeDefOrSpec
 
                 Ensure.That(impl.DeclaringType == this);
                 _itfMethodImpls.Add(decl, impl);
-                loader.FillCustomAttribs(impl, implInfo.GetCustomAttributes(), CustomAttribLink.Type.InterfaceImpl);
+                SetItfCustomAttribs((impl, decl), loader.DecodeCustomAttribs(implInfo.GetCustomAttributes()));
             }
         }
-        loader.FillGenericParams(this, GenericParams, info.GetGenericParameters());
-        loader.FillCustomAttribs(this, info.GetCustomAttributes());
+        loader.FillGenericParams(GenericParams, info.GetGenericParameters());
+        _customAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
     }
 }
 

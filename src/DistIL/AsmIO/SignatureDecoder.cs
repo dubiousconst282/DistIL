@@ -157,12 +157,11 @@ internal struct SignatureDecoder
         }
     }
 
-    public SignatureDecoder ExpectHeader(SignatureKind kind)
+    public void ExpectHeader(SignatureKind kind)
     {
         var header = Reader.ReadSignatureHeader();
         if (header.Kind != kind) {
             throw new BadImageFormatException();
         }
-        return this;
     }
 }

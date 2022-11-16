@@ -8,19 +8,19 @@ using System.Reflection.Metadata.Ecma335;
 /// <summary> Base class for all method entities. </summary>
 public abstract class MethodDesc : MemberDesc
 {
-    public MethodAttributes Attribs { get; protected set; }
-    public MethodImplAttributes ImplAttribs { get; protected set; }
+    public abstract MethodAttributes Attribs { get; }
+    public abstract MethodImplAttributes ImplAttribs { get; }
+
+    public abstract TypeSig ReturnSig { get; }
+    public abstract IReadOnlyList<TypeSig> ParamSig { get; }
+
+    public ImmutableArray<TypeDesc> GenericParams { get; protected set; } = ImmutableArray<TypeDesc>.Empty;
 
     public bool IsStatic => (Attribs & MethodAttributes.Static) != 0;
     public bool IsInstance => !IsStatic;
-
-    public ImmutableArray<TypeDesc> GenericParams { get; protected set; } = ImmutableArray<TypeDesc>.Empty;
     public bool IsGeneric => GenericParams.Length > 0;
 
-    public abstract TypeSig ReturnSig { get; }
     public TypeDesc ReturnType => ReturnSig.Type;
-
-    public abstract IReadOnlyList<TypeSig> ParamSig { get; }
 
     public override void Print(PrintContext ctx)
     {
@@ -45,12 +45,17 @@ public class ParamDef
 
     public TypeDesc Type => Sig.Type;
 
+    internal IList<CustomAttrib>? _customAttribs;
+
     public ParamDef(TypeSig sig, string name, ParameterAttributes attribs = default)
     {
         Sig = sig;
         Name = name;
         Attribs = attribs;
     }
+
+    public IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
+        => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
 
     public override string ToString() => Sig.ToString();
 }
@@ -69,16 +74,21 @@ public class MethodDef : MethodDefOrSpec
     public override TypeDef DeclaringType { get; }
     public override string Name { get; }
 
+    public override MethodAttributes Attribs { get; }
+    public override MethodImplAttributes ImplAttribs { get; }
+
+    public override TypeSig ReturnSig => ReturnParam.Sig;
+    public override IReadOnlyList<TypeSig> ParamSig => _paramSig ??= new() { Method = this };
+
     /// <summary> Represents a placeholder for the return value, which may contain custom attributes. </summary>
     public ParamDef ReturnParam { get; }
 
     //TODO: expose `IROList<TypeSig> ParamSig` instead of `ImmutArray<ParamDef> Params`
-    public ImmutableArray<ParamDef> Params { get; protected set; }
+    public ImmutableArray<ParamDef> Params { get; }
     public ReadOnlySpan<ParamDef> StaticParams => Params.AsSpan(IsStatic ? 0 : 1);
 
-    public override TypeSig ReturnSig => ReturnParam.Sig;
-    public override IReadOnlyList<TypeSig> ParamSig => _paramSig ??= new() { Method = this };
     private ParamSigProxyList? _paramSig;
+    internal IList<CustomAttrib>? _customAttribs;
 
     public ILMethodBody? ILBody { get; set; }
     public IR.MethodBody? Body { get; set; }
@@ -104,6 +114,9 @@ public class MethodDef : MethodDefOrSpec
             ? new MethodSpec(DeclaringType.GetSpec(ctx), this, ctx.FillParams(GenericParams))
             : this;
     }
+
+    public IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
+        => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
 
     internal static MethodDef Decode(ModuleLoader loader, MethodDefinition info)
     {
@@ -164,14 +177,13 @@ public class MethodDef : MethodDefOrSpec
             if (par.Attribs.HasFlag(ParameterAttributes.HasFieldMarshal)) {
                 par.MarshallingDesc = reader.GetBlobBytes(parInfo.GetMarshallingDescriptor());
             }
-            int linkIndex = index == 0 ? -1 : (index - (IsStatic ? 1 : 0));
-            loader.FillCustomAttribs(this, parInfo.GetCustomAttributes(), CustomAttribLink.Type.MethodParam, linkIndex);
+            par._customAttribs = loader.DecodeCustomAttribs(parInfo.GetCustomAttributes());
         }
         if (info.RelativeVirtualAddress != 0) {
             ILBody = new ILMethodBody(loader, info.RelativeVirtualAddress);
         }
-        loader.FillGenericParams(this, GenericParams, info.GetGenericParameters());
-        loader.FillCustomAttribs(this, info.GetCustomAttributes());
+        loader.FillGenericParams(GenericParams, info.GetGenericParameters());
+        _customAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
     }
 
     class ParamSigProxyList : IReadOnlyList<TypeSig>
@@ -190,9 +202,11 @@ public class MethodDef : MethodDefOrSpec
 public class MethodSpec : MethodDefOrSpec
 {
     public override MethodDef Definition { get; }
-
     public override TypeDefOrSpec DeclaringType { get; }
     public override string Name => Definition.Name;
+
+    public override MethodAttributes Attribs => Definition.Attribs;
+    public override MethodImplAttributes ImplAttribs => Definition.ImplAttribs;
 
     public override TypeSig ReturnSig { get; }
     public override IReadOnlyList<TypeSig> ParamSig { get; }
@@ -200,9 +214,6 @@ public class MethodSpec : MethodDefOrSpec
     internal MethodSpec(TypeDefOrSpec declaringType, MethodDef def, ImmutableArray<TypeDesc> genArgs = default)
     {
         Definition = def;
-        Attribs = def.Attribs;
-        ImplAttribs = def.ImplAttribs;
-
         DeclaringType = declaringType;
         Ensure.That(genArgs.IsDefaultOrEmpty || def.IsGeneric);
         GenericParams = genArgs.IsDefault ? def.GenericParams : genArgs;

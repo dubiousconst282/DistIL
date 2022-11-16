@@ -85,6 +85,8 @@ public class IRBuilder
     public NewObjInst CreateNewObj(MethodDesc ctor, params Value[] args)
         => Add(new NewObjInst(ctor, args));
 
+    public IntrinsicInst CreateIntrinsic(IntrinsicDesc intrinsic, params Value[] args)
+        => Add(new IntrinsicInst(intrinsic, args));
 
     public LoadFieldInst CreateFieldLoad(FieldDesc field, Value? obj = null)
         => Add(new LoadFieldInst(field, obj));

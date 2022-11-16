@@ -1,16 +1,19 @@
 namespace DistIL.IR.Utils;
 
+using DistIL.IR.Intrinsics;
+
 /// <summary> Helper for folding instructions with constant operands. </summary>
 public class ConstFolding
 {
     public static Value? Fold(Instruction inst)
     {
         return inst switch {
-            BinaryInst b  => FoldBinary(b.Op, b.Left, b.Right),
-            UnaryInst u   => FoldUnary(u.Op, u.Value),
-            ConvertInst c => FoldConvert(c.Value, c.ResultType, c.CheckOverflow, c.SrcUnsigned),
-            CompareInst c => FoldCompare(c.Op, c.Left, c.Right),
-            CallInst c    => FoldCall(c.Method, c.Args),
+            BinaryInst b    => FoldBinary(b.Op, b.Left, b.Right),
+            UnaryInst u     => FoldUnary(u.Op, u.Value),
+            ConvertInst c   => FoldConvert(c.Value, c.ResultType, c.CheckOverflow, c.SrcUnsigned),
+            CompareInst c   => FoldCompare(c.Op, c.Left, c.Right),
+            CallInst c      => FoldCall(c.Method, c.Args),
+            IntrinsicInst c => FoldIntrinsic(c.Intrinsic, c.Args),
             _ => null
         };
     }
@@ -176,6 +179,24 @@ public class ConstFolding
             };
         }
         return null;
+    }
+
+    public static Value? FoldIntrinsic(IntrinsicDesc intrinsic, ReadOnlySpan<Value> args)
+    {
+        return intrinsic switch {
+            CilIntrinsic c => FoldCilIntrinsic(c, args),
+            _ => null
+        };
+    }
+
+    private static Value? FoldCilIntrinsic(CilIntrinsic intrinsic, ReadOnlySpan<Value> args)
+    {
+        return intrinsic.Id switch {
+            CilIntrinsicId.SizeOf 
+                when args is [TypeDesc { Kind: >= TypeKind.Bool and <= TypeKind.Double } type] 
+                => ConstInt.CreateI(type.Kind.BitSize() / 8),
+            _ => null
+        };
     }
 
     private static object? FoldMathCall(MethodDef method, Value[] args)

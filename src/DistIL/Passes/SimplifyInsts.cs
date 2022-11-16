@@ -37,6 +37,7 @@ public partial class SimplifyInsts : MethodPass
                 UnaryInst c     => SimplifyUnary(c),
                 ConvertInst c   => SimplifyConvert(c),
                 CallInst c      => SimplifyCall(ctx, c),
+                IntrinsicInst c => SimplifyIntrinsic(c),
                 _ => null
             };
             if (newValue != null) {
@@ -63,6 +64,11 @@ public partial class SimplifyInsts : MethodPass
             }
         }
         return ConstFolding.FoldCall(call.Method, call.Args);
+    }
+
+    private Value? SimplifyIntrinsic(IntrinsicInst c)
+    {
+        return ConstFolding.FoldIntrinsic(c.Intrinsic, c.Args);
     }
 
     private Value? SimplifyBinary(BinaryInst inst)

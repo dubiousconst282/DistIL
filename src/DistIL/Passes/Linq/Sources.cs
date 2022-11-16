@@ -46,7 +46,7 @@ internal class ListSource : LinqStageNode
             "get_Item", new MethodSig(Type.GenericParams[0], new TypeSig[] { PrimType.Int32 }),
             throwIfNotFound: true
         );
-        return builder.CreateCallVirt(getter, List);
+        return builder.CreateCallVirt(getter, List, currIndex);
     }
     public override Value EmitEstimCount(IRBuilder builder)
     {

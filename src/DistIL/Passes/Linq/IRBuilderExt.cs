@@ -7,13 +7,12 @@ internal static class IRBuilderExt
     //Note: this assumes that lambda types are all System.Func<>
     public static Value CreateLambdaInvoke(this IRBuilder ib, Value lambda, params Value[] args)
     {
-        var invoker = lambda.ResultType.Methods.First(m => m.Name == "Invoke");
+        var invoker = lambda.ResultType.FindMethod("Invoke", throwIfNotFound: true);
         return ib.CreateCallVirt(invoker, args);
     }
     public static Value CreateLambdaInvoke_ItemAndIndex(this IRBuilder ib, Value lambda, Value currItem, Value currIndex)
     {
-        var type = lambda.ResultType;
-        var invoker = type.Methods.First(m => m.Name == "Invoke");
+        var invoker = lambda.ResultType.FindMethod("Invoke", throwIfNotFound: true);
 
         var args = invoker.ParamSig.Count == 3
             ? new Value[] { lambda, currItem, currIndex }

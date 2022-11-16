@@ -81,16 +81,24 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
         return null;
     }
 
-    /// <summary> Checks if this type is, inherits, or implements `baseType`. </summary>
+    /// <summary> Checks if this type inherits `baseType`. </summary>
     public bool Inherits(TypeDesc baseType)
     {
-        Debug.Assert(!baseType.IsInterface); //not implemented
+        Ensure.That(!baseType.IsInterface);
+
         for (var parent = this; parent != null; parent = parent.BaseType) {
             if (parent == baseType) {
                 return true;
             }
         }
         return false;
+    }
+    /// <summary> Checks if this type implements `interfaceType`. </summary>
+    public bool Implements(TypeDesc interfaceType)
+    {
+        Ensure.That(interfaceType.IsInterface);
+
+        return this is TypeDefOrSpec def && def.Interfaces.Contains(interfaceType);
     }
 
     public sealed override void Print(PrintContext ctx) => Print(ctx, false);

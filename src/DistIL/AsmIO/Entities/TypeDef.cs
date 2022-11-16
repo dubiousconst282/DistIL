@@ -7,7 +7,7 @@ using System.Reflection.Metadata;
 public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
 {
     public abstract ModuleDef Module { get; }
-    public TypeAttributes Attribs { get; set; }
+    public abstract TypeAttributes Attribs { get; }
 
     public override bool IsValueType {
         get {
@@ -20,8 +20,7 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
     public override bool IsInterface => (Attribs & TypeAttributes.Interface) != 0;
     public override bool IsGeneric => GenericParams.Length > 0;
 
-    protected TypeDefOrSpec? _baseType;
-    public override TypeDefOrSpec? BaseType => _baseType;
+    public abstract override TypeDefOrSpec? BaseType { get; }
 
     public abstract IReadOnlyList<TypeDesc> Interfaces { get; }
     public ImmutableArray<TypeDesc> GenericParams { get; protected set; }
@@ -34,8 +33,9 @@ public class TypeDef : TypeDefOrSpec
     public override ModuleDef Module { get; }
     public override TypeKind Kind => _kind;
     public override StackType StackType => _kind.ToStackType();
+    public override TypeDefOrSpec? BaseType => _baseType;
+    public override TypeAttributes Attribs { get; }
 
-    private TypeKind _kind;
     public override string? Namespace { get; }
     public override string Name { get; }
 
@@ -59,6 +59,8 @@ public class TypeDef : TypeDefOrSpec
     public IReadOnlyList<TypeDef> NestedTypes => EmptyIfNull(_nestedTypes);
     public IReadOnlyDictionary<MethodDesc, MethodDef> InterfaceMethodImpls => _itfMethodImpls ?? s_EmptyItfMethodImpls;
 
+    private TypeKind _kind;
+    private TypeDefOrSpec? _baseType;
     private List<FieldDef> _fields = new();
     private List<MethodDef> _methods = new();
 
@@ -260,6 +262,7 @@ public class TypeSpec : TypeDefOrSpec
     public override TypeKind Kind => Definition.Kind;
     public override StackType StackType => Definition.StackType;
     public override TypeDefOrSpec? BaseType => Definition.BaseType;
+    public override TypeAttributes Attribs => Definition.Attribs;
 
     public override string? Namespace => Definition.Namespace;
     public override string Name => Definition.Name;

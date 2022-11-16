@@ -90,10 +90,7 @@ internal class ConcretizationQuery : LinqQuery
     }
     protected void AppendResult(IRBuilder builder, Value container, Value currItem, TypeDefOrSpec containerType)
     {
-        var method = containerType.FindMethod(
-            "Add", new MethodSig(PrimType.Void, new TypeSig[] { containerType.GenericParams[0] }),
-            throwIfNotFound: true
-        );
+        var method = containerType.FindMethod("Add", throwIfNotFound: true);
         builder.CreateCallVirt(method, container, currItem);
     }
 }
@@ -119,12 +116,7 @@ internal class ArrayConcretizationQuery : ConcretizationQuery
     }
     protected override Value WrapContainer(IRBuilder builder, Value container)
     {
-        var containerType = (TypeDefOrSpec)container.ResultType;
-
-        var method = containerType.FindMethod(
-            "ToArray", new MethodSig(containerType.GenericParams[0].CreateArray(), Array.Empty<TypeSig>()),
-            throwIfNotFound: true
-        );
+        var method = container.ResultType.FindMethod("ToArray", throwIfNotFound: true);
         return builder.CreateCallVirt(method, container);
     }
 }

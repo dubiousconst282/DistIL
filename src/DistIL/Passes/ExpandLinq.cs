@@ -4,12 +4,12 @@ using DistIL.Passes.Linq;
 
 public class ExpandLinq : MethodPass
 {
-    readonly TypeDesc t_Enumerable, t_IListOfT;
+    readonly TypeDesc t_Enumerable, t_IListOfT0;
 
     public ExpandLinq(ModuleDef mod)
     {
         t_Enumerable = mod.Resolver.Import(typeof(Enumerable), throwIfNotFound: true);
-        t_IListOfT = mod.Resolver.Import(typeof(IList<>), throwIfNotFound: true);
+        t_IListOfT0 = mod.Resolver.Import(typeof(IList<>), throwIfNotFound: true).GetSpec(default);
     }
 
     public override void Run(MethodTransformContext ctx)
@@ -53,13 +53,17 @@ public class ExpandLinq : MethodPass
         {
             if (source is CallInst call && call.Method.DeclaringType == t_Enumerable) {
                 return call.Method.Name switch {
-                    "Select" => new SelectStage(call, CreateStage(call.Args[0])),
-                    "Where" => new WhereStage(call, CreateStage(call.Args[0])),
+                    "Select"    => new SelectStage(call,    CreateStage(call.Args[0])),
+                    "Where"     => new WhereStage(call,     CreateStage(call.Args[0])),
+                    "OfType"    => new OfTypeStage(call,    CreateStage(call.Args[0])),
+                    "Cast"      => new CastStage(call,      CreateStage(call.Args[0])),
                     _ => CreateEnumeratorSource(call)
                 };
-            } else if (source.ResultType is ArrayType) {
+            }
+            if (source.ResultType is ArrayType) {
                 return new ArraySource(source);
-            } else if (source.ResultType.Inherits(t_IListOfT)) {
+            }
+            if (source.ResultType is TypeSpec spec && spec.Definition.Implements(t_IListOfT0)) {
                 return new ListSource(source);
             }
             return CreateEnumeratorSource(source);

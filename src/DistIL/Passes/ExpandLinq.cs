@@ -34,12 +34,15 @@ public class ExpandLinq : MethodPass
     {
         var method = call.Method;
         if (method.DeclaringType == t_Enumerable) {
-            if (method.Name is "ToArray") {
-                return CreateQuery(call, pipe => new ArrayConcretizationQuery(call, pipe));
-            }
-            if (method.Name is "ToList" or "ToHashSet") {
-                return CreateQuery(call, pipe => new ConcretizationQuery(call, pipe));
-            }
+            return method.Name switch {
+                "ToList" or "ToHashSet"
+                    => CreateQuery(call, pipe => new ConcretizationQuery(call, pipe)),
+                "ToArray"
+                    => CreateQuery(call, pipe => new ArrayConcretizationQuery(call, pipe)),
+                "ToDictionary"
+                    => CreateQuery(call, pipe => new DictionaryConcretizationQuery(call, pipe)),
+                _ => null
+            };
         }
         return null;
     }

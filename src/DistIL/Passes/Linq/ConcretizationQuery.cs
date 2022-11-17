@@ -65,7 +65,8 @@ internal class ConcretizationQuery : LinqQuery
     }
     protected virtual void AppendResult(IRBuilder builder, Value container, Value currItem)
     {
-        AppendResult(builder, container, currItem, (TypeDefOrSpec)container.ResultType);
+        var method = container.ResultType.FindMethod("Add", throwIfNotFound: true);
+        builder.CreateCallVirt(method, container, currItem);
     }
     protected virtual Value WrapContainer(IRBuilder builder, Value container)
     {
@@ -75,23 +76,22 @@ internal class ConcretizationQuery : LinqQuery
     protected Value AllocContainer(IRBuilder builder, Value? count, TypeDefOrSpec type)
     {
         var args = new List<Value>();
+        var sig = new List<TypeSig>();
 
         if (count != null) {
             args.Add(count);
+            sig.Add(PrimType.Int32);
         }
-        if (type.Name is "Dictionary`2" or "HashSet`1" && SubjectCall.Args[^1].ResultType.Name is "IEqualityComparer`1") {
+        var lastParType = SubjectCall.Method.ParamSig[^1].Type;
+        if (type.Name is "Dictionary`2" or "HashSet`1" && lastParType.Name is "IEqualityComparer`1") {
             args.Add(SubjectCall.Args[^1]);
+            sig.Add(lastParType);
         }
         var ctor = type.FindMethod(
-            ".ctor", new MethodSig(PrimType.Void, args.Select(a => (TypeSig)a.ResultType).ToList()),
+            ".ctor", new MethodSig(PrimType.Void, sig),
             throwIfNotFound: true
         );
         return builder.CreateNewObj(ctor, args.ToArray());
-    }
-    protected void AppendResult(IRBuilder builder, Value container, Value currItem, TypeDefOrSpec containerType)
-    {
-        var method = containerType.FindMethod("Add", throwIfNotFound: true);
-        builder.CreateCallVirt(method, container, currItem);
     }
 }
 internal class ArrayConcretizationQuery : ConcretizationQuery
@@ -110,13 +110,25 @@ internal class ArrayConcretizationQuery : ConcretizationQuery
 
         return base.AllocContainer(builder, count, type);
     }
-    protected override void AppendResult(IRBuilder builder, Value container, Value currItem)
-    {
-        base.AppendResult(builder, container, currItem, (TypeDefOrSpec)container.ResultType);
-    }
     protected override Value WrapContainer(IRBuilder builder, Value container)
     {
         var method = container.ResultType.FindMethod("ToArray", throwIfNotFound: true);
         return builder.CreateCallVirt(method, container);
+    }
+}
+internal class DictionaryConcretizationQuery : ConcretizationQuery
+{
+    public DictionaryConcretizationQuery(CallInst call, LinqStageNode pipeline)
+        : base(call, pipeline) { }
+
+    protected override void AppendResult(IRBuilder builder, Value container, Value currItem)
+    {
+        var method = container.ResultType.FindMethod("Add", throwIfNotFound: true);
+        var key = builder.CreateLambdaInvoke(SubjectCall.Args[1], currItem);
+        var value = currItem;
+        if (SubjectCall.Args[2].ResultType.Name != "IEqualityComparer`1") {
+            value = builder.CreateLambdaInvoke(SubjectCall.Args[2], currItem);
+        }
+        builder.CreateCallVirt(method, container, key, value);
     }
 }

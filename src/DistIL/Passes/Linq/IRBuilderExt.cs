@@ -8,7 +8,7 @@ internal static class IRBuilderExt
     public static Value CreateLambdaInvoke(this IRBuilder ib, Value lambda, params Value[] args)
     {
         var invoker = lambda.ResultType.FindMethod("Invoke", throwIfNotFound: true);
-        return ib.CreateCallVirt(invoker, args);
+        return ib.CreateCallVirt(invoker, args.Prepend(lambda).ToArray());
     }
     public static Value CreateLambdaInvoke_ItemAndIndex(this IRBuilder ib, Value lambda, Value currItem, Value currIndex)
     {

@@ -106,6 +106,10 @@ public class MethodDef : MethodDefOrSpec
         Attribs = attribs;
         ImplAttribs = implAttribs;
         GenericParams = genericParams.EmptyIfDefault();
+
+        Ensure.That(
+            IsStatic || !declaringType.IsGeneric || pars[0].Type is TypeSpec or ByrefType { ElemType: TypeSpec },
+            "`this` parameter for generic type must be specialized with the default parameters");
     }
 
     public override MethodDesc GetSpec(GenericContext ctx)
@@ -143,7 +147,7 @@ public class MethodDef : MethodDefOrSpec
         var pars = ImmutableArray.CreateBuilder<ParamDef>(numParams + (header.IsInstance ? 1 : 0));
 
         if (header.IsInstance) {
-            var instanceType = declaringType as TypeDesc;
+            var instanceType = declaringType.GetSpec(GenericContext.Empty);
             pars.Add(new ParamDef(instanceType.IsValueType ? instanceType.CreateByref() : instanceType, "this"));
         }
         for (int i = 0; i < numParams; i++) {

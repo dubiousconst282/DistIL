@@ -72,9 +72,8 @@ public class ModuleDef : ModuleEntity
 
     internal void SortTypes()
     {
-        Comparison<TypeDef> comparer = (a, b) => CompareTypeName(b, a.Namespace, a.Name);
-        _typeDefs.Sort(comparer);
-        _exportedTypes.Sort(comparer);
+        _typeDefs.Sort(CompareTypeName);
+        _exportedTypes.Sort(CompareTypeName);
     }
 
     private static TypeDef? SearchType(List<TypeDef> types, string? ns, string name)
@@ -87,7 +86,7 @@ public class ModuleDef : ModuleEntity
         int min = 0, max = types.Count - 1;
         while (min <= max) {
             int mid = (min + max) >>> 1;
-            int c = CompareTypeName(types[mid], ns, name);
+            int c = -CompareTypeName(types[mid], ns, name);
 
             if (c < 0) {
                 max = mid - 1;
@@ -99,9 +98,26 @@ public class ModuleDef : ModuleEntity
         }
         return ~min;
     }
-    private static int CompareTypeName(TypeDef typeA, string? nsB, string nameB)
+    private static int CompareTypeName(TypeDef typeA, string? nsB, string nameB, bool weightUpNested = true)
     {
+        //Nested types are all at the end, and can never match a name
+        if (typeA.IsNested && weightUpNested) {
+            return +1;
+        }
         int c = string.CompareOrdinal(typeA.Name, nameB);
-        return c == 0 ? string.CompareOrdinal(typeA.Namespace, nsB) : c;
+
+        if (c == 0) {
+            c = string.CompareOrdinal(typeA.Namespace, nsB);
+        }
+        //Force global type to always be the first item on the table
+        if (c != 0 && (typeA.Name == "<Module>" || nameB == "<Module>")) {
+            return nameB == "<Module>" ? +1 : -1;
+        }
+        return c;
+    }
+    internal static int CompareTypeName(TypeDef typeA, TypeDef typeB)
+    {
+        int c = typeA.IsNested.CompareTo(typeB.IsNested);
+        return c == 0 ? CompareTypeName(typeA, typeB.Namespace, typeB.Name, false) : c;
     }
 }

@@ -20,6 +20,9 @@ partial class ModuleWriter
                 _handleMap.Add(method, MetadataTokens.MethodDefinitionHandle(methodIdx++));
             }
         }
+
+        var globalType = _mod.FindType(null, "<Module>");
+        Debug.Assert(globalType == null || _mod.TypeDefs[0] == globalType); //Global type row id must be #1
     }
 
     private EntityHandle CreateHandle(Entity entity)

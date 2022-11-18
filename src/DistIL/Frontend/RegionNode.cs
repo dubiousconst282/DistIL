@@ -30,20 +30,7 @@ internal class RegionNode
 
     public RegionNode FindEnclosing(int offset) => FindEnclosing(offset, offset + 1);
 
-    public bool Contains(int offset)
-    {
-        foreach (var child in Children) {
-            if (offset >= child.StartOffset && offset < child.EndOffset) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public bool AreOnSameRegion(int offset1, int offset2)
-    {
-        return FindEnclosing(offset1) == FindEnclosing(offset2);
-    }
+    public bool Contains(int offset) => offset >= StartOffset && offset <= EndOffset;
 
     public static RegionNode? BuildTree(ExceptionRegion[] clauses)
     {

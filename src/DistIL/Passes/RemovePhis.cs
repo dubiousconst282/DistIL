@@ -105,12 +105,7 @@ public class RemovePhis : MethodPass
     {
         foreach (var block in _method) {
             foreach (var phi in block.Phis()) {
-                int argCount = 0;
-                foreach (var arg in phi) {
-                    argCount += arg.Value is Instruction ? 1 : 0;
-                }
-                
-                var mergeList = new MergeNode[argCount + 1];
+                var mergeList = new MergeNode[phi.NumArgs + 1];
                 int index = 0;
                 
                 foreach (var arg in phi) {
@@ -119,7 +114,8 @@ public class RemovePhis : MethodPass
                     }
                 }
                 AddNode(phi);
-                
+
+                Array.Resize(ref mergeList, index);
                 Array.Sort(mergeList, (a, b) => a == b ? 0 : ComesBefore(a.Def, b.Def) ? -1 : +1);
 
                 void AddNode(Instruction inst)
@@ -191,7 +187,7 @@ public class RemovePhis : MethodPass
                     if (srcSlot != dstSlot) {
                         copiesToSeq.Add((dstSlot, srcSlot));
                     }
-                } else if (src != dstSlot) {
+                } else if (src != dstSlot && src is not Undef) {
                     //Source is a constant, can be copied directly into slot
                     var store = new StoreVarInst(dstSlot, src);
                     store.InsertAfter(copy);

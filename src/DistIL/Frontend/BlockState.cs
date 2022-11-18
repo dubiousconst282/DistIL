@@ -7,7 +7,6 @@ internal class BlockState
     readonly ILImporter _importer;
     readonly MethodBody _body;
     readonly int _startOffset;
-    readonly bool _isInsideEhRegion;
 
     private ModuleDef _mod => _body.Definition.Module;
 
@@ -34,7 +33,6 @@ internal class BlockState
 
         var ilBody = importer._method.ILBody!;
         _stack = new ArrayStack<Value>(ilBody.MaxStack);
-        _isInsideEhRegion = importer._regionTree?.Contains(startOffset) ?? false;
     }
 
     public void Emit(Instruction inst)
@@ -491,7 +489,7 @@ internal class BlockState
             return;
         }
         //Promote block local vars to SSA
-        bool isBlockLocal = (flags & ~VarFlags.MultipleStores) == (VarFlags.IsLocal | VarFlags.Loaded | VarFlags.Stored);
+        bool isBlockLocal = flags == ((VarFlags.IsLocal | VarFlags.Loaded | VarFlags.Stored) & ~VarFlags.CrossesBlock);
         var slotVar = (Variable)slot;
 
         switch (instOp & VarFlags.OpMask) {
@@ -514,7 +512,12 @@ internal class BlockState
                 break;
             }
             case VarFlags.AddrTaken: {
-                Push(new VarAddrInst(slotVar));
+                ref var dataSlot = ref _importer.GetBlockLocalVarSlot(slotVar);
+                if (dataSlot == null || ((VarAddrInst)dataSlot).Block != Block) {
+                    Push(dataSlot = new VarAddrInst(slotVar));
+                } else {
+                    PushNoEmit(dataSlot);
+                }
                 break;
             }
             default: throw new UnreachableException();
@@ -741,8 +744,6 @@ internal class BlockState
 
     private void ImportLeave(int targetOffset)
     {
-        Ensure.That(_isInsideEhRegion, "Leave instruction found outside protected region");
-
         var chainBlock = _importer.GetBlock(targetOffset).Block;
         var currRegion = _importer._regionTree!.FindEnclosing(_startOffset).Parent!;
         var parentRegion = _importer._regionTree!.FindEnclosing(targetOffset);
@@ -764,7 +765,6 @@ internal class BlockState
     }
     private void ImportContinue(bool isFromFilter)
     {
-        Ensure.That(_isInsideEhRegion, "Endfinally/filter instruction found outside protected region");
         var filterResult = isFromFilter ? Pop() : null;
         TerminateBlock(new ContinueInst(filterResult));
     }
@@ -818,7 +818,5 @@ internal enum VarFlags
     OpMask = Loaded | Stored | AddrTaken,
 
     CrossesBlock    = 1 << 5,
-    CrossesRegions  = 1 << 6,
-    MultipleStores  = 1 << 7,
-    LoadBeforeStore = 1 << 8,
+    CrossesRegions  = 1 << 6
 }

@@ -747,13 +747,10 @@ internal class BlockState
 
         //Create a chain of blocks leaving all nested regions until target (in reverse order)
         while (currRegion != parentRegion) {
-            //Try reuse an existing chain block
-            var nextBlock = chainBlock.Preds.FirstOrDefault(b => b.First is LeaveInst);
+            //TODO: avoid creating new blocks (can't use preds as they may be in another region)
+            var nextBlock = _body.CreateBlock(insertAfter: Block);
+            nextBlock.InsertLast(new LeaveInst(chainBlock!));
 
-            if (nextBlock == null) {
-                nextBlock = _body.CreateBlock(insertAfter: Block);
-                nextBlock.InsertLast(new LeaveInst(chainBlock!));
-            }
             chainBlock = nextBlock;
             currRegion = currRegion.Parent!;
         }

@@ -73,6 +73,15 @@ public class CilIntrinsic : IntrinsicDesc
             ReturnType = PrimType.Void.CreatePointer(),
         };
 
+    public override TypeDesc GetResultType(Value[] args)
+    {
+        //isinst returns the boxed object instance for value types
+        if (this == AsInstance && args[0] is TypeDesc { IsValueType: true }) {
+            return PrimType.Object;
+        }
+        return base.GetResultType(args);
+    }
+
     public static CilIntrinsic LoadHandle(ModuleResolver resolver, EntityDesc entity)
     {
         var sys = resolver.SysTypes;

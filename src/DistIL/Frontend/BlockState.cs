@@ -403,10 +403,7 @@ internal class BlockState
                     ImportGenericUnaryIntrinsic(CilIntrinsic.CastClass, inst.Operand);
                     break;
                 case ILCode.Isinst:
-                    ImportGenericUnaryIntrinsic(
-                        CilIntrinsic.AsInstance,
-                        //isinst returns the box object for structs
-                        inst.Operand is TypeDesc { IsValueType: true } ? PrimType.Object : inst.Operand);
+                    ImportGenericUnaryIntrinsic(CilIntrinsic.AsInstance, inst.Operand);
                     break;
                 case ILCode.Box:
                     ImportGenericUnaryIntrinsic(CilIntrinsic.Box, inst.Operand);

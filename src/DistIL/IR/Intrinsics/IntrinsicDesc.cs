@@ -9,6 +9,20 @@ public abstract class IntrinsicDesc
     public ImmutableArray<TypeDesc> ParamTypes { get; protected init; } = ImmutableArray<TypeDesc>.Empty;
     public TypeDesc ReturnType { get; protected init; } = PrimType.Void;
 
+    public virtual TypeDesc GetResultType(Value[] args)
+    {
+        return ResolveType(ReturnType, args);
+    }
+
+    public virtual bool IsAcceptableArgument(Value[] args, int index)
+    {
+        var parType = ParamTypes[index];
+
+        return parType == s_AnyType ? true :
+               parType == s_TypePar ? args[index] is TypeDesc :
+               args[index].ResultType.IsStackAssignableTo(ResolveType(parType, args));
+    }
+
     public static TypeDesc ResolveType(TypeDesc type, Value[] args)
     {
         //Avoid allocating proxy list if type is complete
@@ -17,15 +31,6 @@ public abstract class IntrinsicDesc
         }
         var ctx = new GenericContext(methodArgs: new ValueTypeProxyList() { Values = args });
         return type.GetSpec(ctx);
-    }
-
-    public bool IsAcceptableArgument(Value[] args, int index)
-    {
-        var parType = ParamTypes[index];
-
-        return parType == s_AnyType ? true :
-               parType == s_TypePar ? args[index] is TypeDesc :
-               args[index].ResultType.IsStackAssignableTo(ResolveType(parType, args));
     }
 
     public override string ToString()

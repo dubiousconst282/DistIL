@@ -15,7 +15,7 @@ public class IntrinsicInst : Instruction
         : base(args)
     {
         Intrinsic = intrinsic;
-        ResultType = IntrinsicDesc.ResolveType(intrinsic.ReturnType, args);
+        ResultType = intrinsic.GetResultType(args);
 
         Ensure.That(intrinsic.ParamTypes.Length == args.Length);
 

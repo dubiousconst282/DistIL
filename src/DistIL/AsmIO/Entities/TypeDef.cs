@@ -7,6 +7,9 @@ using System.Reflection.Metadata;
 public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
 {
     public abstract ModuleDef Module { get; }
+    public abstract TypeDef Definition { get; }
+    public abstract override TypeDefOrSpec? BaseType { get; }
+
     public abstract TypeAttributes Attribs { get; }
 
     public override bool IsValueType {
@@ -18,12 +21,6 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
     }
     public override bool IsEnum => BaseType == Module.Resolver.SysTypes.Enum;
     public override bool IsInterface => (Attribs & TypeAttributes.Interface) != 0;
-    public override bool IsGeneric => GenericParams.Length > 0;
-
-    public abstract override TypeDefOrSpec? BaseType { get; }
-
-    public abstract IReadOnlyList<TypeDesc> Interfaces { get; }
-    public ImmutableArray<TypeDesc> GenericParams { get; protected set; }
 
     public override int GetHashCode() => HashCode.Combine(Module, Name, GenericParams.Length);
 }
@@ -31,10 +28,14 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
 public class TypeDef : TypeDefOrSpec
 {
     public override ModuleDef Module { get; }
+    public override TypeDef Definition => this;
+
     public override TypeKind Kind => _kind;
     public override StackType StackType => _kind.ToStackType();
-    public override TypeDefOrSpec? BaseType => _baseType;
     public override TypeAttributes Attribs { get; }
+
+    public override TypeDefOrSpec? BaseType => _baseType;
+    public override ImmutableArray<TypeDesc> GenericParams { get; }
 
     public override string? Namespace { get; }
     public override string Name { get; }
@@ -256,13 +257,14 @@ public class TypeDef : TypeDefOrSpec
 public class TypeSpec : TypeDefOrSpec
 {
     public override ModuleDef Module => Definition.Module;
-    /// <summary> The generic type definition. </summary>
-    public TypeDef Definition { get; }
+    public override TypeDef Definition { get; }
 
     public override TypeKind Kind => Definition.Kind;
     public override StackType StackType => Definition.StackType;
-    public override TypeDefOrSpec? BaseType => Definition.BaseType;
     public override TypeAttributes Attribs => Definition.Attribs;
+
+    public override TypeDefOrSpec? BaseType => Definition.BaseType;
+    public override ImmutableArray<TypeDesc> GenericParams { get; }
 
     public override string? Namespace => Definition.Namespace;
     public override string Name => Definition.Name;
@@ -285,10 +287,12 @@ public class TypeSpec : TypeDefOrSpec
         GenericParams = args;
     }
 
-    public override MethodDesc? FindMethod(string name, in MethodSig sig = default, in GenericContext spec = default, bool throwIfNotFound = false)
+    public override MethodDesc? FindMethod(string name, in MethodSig sig = default, in GenericContext spec = default, bool searchBaseAndItfs = false, bool throwIfNotFound = false)
     {
-        var method = Definition.FindMethod(name, sig, spec.IsNull ? new GenericContext(this) : spec, throwIfNotFound);
-        return method != null ? new MethodSpec(this, (MethodDef)method) : null;
+        var method = Definition.FindMethod(name, sig, spec.IsNull ? new GenericContext(this) : spec, searchBaseAndItfs, throwIfNotFound);
+        return method != null && (!searchBaseAndItfs || method.DeclaringType == Definition)
+            ? new MethodSpec(this, (MethodDef)method)
+            : method;
     }
 
     public override FieldDesc? FindField(string name)

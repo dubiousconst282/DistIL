@@ -15,9 +15,9 @@ public readonly struct GenericContext
         TypeArgs = typeArgs ?? Array.Empty<TypeDesc>();
         MethodArgs = methodArgs ?? Array.Empty<TypeDesc>();
     }
-    public GenericContext(TypeDefOrSpec type)
+    public GenericContext(TypeDesc genType)
     {
-        TypeArgs = type.GenericParams;
+        TypeArgs = genType.GenericParams;
         MethodArgs = Array.Empty<TypeDesc>();
     }
     public GenericContext(MethodDefOrSpec method)

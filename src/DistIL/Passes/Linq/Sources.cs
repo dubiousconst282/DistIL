@@ -1,7 +1,5 @@
 namespace DistIL.Passes.Linq;
 
-using System.Collections;
-
 using DistIL.IR.Utils;
 
 internal class ArraySource : LinqStageNode
@@ -14,14 +12,14 @@ internal class ArraySource : LinqStageNode
     public override Value EmitMoveNext(IRBuilder builder, Value currIndex)
     {
         //lq_index < array.Length
-        return builder.CreateSlt(currIndex, EmitEstimCount(builder));
+        return builder.CreateSlt(currIndex, EmitSourceCount(builder));
     }
     public override Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock)
     {
         //array[lq_index]
         return builder.CreateArrayLoad(Array, currIndex);
     }
-    public override Value EmitEstimCount(IRBuilder builder)
+    public override Value EmitSourceCount(IRBuilder builder)
     {
         return builder.CreateConvert(builder.CreateArrayLen(Array), PrimType.Int32);
     }
@@ -37,7 +35,7 @@ internal class ListSource : LinqStageNode
     public override Value EmitMoveNext(IRBuilder builder, Value currIndex)
     {
         //lq_index < list.Count
-        return builder.CreateSlt(currIndex, EmitEstimCount(builder));
+        return builder.CreateSlt(currIndex, EmitSourceCount(builder));
     }
     public override Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock)
     {
@@ -48,7 +46,7 @@ internal class ListSource : LinqStageNode
         );
         return builder.CreateCallVirt(getter, List, currIndex);
     }
-    public override Value EmitEstimCount(IRBuilder builder)
+    public override Value EmitSourceCount(IRBuilder builder)
     {
         var getter = Type.FindMethod("get_Count", throwIfNotFound: true);
         return builder.CreateCallVirt(getter, List);
@@ -56,21 +54,25 @@ internal class ListSource : LinqStageNode
 }
 internal class EnumeratorSource : LinqStageNode
 {
-    public Value Enumerator { get; }
-    public TypeDefOrSpec Type => (TypeDefOrSpec)Enumerator.ResultType;
+    public Value Enumerable { get; }
+    private CallInst? _enumerator;
 
-    public EnumeratorSource(Value enumerator)
-        => Enumerator = enumerator;
+    public EnumeratorSource(Value enumerable)
+        => Enumerable = enumerable;
 
     public override Value EmitMoveNext(IRBuilder builder, Value currIndex)
     {
-        var t_IEnumerator = Type.Module.Resolver.Import(typeof(IEnumerator), throwIfNotFound: true);
-        var method = t_IEnumerator.FindMethod("MoveNext", throwIfNotFound: true);
-        return builder.CreateCallVirt(method, Enumerator);
+        var method = _enumerator!.ResultType.FindMethod("MoveNext", searchBaseAndItfs: true, throwIfNotFound: true);
+        return builder.CreateCallVirt(method, _enumerator);
     }
     public override Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock)
     {
-        var method = Type.FindMethod("get_Current", throwIfNotFound: true);
-        return builder.CreateCallVirt(method, Enumerator);
+        var method = _enumerator!.ResultType.FindMethod("get_Current", searchBaseAndItfs: true, throwIfNotFound: true);
+        return builder.CreateCallVirt(method, _enumerator);
+    }
+    public override void EmitHead(IRBuilder builder)
+    {
+        var method = Enumerable.ResultType.FindMethod("GetEnumerator", searchBaseAndItfs: true, throwIfNotFound: true);
+        _enumerator = builder.CreateCallVirt(method, Enumerable);
     }
 }

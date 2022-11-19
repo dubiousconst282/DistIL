@@ -7,63 +7,66 @@ internal class ConcretizationQuery : LinqQuery
     public ConcretizationQuery(CallInst call, LinqStageNode pipeline)
         : base(call, pipeline) { }
 
-    public override void Emit()
+    public override bool Emit()
     {
-        //The main loop looks like this:
-        //  PreHeader:
-        //    var result = new Container(Source.GetCount())
-        //    ...
-        //    goto Header
-        //  Header:
-        //    int currIdx = phi [PreHeader -> 0, Latch -> nextIdx]
-        //    bool hasNext = Source.MoveNext()
-        //    goto hasNext ? Body1 : PreExit
-        //  Body1:
-        //    T currItem = Source.Current()
-        //    result.Add(currItem)
-        //  BodyN:
-        //    goto Latch
-        //  Latch:
-        //    int nextIdx = add currIdx, 1
-        //    goto Header
-        //  Exit:
-        //    ...
+        //Emit a loop like this:
+        //
+        //PreHeader:
+        //  var container = new Container(Source.GetCount())
+        //  ...
+        //  goto Header
+        //Header:
+        //  int currIdx = phi [PreHeader -> 0, Latch -> nextIdx]
+        //  bool hasNext = Source.MoveNext(currIdx)
+        //  goto hasNext ? Body1 : Exit
+        //Body1:
+        //  T currItem = Source.Current()
+        //  container.Add(currItem)
+        //  goto BodyN
+        //BodyN
+        //  goto Latch
+        //Latch:
+        //  int nextIdx = add currIdx, 1
+        //  goto Header
+        //Exit:
+        //  var result = WrapContainer(container)
         var preHeader = NewBlock("PreHeader");
         var header = NewBlock("Header");
         var body = NewBlock("Body");
+        var latch = NewBlock("Latch");
         var exit = NewBlock("Exit");
 
-        var estimCount = Pipeline.EmitEstimCount(preHeader);
+        Pipeline.EmitHead(preHeader);
+        var estimCount = Pipeline.EmitSourceCount(preHeader);
         var container = AllocContainer(preHeader, estimCount);
         preHeader.SetBranch(header.Block);
 
-        var currIndex = header.CreatePhi(PrimType.Int32).SetName("currIdx");
-        var hasNext = Pipeline.EmitMoveNext(header, currIndex);
+        var currIdx = header.CreatePhi(PrimType.Int32).SetName("currIdx");
+        var hasNext = Pipeline.EmitMoveNext(header, currIdx);
         header.SetBranch(hasNext, body.Block, exit.Block);
 
-        var latch = NewBlock("Latch");
-        var nextIdx = latch.CreateAdd(currIndex, ConstInt.CreateI(1)).SetName("nextIdx");
-        currIndex.AddArg((preHeader.Block, ConstInt.CreateI(0)), (latch.Block, nextIdx));
-        latch.SetBranch(header.Block);
-
-        var currItem = Pipeline.EmitCurrent(body, currIndex, latch.Block);
-        AppendResult(body, container, currItem);
+        var currItem = Pipeline.EmitCurrent(body, currIdx, latch.Block);
+        AppendItem(body, container, currItem);
         body.SetBranch(latch.Block);
 
-        var wrappedContainer = WrapContainer(exit, container);
+        var nextIdx = latch.CreateAdd(currIdx, ConstInt.CreateI(1)).SetName("nextIdx");
+        currIdx.AddArg((preHeader.Block, ConstInt.CreateI(0)), (latch.Block, nextIdx));
+        latch.SetBranch(header.Block);
 
+        var wrappedContainer = WrapContainer(exit, container);
         var newBlock = SubjectCall.Block.Split(SubjectCall, branchTo: preHeader.Block);
         exit.SetBranch(newBlock);
 
         SubjectCall.ReplaceWith(wrappedContainer);
         Pipeline.DeleteSubject();
+        return true;
     }
 
     protected virtual Value AllocContainer(IRBuilder builder, Value? count)
     {
         return AllocContainer(builder, count, (TypeDefOrSpec)SubjectCall.ResultType);
     }
-    protected virtual void AppendResult(IRBuilder builder, Value container, Value currItem)
+    protected virtual void AppendItem(IRBuilder builder, Value container, Value currItem)
     {
         var method = container.ResultType.FindMethod("Add", throwIfNotFound: true);
         builder.CreateCallVirt(method, container, currItem);
@@ -121,7 +124,7 @@ internal class DictionaryConcretizationQuery : ConcretizationQuery
     public DictionaryConcretizationQuery(CallInst call, LinqStageNode pipeline)
         : base(call, pipeline) { }
 
-    protected override void AppendResult(IRBuilder builder, Value container, Value currItem)
+    protected override void AppendItem(IRBuilder builder, Value container, Value currItem)
     {
         var method = container.ResultType.FindMethod("Add", throwIfNotFound: true);
         var key = builder.CreateLambdaInvoke(SubjectCall.Args[1], currItem);

@@ -50,15 +50,14 @@ internal class OfTypeStage : LinqStageNode
         var currItem = Source!.EmitCurrent(builder, currIndex, skipBlock);
 
         if (currItem.ResultType.IsValueType) {
-            //This should be rare anyway, let downstream passes will deal with it
             currItem = builder.CreateIntrinsic(CilIntrinsic.Box, currItem);
         }
-        var predCond = builder.CreateIntrinsic(CilIntrinsic.AsInstance, destType, currItem);
-        builder.ForkAndSkipIfFalse(predCond, skipBlock);
+        var castItem = builder.CreateIntrinsic(CilIntrinsic.AsInstance, destType, currItem);
+        builder.ForkAndSkipIfFalse(castItem, skipBlock);
 
         return destType.IsValueType
             ? builder.CreateIntrinsic(CilIntrinsic.UnboxObj, destType, currItem)
-            : currItem;
+            : castItem;
     }
     public override Value EmitMoveNext(IRBuilder builder, Value currIndex)
     {
@@ -74,6 +73,10 @@ internal class CastStage : LinqStageNode
     {
         var destType = SubjectCall!.Method.GenericParams[0];
         var currItem = Source!.EmitCurrent(builder, currIndex, skipBlock);
+
+        if (currItem.ResultType.IsValueType) {
+            currItem = builder.CreateIntrinsic(CilIntrinsic.Box, currItem);
+        }
         return builder.CreateIntrinsic(CilIntrinsic.CastClass, destType, currItem);
     }
     public override Value EmitMoveNext(IRBuilder builder, Value currIndex)

@@ -12,19 +12,15 @@ public class IRBuilder
 
     /// <summary> Initializes a builder that inserts instructions before `inst`. </summary>
     public IRBuilder(Instruction inst) => SetPosition(inst);
-    /// <summary> Initializes a builder that appends instructions into `block`. </summary>
-    public IRBuilder(BasicBlock block) => SetPosition(block);
+    /// <summary> Initializes a builder that inserts instructions before `inst`, if non null; othewise it appends new instructions before the terminator of `block`. </summary>
+    public IRBuilder(BasicBlock block, Instruction? inst = null) => SetPosition(block, inst);
 
-    public virtual void SetPosition(Instruction inst)
+    public virtual void SetPosition(BasicBlock block, Instruction? inst = null)
     {
-        _last = inst;
-        _block = inst.Block;
-    }
-    public virtual void SetPosition(BasicBlock block)
-    {
-        _last = null;
         _block = block;
+        _last = inst;
     }
+    public void SetPosition(Instruction inst) => SetPosition(inst.Block, inst);
 
     public PhiInst CreatePhi(TypeDesc resultType) 
         => _block.InsertPhi(resultType);
@@ -123,7 +119,7 @@ public class IRBuilder
         if (_last != null) {
             inst.InsertAfter(_last);
         } else {
-            _block!.InsertLast(inst);
+            _block!.InsertAnteLast(inst);
         }
         _last = inst;
     }

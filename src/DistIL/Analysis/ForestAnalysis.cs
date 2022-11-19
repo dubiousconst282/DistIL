@@ -30,13 +30,18 @@ public class ForestAnalysis : IMethodAnalysis
     private static bool MustBeRooted(Instruction def, BlockInterfs interfs)
     {
         //Consider void or unused instructions on demand, to make the set smaller.
-        if (!def.HasResult || def.NumUses == 0) return false;
+        if (!def.HasResult || def.NumUses == 0 || CheapToRematerialize(def)) return false;
 
         //Def must have one use in the same block, with no interferences in between def and use
         if (def.NumUses >= 2 || def is PhiInst or GuardInst) return true;
 
         var use = def.GetFirstUser()!;
         return use.Block != def.Block || interfs.IsDefInterferedBeforeUse(def, use);
+    }
+
+    private static bool CheapToRematerialize(Instruction inst)
+    {
+        return inst is VarAddrInst or ArrayLenInst;
     }
 
     /// <summary> Returns whether the specified instruction is a the root of a tree/statement (i.e. must be emitted and/or assigned into a temp variable). </summary>

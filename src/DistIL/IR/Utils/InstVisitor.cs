@@ -36,6 +36,6 @@ public interface InstVisitor
 
     void Visit(GuardInst inst);
     void Visit(LeaveInst inst);
-    void Visit(ContinueInst inst);
+    void Visit(ResumeInst inst);
     void Visit(ThrowInst inst);
 }

@@ -71,8 +71,8 @@ public class LeaveInst : Instruction
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }
-/// <summary> Leaves a filter/finally region. </summary>
-public class ContinueInst : Instruction
+/// <summary> Resumes control flow from a filter/finally region. </summary>
+public class ResumeInst : Instruction
 {
     public Value? FilterResult {
         get => IsFromFilter ? Operands[0] : null;
@@ -84,10 +84,10 @@ public class ContinueInst : Instruction
     [MemberNotNullWhen(true, nameof(FilterResult))]
     public bool IsFromFilter => Operands.Length > 0;
 
-    public override string InstName => "continue";
+    public override string InstName => "resume";
     public override bool IsBranch => true;
 
-    public ContinueInst(Value? filterResult = null)
+    public ResumeInst(Value? filterResult = null)
         : base(filterResult == null ? Array.Empty<Value>() : new Value[] { filterResult })
     {
     }

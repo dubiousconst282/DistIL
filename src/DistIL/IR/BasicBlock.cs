@@ -1,4 +1,4 @@
-﻿namespace DistIL.IR;
+namespace DistIL.IR;
 
 public class BasicBlock : TrackedValue
 {
@@ -10,7 +10,7 @@ public class BasicBlock : TrackedValue
     public Instruction First { get; private set; } = null!;
     /// <remarks> May be one of: 
     /// <see cref="ReturnInst"/>, <see cref="BranchInst"/>, <see cref="SwitchInst"/>,
-    /// <see cref="ThrowInst"/>, <see cref="LeaveInst"/>, or <see cref="ContinueInst"/>. </remarks>
+    /// <see cref="ThrowInst"/>, <see cref="LeaveInst"/>, or <see cref="ResumeInst"/>. </remarks>
     public Instruction Last { get; private set; } = null!;
 
     public BasicBlock? Prev { get; set; }

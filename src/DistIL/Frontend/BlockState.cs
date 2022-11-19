@@ -378,7 +378,7 @@ internal class BlockState
                     break;
                 case ILCode.Endfinally:
                 case ILCode.Endfilter:
-                    ImportContinue(opcode == ILCode.Endfilter);
+                    ImportResume(opcode == ILCode.Endfilter);
                     break;
                 #endregion
 
@@ -757,10 +757,10 @@ internal class BlockState
         //We don't need to call AddSucc() because the eval stack should be discarded.
         TerminateBlock(new LeaveInst(chainBlock));
     }
-    private void ImportContinue(bool isFromFilter)
+    private void ImportResume(bool isFromFilter)
     {
         var filterResult = isFromFilter ? Pop() : null;
-        TerminateBlock(new ContinueInst(filterResult));
+        TerminateBlock(new ResumeInst(filterResult));
     }
 
     private void ImportThrow(bool isRethrow)

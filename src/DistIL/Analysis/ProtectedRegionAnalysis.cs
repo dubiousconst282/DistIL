@@ -66,7 +66,7 @@ public class ProtectedRegion
     public IEnumerable<BasicBlock> GetExitBlocks()
     {
         foreach (var block in Blocks) {
-            if (block.Last is LeaveInst or ContinueInst) {
+            if (block.Last is LeaveInst or ResumeInst) {
                 yield return block;
             }
         }

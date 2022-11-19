@@ -171,6 +171,6 @@ public class IRCloner
         public void Visit(GuardInst inst) => Out(new GuardInst(inst.Kind, Remap(inst.HandlerBlock), inst.CatchType == null ? null : Remap(inst.CatchType), inst.HasFilter ? Remap(inst.FilterBlock) : null));
         public void Visit(ThrowInst inst) => Out(new ThrowInst(inst.IsRethrow ? null : Remap(inst.Exception)));
         public void Visit(LeaveInst inst) => Out(new LeaveInst(Remap(inst.Target)));
-        public void Visit(ContinueInst inst) => Out(new ContinueInst(inst.IsFromFilter ? Remap(inst.FilterResult) : null));
+        public void Visit(ResumeInst inst) => Out(new ResumeInst(inst.IsFromFilter ? Remap(inst.FilterResult) : null));
     }
 }

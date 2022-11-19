@@ -266,7 +266,7 @@ partial class ILGenerator
     {
         _asm.Emit(ILCode.Leave, inst.Target);
     }
-    public void Visit(ContinueInst inst)
+    public void Visit(ResumeInst inst)
     {
         if (inst.IsFromFilter) {
             Push(inst.FilterResult);

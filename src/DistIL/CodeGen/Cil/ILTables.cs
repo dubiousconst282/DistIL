@@ -199,21 +199,21 @@ internal static class ILTables
     }
 
     public static ILCode GetArrayElemMacro(TypeDesc type, bool ld) => type.Kind switch {
-        TypeKind.Bool    => ld ? ILCode.Ldelem_U1 : ILCode.Stelem_I1,
-        TypeKind.Char    => ld ? ILCode.Ldelem_U2 : ILCode.Stelem_I2,
-        TypeKind.SByte   => ld ? ILCode.Ldelem_I1 : ILCode.Stelem_I1,
-        TypeKind.Int16   => ld ? ILCode.Ldelem_I2 : ILCode.Stelem_I2,
-        TypeKind.Int32   => ld ? ILCode.Ldelem_I4 : ILCode.Stelem_I4,
-        TypeKind.Int64   => ld ? ILCode.Ldelem_I8 : ILCode.Stelem_I8,
-        TypeKind.Byte    => ld ? ILCode.Ldelem_U1 : ILCode.Stelem_I1,
-        TypeKind.UInt16  => ld ? ILCode.Ldelem_U2 : ILCode.Stelem_I2,
-        TypeKind.UInt32  => ld ? ILCode.Ldelem_U4 : ILCode.Stelem_I4,
-        TypeKind.UInt64  => ld ? ILCode.Ldelem_I8 : ILCode.Stelem_I8,
-        TypeKind.Single  => ld ? ILCode.Ldelem_R4 : ILCode.Stelem_R4,
-        TypeKind.Double  => ld ? ILCode.Ldelem_R8 : ILCode.Stelem_R8,
-        TypeKind.IntPtr  => ld ? ILCode.Ldelem_I  : ILCode.Stelem_I1,
-        TypeKind.UIntPtr => ld ? ILCode.Ldelem_I  : ILCode.Stelem_I1,
-        TypeKind.Pointer => ld ? ILCode.Ldelem_I  : ILCode.Stelem_I1,
+        TypeKind.SByte      => ld ? ILCode.Ldelem_I1 : ILCode.Stelem_I1,
+        TypeKind.Int16      => ld ? ILCode.Ldelem_I2 : ILCode.Stelem_I2,
+        TypeKind.Int32      => ld ? ILCode.Ldelem_I4 : ILCode.Stelem_I4,
+        TypeKind.Int64 or
+        TypeKind.UInt64     => ld ? ILCode.Ldelem_I8 : ILCode.Stelem_I8,
+        TypeKind.Bool or 
+        TypeKind.Byte       => ld ? ILCode.Ldelem_U1 : ILCode.Stelem_I1,
+        TypeKind.Char or
+        TypeKind.UInt16     => ld ? ILCode.Ldelem_U2 : ILCode.Stelem_I2,
+        TypeKind.UInt32     => ld ? ILCode.Ldelem_U4 : ILCode.Stelem_I4,
+        TypeKind.Single     => ld ? ILCode.Ldelem_R4 : ILCode.Stelem_R4,
+        TypeKind.Double     => ld ? ILCode.Ldelem_R8 : ILCode.Stelem_R8,
+        TypeKind.IntPtr or
+        TypeKind.UIntPtr or 
+        TypeKind.Pointer    => ld ? ILCode.Ldelem_I  : ILCode.Stelem_I,
         _ => default
     };
 #pragma warning restore format

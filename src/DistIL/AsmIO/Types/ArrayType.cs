@@ -128,7 +128,10 @@ public class MDArrayMethod : MethodDesc
 
     public override MethodDesc GetSpec(GenericContext ctx)
     {
-        throw new UnreachableException();
+        var specType = DeclaringType.GetSpec(ctx);
+        return specType == DeclaringType
+            ? this
+            : ((MDArrayType)specType).Methods[(int)Kind];
     }
 
     class ParamSigList : IReadOnlyList<TypeSig>

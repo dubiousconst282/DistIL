@@ -176,12 +176,12 @@ internal class ModuleLoader
         throw new InvalidOperationException($"Could not resolve referenced field '{rootParent}::{name}'");
     }
 
-    public ImmutableArray<TypeDesc> CreateGenericParams(GenericParameterHandleCollection handleList, bool isForMethod)
+    public ImmutableArray<GenericParamType> CreateGenericParams(GenericParameterHandleCollection handleList, bool isForMethod)
     {
         if (handleList.Count == 0) {
-            return ImmutableArray<TypeDesc>.Empty;
+            return ImmutableArray<GenericParamType>.Empty;
         }
-        var builder = ImmutableArray.CreateBuilder<TypeDesc>(handleList.Count);
+        var builder = ImmutableArray.CreateBuilder<GenericParamType>(handleList.Count);
         foreach (var handle in handleList) {
             var info = _reader.GetGenericParameter(handle);
             string name = _reader.GetString(info.Name);
@@ -190,7 +190,7 @@ internal class ModuleLoader
         return builder.MoveToImmutable();
     }
 
-    public void FillGenericParams(ImmutableArray<TypeDesc> genPars, GenericParameterHandleCollection handles)
+    public void FillGenericParams(IReadOnlyList<GenericParamType> genPars, GenericParameterHandleCollection handles)
     {
         foreach (var handle in handles) {
             var info = _reader.GetGenericParameter(handle);

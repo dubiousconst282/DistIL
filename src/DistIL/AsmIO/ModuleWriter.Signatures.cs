@@ -41,7 +41,7 @@ partial class ModuleWriter
                 break;
             }
             case TypeSpec t: {
-                var argEnc = enc.GenericInstantiation(GetHandle(t.Definition), t.GenericParams.Length, t.IsValueType);
+                var argEnc = enc.GenericInstantiation(GetHandle(t.Definition), t.GenericParams.Count, t.IsValueType);
                 foreach (var arg in t.GenericParams) {
                     EncodeType(argEnc.AddArgument(), arg);
                 }
@@ -89,7 +89,7 @@ partial class ModuleWriter
             var pars = method.ParamSig;
             int offset = method.IsInstance ? 1 : 0;
 
-            b.MethodSignature(default, method.GenericParams.Length, method.IsInstance)
+            b.MethodSignature(default, method.GenericParams.Count, method.IsInstance)
                 .Parameters(pars.Count - offset, out var retTypeEnc, out var parsEnc);
 
             EncodeType(retTypeEnc.Type(), method.ReturnSig);
@@ -103,7 +103,7 @@ partial class ModuleWriter
     private BlobHandle EncodeMethodSpecSig(MethodSpec method)
     {
         return EncodeSig(b => {
-            var genArgEnc = b.MethodSpecificationSignature(method.GenericParams.Length);
+            var genArgEnc = b.MethodSpecificationSignature(method.GenericParams.Count);
 
             foreach (var par in method.GenericParams) {
                 EncodeType(genArgEnc.AddArgument(), par);

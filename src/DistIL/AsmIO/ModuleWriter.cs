@@ -82,7 +82,7 @@ internal partial class ModuleWriter
         Debug.Assert(type.Fields.Count == 0 || _handleMap[type.Fields[0]] == firstFieldHandle);
         Debug.Assert(type.Methods.Count == 0 || _handleMap[type.Methods[0]] == firstMethodHandle);
 
-        if (type.GenericParams.Length > 0) {
+        if (type.IsGeneric) {
             _genericDefs.Add(type);
         }
         if (type.IsNested) {
@@ -207,7 +207,7 @@ internal partial class ModuleWriter
         for (int i = 0; i < pars.Length; i++) {
             EmitParam(pars[i], i + 1);
         }
-        if (method.GenericParams.Length > 0) {
+        if (method.IsGeneric) {
             _genericDefs.Add(method);
         }
         EmitCustomAttribs(handle, method.GetCustomAttribs());

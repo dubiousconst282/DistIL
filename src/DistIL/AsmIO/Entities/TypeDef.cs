@@ -22,7 +22,7 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
     public override bool IsEnum => BaseType == Module.Resolver.SysTypes.Enum;
     public override bool IsInterface => (Attribs & TypeAttributes.Interface) != 0;
 
-    public override int GetHashCode() => HashCode.Combine(Module, Name, GenericParams.Length);
+    public override int GetHashCode() => HashCode.Combine(Module, Name);
 }
 
 public class TypeDef : TypeDefOrSpec
@@ -35,7 +35,7 @@ public class TypeDef : TypeDefOrSpec
     public override TypeAttributes Attribs { get; }
 
     public override TypeDefOrSpec? BaseType => _baseType;
-    public override ImmutableArray<TypeDesc> GenericParams { get; }
+    public override IReadOnlyList<GenericParamType> GenericParams { get; }
 
     public override string? Namespace { get; }
     public override string Name { get; }
@@ -80,7 +80,7 @@ public class TypeDef : TypeDefOrSpec
     internal TypeDef(
         ModuleDef mod, string? ns, string name, 
         TypeAttributes attribs = default,
-        ImmutableArray<TypeDesc> genericParams = default,
+        ImmutableArray<GenericParamType> genericParams = default,
         TypeDefOrSpec? baseType = null)
     {
         Module = mod;
@@ -99,7 +99,7 @@ public class TypeDef : TypeDefOrSpec
     }
     public TypeSpec GetSpec(ImmutableArray<TypeDesc> genArgs)
     {
-        Ensure.That(IsGeneric && genArgs.Length == GenericParams.Length);
+        Ensure.That(IsGeneric && genArgs.Length == GenericParams.Count);
         return new TypeSpec(this, genArgs);
     }
 
@@ -116,10 +116,7 @@ public class TypeDef : TypeDefOrSpec
         var existingMethod = FindMethod(name, new MethodSig(retSig, paramSig.Select(p => p.Sig).ToList()));
         Ensure.That(existingMethod == null, "A method with the same signature already exists");
 
-        var method = new MethodDef(
-            this, retSig, paramSig, name, attribs, 
-            genericParams: genericPars.IsDefault ? default : genericPars.CastArray<TypeDesc>()
-        );
+        var method = new MethodDef(this, retSig, paramSig, name, attribs, MethodImplAttributes.IL, genericPars);
         _methods.Add(method);
         return method;
     }
@@ -264,7 +261,7 @@ public class TypeSpec : TypeDefOrSpec
     public override TypeAttributes Attribs => Definition.Attribs;
 
     public override TypeDefOrSpec? BaseType => Definition.BaseType;
-    public override ImmutableArray<TypeDesc> GenericParams { get; }
+    public override IReadOnlyList<TypeDesc> GenericParams { get; }
 
     public override string? Namespace => Definition.Namespace;
     public override string Name => Definition.Name;

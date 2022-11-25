@@ -42,7 +42,7 @@ public readonly struct MethodSig
 
     public bool Matches(MethodDesc method, in GenericContext spec)
     {
-        return method.GenericParams.Length == NumGenericParams &&
+        return method.GenericParams.Count == NumGenericParams &&
             (IsInstance == null || IsInstance == method.IsInstance) &&
             method.ReturnSig.GetSpec(spec) == ReturnType &&
             CompareParams(method, spec);

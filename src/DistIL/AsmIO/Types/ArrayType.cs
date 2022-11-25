@@ -98,6 +98,7 @@ public class MDArrayMethod : MethodDesc
     }
 
     public override MDArrayType DeclaringType { get; }
+    public OpKind Kind { get; }
 
     public override string Name
         => Kind <= OpKind.RangeCtor ? ".ctor" : Kind.ToString();
@@ -116,7 +117,8 @@ public class MDArrayMethod : MethodDesc
     public override IReadOnlyList<TypeSig> ParamSig
         => _paramSig ??= new() { Method = this };
 
-    public OpKind Kind { get; }
+    public override IReadOnlyList<TypeDesc> GenericParams
+        => Array.Empty<TypeDesc>();
 
     private ParamSigList? _paramSig;
 

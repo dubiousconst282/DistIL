@@ -46,8 +46,7 @@ public class ModuleDef : ModuleEntity
             throw new InvalidOperationException("A type with the same name already exists");
         }
         var type = new TypeDef(
-            this, ns, name, attrs, 
-            genericParams.CastArray<TypeDesc>(),
+            this, ns, name, attrs, genericParams,
             baseType ?? Resolver.SysTypes.Object
         );
         _typeDefs.Insert(~index, type);

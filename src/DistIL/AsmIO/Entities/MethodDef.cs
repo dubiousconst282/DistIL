@@ -13,12 +13,11 @@ public abstract class MethodDesc : MemberDesc
 
     public abstract TypeSig ReturnSig { get; }
     public abstract IReadOnlyList<TypeSig> ParamSig { get; }
-
-    public ImmutableArray<TypeDesc> GenericParams { get; protected set; } = ImmutableArray<TypeDesc>.Empty;
+    public abstract IReadOnlyList<TypeDesc> GenericParams { get; }
 
     public bool IsStatic => (Attribs & MethodAttributes.Static) != 0;
     public bool IsInstance => !IsStatic;
-    public bool IsGeneric => GenericParams.Length > 0;
+    public bool IsGeneric => GenericParams.Count > 0;
 
     public TypeDesc ReturnType => ReturnSig.Type;
 
@@ -79,6 +78,7 @@ public class MethodDef : MethodDefOrSpec
 
     public override TypeSig ReturnSig => ReturnParam.Sig;
     public override IReadOnlyList<TypeSig> ParamSig => _paramSig ??= new() { Method = this };
+    public override IReadOnlyList<GenericParamType> GenericParams { get; }
 
     /// <summary> Represents a placeholder for the return value, which may contain custom attributes. </summary>
     public ParamDef ReturnParam { get; }
@@ -97,7 +97,7 @@ public class MethodDef : MethodDefOrSpec
         TypeDef declaringType,
         TypeSig retSig, ImmutableArray<ParamDef> pars, string name,
         MethodAttributes attribs = default, MethodImplAttributes implAttribs = default,
-        ImmutableArray<TypeDesc> genericParams = default)
+        ImmutableArray<GenericParamType> genericParams = default)
     {
         DeclaringType = declaringType;
         ReturnParam = new ParamDef(retSig, "", ParameterAttributes.Retval);
@@ -214,6 +214,10 @@ public class MethodSpec : MethodDefOrSpec
 
     public override TypeSig ReturnSig { get; }
     public override IReadOnlyList<TypeSig> ParamSig { get; }
+    public override IReadOnlyList<TypeDesc> GenericParams { get; }
+
+    /// <summary> Returns whether the generic parameters from this spec are different from its definition. </summary>
+    public bool IsBoundGeneric => GenericParams != Definition.GenericParams;
 
     internal MethodSpec(TypeDefOrSpec declaringType, MethodDef def, ImmutableArray<TypeDesc> genArgs = default)
     {

@@ -26,9 +26,9 @@ public readonly struct GenericContext
         MethodArgs = method.GenericParams;
     }
 
-    public ImmutableArray<TypeDesc> FillParams(ImmutableArray<TypeDesc> pars)
+    public ImmutableArray<TypeDesc> FillParams(IReadOnlyCollection<TypeDesc> pars)
     {
-        var builder = ImmutableArray.CreateBuilder<TypeDesc>(pars.Length);
+        var builder = ImmutableArray.CreateBuilder<TypeDesc>(pars.Count);
         foreach (var type in pars) {
             builder.Add(type.GetSpec(this));
         }

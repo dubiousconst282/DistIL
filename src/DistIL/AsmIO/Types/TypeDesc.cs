@@ -10,7 +10,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
 
     public abstract TypeDesc? BaseType { get; }
     public virtual IReadOnlyList<TypeDesc> Interfaces => Array.Empty<TypeDesc>();
-    public virtual ImmutableArray<TypeDesc> GenericParams { get; }
+    public virtual IReadOnlyList<TypeDesc> GenericParams { get; } = Array.Empty<TypeDesc>();
 
     /// <summary> Element type of the array, pointer or byref type. </summary>
     public virtual TypeDesc? ElemType => null;
@@ -18,7 +18,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     public virtual bool IsValueType => false;
     public virtual bool IsEnum => false;
     public virtual bool IsInterface => false;
-    public bool IsGeneric => GenericParams.Length > 0;
+    public bool IsGeneric => GenericParams.Count > 0;
 
     [MemberNotNullWhen(true, nameof(IsEnum))]
     public virtual TypeDesc? UnderlyingEnumType => null;

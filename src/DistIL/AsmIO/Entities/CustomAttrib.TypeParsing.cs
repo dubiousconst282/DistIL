@@ -197,7 +197,7 @@ partial class CustomAttrib
                     Print(spec.Definition);
                     Ensure.That(spec.Name.Contains('`'), "Generic type name must end with a backtick followed by the number of generic parameters.");
                     sb.Append('[');
-                    for (int i = 0; i < spec.GenericParams.Length; i++) {
+                    for (int i = 0; i < spec.GenericParams.Count; i++) {
                         if (i != 0) sb.Append(',');
                         Print(spec.GenericParams[i]);
                     }

@@ -1,4 +1,4 @@
-namespace DistIL.IR;
+﻿namespace DistIL.IR;
 
 public class BasicBlock : TrackedValue
 {
@@ -35,10 +35,21 @@ public class BasicBlock : TrackedValue
             return count;
         }
     }
-    public Instruction FirstNonPhi {
+    /// <summary> Returns the first instruction that is not a <see cref="GuardInst"/>. </summary>
+    public Instruction FirstNonGuard {
         get {
             var inst = First;
-            while (inst is PhiInst) {
+            while (inst is GuardInst) {
+                inst = inst.Next!;
+            }
+            return inst;
+        }
+    }
+    /// <summary> Returns the first instruction that is not a <see cref="PhiInst"/> or <see cref="GuardInst"/>. </summary>
+    public Instruction FirstNonHeader {
+        get {
+            var inst = First;
+            while (inst is PhiInst or GuardInst) {
                 inst = inst.Next!;
             }
             return inst;
@@ -134,7 +145,7 @@ public class BasicBlock : TrackedValue
     public PhiInst InsertPhi(PhiInst phi)
     {
         if (First != null) {
-            InsertBefore(FirstNonPhi, phi);
+            InsertBefore(FirstNonHeader, phi);
         } else {
             InsertFirst(phi);
         }
@@ -245,12 +256,12 @@ public class BasicBlock : TrackedValue
 
     public IEnumerable<PhiInst> Phis()
     {
-        for (var inst = First; inst is PhiInst phi; inst = inst.Next) {
+        for (var inst = FirstNonGuard; inst is PhiInst phi; inst = inst.Next) {
             yield return phi;
         }
     }
     /// <summary> Enumerates all <see cref="GuardInst"/> in this block. </summary>
-    /// <remarks> Blocks with guards (entry of a region) should not have phi instructions. </remarks>
+    /// <remarks> Blocks can have both guards and phis, but guards must always come first. </remarks>
     public IEnumerable<GuardInst> Guards()
     {
         for (var inst = First; inst is GuardInst guard; inst = inst.Next) {
@@ -259,7 +270,7 @@ public class BasicBlock : TrackedValue
     }
     public IEnumerable<Instruction> NonPhis()
     {
-        for (var inst = FirstNonPhi; inst != null; inst = inst.Next) {
+        for (var inst = FirstNonHeader; inst != null; inst = inst.Next) {
             yield return inst;
         }
     }
@@ -269,7 +280,7 @@ public class BasicBlock : TrackedValue
 
     //Enumerating block users (ignoring phis) will lead directly to predecessors.
     //GuardInst`s will not yield duplicates because handler blocks can only have one predecessor guard.
-    //SwitchInst has an special representation to avoid duplicated block use edges.
+    //SwitchInst has a special representation to avoid duplicated block use edges.
     public struct PredIterator : Iterator<BasicBlock>
     {
         ValueUserIterator _users;

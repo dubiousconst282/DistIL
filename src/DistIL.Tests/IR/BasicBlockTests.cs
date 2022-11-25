@@ -61,7 +61,7 @@ public class BasicBlockTests
 
         Assert.Equal(inst1, block.First);
         Assert.Equal(inst5, block.Last);
-        Assert.Equal(inst3, block.FirstNonPhi);
+        Assert.Equal(inst3, block.FirstNonHeader);
 
         Assert.Equal(new Instruction[] { inst1, inst2, inst3, inst4, inst5 }, ToList(block.GetEnumerator()));
         Assert.Equal(new Instruction[] { inst3, inst4, inst5 }, ToList(block.NonPhis().GetEnumerator()));

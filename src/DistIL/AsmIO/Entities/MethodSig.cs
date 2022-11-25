@@ -4,16 +4,16 @@ using System.Collections.Generic;
 using System.Reflection.Metadata;
 
 /// <summary> Represents the signature of a method declared in a type. </summary>
-public readonly struct MethodSig : IEquatable<MethodSig>
+public readonly struct MethodSig
 {
-    const SignatureAttributes kInvariantInstance = (SignatureAttributes)0x80;
+    const SignatureAttributes kMaybeInstance = (SignatureAttributes)0x80;
 
     public TypeSig ReturnType { get; }
     public IReadOnlyList<TypeSig> ParamTypes { get; }
 
     public int NumGenericParams { get; }
 
-    public bool? IsInstance => (_header.RawValue & (byte)kInvariantInstance) != 0 ? null : _header.IsInstance;
+    public bool? IsInstance => (_header.RawValue & (byte)kMaybeInstance) != 0 ? null : _header.IsInstance;
     public bool IsGeneric => _header.IsGeneric;
     public CallConvention CallConv => (CallConvention)_header.CallingConvention;
 
@@ -27,7 +27,7 @@ public readonly struct MethodSig : IEquatable<MethodSig>
         ReturnType = retType;
         ParamTypes = paramTypes;
         NumGenericParams = numGenPars;
-        _header = new(SignatureKind.Method, default, isInstance == null ? (SignatureAttributes)0x80 : 0);
+        _header = new(SignatureKind.Method, default, isInstance == null ? kMaybeInstance : 0);
     }
 
     /// <remarks> Note that <paramref name="paramTypes"/> should not include the instance type (`this` parameter). </remarks>
@@ -37,7 +37,7 @@ public readonly struct MethodSig : IEquatable<MethodSig>
         ParamTypes = paramTypes;
         NumGenericParams = numGenPars;
         _header = header;
-        Ensure.That(!header.Attributes.HasFlag(kInvariantInstance));
+        Ensure.That(!header.Attributes.HasFlag(kMaybeInstance));
     }
 
     public bool Matches(MethodDesc method, in GenericContext spec)
@@ -63,19 +63,6 @@ public readonly struct MethodSig : IEquatable<MethodSig>
             }
         }
         return true;
-    }
-
-    public bool Equals(MethodSig other)
-    {
-        throw new NotImplementedException();
-    }
-    public override bool Equals(object? obj)
-    {
-        throw new NotImplementedException();
-    }
-    public override int GetHashCode()
-    {
-        throw new NotImplementedException();
     }
 }
 

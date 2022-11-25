@@ -98,16 +98,23 @@ public class MDArrayMethod : MethodDesc
     }
 
     public override MDArrayType DeclaringType { get; }
-    public override string Name { get; }
-    
+
+    public override string Name
+        => Kind <= OpKind.RangeCtor ? ".ctor" : Kind.ToString();
+
     public override MethodAttributes Attribs
         => MethodAttributes.Public | (Kind <= OpKind.RangeCtor ? MethodAttributes.SpecialName : 0);
 
     public override MethodImplAttributes ImplAttribs
         => MethodImplAttributes.InternalCall;
 
-    public override TypeSig ReturnSig { get; }
-    public override IReadOnlyList<TypeSig> ParamSig => _paramSig ??= new() { Method = this };
+    public override TypeSig ReturnSig => Kind switch {
+        <= OpKind.Set  => PrimType.Void,
+        OpKind.Get     => DeclaringType.ElemType,
+        OpKind.Address => DeclaringType.ElemType.CreateByref()
+    };
+    public override IReadOnlyList<TypeSig> ParamSig
+        => _paramSig ??= new() { Method = this };
 
     public OpKind Kind { get; }
 
@@ -115,15 +122,8 @@ public class MDArrayMethod : MethodDesc
 
     internal MDArrayMethod(MDArrayType type, OpKind kind)
     {
-        bool isCtor = kind <= OpKind.RangeCtor;
         DeclaringType = type;
-        Name = isCtor ? ".ctor" : kind.ToString();
         Kind = kind;
-        ReturnSig = kind switch {
-            <= OpKind.Set  => PrimType.Void,
-            OpKind.Get     => type.ElemType,
-            OpKind.Address => type.ElemType.CreateByref()
-        };
     }
 
     public override MethodDesc GetSpec(GenericContext ctx)
@@ -143,14 +143,13 @@ public class MDArrayMethod : MethodDesc
                 if (index == 0) {
                     return Method.DeclaringType; //this
                 }
-                int rank = Method.DeclaringType.Rank;
                 return Method.Kind switch {
-                    OpKind.Set when index == rank + 1
+                    OpKind.Set when index == Count - 1
                         => Method.DeclaringType.ElemType,
-                    _ when index >= Count
-                        => throw new IndexOutOfRangeException(),
+                    _ when index < Count 
+                        => PrimType.Int32,
                     _
-                        => PrimType.Int32
+                        => throw new IndexOutOfRangeException()
                 };
             }
         }

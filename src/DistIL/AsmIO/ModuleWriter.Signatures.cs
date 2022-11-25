@@ -63,14 +63,17 @@ partial class ModuleWriter
         }
     }
 
-    private BlobHandle EncodeMethodSig(MethodSig sig)
+    private BlobHandle EncodeMethodSig(MethodSig sig, bool isPropSig = false)
     {
         return EncodeSig(b => {
             var pars = sig.ParamTypes;
-            b.MethodSignature(
-                (SignatureCallingConvention)sig.CallConv, sig.NumGenericParams,
-                sig.IsInstance ?? throw new InvalidOperationException()
-            ).Parameters(pars.Count, out var retTypeEnc, out var parsEnc);
+            bool isInstance = sig.IsInstance ?? throw new InvalidOperationException();
+
+            var sigEnc = isPropSig
+                ? b.PropertySignature(isInstance)
+                : b.MethodSignature((SignatureCallingConvention)sig.CallConv, sig.NumGenericParams, isInstance);
+
+            sigEnc.Parameters(pars.Count, out var retTypeEnc, out var parsEnc);
 
             EncodeType(retTypeEnc.Type(), sig.ReturnType);
 

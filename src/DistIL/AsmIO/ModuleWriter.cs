@@ -127,7 +127,7 @@ internal partial class ModuleWriter
 
         PropertyDefinitionHandle EmitProp(PropertyDef prop)
         {
-            var handle = _builder.AddProperty(prop.Attribs, AddString(prop.Name), EncodeMethodSig(prop.Sig));
+            var handle = _builder.AddProperty(prop.Attribs, AddString(prop.Name), EncodeMethodSig(prop.Sig, isPropSig: true));
 
             Link(handle, prop.Getter, MethodSemanticsAttributes.Getter);
             Link(handle, prop.Setter, MethodSemanticsAttributes.Setter);

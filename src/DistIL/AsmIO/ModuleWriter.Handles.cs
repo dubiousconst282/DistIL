@@ -22,9 +22,10 @@ partial class ModuleWriter
         }
 
         var globalType = _mod.FindType(null, "<Module>");
-        Debug.Assert(globalType == null || _mod.TypeDefs[0] == globalType); //Global type row id must be #1
+        Debug.Assert(globalType != null && _mod.TypeDefs[0] == globalType); //Global type row id must be #1
     }
 
+    //Add reference to an entity defined in another module
     private EntityHandle CreateHandle(Entity entity)
     {
         switch (entity) {
@@ -42,26 +43,21 @@ partial class ModuleWriter
                 );
             }
             case TypeSig sig: {
+                Debug.Assert(sig.HasCustomMods);
+
                 return _builder.AddTypeSpecification(
                     EncodeSig(b => EncodeType(b.TypeSpecificationSignature(), sig))
                 );
             }
             case MethodDesc method: {
-                EntityHandle refHandle;
-                var spec = method as MethodSpec;
-
-                if (spec is { DeclaringType: TypeDef }) {
-                    refHandle = GetHandle(spec.Definition);
-                } else {
-                    refHandle = _builder.AddMemberReference(
-                        GetHandle(method.DeclaringType),
-                        AddString(method.Name),
-                        EncodeMethodSig((method as MethodDefOrSpec)?.Definition ?? method)
-                    );
-                }
-                return spec is { IsGeneric: true }
-                    ? _builder.AddMethodSpecification(refHandle, EncodeMethodSpecSig(spec))
-                    : refHandle;
+                var defHandle = _builder.AddMemberReference(
+                    GetHandle(method.DeclaringType),
+                    AddString(method.Name),
+                    EncodeMethodSig((method as MethodDefOrSpec)?.Definition ?? method)
+                );
+                return method is MethodSpec { IsBoundGeneric: true } spec
+                    ? _builder.AddMethodSpecification(defHandle, EncodeMethodSpecSig(spec))
+                    : defHandle;
             }
             case FieldDefOrSpec field: {
                 return _builder.AddMemberReference(

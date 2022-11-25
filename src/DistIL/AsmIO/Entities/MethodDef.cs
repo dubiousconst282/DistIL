@@ -216,8 +216,8 @@ public class MethodSpec : MethodDefOrSpec
     public override IReadOnlyList<TypeSig> ParamSig { get; }
     public override IReadOnlyList<TypeDesc> GenericParams { get; }
 
-    /// <summary> Returns whether the generic parameters from this spec are different from its definition. </summary>
-    public bool IsBoundGeneric => GenericParams != Definition.GenericParams;
+    /// <summary> Returns whether this meth generic parameters from this spec are different from its definition. </summary>
+    public bool IsBoundGeneric => IsGeneric && GenericParams != Definition.GenericParams;
 
     internal MethodSpec(TypeDefOrSpec declaringType, MethodDef def, ImmutableArray<TypeDesc> genArgs = default)
     {

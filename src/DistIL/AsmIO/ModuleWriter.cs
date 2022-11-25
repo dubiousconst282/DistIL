@@ -93,6 +93,8 @@ internal partial class ModuleWriter
             EmitCustomAttribs(itfHandle, type.GetCustomAttribs(itf));
         }
         foreach (var (decl, impl) in type.InterfaceMethodImpls) {
+            Debug.Assert(decl is not MethodSpec { IsBoundGeneric: true });
+
             var implHandle = _builder.AddMethodImplementation(handle, GetHandle(impl), GetHandle(decl));
             EmitCustomAttribs(implHandle, type.GetCustomAttribs(impl, decl));
         }
@@ -124,41 +126,6 @@ internal partial class ModuleWriter
             _builder.AddTypeLayout(handle, (ushort)type.LayoutPack, (uint)type.LayoutSize);
         }
         EmitCustomAttribs(handle, type.GetCustomAttribs());
-
-        PropertyDefinitionHandle EmitProp(PropertyDef prop)
-        {
-            var handle = _builder.AddProperty(prop.Attribs, AddString(prop.Name), EncodeMethodSig(prop.Sig, isPropSig: true));
-
-            Link(handle, prop.Getter, MethodSemanticsAttributes.Getter);
-            Link(handle, prop.Setter, MethodSemanticsAttributes.Setter);
-
-            foreach (var otherAcc in prop.OtherAccessors) {
-                Link(handle, otherAcc, MethodSemanticsAttributes.Other);
-            }
-            EmitCustomAttribs(handle, prop.GetCustomAttribs());
-
-            return handle;
-        }
-        EventDefinitionHandle EmitEvent(EventDef evt)
-        {
-            var handle = _builder.AddEvent(evt.Attribs, AddString(evt.Name), GetHandle(evt.Type));
-
-            Link(handle, evt.Adder, MethodSemanticsAttributes.Adder);
-            Link(handle, evt.Remover, MethodSemanticsAttributes.Remover);
-            Link(handle, evt.Raiser, MethodSemanticsAttributes.Raiser);
-
-            foreach (var otherAcc in evt.OtherAccessors) {
-                Link(handle, otherAcc, MethodSemanticsAttributes.Other);
-            }
-            EmitCustomAttribs(handle, evt.GetCustomAttribs());
-            return handle;
-        }
-        void Link(EntityHandle assoc, MethodDef? method, MethodSemanticsAttributes kind)
-        {
-            if (method != null) {
-                _builder.AddMethodSemantics(assoc, kind, (MethodDefinitionHandle)GetHandle(method));
-            }
-        }
     }
 
     private void EmitField(FieldDef field)
@@ -170,20 +137,20 @@ internal partial class ModuleWriter
         );
         Debug.Assert(_handleMap[field] == handle);
 
-        if (field.MappedData != null) {
+        if (field.Attribs.HasFlag(FieldAttributes.HasFieldRVA)) {
             _fieldDataStream ??= new();
             _builder.AddFieldRelativeVirtualAddress(handle, _fieldDataStream.Count);
-            _fieldDataStream.WriteBytes(field.MappedData);
+            _fieldDataStream.WriteBytes(field.MappedData!);
             _fieldDataStream.Align(ManagedPEBuilder.MappedFieldDataAlignment);
+        }
+        if (field.Attribs.HasFlag(FieldAttributes.HasFieldMarshal)) {
+            _builder.AddMarshallingDescriptor(handle, _builder.GetOrAddBlob(field.MarshallingDesc!));
         }
         if (field.Attribs.HasFlag(FieldAttributes.HasDefault)) {
             _builder.AddConstant(handle, field.DefaultValue);
         }
         if (field.LayoutOffset >= 0) {
             _builder.AddFieldLayout(handle, field.LayoutOffset);
-        }
-        if (field.MarshallingDesc != null) {
-            _builder.AddMarshallingDescriptor(handle, _builder.GetOrAddBlob(field.MarshallingDesc));
         }
         EmitCustomAttribs(handle, field.GetCustomAttribs());
     }
@@ -224,6 +191,41 @@ internal partial class ModuleWriter
             _builder.AddMarshallingDescriptor(handle, _builder.GetOrAddBlob(par.MarshallingDesc!));
         }
         EmitCustomAttribs(handle, par.GetCustomAttribs());
+    }
+
+    private PropertyDefinitionHandle EmitProp(PropertyDef prop)
+    {
+        var handle = _builder.AddProperty(prop.Attribs, AddString(prop.Name), EncodeMethodSig(prop.Sig, isPropSig: true));
+
+        Link(handle, prop.Getter, MethodSemanticsAttributes.Getter);
+        Link(handle, prop.Setter, MethodSemanticsAttributes.Setter);
+
+        foreach (var otherAcc in prop.OtherAccessors) {
+            Link(handle, otherAcc, MethodSemanticsAttributes.Other);
+        }
+        EmitCustomAttribs(handle, prop.GetCustomAttribs());
+
+        return handle;
+    }
+    private EventDefinitionHandle EmitEvent(EventDef evt)
+    {
+        var handle = _builder.AddEvent(evt.Attribs, AddString(evt.Name), GetHandle(evt.Type));
+
+        Link(handle, evt.Adder, MethodSemanticsAttributes.Adder);
+        Link(handle, evt.Remover, MethodSemanticsAttributes.Remover);
+        Link(handle, evt.Raiser, MethodSemanticsAttributes.Raiser);
+
+        foreach (var otherAcc in evt.OtherAccessors) {
+            Link(handle, otherAcc, MethodSemanticsAttributes.Other);
+        }
+        EmitCustomAttribs(handle, evt.GetCustomAttribs());
+        return handle;
+    }
+    private void Link(EntityHandle assoc, MethodDef? method, MethodSemanticsAttributes kind)
+    {
+        if (method != null) {
+            _builder.AddMethodSemantics(assoc, kind, (MethodDefinitionHandle)GetHandle(method));
+        }
     }
 
     private void EmitPendingGenericParams()

@@ -108,7 +108,7 @@ internal class ArrayConcretizationQuery : ConcretizationQuery
         var resolver = Method.Definition.Module.Resolver;
 
         var arrayType = (ArrayType)SubjectCall.ResultType;
-        var listType = (TypeDef)resolver.Import(typeof(List<>), throwIfNotFound: true);
+        var listType = (TypeDef)resolver.Import(typeof(List<>));
         var type = listType.GetSpec(ImmutableArray.Create(arrayType.ElemType));
 
         return base.AllocContainer(builder, count, type);

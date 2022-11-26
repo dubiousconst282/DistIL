@@ -24,10 +24,7 @@ public class CustomAttribTests
         Assert.Equal(new int[] { 1, 2, 3 }, (int[]?)attrib.FixedArgs[3]);
         Assert.Equal(150, attrib.FixedArgs[4]);
 
-        var listEnumeratorArray = ((TypeDef)resolver.Import(typeof(List<>))!)
-            .GetNestedType("Enumerator")!
-            .GetSpec(new GenericContext(new[] { sys.String }))
-            .CreateArray();
+        var listEnumeratorArray = resolver.Import(typeof(List<string>.Enumerator)).CreateArray();
 
         CheckNamed("F_Type", sys.Type, sys.Int32);
         CheckNamed("F_Int", PrimType.Int32, 550);

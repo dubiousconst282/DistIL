@@ -99,7 +99,8 @@ internal class CountQuery : AggregationQuery
     public CountQuery(CallInst call, LinqStageNode pipeline)
         : base(call, call.NumArgs >= 2 ? new WhereStage(call, pipeline) : pipeline)
     {
-        Debug.Assert(pipeline is not (ArraySource or ListSource));
+        //Should not expand unfiltered Count() on array/list
+        Debug.Assert(pipeline is not (ArraySource or ListSource) || call.NumArgs >= 2);
     }
 
     protected override Value GetSeed(IRBuilder builder)

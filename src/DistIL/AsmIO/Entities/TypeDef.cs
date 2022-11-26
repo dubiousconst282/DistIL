@@ -22,6 +22,8 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
     public override bool IsEnum => BaseType == Module.Resolver.SysTypes.Enum;
     public override bool IsInterface => (Attribs & TypeAttributes.Interface) != 0;
 
+    public override abstract TypeDefOrSpec GetSpec(GenericContext context);
+    
     public override int GetHashCode() => HashCode.Combine(Module, Name);
 }
 
@@ -298,7 +300,7 @@ public class TypeSpec : TypeDefOrSpec
         return field != null ? new FieldSpec(this, (FieldDef)field) : null;
     }
 
-    public override TypeDesc GetSpec(GenericContext context)
+    public override TypeSpec GetSpec(GenericContext context)
     {
         return new TypeSpec(Definition, context.FillParams(GenericParams));
     }

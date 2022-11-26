@@ -30,11 +30,44 @@ public class ModuleResolver
         AddSearchPaths(searchPaths.Split(Path.PathSeparator).Select(Path.GetDirectoryName)!);
     }
 
-    public TypeDefOrSpec? Import(Type type, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
+    public TypeDefOrSpec? Import(Type type, [DoesNotReturnIf(true)] bool throwIfNotFound = true)
     {
-        Debug.Assert(!type.IsGenericParameter && !type.IsNested); //not impl
+        Ensure.That(type.IsTypeDefinition || type.IsConstructedGenericType);
+
         var mod = Resolve(type.Assembly.GetName());
-        return mod?.FindType(type.Namespace, type.Name, throwIfNotFound);
+        TypeDefOrSpec? resolved = null;
+
+        if (mod != null) {
+            resolved = type.IsNested || type.IsGenericType
+                ? ImportGenericOrNestedType(mod, type, throwIfNotFound)
+                : mod.FindType(type.Namespace, type.Name, throwIfNotFound);
+        }
+        if (resolved == null && throwIfNotFound) {
+            throw new InvalidOperationException("Could not import the specified type");
+        }
+        return resolved;
+    }
+
+    private TypeDefOrSpec? ImportGenericOrNestedType(ModuleDef scope, Type type, bool throwIfNotFound)
+    {
+        var resolved = type.IsNested
+            ? (Import(type.DeclaringType!, throwIfNotFound) as TypeDef)?.GetNestedType(type.Name)
+            : scope.FindType(type.Namespace, type.Name, throwIfNotFound);
+
+        if (resolved != null && type.IsConstructedGenericType) {
+            var genArgs = type.GenericTypeArguments;
+            var finalArgs = ImmutableArray.CreateBuilder<TypeDesc>(genArgs.Length);
+
+            foreach (var genArg in genArgs) {
+                var resolvedArg = Import(genArg, throwIfNotFound);
+                if (resolvedArg == null) {
+                    return null;
+                }
+                finalArgs.Add(resolvedArg);
+            }
+            return resolved.GetSpec(finalArgs.MoveToImmutable());
+        }
+        return resolved;
     }
 
     public ModuleDef? Resolve(AssemblyName name, [DoesNotReturnIf(true)] bool throwIfNotFound = false)

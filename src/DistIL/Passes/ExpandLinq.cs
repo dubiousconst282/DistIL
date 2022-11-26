@@ -8,9 +8,9 @@ public class ExpandLinq : MethodPass
 
     public ExpandLinq(ModuleDef mod)
     {
-        t_Enumerable = mod.Resolver.Import(typeof(Enumerable), throwIfNotFound: true);
-        t_IListOfT0 = (TypeDefOrSpec)mod.Resolver.Import(typeof(IList<>), throwIfNotFound: true).GetSpec(default);
-        t_IEnumerableOfT0 = (TypeDefOrSpec)mod.Resolver.Import(typeof(IEnumerable<>), throwIfNotFound: true).GetSpec(default);
+        t_Enumerable = mod.Resolver.Import(typeof(Enumerable));
+        t_IListOfT0 = mod.Resolver.Import(typeof(IList<>)).GetSpec(default);
+        t_IEnumerableOfT0 = mod.Resolver.Import(typeof(IEnumerable<>)).GetSpec(default);
     }
 
     public override void Run(MethodTransformContext ctx)

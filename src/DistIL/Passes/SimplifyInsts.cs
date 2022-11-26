@@ -20,7 +20,7 @@ public partial class SimplifyInsts : MethodPass
 
         void AddCallOpt(Type declType, string methodName, Func<MethodTransformContext, CallInst, bool> run)
         {
-            if (mod.Resolver.Import(declType) is { } declTypeDesc) {
+            if (mod.Resolver.Import(declType, throwIfNotFound: false) is { } declTypeDesc) {
                 ref var entries = ref _callOpts.GetOrAddRef(methodName);
                 entries = new CallOptEntry[(entries?.Length ?? 0) + 1];
                 entries[^1] = (declTypeDesc, run);

@@ -29,9 +29,9 @@ partial class CustomAttrib
             return ValueArray.Empty;
         }
 
-        var builder = ImmutableArray.CreateBuilder<object?>(count);
-        for (int i = 0; i < count; i++) {
-            builder.Add(DecodeElement(ref reader, Constructor.ParamSig[i + 1].Type));
+        var builder = ImmutableArray.CreateBuilder<object?>(count - 1);
+        for (int i = 1; i < count; i++) {
+            builder.Add(DecodeElement(ref reader, Constructor.ParamSig[i].Type));
         }
         return builder.MoveToImmutable();
     }

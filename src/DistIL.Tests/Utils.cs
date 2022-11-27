@@ -1,3 +1,5 @@
+namespace DistIL.Tests;
+
 using DistIL.AsmIO;
 using DistIL.IR;
 
@@ -8,15 +10,17 @@ class Utils
         var pars = paramTypes
             .Select((t, i) => new ParamDef(t, "par" + i))
             .ToImmutableArray();
-        var def = new MethodDef(null!, retType ?? PrimType.Void, pars, "Dummy");
-        return new MethodBody(def);
+
+        var type = new TypeDef(null!, null, "DummyClass");
+        var method = new MethodDef(type, retType ?? PrimType.Void, pars, "DummyMethod");
+        return new MethodBody(method);
     }
 }
 
-class DummyValue : TrackedValue
+class FakeValue : TrackedValue
 {
     public int Id;
-    public DummyValue(int id)
+    public FakeValue(int id)
     {
         Id = id;
         ResultType = PrimType.Int32;

@@ -8,7 +8,7 @@ public class ValueTests
     [Fact]
     public void Test_UseList_SingleUser()
     {
-        var value = new DummyValue(123);
+        var value = new FakeValue(123);
         var inst1 = new BinaryInst(BinaryOp.Add, value, value);
 
         CheckUses(value, (inst1, 0), (inst1, 1));
@@ -17,7 +17,7 @@ public class ValueTests
     [Fact]
     public void Test_UseList_MultipleUsers()
     {
-        var value = new DummyValue(123);
+        var value = new FakeValue(123);
         var inst1 = new BinaryInst(BinaryOp.Add, value, value);
         var inst2 = new BinaryInst(BinaryOp.Sub, value, value);
         var inst3 = new BinaryInst(BinaryOp.Mul, value, value);
@@ -32,9 +32,9 @@ public class ValueTests
     [Fact]
     public void Test_UseList_Replace()
     {
-        var value1 = new DummyValue(123);
-        var value2 = new DummyValue(456);
-        var value3 = new DummyValue(789);
+        var value1 = new FakeValue(123);
+        var value2 = new FakeValue(456);
+        var value3 = new FakeValue(789);
         var value4 = ConstInt.CreateI(111);
         var inst1 = new BinaryInst(BinaryOp.Add, value2, value1);
         var inst2 = new BinaryInst(BinaryOp.Mul, value1, value2);
@@ -55,8 +55,8 @@ public class ValueTests
     [Fact]
     public void Test_UseList_Relocate()
     {
-        var value1 = new DummyValue(123);
-        var value2 = new DummyValue(456);
+        var value1 = new FakeValue(123);
+        var value2 = new FakeValue(456);
         var block = new BasicBlock(null!);
         var phi = new PhiInst((block, value1), (block, value1), (block, value1), (block, value2));
         //                      0      1          2      3        4       5          6      7
@@ -76,18 +76,12 @@ public class ValueTests
     {
         Assert.Equal(expUses.Length, value.NumUses);
 
-        var userSet = new HashSet<Instruction>();
-        foreach (var user in value.Users()) {
-            userSet.Add(user);
-        }
+        var userSet = value.Users().AsEnumerable().ToHashSet();
         Assert.Equal(expUses.DistinctBy(u => u.Item1).Count(), userSet.Count);
         userSet.SymmetricExceptWith(expUses.Select(u => u.Item1));
         Assert.Empty(userSet);
 
-        var useSet = new HashSet<(Instruction, int)>();
-        foreach (var use in value.Uses()) {
-            useSet.Add(use);
-        }
+        var useSet = value.Uses().AsEnumerable().ToHashSet();
         Assert.Equal(expUses.Length, useSet.Count);
         useSet.SymmetricExceptWith(expUses);
         Assert.Empty(useSet);

@@ -5,15 +5,15 @@ using DistIL.IR;
 using DistIL.IR.Utils;
 using DistIL.IR.Utils.Parser;
 
+[Collection("ModuleResolver")]
 public class ParserTests
 {
     readonly ModuleResolver _modResolver;
     readonly ModuleDef _corelib;
 
-    public ParserTests()
+    public ParserTests(ModuleResolverFixture mrf)
     {
-        _modResolver = new ModuleResolver();
-        _modResolver.AddTrustedSearchPaths();
+        _modResolver = mrf.Resolver;
         _corelib = _modResolver.CoreLib;
     }
 

@@ -2,16 +2,22 @@ namespace DistIL.Tests.AsmIO;
 
 using DistIL.AsmIO;
 
+[Collection("ModuleResolver")]
 public class CustomAttribTests
 {
-    [Fact]
-    public void Test_DecodeCase1()
-    {
-        var resolver = new ModuleResolver();
-        resolver.AddTrustedSearchPaths();
-        var sys = resolver.SysTypes;
+    readonly ModuleResolver _modResolver;
 
-        var type = resolver.Load("DistIL.Tests.TestAsm.dll").FindType(null, "CustomAttribs")!;
+    public CustomAttribTests(ModuleResolverFixture mrf)
+    {
+        _modResolver = mrf.Resolver;
+    }
+
+    [Fact]
+    public void Test_BlobDecoding()
+    {
+        var sys = _modResolver.SysTypes;
+
+        var type = _modResolver.Load("DistIL.Tests.TestAsm.dll").FindType(null, "CustomAttribs")!;
         var attrib = type.Methods.First(m => m.Name == "DecodeCase1").GetCustomAttribs().First();
 
         Assert.Equal(type, ((TypeDef)attrib.Constructor.DeclaringType).DeclaringType);
@@ -24,12 +30,12 @@ public class CustomAttribTests
         Assert.Equal(new int[] { 1, 2, 3 }, (int[]?)attrib.FixedArgs[3]);
         Assert.Equal(150, attrib.FixedArgs[4]);
 
-        var listEnumeratorArray = resolver.Import(typeof(List<string>.Enumerator)).CreateArray();
+        var listEnumeratorArray = _modResolver.Import(typeof(List<string>.Enumerator)).CreateArray();
 
         CheckNamed("F_Type", sys.Type, sys.Int32);
         CheckNamed("F_Int", PrimType.Int32, 550);
         CheckNamed("F_Str", PrimType.String, "lorem");
-        CheckNamed("F_Enum", resolver.Import(typeof(DayOfWeek))!, (int)DayOfWeek.Friday);
+        CheckNamed("F_Enum", _modResolver.Import(typeof(DayOfWeek))!, (int)DayOfWeek.Friday);
         CheckNamed("F_ByteArr", PrimType.Byte.CreateArray(), new byte[] { 1, 2, 3, 255 });
         CheckNamed("F_StrArr", PrimType.String.CreateArray(), new string[] { "ipsum", "dolor" });
         CheckNamed("F_TypeArr", sys.Type.CreateArray(), new TypeDesc[] { sys.Int32, sys.String, listEnumeratorArray });

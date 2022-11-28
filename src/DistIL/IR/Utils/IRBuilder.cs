@@ -9,6 +9,7 @@ public class IRBuilder
     BasicBlock _block = null!;
 
     public BasicBlock Block => _block!;
+    public MethodBody Method => _block!.Method;
 
     /// <summary> Initializes a builder that inserts instructions before `inst`. </summary>
     public IRBuilder(Instruction inst) => SetPosition(inst);
@@ -33,6 +34,17 @@ public class IRBuilder
 
     public void SetBranch(Value cond, BasicBlock then, BasicBlock else_) 
         => _block.SetBranch(new BranchInst(cond, then, else_));
+
+    /// <summary>
+    /// Terminates the current block with a new branch `goto cond ? newBlock : elseBlock`.
+    /// This builder continues at the start of `newBlock`.
+    /// </summary>
+    public void Fork(Value cond, BasicBlock elseBlock)
+    {
+        var newBlock = Method.CreateBlock(insertAfter: Block);
+        SetBranch(cond, newBlock, elseBlock);
+        SetPosition(newBlock);
+    }
 
     public Value CreateBin(BinaryOp op, Value left, Value right)
     {
@@ -84,11 +96,25 @@ public class IRBuilder
     public IntrinsicInst CreateIntrinsic(IntrinsicDesc intrinsic, params Value[] args)
         => Add(new IntrinsicInst(intrinsic, args));
 
+
     public LoadFieldInst CreateFieldLoad(FieldDesc field, Value? obj = null)
         => Add(new LoadFieldInst(field, obj));
 
     public StoreFieldInst CreateFieldStore(FieldDesc field, Value? obj, Value value)
         => Add(new StoreFieldInst(field, obj, value));
+
+    public FieldAddrInst CreateFieldAddr(FieldDesc field, Value? obj)
+        => Add(new FieldAddrInst(field, obj));
+
+
+    public LoadVarInst CreateVarLoad(Variable var)
+        => Add(new LoadVarInst(var));
+
+    public StoreVarInst CreateVarStore(Variable var, Value value)
+        => Add(new StoreVarInst(var, value));
+
+    public VarAddrInst CreateVarAddr(Variable var)
+        => Add(new VarAddrInst(var));
 
 
     public ArrayLenInst CreateArrayLen(Value array)
@@ -99,6 +125,10 @@ public class IRBuilder
 
     public StoreArrayInst CreateArrayStore(Value array, Value index, Value value, TypeDesc? elemType = null, ArrayAccessFlags flags = default)
         => Add(new StoreArrayInst(array, index, value, elemType ?? (array.ResultType as ArrayType)!.ElemType, flags));
+
+    public ArrayAddrInst CreateArrayAddr(Value array, Value index, TypeDesc? elemType = null, ArrayAccessFlags flags = default)
+        => Add(new ArrayAddrInst(array, index, elemType ?? (array.ResultType as ArrayType)!.ElemType, flags));
+
 
     public IntrinsicInst CreateNewArray(TypeDesc elemType, Value length)
         => Add(new IntrinsicInst(CilIntrinsic.NewArray, elemType, length));

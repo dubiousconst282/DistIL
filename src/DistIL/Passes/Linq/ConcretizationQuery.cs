@@ -99,9 +99,8 @@ internal class ConcretizationQuery : LinqQuery
 }
 internal class ArrayConcretizationQuery : ConcretizationQuery
 {
-    public ArrayConcretizationQuery(CallInst call, LinqStageNode pipeline) : base(call, pipeline)
-    {
-    }
+    public ArrayConcretizationQuery(CallInst call, LinqStageNode pipeline)
+        : base(call, pipeline) { }
 
     protected override Value AllocContainer(IRBuilder builder, Value? count)
     {
@@ -129,7 +128,8 @@ internal class DictionaryConcretizationQuery : ConcretizationQuery
         var method = container.ResultType.FindMethod("Add", throwIfNotFound: true);
         var key = builder.CreateLambdaInvoke(SubjectCall.Args[1], currItem);
         var value = currItem;
-        if (SubjectCall.Args[2].ResultType.Name != "IEqualityComparer`1") {
+        //Signature: ToDictionary(source, keySelector, [elementSelector], [comparer])
+        if (SubjectCall.Args is [_, _, { ResultType.Name: not "IEqualityComparer`1" }, ..]) {
             value = builder.CreateLambdaInvoke(SubjectCall.Args[2], currItem);
         }
         builder.CreateCallVirt(method, container, key, value);

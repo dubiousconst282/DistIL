@@ -52,3 +52,13 @@ internal abstract class LinqStageNode
         Source?.DeleteSubject();
     }
 }
+internal abstract class LinqSourceNode : LinqStageNode
+{
+    public Value PhysicalSource { get; }
+
+    protected LinqSourceNode(Value physicalSource, CallInst? subjectCall = null)
+        : base(subjectCall, null)
+    {
+        PhysicalSource = physicalSource;
+    }
+}

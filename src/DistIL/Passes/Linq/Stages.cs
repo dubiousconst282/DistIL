@@ -35,7 +35,7 @@ internal class WhereStage : LinqStageNode
     {
         var currItem = Source!.EmitCurrent(builder, currIndex, skipBlock);
         var predCond = builder.CreateLambdaInvoke_ItemAndIndex(FilterLambda, currItem, currIndex);
-        builder.ForkAndSkipIfFalse(predCond, skipBlock);
+        builder.Fork(predCond, skipBlock);
         return currItem;
     }
 }
@@ -53,7 +53,7 @@ internal class OfTypeStage : LinqStageNode
             currItem = builder.CreateIntrinsic(CilIntrinsic.Box, currItem);
         }
         var castItem = builder.CreateIntrinsic(CilIntrinsic.AsInstance, destType, currItem);
-        builder.ForkAndSkipIfFalse(castItem, skipBlock);
+        builder.Fork(castItem, skipBlock);
 
         return destType.IsValueType
             ? builder.CreateIntrinsic(CilIntrinsic.UnboxObj, destType, currItem)

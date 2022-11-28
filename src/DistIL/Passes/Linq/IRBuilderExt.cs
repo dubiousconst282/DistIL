@@ -19,11 +19,4 @@ internal static class IRBuilderExt
             : new Value[] { lambda, currItem };
         return ib.CreateCallVirt(invoker, args);
     }
-
-    public static void ForkAndSkipIfFalse(this IRBuilder ib, Value cond, BasicBlock skipBlock)
-    {
-        var newBlock = ib.Block.Method.CreateBlock(insertAfter: ib.Block);
-        ib.SetBranch(cond, newBlock, skipBlock);
-        ib.SetPosition(newBlock);
-    }
 }

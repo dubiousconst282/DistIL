@@ -5,20 +5,22 @@
 public class Variable : TrackedValue
 {
     public TypeSig Sig { get; }
-    public bool IsPinned { get; }
     public string? Name { get; set; }
+
+    public bool IsPinned { get; }
     /// <summary>
     /// Whether this variable's address has been exposed, or if it is alive across protected regions.
     /// Setting to true disables SSA enregistration.
     /// </summary>
     public bool IsExposed { get; set; }
 
-    public Variable(TypeSig sig, string? name = null, bool pinned = false)
+    public Variable(TypeSig sig, string? name = null, bool pinned = false, bool exposed = false)
     {
         ResultType = sig.Type;
         Sig = sig;
-        IsPinned = pinned;
         Name = name;
+        IsPinned = pinned;
+        IsExposed = exposed;
     }
 
     public override void Print(PrintContext ctx)

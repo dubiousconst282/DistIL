@@ -16,7 +16,6 @@ public class ExpandLinq : MethodPass
     public override void Run(MethodTransformContext ctx)
     {
         var queries = new List<LinqQuery>();
-        bool changed = false;
 
         foreach (var inst in ctx.Method.Instructions().OfType<CallInst>()) {
             if (CreateQuery(inst) is { } query) {
@@ -24,11 +23,30 @@ public class ExpandLinq : MethodPass
             }
         }
 
-        foreach (var query in queries) {
-            changed |= query.Emit();
-        }
-        if (!changed) {
+        //Overlapping queries must be expanded in a specific order, because the SubjectCall instruction of
+        //a query source won't be updated after a dependency query is expanded.
+        //We could sort them based on the dominator tree order or just by traversing them using some sort of DFS.
+        //These queries seem to be quite rare, so we'll just give up for now. 
+        if (queries.Any(q1 => queries.Any(q2 => GetSource(q2).PhysicalSource == q1.SubjectCall))) {
             ctx.PreserveAll();
+            return;
+        }
+
+        foreach (var query in queries) {
+            if (query.Emit()) {
+                ctx.InvalidateAll();
+            }
+        }
+    }
+
+    private static LinqSourceNode GetSource(LinqQuery query)
+    {
+        var node = query.Pipeline;
+        while (true) {
+            if (node is LinqSourceNode src) {
+                return src;
+            }
+            node = node.Source!;
         }
     }
 
@@ -73,13 +91,16 @@ public class ExpandLinq : MethodPass
     private LinqStageNode CreateStage(Value source)
     {
         if (source is CallInst call && call.Method.DeclaringType == t_Enumerable) {
-            return call.Method.Name switch {
+            var stage = call.Method.Name switch {
                 "Select"    => new SelectStage(call,    CreateStage(call.Args[0])),
                 "Where"     => new WhereStage(call,     CreateStage(call.Args[0])),
                 "OfType"    => new OfTypeStage(call,    CreateStage(call.Args[0])),
                 "Cast"      => new CastStage(call,      CreateStage(call.Args[0])),
-                _ => new EnumeratorSource(call)
+                _ => default(LinqStageNode)
             };
+            if (stage != null) {
+                return stage;
+            }
         }
         if (source.ResultType is ArrayType) {
             return new ArraySource(source);

@@ -19,7 +19,7 @@ public class ArrayLenInst : Instruction
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }
 
-public abstract class ArrayAccessInst : Instruction
+public abstract class ArrayAccessInst : Instruction, AccessInst
 {
     public override bool MayThrow => true;
 
@@ -34,6 +34,8 @@ public abstract class ArrayAccessInst : Instruction
     public abstract TypeDesc ElemType { get; set; }
     public ArrayAccessFlags Flags { get; set; }
 
+    Value AccessInst.Location => Array;
+
     protected ArrayAccessInst(ArrayAccessFlags flags, params Value[] operands)
         : base(operands)
     {
@@ -41,7 +43,7 @@ public abstract class ArrayAccessInst : Instruction
     }
 }
 
-public class LoadArrayInst : ArrayAccessInst
+public class LoadArrayInst : ArrayAccessInst, LoadInst
 {
     public override TypeDesc ElemType {
         get => ResultType;
@@ -57,7 +59,7 @@ public class LoadArrayInst : ArrayAccessInst
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }
-public class StoreArrayInst : ArrayAccessInst
+public class StoreArrayInst : ArrayAccessInst, StoreInst
 {
     public Value Value {
         get => Operands[2];
@@ -82,7 +84,7 @@ public class ArrayAddrInst : ArrayAccessInst
     /// <summary> Specifies the access type. For primitive arrays, it is used as the element stride (address = baseAddr + index * elemStride). </summary>
     public override TypeDesc ElemType {
         get => ResultType.ElemType!;
-        set => ResultType = new ByrefType(value);
+        set => ResultType = value.CreateByref();
     }
 
     public override string InstName => "arraddr";

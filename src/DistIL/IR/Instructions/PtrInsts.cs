@@ -1,6 +1,6 @@
 namespace DistIL.IR;
 
-public abstract class PtrAccessInst : Instruction
+public abstract class PtrAccessInst : Instruction, AccessInst
 {
     public Value Address {
         get => Operands[0];
@@ -14,13 +14,15 @@ public abstract class PtrAccessInst : Instruction
     public bool Unaligned => (Flags & PointerFlags.Unaligned) != 0;
     public bool Volatile => (Flags & PointerFlags.Volatile) != 0;
 
+    Value AccessInst.Location => Address;
+
     protected PtrAccessInst(PointerFlags flags, params Value[] operands)
         : base(operands)
     {
         Flags = flags;
     }
 }
-public class LoadPtrInst : PtrAccessInst
+public class LoadPtrInst : PtrAccessInst, LoadInst
 {
     public override TypeDesc ElemType {
         get => ResultType;
@@ -36,7 +38,7 @@ public class LoadPtrInst : PtrAccessInst
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }
-public class StorePtrInst : PtrAccessInst
+public class StorePtrInst : PtrAccessInst, StoreInst
 {
     public Value Value {
         get => Operands[1];

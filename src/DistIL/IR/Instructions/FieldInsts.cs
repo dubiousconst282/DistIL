@@ -1,6 +1,6 @@
 namespace DistIL.IR;
 
-public abstract class FieldAccessInst : Instruction
+public abstract class FieldAccessInst : Instruction, AccessInst
 {
     public FieldDesc Field {
         get => (FieldDesc)Operands[0];
@@ -21,9 +21,15 @@ public abstract class FieldAccessInst : Instruction
 
     public override bool MayThrow => IsInstance;
 
-    protected FieldAccessInst(params Value[] args)
-        : base(args)
+    Value AccessInst.Location => Field;
+
+    protected FieldAccessInst(TypeDesc resultType, FieldDesc field, Value? obj)
+        : this(resultType, obj == null ? new[] { field } : new[] { field, obj }) { }
+
+    protected FieldAccessInst(TypeDesc resultType, params Value[] operands)
+        : base(operands)
     {
+        ResultType = resultType;
     }
 
     protected override void PrintOperands(PrintContext ctx)
@@ -38,21 +44,17 @@ public abstract class FieldAccessInst : Instruction
     }
 }
 
-public class LoadFieldInst : FieldAccessInst
+public class LoadFieldInst : FieldAccessInst, LoadInst
 {
     public override string InstName => "ldfld";
 
-    public LoadFieldInst(FieldDesc field, Value? obj)
-        : base(obj == null ? new[] { field } : new[] { field, obj })
-    {
-        Ensure.That(field.IsStatic == (obj == null));
-        ResultType = field.Type;
-    }
+    public LoadFieldInst(FieldDesc field, Value? obj = null)
+        : base(field.Type, field, obj) { }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }
 
-public class StoreFieldInst : FieldAccessInst
+public class StoreFieldInst : FieldAccessInst, StoreInst
 {
     public Value Value {
         get => Operands[IsStatic ? 1 : 2];
@@ -64,9 +66,9 @@ public class StoreFieldInst : FieldAccessInst
     public override string InstName => "stfld";
 
     public StoreFieldInst(FieldDesc field, Value? obj, Value value)
-        : base(obj == null ? new[] { field, value } : new[] { field, obj, value })
+        : base(PrimType.Void, obj == null ? new[] { field, value } : new[] { field, obj, value })
     {
-        Ensure.That((field.IsStatic == (obj == null)) && value.ResultType.IsStackAssignableTo(field.Type));
+        Ensure.That(value.ResultType.IsStackAssignableTo(field.Type));
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
@@ -77,11 +79,7 @@ public class FieldAddrInst : FieldAccessInst
     public override string InstName => "fldaddr";
 
     public FieldAddrInst(FieldDesc field, Value? obj)
-        : base(obj == null ? new[] { field } : new[] { field, obj })
-    {
-        Ensure.That(field.IsStatic == (obj == null));
-        ResultType = new ByrefType(field.Type);
-    }
+        : base(field.Type.CreateByref(), field, obj) { }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }

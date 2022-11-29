@@ -250,7 +250,7 @@ public class MethodSpec : MethodDefOrSpec
 
     public override MethodDesc GetSpec(GenericContext ctx)
     {
-        return new MethodSpec((TypeDefOrSpec)DeclaringType.GetSpec(ctx), Definition, ctx.FillParams(GenericParams));
+        return new MethodSpec(DeclaringType.GetSpec(ctx), Definition, ctx.FillParams(GenericParams));
     }
 }
 

@@ -8,6 +8,7 @@ public readonly struct GenericContext
     public IReadOnlyList<TypeDesc> MethodArgs { get; }
 
     public bool IsNull => TypeArgs == null && MethodArgs == null;
+    public bool IsNullOrEmpty => IsNull || TypeArgs.Count == 0 || MethodArgs.Count == 0;
 
     public GenericContext(IReadOnlyList<TypeDesc>? typeArgs = null, IReadOnlyList<TypeDesc>? methodArgs = null)
     {

@@ -288,10 +288,16 @@ public class TypeSpec : TypeDefOrSpec
 
     public override MethodDesc? FindMethod(string name, in MethodSig sig = default, in GenericContext spec = default, bool searchBaseAndItfs = false, bool throwIfNotFound = false)
     {
-        var method = Definition.FindMethod(name, sig, spec.IsNull ? new GenericContext(this) : spec, searchBaseAndItfs, throwIfNotFound);
-        return method != null && (!searchBaseAndItfs || method.DeclaringType == Definition)
-            ? new MethodSpec(this, (MethodDef)method)
-            : method;
+        var actualSpec = spec.IsNull ? new GenericContext(this) : spec;
+        var method = Definition.FindMethod(name, sig, actualSpec, searchBaseAndItfs, throwIfNotFound);
+
+        if (method == null) {
+            return null;
+        }
+        if (method.DeclaringType != Definition || !spec.IsNullOrEmpty) {
+            return method.GetSpec(actualSpec);
+        }
+        return new MethodSpec(this, (MethodDef)method);
     }
 
     public override FieldDesc? FindField(string name)

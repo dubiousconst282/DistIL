@@ -30,7 +30,7 @@ public class Variable : TrackedValue
 
     public override SymbolTable? GetSymbolTable()
     {
-        var parentMethod = GetFirstUser()?.Block?.Method;
+        var parentMethod = Users().FirstOrDefault()?.Block?.Method;
         return parentMethod?.GetSymbolTable();
     }
 }

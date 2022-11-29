@@ -35,7 +35,7 @@ public class ForestAnalysis : IMethodAnalysis
         //Def must have one use in the same block, with no interferences in between def and use
         if (def.NumUses >= 2 || def is PhiInst or GuardInst) return true;
 
-        var use = def.GetFirstUser()!;
+        var use = def.Users().First();
         return use.Block != def.Block || interfs.IsDefInterferedBeforeUse(def, use);
     }
 

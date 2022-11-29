@@ -17,10 +17,10 @@ class Utils
     }
 }
 
-class FakeValue : TrackedValue
+class FakeTrackedValue : TrackedValue
 {
     public int Id;
-    public FakeValue(int id)
+    public FakeTrackedValue(int id)
     {
         Id = id;
         ResultType = PrimType.Int32;

@@ -19,14 +19,14 @@ public abstract class Value
     }
 
     internal virtual void AddUse(Instruction user, int operIdx) { }
-    internal virtual void RemoveUse(ref UseDef use) { }
+    internal virtual void RemoveUse(Instruction user, int operIdx) { }
 }
+
 /// <summary> The base class for a value that tracks it uses. </summary>
 public abstract class TrackedValue : Value
 {
-    //The use list is a doubly-linked list where nodes are keept in a array owned by
-    //user instructions. Nodes (defs) contains the actual refs for the prev/next links.
-    //References are represented as (Inst Owner, int Index).
+    //The value use chain is represented by a doubly-linked list, pointers are represented
+    //as (Inst Owner, int Index), which index `Instruction._useDefs`.
     UseRef _firstUse;
 
     /// <summary> The number of (operand) uses this value have. </summary>
@@ -34,31 +34,30 @@ public abstract class TrackedValue : Value
 
     internal override void AddUse(Instruction user, int operIdx)
     {
-        var use = new UseRef() { Owner = user, Index = operIdx };
+        var node = new UseRef() { Owner = user, Index = operIdx };
+        Debug.Assert(!node.Prev.Exists && !node.Next.Exists);
+
         if (_firstUse.Exists) {
-            _firstUse.Prev = use;
-            use.Next = _firstUse;
+            _firstUse.Prev = node;
+            node.Next = _firstUse;
         }
-        _firstUse = use;
+        _firstUse = node;
         NumUses++;
     }
-    internal override void RemoveUse(ref UseDef use)
+    internal override void RemoveUse(Instruction user, int operIdx)
     {
-        if (use.Prev.Exists) {
-            use.Prev.Next = use.Next;
-        } else {
-            _firstUse = use.Next!;
-        }
-        if (use.Next.Exists) {
-            use.Next.Prev = use.Prev;
-        }
-        use = default; //clear prev/next links
-        NumUses--;
-    }
+        var node = new UseRef() { Owner = user, Index = operIdx };
 
-    public Instruction? GetFirstUser()
-    {
-        return _firstUse.Owner;
+        if (node.Prev.Exists) {
+            node.Prev.Next = node.Next;
+        } else {
+            _firstUse = node.Next;
+        }
+        if (node.Next.Exists) {
+            node.Next.Prev = node.Prev;
+        }
+        node.Def = default;
+        NumUses--;
     }
 
     /// <summary> Replace all uses of this value with `newValue`. </summary>
@@ -66,26 +65,40 @@ public abstract class TrackedValue : Value
     {
         if (newValue == this || !_firstUse.Exists) return;
 
-        //Update user operands and find last use
-        var use = _firstUse;
-        while (true) {
-            use.Owner._operands[use.Index] = newValue;
-
-            var next = use.Next;
-            if (!next.Exists) break;
-            use = next;
-        }
-        //Merge use lists
-        if (newValue is TrackedValue n) {
-            if (n._firstUse.Exists) {
-                use.Next = n._firstUse;
-                n._firstUse.Prev = use;
-            }
-            n._firstUse = _firstUse;
-            n.NumUses += NumUses;
+        if (newValue is TrackedValue newTrackedValue) {
+            TransferUses(newTrackedValue);
+        } else {
+            TransferUsesToUntracked(newValue);
         }
         _firstUse = default;
         NumUses = 0;
+    }
+
+    private void TransferUses(TrackedValue dest)
+    {
+        var lastNode = default(UseRef);
+        for (var node = _firstUse; node.Exists; node = node.Next) {
+            node.Operand = dest;
+            lastNode = node;
+        }
+        //Append the uselist from the newValue at the end of this one, and transfer ownership
+        if (dest._firstUse.Exists) {
+            Debug.Assert(!dest._firstUse.Prev.Exists);
+
+            dest._firstUse.Prev = lastNode;
+            lastNode.Next = dest._firstUse;
+        }
+        dest._firstUse = _firstUse;
+        dest.NumUses += NumUses;
+    }
+    private void TransferUsesToUntracked(Value dest)
+    {
+        for (var node = _firstUse; node.Exists; ) {
+            var next = node.Next;
+            node.Operand = dest;
+            node.Def = default; //erase node slot to avoid "ghost" links
+            node = next;
+        }
     }
 
     /// <summary> Returns an enumerator of instructions using this value. Neither order nor uniqueness is guaranteed. </summary>
@@ -138,6 +151,7 @@ internal struct UseRef
     public ref UseRef Next => ref Def.Next;
 
     public ref UseDef Def => ref Owner._useDefs[Index];
+    public ref Value Operand => ref Owner._operands[Index];
 
     public override string ToString() => Owner == null ? "<null>" : $"<{Owner}> at {Index}";
 }

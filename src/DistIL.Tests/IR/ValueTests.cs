@@ -8,7 +8,7 @@ public class ValueTests
     [Fact]
     public void Test_UseList_SingleUser()
     {
-        var value = new FakeValue(123);
+        var value = new FakeTrackedValue(123);
         var inst1 = new BinaryInst(BinaryOp.Add, value, value);
 
         CheckUses(value, (inst1, 0), (inst1, 1));
@@ -17,7 +17,7 @@ public class ValueTests
     [Fact]
     public void Test_UseList_MultipleUsers()
     {
-        var value = new FakeValue(123);
+        var value = new FakeTrackedValue(123);
         var inst1 = new BinaryInst(BinaryOp.Add, value, value);
         var inst2 = new BinaryInst(BinaryOp.Sub, value, value);
         var inst3 = new BinaryInst(BinaryOp.Mul, value, value);
@@ -32,9 +32,9 @@ public class ValueTests
     [Fact]
     public void Test_UseList_Replace()
     {
-        var value1 = new FakeValue(123);
-        var value2 = new FakeValue(456);
-        var value3 = new FakeValue(789);
+        var value1 = new FakeTrackedValue(123);
+        var value2 = new FakeTrackedValue(456);
+        var value3 = new FakeTrackedValue(789);
         var value4 = ConstInt.CreateI(111);
         var inst1 = new BinaryInst(BinaryOp.Add, value2, value1);
         var inst2 = new BinaryInst(BinaryOp.Mul, value1, value2);
@@ -53,10 +53,28 @@ public class ValueTests
     }
 
     [Fact]
+    public void Test_UseList_ReplaceToUntrackedAndBack()
+    {
+        var value1 = new FakeTrackedValue(123);
+        var value2 = new FakeTrackedValue(456);
+        var value3 = ConstInt.CreateI(111);
+        var inst1 = new BinaryInst(BinaryOp.Add, value1, value2);
+        var inst2 = new BinaryInst(BinaryOp.Add, value2, value2);
+
+        value2.ReplaceUses(value3);
+        CheckUses(value2);
+        Assert.False(inst1._useDefs[1].Prev.Exists);
+        Assert.False(inst1._useDefs[1].Next.Exists);
+
+        inst1.ReplaceOperand(1, value2);
+        CheckUses(value2, (inst1, 1));
+    }
+
+    [Fact]
     public void Test_UseList_Relocate()
     {
-        var value1 = new FakeValue(123);
-        var value2 = new FakeValue(456);
+        var value1 = new FakeTrackedValue(123);
+        var value2 = new FakeTrackedValue(456);
         var block = new BasicBlock(null!);
         var phi = new PhiInst((block, value1), (block, value1), (block, value1), (block, value2));
         //                      0      1          2      3        4       5          6      7

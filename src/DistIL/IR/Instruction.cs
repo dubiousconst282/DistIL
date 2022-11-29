@@ -82,7 +82,7 @@ public abstract class Instruction : TrackedValue
         if (_useDefs == null) return;
 
         for (int i = 0; i < _operands.Length; i++) {
-            _operands[i].RemoveUse(ref _useDefs[i]);
+            _operands[i].RemoveUse(this, i);
         }
         _useDefs = null!;
     }
@@ -94,7 +94,7 @@ public abstract class Instruction : TrackedValue
             if (_operands[i] == oldValue) {
                 _operands[i] = newValue;
 
-                oldValue.RemoveUse(ref _useDefs[i]);
+                oldValue.RemoveUse(this, i);
                 newValue.AddUse(this, i);
             }
         }
@@ -106,7 +106,7 @@ public abstract class Instruction : TrackedValue
         if (newValue != prevValue) {
             _operands[operIndex] = newValue;
 
-            prevValue?.RemoveUse(ref _useDefs[operIndex]);
+            prevValue?.RemoveUse(this, operIndex);
             newValue.AddUse(this, operIndex);
         }
     }
@@ -131,9 +131,9 @@ public abstract class Instruction : TrackedValue
         var oldOpers = _operands;
         var oldUses = _useDefs;
 
-        //Remove uses from middle and postfix (we'll relocate it later)
+        //Remove uses from middle and postfix, relocate them later
         for (int i = startIndex; i < oldOpers.Length; i++) {
-            oldOpers[i].RemoveUse(ref oldUses[i]);
+            oldOpers[i].RemoveUse(this, i);
         }
 
         var newOpers = _operands = new Value[oldOpers.Length - count];
@@ -148,7 +148,7 @@ public abstract class Instruction : TrackedValue
         for (int i = startIndex + count; i < oldOpers.Length; i++) {
             int j = i - count;
             newOpers[j] = oldOpers[i];
-            oldOpers[i].AddUse(this, j); //Relocate use
+            newOpers[j].AddUse(this, j); //Relocate use
         }
     }
 

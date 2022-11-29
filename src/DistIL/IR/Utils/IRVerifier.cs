@@ -15,15 +15,16 @@ public class IRVerifier
     public static List<Diagnostic> Diagnose(MethodBody method)
     {
         var v = new IRVerifier(method);
-        v.VerifyInstsAndUses();
+        v.VerifyMethod();
         return v._diags;
     }
 
-    private void VerifyInstsAndUses()
+    private void VerifyMethod()
     {
         Check(_method.EntryBlock.NumPreds == 0, _method.EntryBlock, "Entry block should not have predecessors");
 
         var useChecker = new UseChecker();
+        var regionAnalysis = new ProtectedRegionAnalysis(_method);
 
         foreach (var block in _method) {
             int blockInstIdx = 0;
@@ -32,9 +33,9 @@ public class IRVerifier
                 CheckInst(inst);
                 useChecker.AddInst(this, inst, blockInstIdx++);
             }
-            Check(block.Last.IsBranch, block, "Block must end with a valid terminator");
+            CheckTerminator(block, regionAnalysis);
         }
-        useChecker.Validate(this);
+        useChecker.Validate(this, regionAnalysis);
     }
 
     private void CheckInst(Instruction inst)
@@ -66,16 +67,56 @@ public class IRVerifier
 
                 if (!srcType.IsStackAssignableTo(dstType)) {
                     Error(inst, $"Store to incompatible type: {srcType} -> {dstType}", DiagnosticSeverity.Warn);
-                } else if (
-                    dstType.StackType == StackType.Int && srcType.Kind > dstType.Kind &&
-                    !(dstType.Kind == TypeKind.Bool && srcVal is CompareInst or ConstInt { Value: 0 or 1 })
-                ) {
-                    Error(inst, $"Coerced store will implicitly truncate source value: {srcType} -> {dstType}", DiagnosticSeverity.Info);
                 }
                 break;
             }
             case { IsBranch: true, Next: not null }: {
                 Error(inst, "Branch must be the last instruction in the block");
+                break;
+            }
+        }
+    }
+
+    private void CheckTerminator(BasicBlock block, ProtectedRegionAnalysis regionAnalysis)
+    {
+        switch (block.Last) {
+            case BranchInst or SwitchInst: {
+                var currRegion = regionAnalysis.GetBlockRegion(block);
+
+                foreach (var oper in block.Last.Operands) {
+                    if (oper is not BasicBlock succ) continue;
+
+                    var succRegion = regionAnalysis.GetBlockRegion(succ);
+
+                    if (currRegion != succRegion && !(succ == succRegion.StartBlock && succRegion.Parent == currRegion)) {
+                        Error(block, $"Branch target must be within the same region");
+                        break;
+                    }
+                }
+                break;
+            }
+            case LeaveInst or ResumeInst: {
+                var region = regionAnalysis.GetBlockRegion(block);
+
+                if (region == regionAnalysis.Root) {
+                    Error(block, "Cannot leave or resume from root region");
+                } else if (block.Last is ResumeInst resume) {
+                    bool isValid = region.StartBlock.Users().OfType<GuardInst>().FirstOrDefault() is { } guard &&
+                        (resume.IsFromFilter
+                            ? (guard.FilterBlock == region.StartBlock)
+                            : guard.Kind is GuardKind.Finally or GuardKind.Fault);
+                    Check(isValid, block, "ResumeInst should not be used outside filter, finally, or fault handlers");
+                }
+                break;
+            }
+            case ReturnInst: {
+                if (regionAnalysis.GetBlockRegion(block) != regionAnalysis.Root) {
+                    Error(block, $"ReturnInst should not be used inside a protected region");
+                }
+                break;
+            }
+            default: {
+                Check(block.Last.IsBranch, block, "Block must end with a valid terminator");
                 break;
             }
         }
@@ -118,7 +159,7 @@ public class IRVerifier
             _blockIndices[inst] = blockIndex;
         }
 
-        public void Validate(IRVerifier verifier)
+        public void Validate(IRVerifier verifier, ProtectedRegionAnalysis regionAnalysis)
         {
             var domTree = new DominatorTree(verifier._method);
             var actUsers = new HashSet<Instruction>();
@@ -130,11 +171,16 @@ public class IRVerifier
                 verifier.Check(actUsers.Count == 0, val, "Invalid value use chain");
                 actUsers.Clear();
 
-                //Check dominance
-                if (val is Instruction defInst) {
-                    foreach (var user in defInst.Users()) {
-                        if (user is Instruction userInst && !IsDominatedByDef(domTree, defInst, userInst)) {
-                            verifier.Error(user, $"Using non-dominating instruction '{defInst}'");
+                //Check users
+                if (val is Instruction def) {
+                    var defRegion = regionAnalysis.GetBlockRegion(def.Block);
+                    
+                    foreach (var user in def.Users()) {
+                        if (!IsDominatedByDef(domTree, def, user)) {
+                            verifier.Error(user, $"Using non-dominating instruction '{def}'");
+                        }
+                        if (def is not GuardInst && def.Block != user.Block && defRegion.FindBlockParent(user.Block) == null) {
+                            verifier.Error(user, $"Using instruction defined inside a child region '{def}'");
                         }
                     }
                 }
@@ -167,7 +213,7 @@ public struct Diagnostic
 
     public override string ToString()
     {
-        return $"[{Severity}] {Message} ({Location})";
+        return $"[{Severity}] {Message} (at {Location})";
     }
 }
 public enum DiagnosticSeverity

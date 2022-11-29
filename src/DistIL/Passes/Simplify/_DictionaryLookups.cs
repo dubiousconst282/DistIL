@@ -28,7 +28,7 @@ partial class SimplifyInsts : MethodPass
     {
         Debug.Assert(call.Method.Name == "ContainsKey");
 
-        var branch = (BranchInst?)call.Users().FirstOrDefault(u => u is BranchInst); //implies branch.Cond == call
+        var branch = call.Users().OfType<BranchInst>().FirstOrDefault(); //implies branch.Cond == call
         if (branch == null || call.Args is not [TrackedValue instance, var key]) return false;
 
         var declType = (TypeSpec)call.Method.DeclaringType;

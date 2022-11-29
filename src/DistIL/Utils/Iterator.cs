@@ -3,7 +3,7 @@ namespace DistIL.Util;
 using System.Collections;
 
 /// <summary> A lightweight alternative for <see cref="IEnumerator{T}"/>, without all the legacy cruft. </summary>
-public interface Iterator<T> : Iterator
+public interface Iterator<out T> : Iterator
 {
     T Current { get; }
     bool MoveNext();
@@ -27,6 +27,16 @@ public static class Iterators
             }
         }
         return false;
+    }
+    
+    public static bool All<T>(this Iterator<T> itr, Func<T, bool> predicate)
+    {
+        while (itr.MoveNext()) {
+            if (!predicate(itr.Current)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// <summary> Returns the number of *remaining* elements in the iterator. </summary>
@@ -75,6 +85,8 @@ public static class Iterators
         return default;
     }
 
+    public static OfTypeIterator<T> OfType<T>(this Iterator<object> itr) => new(itr);
+
     public static List<T> ToList<T>(this Iterator<T> itr)
     {
         var list = new List<T>();
@@ -86,12 +98,12 @@ public static class Iterators
 
     public class EnumerableAdapter<T> : IEnumerable<T>, IEnumerator<T>
     {
-        readonly Iterator<T> _itr;
+        readonly Iterator<T> _src;
 
-        public EnumerableAdapter(Iterator<T> itr) => _itr = itr;
+        public EnumerableAdapter(Iterator<T> src) => _src = src;
 
-        public T Current => _itr.Current;
-        public bool MoveNext() => _itr.MoveNext();
+        public T Current => _src.Current;
+        public bool MoveNext() => _src.MoveNext();
         public IEnumerator<T> GetEnumerator() => this;
 
         public void Reset() => throw new InvalidOperationException();
@@ -99,5 +111,23 @@ public static class Iterators
 
         IEnumerator IEnumerable.GetEnumerator() => this;
         object? IEnumerator.Current => Current;
+    }
+    public struct OfTypeIterator<T> : Iterator<T>
+    {
+        readonly Iterator<object> _src;
+
+        public OfTypeIterator(Iterator<object> src) => _src = src;
+
+        public T Current => (T)_src.Current;
+
+        public bool MoveNext()
+        {
+            while (_src.MoveNext()) {
+                if (_src.Current is T) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 }

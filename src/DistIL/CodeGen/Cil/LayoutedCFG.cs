@@ -65,7 +65,7 @@ public class LayoutedCFG
             foreach (var child in node.Children) {
                 PlaceAntecessorBlocks(child.StartBlock);
                 var range = LayoutRegion(child);
-                var guard = (GuardInst?)child.StartBlock.Users().FirstOrDefault(u => u is GuardInst);
+                var guard = child.StartBlock.Users().OfType<GuardInst>().FirstOrDefault();
 
                 if (guard != null) {
                     clauses[clauseIndices[guard]].UpdateRanges(child.StartBlock, range);

@@ -68,7 +68,7 @@ internal class ConcretizationQuery : LinqQuery
     }
     protected virtual void AppendItem(IRBuilder builder, Value container, Value currItem)
     {
-        var method = container.ResultType.FindMethod("Add", throwIfNotFound: true);
+        var method = container.ResultType.FindMethod("Add");
         builder.CreateCallVirt(method, container, currItem);
     }
     protected virtual Value WrapContainer(IRBuilder builder, Value container)
@@ -90,10 +90,7 @@ internal class ConcretizationQuery : LinqQuery
             args.Add(SubjectCall.Args[^1]);
             sig.Add(lastParType);
         }
-        var ctor = type.FindMethod(
-            ".ctor", new MethodSig(PrimType.Void, sig),
-            throwIfNotFound: true
-        );
+        var ctor = type.FindMethod(".ctor", new MethodSig(PrimType.Void, sig));
         return builder.CreateNewObj(ctor, args.ToArray());
     }
 }
@@ -114,7 +111,7 @@ internal class ArrayConcretizationQuery : ConcretizationQuery
     }
     protected override Value WrapContainer(IRBuilder builder, Value container)
     {
-        var method = container.ResultType.FindMethod("ToArray", throwIfNotFound: true);
+        var method = container.ResultType.FindMethod("ToArray");
         return builder.CreateCallVirt(method, container);
     }
 }
@@ -125,7 +122,7 @@ internal class DictionaryConcretizationQuery : ConcretizationQuery
 
     protected override void AppendItem(IRBuilder builder, Value container, Value currItem)
     {
-        var method = container.ResultType.FindMethod("Add", throwIfNotFound: true);
+        var method = container.ResultType.FindMethod("Add");
         var key = builder.CreateLambdaInvoke(SubjectCall.Args[1], currItem);
         var value = currItem;
         //Signature: ToDictionary(source, keySelector, [elementSelector], [comparer])

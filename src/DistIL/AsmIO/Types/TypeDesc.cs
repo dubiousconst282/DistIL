@@ -1,4 +1,4 @@
-﻿namespace DistIL.AsmIO;
+namespace DistIL.AsmIO;
 
 /// <summary> The base class of all types. </summary>
 public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
@@ -60,7 +60,9 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     /// <summary> Searches for a method with the specified signature. </summary>
     /// <param name="sig">The method signature to search for, or `default` to match any signature. Should not include the `this` parameter type. </param>
     /// <param name="spec">A generic context used to specialize methods before matching with the signature.</param>
-    public virtual MethodDesc? FindMethod(string name, in MethodSig sig = default, in GenericContext spec = default, bool searchBaseAndItfs = false, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
+    public virtual MethodDesc? FindMethod(
+        string name, in MethodSig sig = default, in GenericContext spec = default,
+        bool searchBaseAndItfs = false, [DoesNotReturnIf(true)] bool throwIfNotFound = true)
     {
         foreach (var method in Methods) {
             if (method.Name == name && (sig.IsNull || sig.Matches(method, spec))) {
@@ -85,12 +87,16 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
         return null;
     }
 
-    public virtual FieldDesc? FindField(string name)
+    //TODO: consistency with FindMethod(), add `searchBaseAndItfs` parameter
+    public virtual FieldDesc? FindField(string name, [DoesNotReturnIf(true)] bool throwIfNotFound = true)
     {
         foreach (var field in Fields) {
             if (field.Name == name) {
                 return field;
             }
+        }
+        if (throwIfNotFound) {
+            throw new InvalidOperationException($"Could not find field '{name}' in type '{Name}'.");
         }
         return null;
     }

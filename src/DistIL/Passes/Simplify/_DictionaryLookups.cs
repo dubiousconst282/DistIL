@@ -43,7 +43,7 @@ partial class SimplifyInsts : MethodPass
         var resultLoad = new LoadVarInst(resultVar);
         var tryGetCall = new CallInst(
             declType.FindMethod("TryGetValue", 
-                new MethodSig(PrimType.Bool, new TypeSig[] { key.ResultType, resultVar.ResultType.CreateByref() }))!,
+                new MethodSig(PrimType.Bool, new TypeSig[] { key.ResultType, resultVar.ResultType.CreateByref() })),
             new[] { instance, key, resultAddr }, isVirtual: true);
 
         resultAddr.InsertBefore(call);

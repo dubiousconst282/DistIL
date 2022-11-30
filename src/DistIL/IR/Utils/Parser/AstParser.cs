@@ -296,7 +296,7 @@ internal class AstParser
             opers.Add(ParseValue());
         });
 
-        var method = ownerType.FindMethod(name, new MethodSig(retType, pars, isInstance, genPars.Count));
+        var method = ownerType.FindMethod(name, new MethodSig(retType, pars, isInstance, genPars.Count), throwIfNotFound: false);
         if (method == null) {
             _lexer.Error("Method could not be found", start);
         } else if (genPars.Count > 0) {

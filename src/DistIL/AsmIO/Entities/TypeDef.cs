@@ -115,7 +115,7 @@ public class TypeDef : TypeDefOrSpec
         MethodAttributes attribs = MethodAttributes.Public | MethodAttributes.HideBySig,
         ImmutableArray<GenericParamType> genericPars = default)
     {
-        var existingMethod = FindMethod(name, new MethodSig(retSig, paramSig.Select(p => p.Sig).ToList()));
+        var existingMethod = FindMethod(name, new MethodSig(retSig, paramSig.Select(p => p.Sig).ToList()), throwIfNotFound: false);
         Ensure.That(existingMethod == null, "A method with the same signature already exists");
 
         var method = new MethodDef(this, retSig, paramSig, name, attribs, MethodImplAttributes.IL, genericPars);
@@ -158,7 +158,8 @@ public class TypeDef : TypeDefOrSpec
         }
     }
 
-    public override bool Equals(TypeDesc? other) => object.ReferenceEquals(this, other);
+    public override bool Equals(TypeDesc? other)
+        => object.ReferenceEquals(this, other) || (other is PrimType p && p.IsDefinition(this));
 
     internal static TypeDef Decode(ModuleLoader loader, TypeDefinition info)
     {
@@ -286,7 +287,9 @@ public class TypeSpec : TypeDefOrSpec
         GenericParams = args;
     }
 
-    public override MethodDesc? FindMethod(string name, in MethodSig sig = default, in GenericContext spec = default, bool searchBaseAndItfs = false, bool throwIfNotFound = false)
+    public override MethodDesc? FindMethod(
+        string name, in MethodSig sig = default, in GenericContext spec = default, 
+        bool searchBaseAndItfs = false, [DoesNotReturnIf(true)] bool throwIfNotFound = true)
     {
         var actualSpec = spec.IsNull ? new GenericContext(this) : spec;
         var method = Definition.FindMethod(name, sig, actualSpec, searchBaseAndItfs, throwIfNotFound);
@@ -300,9 +303,9 @@ public class TypeSpec : TypeDefOrSpec
         return new MethodSpec(this, (MethodDef)method);
     }
 
-    public override FieldDesc? FindField(string name)
+    public override FieldDesc? FindField(string name, [DoesNotReturnIf(true)] bool throwIfNotFound = true)
     {
-        var field = Definition.FindField(name);
+        var field = Definition.FindField(name, throwIfNotFound);
         return field != null ? new FieldSpec(this, (FieldDef)field) : null;
     }
 

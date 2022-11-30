@@ -38,15 +38,12 @@ internal class ListSource : LinqSourceNode
     public override Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock)
     {
         //list[lq_index]
-        var getter = Type.FindMethod(
-            "get_Item", new MethodSig(Type.GenericParams[0], new TypeSig[] { PrimType.Int32 }),
-            throwIfNotFound: true
-        );
+        var getter = Type.FindMethod("get_Item", new MethodSig(Type.GenericParams[0], new TypeSig[] { PrimType.Int32 }));
         return builder.CreateCallVirt(getter, PhysicalSource, currIndex);
     }
     public override Value EmitSourceCount(IRBuilder builder)
     {
-        var getter = Type.FindMethod("get_Count", throwIfNotFound: true);
+        var getter = Type.FindMethod("get_Count");
         return builder.CreateCallVirt(getter, PhysicalSource);
     }
 }
@@ -60,12 +57,12 @@ internal class EnumeratorSource : LinqSourceNode
 
     public override Value EmitMoveNext(IRBuilder builder, Value currIndex)
     {
-        var method = _enumeratorType!.FindMethod("MoveNext", searchBaseAndItfs: true, throwIfNotFound: true);
+        var method = _enumeratorType!.FindMethod("MoveNext", searchBaseAndItfs: true);
         return builder.CreateCallVirt(method, _enumerator);
     }
     public override Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock)
     {
-        var method = _enumeratorType!.FindMethod("get_Current", searchBaseAndItfs: true, throwIfNotFound: true);
+        var method = _enumeratorType!.FindMethod("get_Current", searchBaseAndItfs: true);
         return builder.CreateCallVirt(method, _enumerator);
     }
     public override void EmitHead(IRBuilder builder)
@@ -79,7 +76,7 @@ internal class EnumeratorSource : LinqSourceNode
             sourceType = (TypeDesc)boxed.Args[0];
             source = builder.CreateIntrinsic(CilIntrinsic.UnboxRef, sourceType, boxed);
         }
-        var method = sourceType.FindMethod("GetEnumerator", searchBaseAndItfs: true, throwIfNotFound: true);
+        var method = sourceType.FindMethod("GetEnumerator", searchBaseAndItfs: true);
         _enumerator = builder.CreateCallVirt(method, source);
         _enumeratorType = _enumerator.ResultType;
 

@@ -151,7 +151,7 @@ internal class ModuleLoader
         var spec = GenericContext.Empty;
 
         for (var parent = rootParent; parent != null; parent = parent.BaseType) {
-            var method = parent.FindMethod(name, signature, spec);
+            var method = parent.FindMethod(name, signature, spec, throwIfNotFound: false);
             if (method != null) {
                 return method;
             }

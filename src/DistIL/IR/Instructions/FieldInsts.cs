@@ -2,15 +2,12 @@ namespace DistIL.IR;
 
 public abstract class FieldAccessInst : Instruction, AccessInst
 {
-    public FieldDesc Field {
-        get => (FieldDesc)Operands[0];
-        set => ReplaceOperand(0, value);
-    }
+    public FieldDesc Field { get; set; }
     public Value? Obj {
-        get => IsStatic ? null : Operands[1];
+        get => IsStatic ? null : _operands[0];
         set {
             Ensure.That(!IsStatic && value != null);
-            ReplaceOperand(1, value);
+            ReplaceOperand(0, value);
         }
     }
     [MemberNotNullWhen(false, nameof(Obj))]
@@ -24,12 +21,13 @@ public abstract class FieldAccessInst : Instruction, AccessInst
     Value AccessInst.Location => Field;
 
     protected FieldAccessInst(TypeDesc resultType, FieldDesc field, Value? obj)
-        : this(resultType, obj == null ? new[] { field } : new[] { field, obj }) { }
+        : this(resultType, field, obj == null ? Array.Empty<Value>() : new[] { obj }) { }
 
-    protected FieldAccessInst(TypeDesc resultType, params Value[] operands)
+    protected FieldAccessInst(TypeDesc resultType, FieldDesc field, params Value[] operands)
         : base(operands)
     {
         ResultType = resultType;
+        Field = field;
     }
 
     protected override void PrintOperands(PrintContext ctx)
@@ -37,7 +35,7 @@ public abstract class FieldAccessInst : Instruction, AccessInst
         ctx.Print(" ");
         Field.PrintAsOperand(ctx);
 
-        foreach (var oper in Operands[1..]) {
+        foreach (var oper in _operands) {
             ctx.Print(", ");
             oper.PrintAsOperand(ctx);
         }
@@ -57,8 +55,8 @@ public class LoadFieldInst : FieldAccessInst, LoadInst
 public class StoreFieldInst : FieldAccessInst, StoreInst
 {
     public Value Value {
-        get => Operands[IsStatic ? 1 : 2];
-        set => ReplaceOperand(IsStatic ? 1 : 2, value);
+        get => _operands[IsStatic ? 0 : 1];
+        set => ReplaceOperand(IsStatic ? 0 : 1, value);
     }
 
     public override bool SafeToRemove => false;
@@ -66,7 +64,7 @@ public class StoreFieldInst : FieldAccessInst, StoreInst
     public override string InstName => "stfld";
 
     public StoreFieldInst(FieldDesc field, Value? obj, Value value)
-        : base(PrimType.Void, obj == null ? new[] { field, value } : new[] { field, obj, value })
+        : base(PrimType.Void, field, obj == null ? new[] { value } : new[] { obj, value })
     {
         Ensure.That(value.ResultType.IsStackAssignableTo(field.Type));
     }

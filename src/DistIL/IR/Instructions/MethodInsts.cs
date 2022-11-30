@@ -90,26 +90,24 @@ public class NewObjInst : Instruction
 
 public class FuncAddrInst : Instruction
 {
-    public MethodDesc Method {
-        get => (MethodDesc)Operands[0];
-        set => ReplaceOperand(0, value);
-    }
+    public MethodDesc Method { get; set; }
     public Value? Object {
-        get => IsVirtual ? Operands[1] : null;
+        get => IsVirtual ? Operands[0] : null;
         set {
             Ensure.That(IsVirtual && value != null);
-            ReplaceOperand(1, value);
+            ReplaceOperand(0, value);
         }
     }
     [MemberNotNullWhen(true, nameof(Object))]
-    public bool IsVirtual => Operands.Length >= 2;
+    public bool IsVirtual => Operands.Length > 0;
 
     public override string InstName => IsVirtual ? "virtfuncaddr" : "funcaddr";
 
     public FuncAddrInst(MethodDesc method, Value? obj = null)
-        : base(obj == null ? new Value[] { method } : new Value[] { method, obj })
+        : base(obj == null ? Array.Empty<Value>() : new Value[] { obj })
     {
         ResultType = PrimType.Void.CreatePointer();
+        Method = method;
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);

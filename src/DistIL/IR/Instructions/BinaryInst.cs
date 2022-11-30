@@ -36,32 +36,42 @@ public class BinaryInst : Instruction
         var sa = a.StackType;
         var sb = b.StackType;
 
+        if (sa == sb) {
+            return sa switch {
+                StackType.Int or StackType.Long
+                    => sa.GetPrimType(a.Kind.IsSigned() || b.Kind.IsSigned()),
+                StackType.Float
+                    => a == PrimType.Double ? a : b, //pick double over float
+                StackType.NInt
+                    => a == b ? a : PrimType.IntPtr, //pick pointer over nint
+                StackType.ByRef when op == BinaryOp.Sub
+                    => PrimType.IntPtr,
+                _ => null
+            };
+        }
+
         //Bit shift ops allows any combination of (i4/i8/nint op i4/nint)
         if (op is BinaryOp.Shl or BinaryOp.Shra or BinaryOp.Shrl &&
             sa is StackType.Int or StackType.Long or StackType.NInt &&
             sb is StackType.Int or StackType.NInt
         ) {
-            return a;
+            //Type must be normalized to stack type, otherwise we'd endup with non-sense:
+            //  byte r1 = shl #byte_x, 8
+            return sa.GetPrimType(a.Kind.IsSigned());
         }
 
-        //Sort (sa, sb) and (a, b) to reduce number of cases,
-        //such that sa <= sb with order [int long nint float nint byref]
-        if (sa > sb) (sa, sb, a, b) = (sb, sa, b, a);
+        //Sort (a, b) to reduce number of cases, such that sa <= sb
+        //in respect to declaration order: [int long nint float nint byref]
+        if (sa > sb) { (sa, sb, a, b) = (sb, sa, b, a); }
 
-        #pragma warning disable format
         return (sa, sb, op) switch {
-            (StackType.Int,     StackType.Int, _)   => PrimType.Int32,
-            (StackType.Long,    StackType.Long, _)  => PrimType.Int64,
-            (StackType.Float,   StackType.Float, _) => a == PrimType.Double ? a : b, //pick double over float
-            (StackType.NInt,    StackType.NInt, _)  => a == b ? a : PrimType.IntPtr, //pick pointer over nint
-            (StackType.Int,     StackType.NInt, _)  => b,
-            (StackType.ByRef,   StackType.ByRef, BinaryOp.Sub) => PrimType.IntPtr,   //& - & = nint
+            (StackType.Int, StackType.NInt, _)
+                => b is PointerType ? b : sb.GetPrimType(b.Kind.IsSigned()),
             //int/nint + & = &
             (StackType.Int or StackType.NInt, StackType.ByRef, BinaryOp.Add or BinaryOp.AddOvf)
-                    => b,
+                => b,
             _ => null
         };
-        #pragma warning restore format
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);

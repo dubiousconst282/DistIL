@@ -120,6 +120,15 @@ public static class TypeKinds
             _ => StackType.Object,
         };
 
+    public static PrimType GetPrimType(this StackType type, bool signed = false)
+        => type switch {
+            StackType.Int   => signed ? PrimType.Int32 : PrimType.UInt32,
+            StackType.Long  => signed ? PrimType.Int64 : PrimType.UInt64,
+            StackType.NInt  => signed ? PrimType.IntPtr : PrimType.UIntPtr,
+            StackType.Float => PrimType.Double,
+            StackType.Object => PrimType.Object
+        };
+
     internal static PrimitiveTypeCode ToSrmTypeCode(this TypeKind kind)
     {
         return kind switch {

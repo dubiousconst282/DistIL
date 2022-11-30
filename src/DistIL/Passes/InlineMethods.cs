@@ -50,13 +50,9 @@ public class InlineMethods : MethodPass
         var callerBody = call.Block.Method;
         var cloner = new IRCloner(new GenericContext(callee));
 
-        //FIXME: III.1.6 Implicit argument coercion
-        //e.g:  ldc.i4 256; call void M(uint8 x)
-        //CLI demands x to be truncated on entry, this will not happen for inlined methods and may result in subtle behavior differences.
-        //
         //Add argument mappings
         for (int i = 0; i < calleeBody.Args.Length; i++) {
-            cloner.AddMapping(calleeBody.Args[i], call.GetArg(i));
+            cloner.AddMapping(calleeBody.Args[i], call.Args[i]);
         }
 
         //Clone blocks

@@ -2,14 +2,11 @@ namespace DistIL.IR;
 
 public class CallInst : Instruction
 {
-    public MethodDesc Method {
-        get => (MethodDesc)Operands[0];
-        set => ReplaceOperand(0, value);
-    }
-    public ReadOnlySpan<Value> Args => Operands.Slice(1);
-    
+    public MethodDesc Method { get; set; }
+    public ReadOnlySpan<Value> Args => _operands;
+
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-    public int NumArgs => Operands.Length - 1;
+    public int NumArgs => _operands.Length;
 
     public bool IsVirtual { get; set; }
     public bool IsStatic => Method.IsStatic;
@@ -21,16 +18,16 @@ public class CallInst : Instruction
     public override string InstName => "call" + (IsVirtual ? "virt" : "");
 
     public CallInst(MethodDesc method, Value[] args, bool isVirtual = false, TypeDesc? constraint = null)
-        : base(args.Prepend(method).ToArray())
+        : base(args)
     {
         Ensure.That(args.Length == method.ParamSig.Count);
         ResultType = method.ReturnType;
+        Method = method;
         IsVirtual = isVirtual;
         Constraint = constraint;
     }
 
-    public Value GetArg(int index) => Operands[index + 1];
-    public void SetArg(int index, Value newValue) => ReplaceOperand(index + 1, newValue);
+    public void SetArg(int index, Value newValue) => ReplaceOperand(index, newValue);
     
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
@@ -67,24 +64,22 @@ public class CallInst : Instruction
 public class NewObjInst : Instruction
 {
     /// <summary> The `.ctor` method. Note that the first argument (`this`) is ignored. </summary>
-    public MethodDesc Constructor {
-        get => (MethodDesc)Operands[0];
-        set => ReplaceOperand(0, value);
-    }
-    public ReadOnlySpan<Value> Args => Operands.Slice(1);
+    public MethodDesc Constructor { get; set; }
+    public ReadOnlySpan<Value> Args => _operands;
 
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-    public int NumArgs => Operands.Length - 1;
+    public int NumArgs => _operands.Length;
 
     public override bool HasSideEffects => true;
     public override bool MayWriteToMemory => true;
     public override string InstName => "newobj";
 
     public NewObjInst(MethodDesc ctor, Value[] args)
-        : base(args.Prepend(ctor).ToArray())
+        : base(args)
     {
         Ensure.That(!ctor.IsStatic && args.Length == (ctor.ParamSig.Count - 1));
         ResultType = ctor.DeclaringType;
+        Constructor = ctor;
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);

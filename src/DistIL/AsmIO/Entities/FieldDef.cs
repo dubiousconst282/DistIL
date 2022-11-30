@@ -114,29 +114,9 @@ public class FieldDef : FieldDefOrSpec
 
     public static int GetMappedDataSize(TypeDesc type)
     {
-        switch (type.Kind) {
-            case TypeKind.Bool:
-            case TypeKind.SByte:
-            case TypeKind.Byte:
-                return 1;
-            case TypeKind.Char:
-            case TypeKind.Int16:
-            case TypeKind.UInt16:
-                return 2;
-            case TypeKind.Int32:
-            case TypeKind.UInt32:
-            case TypeKind.Single:
-                return 4;
-            case TypeKind.Int64:
-            case TypeKind.UInt64:
-            case TypeKind.Double:
-                return 8;
-            default:
-                if (type is TypeDef def) {
-                    return def.LayoutSize;
-                }
-                return 0;
-        }
+        return type is TypeDef def 
+            ? def.LayoutSize
+            : type.Kind.Size();
     }
 }
 public class FieldSpec : FieldDefOrSpec

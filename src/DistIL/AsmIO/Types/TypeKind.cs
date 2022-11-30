@@ -27,12 +27,27 @@ public enum TypeKind
     Struct,
     Array,
 }
-public static class TypeKindEx
+//I.12.1 Supported data types 
+//I.12.3.2.1 The evaluation stack
+public enum StackType
 {
-    const byte Uns = 1 << 0; //Unsigned int
-    const byte Sig = 1 << 1; //Signed int
-    const byte Ptr = 1 << 2; //Pointer size
-    const byte Obj = 1 << 3; //Object
+    Void,   // (no value)
+    Int,    // int32
+    Long,   // int64
+    NInt,   // native int / unmanaged pointer
+    Float,  // F
+    ByRef,  // &
+    Object, // O
+    Struct  // value type
+}
+
+public static class TypeKinds
+{
+    private const byte
+        Uns = 1 << 0, //Unsigned int
+        Sig = 1 << 1, //Signed int
+        Ptr = 1 << 2, //Pointer size
+        Obj = 1 << 3; //Object
 
     private static readonly (byte BitSize, byte Flags)[] _data = {
         (0,    0), //Void
@@ -60,12 +75,35 @@ public static class TypeKindEx
     };
 
     public static int BitSize(this TypeKind type) => _data[(int)type].BitSize;
+    public static int Size(this TypeKind type) => type.BitSize() / 8;
+
     public static bool IsSigned(this TypeKind type) => HasFlag(type, Sig);
     public static bool IsUnsigned(this TypeKind type) => HasFlag(type, Uns);
     public static bool IsPointerSize(this TypeKind type) => HasFlag(type, Ptr);
 
+    public static TypeKind GetSigned(this TypeKind type) => type - (type.IsUnsigned() && type >= TypeKind.SByte ? 1 : 0);
+    public static TypeKind GetUnsigned(this TypeKind type) => type + (type.IsSigned() && type >= TypeKind.SByte ? 1 : 0);
+
     public static bool IsInt(this TypeKind type) => HasFlag(type, Sig | Uns);
     public static bool IsFloat(this TypeKind type) => type is TypeKind.Single or TypeKind.Double;
+
+    /// <summary> Checks whether the type is one of { bool, [s]byte, char, [u]short }. </summary>
+    public static bool IsSmallInt(this TypeKind type) => type is >= TypeKind.Bool and <= TypeKind.UInt16;
+
+    /// <summary> Maps this type into: `bool => byte, char => ushort, string|array => object` and optionally normalizes the result to signed.  </summary>
+    public static TypeKind GetStorageType(this TypeKind type, bool normalizeToSigned = true)
+    {
+        type = type switch {
+            TypeKind.Bool => TypeKind.Byte,
+            TypeKind.Char => TypeKind.UInt16,
+            TypeKind.String or TypeKind.Array => TypeKind.Object,
+            _ => type
+        };
+        if (normalizeToSigned) {
+            type = type.GetSigned();
+        }
+        return type;
+    }
 
     private static bool HasFlag(TypeKind type, byte flags)
         => (_data[(int)type].Flags & flags) != 0;
@@ -106,18 +144,4 @@ public static class TypeKindEx
             _ => throw new NotSupportedException()
         };
     }
-
-}
-//I.12.1 Supported data types 
-//I.12.3.2.1 The evaluation stack
-public enum StackType
-{
-    Void,   // (no value)
-    Int,    // int32
-    Long,   // int64
-    NInt,   // native int / unmanaged pointer
-    Float,  // F
-    ByRef,  // &
-    Object, // O
-    Struct  // value type
 }

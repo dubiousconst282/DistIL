@@ -28,12 +28,12 @@ public class ExpandLinq : MethodPass
         //We could sort them based on the dominator tree order or just by traversing them using some sort of DFS.
         //These queries seem to be quite rare, so we'll just give up for now. 
         if (queries.Any(q1 => queries.Any(q2 => GetSource(q2).PhysicalSource == q1.SubjectCall))) {
-            ctx.PreserveAll();
             return;
         }
 
         foreach (var query in queries) {
             if (query.Emit()) {
+                Console.WriteLine($"ExpandLinq at {ctx.Method}");
                 ctx.InvalidateAll();
             }
         }
@@ -73,7 +73,8 @@ public class ExpandLinq : MethodPass
             var declType = (method.DeclaringType as TypeSpec)?.Definition ?? method.DeclaringType;
 
             if (declType == t_IEnumerableOfT0.Definition || declType.Inherits(t_IEnumerableOfT0)) {
-                return CreateQuery(call, pipe => new ConsumedQuery(call, pipe));
+                //FIXME: Consumed queries don't work with nested loops
+                //return CreateQuery(call, pipe => new ConsumedQuery(call, pipe));
             }
         }
         return null;

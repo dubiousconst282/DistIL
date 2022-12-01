@@ -1,7 +1,7 @@
 # DistIL
-An experimental optimizer and compiler IR for .NET CIL
+Experimental optimizer and compiler IR for .NET CIL
 
-One of the primary targets is optimizations for well known libraries and usage patterns, which are simple to implement using pattern matching and in most cases don't require sophisticated analyses.  
+One of the primary targets is optimizations for well known libraries and usage patterns, most of which are simple to implement using pattern matching and in most cases don't require other analyses.  
 A notable example is Linq expansion/inlining, which is currently implemented in just a few hundred lines of code (not including method/lambda inlining), and is capable of producing seemingly complex outputs:
 
 <table>
@@ -32,29 +32,29 @@ List&lt;int> Linq2(List&lt;object> src) {
   </tr>
 </table>
 
-A few other analyses and transforms such as constant folding, method inlining, SSA construction and deconstruction are implemented as well, and are somewhat functional. Other optimizations such as object stack allocation/SROA and general loop optimizations are also planned for the near future (or at least fantasized of).
+A few other analyses and transforms such as constant folding, method inlining, SSA construction and deconstruction are implemented as well. Other optimizations such as object stack allocation/SROA and general loop optimizations are also planned for the near future (or at least fantasized of).
 
-It is currently capable of sucessfully processing simple apps (come in and out of its IR without completely breaking them), but not yet much more.
+DistIL is currently capable of sucessfully processing itself, and a few other libraries such as _ICSharpCode.Decompiler_ and _ImageSharp_, without observably breaking them.
 
-# IR Overview
-DistIL's _intermediate representation_ is based on a traditional _control flow graph_ with instructions in _static single assignment_ form, mainly inspired by LLVM. Most semantics are identical to CIL, since it is its main and only target.
+# IR overview
+DistIL's _intermediate representation_ is based on a traditional _control flow graph_ with instructions in _static single assignment_ form, mainly inspired by LLVM. It tries to be simple and stay as close to CIL as possible, since it is its main and only target.
 
-Protected regions are by far the most complex aspect of the IR. They are represented as implicit sub-graphs of the main CFG, delimited by _guard_ and _leave_ instructions. Being implicit allows for a majority of transforms to work with none or few special cases, as guard/leave instructions provide clear boundaries for each region.  
+One of the most complex aspects of the IR are protected regions. They are represented as implicit sub-graphs of the main CFG, delimited by _guard_ and _leave_ instructions. Being implicit allows for a majority of transforms dealing with control flow to work with none or few special cases, as guard/leave instructions provide clear boundaries for each region.  
 Nevertheless, they bringing several complications such as additional constraints on SSA renaming, and requirement for proper block ordering during code generation.
 
 The type system completely abstracts away things like entity handles/tokens and cross-assembly references, but it requires the entire dependency tree of a module to be available in order to work. It uses _System.Reflection.Metadata_ for module loading and writing.
 
 ## IR dumps
 Being able to dump an IR into a readable form is a necessity for any compiler. DistIL can render its IR into both plaintext and Graphviz forms (with syntax highlighting).  
-A parser for plaintext dumps is also implemented and only requires minimal changes such as adding type imports.
-
-There are several ways to render Graphviz files, but [this VSCode extension](https://marketplace.visualstudio.com/items?itemName=tintinweb.graphviz-interactive-preview) seems to be the most convenient as it auto refreshes when the file changes, and provides decent zoom and dragging controls.
+A parser for plaintext dumps is partially implemented and only requires minimal changes such as adding type imports.
 
 ### Showcase: Linq expansion
 <img src="https://user-images.githubusercontent.com/87553666/202864892-5f33647f-be40-43ac-b0b5-772e73663e7d.svg">
 
-This CFG corresponds to the the Linq expansion sample in the heading.  
-Most of the work involves inlining lambdas, the expansion transform itself only generates a simple loop and invokes the original lambdas. Another simplification pass detects and replaces them with direct calls, which can then be inlined further down.
+This CFG corresponds to the the optimized Linq expansion sample in the heading.  
+Most of the work involves inlining lambdas, the expansion transform itself only generates a simple loop and invokes the original lambdas. Another simplification pass detects and replaces them with direct calls, which may then be inlined further down.
+
+The transform does currently cause subtle behavior changes, for example, concurrent modification checking done by `List<T>.Enumerator` and the lambda instance cache are eliminated. In the future, transform "safety" settings could be implemented in order to preserve them.
 
 ### Showcase: Protected regions
 <table>
@@ -84,7 +84,7 @@ int Try2(string str) {
   </tr>
 </table>
 
-SSA renaming is constrained for variables crossing protected regions, as exception control flow is implicit and phi instructions can only merge values at block boundaries.  
+SSA renaming is constrained for variables crossing protected regions, because exception control flow is implicit and phi instructions can only merge values at block boundaries.  
 Information about individual regions is not keept in the CFG, but provided by a dedicated analysis (ProtectedRegionAnalysis), which identifies them using a recursive DFS and exposes the result as trees.
 
 # Related projects

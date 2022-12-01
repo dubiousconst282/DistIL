@@ -1,6 +1,7 @@
 namespace DistIL.Passes;
 
 using DistIL.Analysis;
+using DistIL.AsmIO;
 using DistIL.IR.Intrinsics;
 
 //This pass is based on "Revisiting Out-of-SSA Translation for Correctness, Code Quality, and Efficiency"
@@ -211,8 +212,28 @@ public class RemovePhis : MethodPass
     }
     private Variable GetSlotVar(Instruction def)
     {
-        return _slotVars.GetOrAddRef(_mergeNodes[def].List)
-                ??= new Variable(def.ResultType);
+        var list = _mergeNodes[def].List;
+        return _slotVars.GetOrAddRef(list)
+                ??= new Variable(GetListVarType(list));
+    }
+
+    private TypeDesc GetListVarType(MergeNode[] list)
+    {
+        //We must use the biggest type associated with the list, in order to avoid truncating values.
+        //Consider the following:
+        //  ushort x1; ...
+        //  int x2; ...
+        //  int res = phi x1, x2;
+        //If GetSlotVar() is first called with x1 as argument, the list will be assigned 
+        //to a new variable of ushort, which will truncate the value of x2.
+        //We also consider interface and base types, demoting the result to a common ancestor type.
+        var type = default(TypeDesc);
+        foreach (var node in list) {
+            if (GetValue(node.Def) is not ConstNull) {
+                type = TypeDesc.GetCommonAssignableType(type, node.Def.ResultType);
+            }
+        }
+        return type ?? PrimType.Object;
     }
 
     private bool MergeIfNotIntersecting(MergeNode[] listA, MergeNode[] listB)
@@ -258,6 +279,9 @@ public class RemovePhis : MethodPass
 
     //Checks if `a` interferes (i.e., intersects and has a different value) with an already-visited variable.
     //This method also update ancestor information, and assumes that `b` dominates `a`.
+    //TODO: This code seems to be broken, it will ocasionally return true for nodes that don't intersect at all.
+    //      We should look into fixing it unless we endup implementing an "register allocator" which can deal with phis.
+    //      The SSABook has an similar algorithm, and it looks simpler.
     private bool Interferes(MergeNode a, MergeNode b)
     {
         a.EqualAncestorOut = null;
@@ -286,22 +310,9 @@ public class RemovePhis : MethodPass
     private bool Intersects(Instruction a, Instruction b)
     {
         Debug.Assert(Dominates(a, b));
-
-        if (_liveness.IsLiveOut(b.Block, a)) {
-            //We should check if `a` is defined before `b`, but that doesn't seem to matter...
-            return true;
-        }
-        //If `a` is defined or liveIn in the same block as `b`, we need to check if it is used after it
-        if (a.Block == b.Block || _liveness.IsLiveIn(b.Block, a)) {
-            while ((b = b.Next!) != null) {
-                if (b.Operands.ContainsRef(a)) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        return _liveness.IsLiveAfter(a, b);
     }
-    
+
     private bool Dominates(Instruction parent, Instruction child)
     {
         return parent.Block == child.Block 

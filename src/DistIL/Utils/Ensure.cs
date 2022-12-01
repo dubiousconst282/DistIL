@@ -19,17 +19,16 @@ internal static class Ensure
     }
 
     [DebuggerStepThrough]
-    public static void IndexValid(int index, int length, string? msg = null)
+    public static void IndexValid(int index, int length)
     {
         Debug.Assert(length >= 0);
 
         if ((uint)index >= (uint)length) {
-            ThrowHelper(msg);
+            ThrowHelper();
         }
 
         [DoesNotReturn, StackTraceHidden]
-        static void ThrowHelper(string? msg)
-            => throw new IndexOutOfRangeException(msg);
+        static void ThrowHelper() => throw new IndexOutOfRangeException();
     }
 
     [DebuggerStepThrough, DoesNotReturn]

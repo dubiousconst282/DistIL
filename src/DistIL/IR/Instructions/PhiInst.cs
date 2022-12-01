@@ -1,8 +1,8 @@
 namespace DistIL.IR;
 
 /// <summary>
-/// The Phi instruction maps the incomming predecessor block into the value of the argument with the same block.
-/// Arguments should not have duplicated blocks.
+/// The Phi instruction maps the incomming predecessor block in the CFG execution path to one of its corresponding arguments.
+/// There should not be duplicated blocks in the arguments.
 /// </summary>
 public class PhiInst : Instruction
 {
@@ -15,13 +15,9 @@ public class PhiInst : Instruction
         ResultType = type;
     }
     public PhiInst(params PhiArg[] args)
-        : base(InterleaveArgs(args))
+        : base(InterleaveArgs(args, out var type))
     {
-        ResultType = args[0].Value.ResultType;
-        
-        foreach (var arg in args) {
-            Ensure.That(arg.Value.ResultType.IsStackAssignableTo(ResultType));
-        }
+        ResultType = type;
     }
     
     /// <summary> Unchecked non-copying constructor. </summary>
@@ -35,50 +31,48 @@ public class PhiInst : Instruction
         ResultType = resultType;
     }
     
-    public BasicBlock GetBlock(int index) => (BasicBlock)_operands[index * 2 + 0];
-    public Value GetValue(int index) => _operands[index * 2 + 1];
-
     /// <summary> Returns the incomming value for the given predecessor block. If it doesn't exist, an exception is thrown. </summary>
     public Value GetValue(BasicBlock block) => GetValue(FindArgIndex(block));
+    public Value GetValue(int index) => _operands[index * 2 + 1];
 
     /// <summary> Sets the incomming value for the given predecessor block. If it doesn't exist, an exception is thrown. </summary>
-    public void SetValue(BasicBlock block, Value newValue)
-    {
-        int index = FindArgIndex(block);
-        ReplaceOperand(index * 2 + 1, newValue);
-    }
-    public void SetValue(int index, Value newValue)
-    {
-        ReplaceOperand(index * 2 + 1, newValue);
-    }
+    public void SetValue(BasicBlock block, Value newValue) => SetValue(FindArgIndex(block), newValue);
+    public void SetValue(int index, Value newValue) => ReplaceOperand(index * 2 + 1, newValue);
 
-    public PhiArg GetArg(int index)
-    {
-        var block = _operands[index * 2 + 0];
-        var value = _operands[index * 2 + 1];
-        return new PhiArg((BasicBlock)block, value);
-    }
+    /// <summary> Returns the first block which maps to `value`. If it doesn't exist, an exception is thrown. </summary>
+    public BasicBlock GetBlock(Value value) => GetBlock(FindArgIndex(value, true));
+    public BasicBlock GetBlock(int index) => (BasicBlock)_operands[index * 2 + 0];
+
+    public PhiArg GetArg(int index) => new(GetBlock(index), GetValue(index));
 
     public void AddArg(BasicBlock block, Value value)
     {
         int index = GrowOperands(2);
-        ReplaceOperand(index + 0, block);
-        ReplaceOperand(index + 1, value);
+        InsertArg(index, block, value);
     }
+
     public void AddArg(params PhiArg[] args)
     {
         int index = GrowOperands(args.Length * 2);
 
         foreach (var (block, value) in args) {
-            ReplaceOperand(index + 0, block);
-            ReplaceOperand(index + 1, value);
+            InsertArg(index, block, value);
             index += 2;
         }
     }
 
+    private void InsertArg(int index, BasicBlock block, Value value)
+    {
+        Debug.Assert(_operands[index] == null);
+        ReplaceOperand(index + 0, block);
+        ReplaceOperand(index + 1, value);
+        ResultType = GetCommonType(ResultType, _operands, index);
+    }
+
     public void RemoveArg(int index, bool removeTrivialPhi)
     {
-        Ensure.That(index >= 0 && index < NumArgs);
+        Ensure.IndexValid(index, NumArgs);
+
         if (removeTrivialPhi && NumArgs == 2) {
             ReplaceWith(GetValue(1 - index));
             return;
@@ -89,10 +83,10 @@ public class PhiInst : Instruction
     public void RemoveArg(BasicBlock block, bool removeTrivialPhi) 
         => RemoveArg(FindArgIndex(block), removeTrivialPhi);
 
-    private int FindArgIndex(BasicBlock block)
+    private int FindArgIndex(Value operand, bool isValue = false)
     {
-        for (int i = 0; i < _operands.Length; i += 2) {
-            if (_operands[i] == block) {
+        for (int i = isValue ? 1 : 0; i < _operands.Length - 1; i += 2) {
+            if (_operands[i] == operand) {
                 return i / 2;
             }
         }
@@ -105,12 +99,8 @@ public class PhiInst : Instruction
     {
         for (int i = 0; i < NumArgs; i++) {
             var (block, value) = GetArg(i);
-
-            ctx.Print(i == 0 ? " [" : ", [");
-            block.PrintAsOperand(ctx);
-            ctx.Print(" -> ");
-            value.PrintAsOperand(ctx);
-            ctx.Print("]");
+            string opening = (i == 0) ? " [" : ", [";
+            ctx.Print($"{opening}{block} -> {value}]");
         }
     }
 
@@ -121,14 +111,40 @@ public class PhiInst : Instruction
         }
     }
     
-    private static Value[] InterleaveArgs(PhiArg[] args)
+    private static Value[] InterleaveArgs(PhiArg[] args, out TypeDesc resultType)
     {
+        Ensure.That(args.Length > 0, "Phi argument array cannot be empty");
+        resultType = null!;
+
         var opers = new Value[args.Length * 2];
+
         for (int i = 0; i < args.Length; i++) {
-            opers[i * 2 + 0] = args[i].Block;
-            opers[i * 2 + 1] = args[i].Value;
+            var (block, value) = args[i];
+            opers[i * 2 + 0] = block;
+            opers[i * 2 + 1] = value;
+            resultType = GetCommonType(resultType, opers, i * 2);
         }
         return opers;
+    }
+    private static TypeDesc GetCommonType(TypeDesc? currType, Value[] opers, int currIndex)
+    {
+        var value = opers[currIndex + 1];
+        if (ReferenceEquals(currType, PrimType.Object) && !HasConcreteValueBefore(opers, currIndex)) {
+            return value.ResultType;
+        }
+        return TypeDesc.GetCommonAssignableType(currType, value.ResultType)
+            ?? throw new InvalidOperationException("Phi arguments must be stack assignable to each other");
+
+
+        static bool HasConcreteValueBefore(Value[] opers, int endIndex)
+        {
+            for (int i = 0; i < endIndex; i += 2) {
+                if (opers[i + 1] is not ConstNull) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 }
 //typedef PhiArg = (BasicBlock block, Value value);

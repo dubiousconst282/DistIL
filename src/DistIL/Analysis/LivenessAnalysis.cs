@@ -1,24 +1,20 @@
 namespace DistIL.Analysis;
 
-using InstSet = RefSet<IR.Instruction>;
+using InstSet = RefSet<Instruction>;
 
 /// <summary>
-/// Liveness analysis for SSA definitions. The current implementation is based on the path exploration method.
+/// Liveness analysis for SSA definitions. The current implementation is based on the 
+/// path exploration method, which has a complexity of O(numGlobalVars * numCrossedBlocks).
 /// 
 /// See "Computing Liveness Sets for SSA-Form Programs" (https://hal.inria.fr/inria-00558509v2/document)
 /// and section 7.4 of the SSA book.
 /// </summary>
 public class LivenessAnalysis : IMethodAnalysis
 {
-    readonly Dictionary<BasicBlock, (InstSet LiveIn, InstSet LiveOut)> _blockData = new();
+    readonly Dictionary<BasicBlock, (InstSet? In, InstSet? Out)> _liveSets = new();
 
     public LivenessAnalysis(MethodBody method)
     {
-        //Init block sets
-        foreach (var block in method) {
-            _blockData[block] = (new InstSet(), new InstSet());
-        }
-
         var worklist = new ArrayStack<BasicBlock>();
 
         //Visit all instructions defining a value
@@ -35,7 +31,7 @@ public class LivenessAnalysis : IMethodAnalysis
                             AddLiveIn(user.Block, inst);
                         }
                     }
-                } else {
+                } else if (user.Block != inst.Block) {
                     worklist.Push(user.Block);
                 }
                 //Traverse the CFG backwards to propagate liveness
@@ -53,8 +49,11 @@ public class LivenessAnalysis : IMethodAnalysis
 
         //We could avoid set lookups by keeping the latest added block in _blockData,
         //but that's not a huge deal.
-        bool AddLiveIn(BasicBlock block, Instruction inst) => _blockData[block].LiveIn.Add(inst);
-        bool AddLiveOut(BasicBlock block, Instruction inst) => _blockData[block].LiveOut.Add(inst);
+        bool AddLiveIn(BasicBlock block, Instruction inst)
+            => (_liveSets.GetOrAddRef(block).In ??= new()).Add(inst);
+
+        bool AddLiveOut(BasicBlock block, Instruction inst)
+            => (_liveSets.GetOrAddRef(block).Out ??= new()).Add(inst);
     }
 
     public static IMethodAnalysis Create(IMethodAnalysisManager mgr)
@@ -63,38 +62,42 @@ public class LivenessAnalysis : IMethodAnalysis
     }
 
     /// <summary> Returns the live sets for `block`. </summary>
-    public (InstSet In, InstSet Out) GetLive(BasicBlock block) => _blockData[block];
+    public (InstSet? In, InstSet? Out) GetLiveSets(BasicBlock block) => _liveSets.GetValueOrDefault(block);
 
     /// <summary> Checks if `inst` is live at the start of `block`. </summary>
-    public bool IsLiveIn(BasicBlock block, Instruction inst) => _blockData[block].LiveIn.Contains(inst);
+    public bool IsLiveIn(BasicBlock block, Instruction inst) => GetLiveSets(block).In?.Contains(inst) ?? false;
 
     /// <summary> Checks if `inst` is live when `block` exits. </summary>
-    public bool IsLiveOut(BasicBlock block, Instruction inst) => _blockData[block].LiveOut.Contains(inst);
+    public bool IsLiveOut(BasicBlock block, Instruction inst) => GetLiveSets(block).Out?.Contains(inst) ?? false;
+
+    /// <summary> Checks if `inst` is live after `pos` executes. </summary>
+    public bool IsLiveAfter(Instruction inst, Instruction pos)
+    {
+        if (IsLiveOut(pos.Block, inst)) {
+            return true;
+        }
+        //If `a` is defined or liveIn in the same block as `b`, we need to check if it is used after it
+        if (inst.Block == pos.Block || IsLiveIn(pos.Block, inst)) {
+            for (var curr = pos; (curr = curr.Next) != null;) {
+                if (curr.Operands.ContainsRef(inst)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 
     public override string ToString()
     {
         var sb = new StringBuilder();
-        var pc = new PrintContext(new System.IO.StringWriter(sb), _blockData.First().Key.Method.GetSymbolTable());
+        var pc = new PrintContext(new StringWriter(sb), _liveSets.First().Key.Method.GetSymbolTable());
 
-        foreach (var (block, (liveIn, liveOut)) in _blockData) {
-            if (liveIn.Count + liveOut.Count == 0) continue;
+        foreach (var (block, (liveIn, liveOut)) in _liveSets) {
+            if (liveIn?.Count + liveOut?.Count == 0) continue;
             
             sb.Append($"{block}:\n");
-            PrintSet("  In: [", liveIn);
-            PrintSet("  Out: [", liveOut);
-
-            void PrintSet(string prefix, InstSet set)
-            {
-                if (set.Count == 0) return;
-
-                sb.Append(prefix);
-                foreach (var inst in set) {
-                    inst.PrintAsOperand(pc);
-                    sb.Append(", ");
-                }
-                sb.Length -= 2;
-                sb.Append("]\n");
-            }
+            pc.PrintSequence("   In: [", "]", liveIn!.GetEnumerator().AsEnumerable(), pc.PrintAsOperand);
+            pc.PrintSequence("  Out: [", "]", liveOut!.GetEnumerator().AsEnumerable(), pc.PrintAsOperand);
         }
         return sb.ToString();
     }

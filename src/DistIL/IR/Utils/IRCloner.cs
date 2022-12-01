@@ -28,6 +28,11 @@ public class IRCloner
         _srcBlocks.Add(srcBlock);
     }
 
+    public BasicBlock GetMapping(BasicBlock srcBlock)
+    {
+        return (BasicBlock)_mappings[srcBlock];
+    }
+
     /// <summary> Clones all scheduled blocks. </summary>
     public void Run()
     {

@@ -52,70 +52,78 @@ public class InlineMethods : MethodPass
 
         //Add argument mappings
         for (int i = 0; i < calleeBody.Args.Length; i++) {
-            cloner.AddMapping(calleeBody.Args[i], call.Args[i]);
+            var arg = calleeBody.Args[i];
+            var val = StoreInst.Coerce(arg.ResultType, call.Args[i], insertBefore: call);
+            cloner.AddMapping(arg, val);
         }
 
         //Clone blocks
-        var newBlocks = new List<BasicBlock>();
+        var returningBlocks = new List<BasicBlock>();
+        var lastBlock = call.Block;
+
         foreach (var block in calleeBody) {
-            var newBlock = callerBody.CreateBlock(insertAfter: newBlocks.LastOrDefault(call.Block));
+            var newBlock = callerBody.CreateBlock(insertAfter: lastBlock);
             cloner.AddBlock(block, newBlock);
-            newBlocks.Add(newBlock);
+            lastBlock = newBlock;
+
+            if (block.Last is ReturnInst) {
+                returningBlocks.Add(newBlock);
+            }
         }
         cloner.Run();
 
-        if (newBlocks is [{ Last: ReturnInst }]) {
-            //Opt: avoid creating new blocks for callees with a single block ending with a return
-            InlineOneBlock(call, newBlocks[0]);
-            newBlocks[0].Remove();
+        //If the callee only has a single block ending with return,
+        //the entire code can be moved at once without creating new blocks.
+        var result = calleeBody.NumBlocks == 1 && returningBlocks.Count == 1
+            ? InlineOneBlock(call, returningBlocks[0])
+            : InlineManyBlocks(call, cloner.GetMapping(calleeBody.EntryBlock), returningBlocks);
+
+        if (result != null) {
+            //After inlining, `call` will be at the start of the continuation block.
+            var truncResult = StoreInst.Coerce(call.ResultType, result, insertBefore: call);
+            call.ReplaceWith(truncResult);
+        } else if (call.NumUses == 0) {
+            call.Remove();
         } else {
-            InlineManyBlocks(call, newBlocks);
+            //This could happen if we inline a method that ends with ThrowInst, but it still returns something.
+            //Code after `call` should be unreachable now, but we need to replace its uses with undef to avoid making the IR invalid.
+            call.ReplaceWith(new Undef(call.ResultType));
         }
         return true;
     }
 
-    private static void InlineOneBlock(CallInst call, BasicBlock block)
+    private static Value? InlineOneBlock(CallInst call, BasicBlock block)
     {
+        var ret = (ReturnInst)block.Last;
+
         //Move code (if not a single return)
-        if (block.Last.Prev != null) {
-            block.MoveRange(call.Block, call, block.First, block.Last.Prev);
+        if (ret.Prev != null) {
+            block.MoveRange(call.Block, call.Prev, block.First, ret.Prev);
         }
-        //Replace call value
-        if (block.Last is ReturnInst ret && ret.HasValue) {
-            call.ReplaceWith(ret.Value);
-        } else {
-            call.Remove();
-        }
+        block.Remove();
+        return ret?.Value;
     }
 
-    private static void InlineManyBlocks(CallInst call, List<BasicBlock> blocks)
+    private static Value? InlineManyBlocks(CallInst call, BasicBlock entryBlock, List<BasicBlock> returningBlocks)
     {
         var startBlock = call.Block;
-        var endBlock = startBlock.Split(call);
+        var endBlock = startBlock.Split(call, branchTo: entryBlock);
 
         var returnedVals = new List<PhiArg>();
 
-        //Connect blocks into caller and convert returns to jumps into endBlock
-        foreach (var block in blocks) {
-            if (block == blocks[0]) { //entry block
-                startBlock.SetBranch(block);
+        //Rewrite exit blocks to jump into endBlock
+        foreach (var block in returningBlocks) {
+            if (block.Last is ReturnInst { HasValue: true, Value: var result }) {
+                returnedVals.Add((block, result));
             }
-            if (block.Last is ReturnInst ret) {
-                if (ret.HasValue) {
-                    returnedVals.Add((block, ret.Value));
-                }
-                block.SetBranch(endBlock);
-            }
+            block.SetBranch(endBlock);
         }
-        //Replace uses of the call with the returned value, or a phi for each returning block
+
+        //Return the generated value
         if (returnedVals.Count >= 2) {
-            var value = endBlock.InsertPhi(new PhiInst(returnedVals.ToArray()));
-            call.ReplaceWith(value);
-        } else if (returnedVals.Count == 1) {
-            call.ReplaceWith(returnedVals[0].Value);
-        } else {
-            call.Remove();
+            return endBlock.InsertPhi(new PhiInst(returnedVals.ToArray()));
         }
+        return returnedVals.FirstOrDefault().Value;
     }
 
     public class Options

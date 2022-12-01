@@ -98,7 +98,8 @@ public class SsaTransform : MethodPass
             foreach (var inst in block.NonPhis()) {
                 //Update latest def
                 if (inst is StoreVarInst store && CanEnreg(store)) {
-                    PushDef(block, store.Var, store.Value);
+                    var value = StoreInst.Coerce(store.Var.ResultType, store.Value, insertBefore: store);
+                    PushDef(block, store.Var, value);
                     store.Remove();
                 }
                 //Replace load with latest def

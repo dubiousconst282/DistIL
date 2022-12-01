@@ -19,14 +19,34 @@ public interface StoreInst : AccessInst
     /// a store/load roundtrip to a location of type `destType`, or returns `val` itself if no truncation would occur.
     /// See <see cref="IsCoerced(TypeDesc, TypeDesc)"/>.
     /// </summary>
-    public static Value CreateCoercedValue(TypeDesc destType, Value val, Instruction insertBefore)
+    public static Value Coerce(TypeDesc destType, Value val, Instruction insertBefore)
     {
-        return val;
+        if (!IsCoerced(destType, val)) {
+            return val;
+        }
+        var conv = new ConvertInst(val, destType);
+        conv.InsertBefore(insertBefore);
+        return conv;
+    }
+    public static bool IsCoerced(TypeDesc destType, Value srcValue)
+    {
+        var destKind = destType.Kind;
+        if (destKind.IsSmallInt() && srcValue is ConstInt cons) {
+            ulong mask = (1ul << destKind.BitSize()) - 1; //won't overflow as BitSize is <= 16
+            return (cons.UValue & ~mask) != 0;
+        }
+        return IsCoerced(destType, srcValue.ResultType);
     }
     public static bool IsCoerced(TypeDesc destType, TypeDesc srcType)
     {
         //III.1.6 Implicit argument coercion
 
-        return false; //TODO
+        //`NInt -> &` as in "Start GC Tracking" sounds particularly brittle. Not even Roslyn makes guarantees about it:
+        //  https://github.com/dotnet/runtime/issues/34501#issuecomment-608548207
+        //It's probably for the best if we don't support it.
+        return
+            (destType.Kind.IsSmallInt() && !srcType.Kind.IsSmallInt() && srcType.StackType is StackType.Int or StackType.NInt) ||
+            (destType.StackType == StackType.NInt && srcType.StackType == StackType.Int) ||
+            (destType.Kind == TypeKind.Double && srcType.Kind == TypeKind.Single);
     }
 }

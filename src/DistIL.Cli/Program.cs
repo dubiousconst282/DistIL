@@ -68,6 +68,7 @@ ignoreAccChecksCtor.ILBody = new ILMethodBody() {
 };
 var asmCAs = module.GetCustomAttribs(forAssembly: true);
 asmCAs.Add(new CustomAttrib(ignoreAccChecksCtor, ImmutableArray.Create<object?>(module.AsmName.Name)));
+asmCAs.Add(new CustomAttrib(ignoreAccChecksCtor, ImmutableArray.Create<object?>("System.Private.CoreLib")));
 
 if (args.Length >= 2) {
     using var outStream = File.Create(args[1]);

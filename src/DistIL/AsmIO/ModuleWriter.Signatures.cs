@@ -10,10 +10,12 @@ partial class ModuleWriter
         foreach (var mod in sig.CustomMods) {
             enc.CustomModifiers().AddModifier(GetHandle(mod.Type), !mod.IsRequired);
         }
-        //Bypassing the encoder api because it's so goddamn awful, even though we'll probably get bitten sooner or later.
-        //https://github.com/dotnet/runtime/blob/1ba0394d71a4ea6bee7f6b28a22d666b7b56f913/src/libraries/System.Reflection.Metadata/src/System/Reflection/Metadata/Ecma335/Encoding/BlobEncoders.cs#L809
         switch (sig.Type) {
             case PrimType t: {
+                if (ReferenceEquals(t, PrimType.Array)) { //PrimTypes were a mistake...
+                    enc.Type(GetHandle(_mod.Resolver.SysTypes.Array), false);
+                    return;
+                }
                 enc.Builder.WriteByte((byte)t.Kind.ToSrmTypeCode());
                 break;
             }

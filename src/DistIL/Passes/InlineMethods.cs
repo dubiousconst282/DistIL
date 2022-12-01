@@ -33,11 +33,13 @@ public class InlineMethods : MethodPass
     {
         //TODO: proper checks - II.10.3 Introducing and overriding virtual methods
         var blockedAttribs = MethodAttribs.NewSlot | MethodAttribs.Abstract | MethodAttribs.PinvokeImpl;
+        var staticVirt = MethodAttribs.Static | MethodAttribs.Virtual;
 
         return callInst.Method is MethodDefOrSpec { Definition: var callee } &&
             callee != caller &&
             callee.ILBody?.Instructions.Count <= _opts.MaxCalleeSize &&
             (callee.Attribs & blockedAttribs) == 0 &&
+            (callee.Attribs & staticVirt) != staticVirt &&
             callee.GetCustomAttribs().Find("System.Runtime.CompilerServices", "IntrinsicAttribute") == null &&
             callee.GetCustomAttribs().Find("System.Runtime.CompilerServices", "AsyncStateMachine") == null;
     }

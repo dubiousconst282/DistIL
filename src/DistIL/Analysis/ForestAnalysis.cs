@@ -7,6 +7,9 @@ public class ForestAnalysis : IMethodAnalysis
 
     public ForestAnalysis(MethodBody method)
     {
+        //This is a simple forward use scan algorithm, perhaps a even simpler approach
+        //would be to simulate a eval stack, pushing instructions as they appear, and
+        //popping operands while "dropping" those that don't match or were interfered.
         var interfs = new BlockInterfs();
 
         foreach (var block in method) {
@@ -15,7 +18,7 @@ public class ForestAnalysis : IMethodAnalysis
 
             //Find statements
             foreach (var inst in block) {
-                if (MustBeRooted(inst, interfs)) {
+                if (!interfs.CanBeInlinedIntoUse(inst)) {
                     _trees.Add(inst);
                 }
             }
@@ -27,29 +30,24 @@ public class ForestAnalysis : IMethodAnalysis
         return new ForestAnalysis(mgr.Method);
     }
 
-    private static bool MustBeRooted(Instruction def, BlockInterfs interfs)
-    {
-        //Consider void or unused instructions on demand, to make the set smaller.
-        if (!def.HasResult || def.NumUses == 0 || CheapToRematerialize(def)) return false;
-
-        //Def must have one use in the same block, with no interferences in between def and use
-        if (def.NumUses >= 2 || def is PhiInst or GuardInst) return true;
-
-        var use = def.Users().First();
-        return use.Block != def.Block || interfs.IsDefInterferedBeforeUse(def, use);
-    }
-
-    private static bool CheapToRematerialize(Instruction inst)
-    {
-        return inst is VarAddrInst or ArrayLenInst;
-    }
-
     /// <summary> Returns whether the specified instruction is a the root of a tree/statement (i.e. must be emitted and/or assigned into a temp variable). </summary>
-    public bool IsTreeRoot(Instruction inst) 
-        => _trees.Contains(inst) || !inst.HasResult || (inst.NumUses == 0 && inst.HasSideEffects);
+    public bool IsTreeRoot(Instruction inst) => _trees.Contains(inst);
 
     /// <summary> Returns whether the specified instruction is a leaf or branch (i.e. can be inlined into an operand). </summary>
     public bool IsLeaf(Instruction inst) => !IsTreeRoot(inst);
+
+    private static bool IsAlwaysRooted(Instruction inst)
+    {
+        return !inst.HasResult || inst.NumUses is 0 or >= 2 ||
+                inst is PhiInst or GuardInst ||
+                inst.Users().First().Block != inst.Block;
+    }
+
+    private static bool IsAlwaysLeaf(Instruction inst)
+    {
+        //Cheaper to rematerialize
+        return inst is VarAddrInst or ArrayLenInst;
+    }
 
     class BlockInterfs
     {
@@ -82,10 +80,15 @@ public class ForestAnalysis : IMethodAnalysis
             }
         }
 
-        public bool IsDefInterferedBeforeUse(Instruction def, Instruction use)
+        public bool CanBeInlinedIntoUse(Instruction inst)
+        {
+            return IsAlwaysLeaf(inst) || (!IsAlwaysRooted(inst) && !IsDefInterferedBeforeUse(inst));
+        }
+
+        private bool IsDefInterferedBeforeUse(Instruction def)
         {
             int defIdx = _indices[def] + 1; //offset by one to ignore def when checking for interferences
-            int useIdx = _indices[use];
+            int useIdx = GetLastSafeUsePoint(def);
 
             if (def is LoadVarInst { Var: var var }) {
                 //If this variable is exposed, assume that any store can change its value
@@ -103,21 +106,43 @@ public class ForestAnalysis : IMethodAnalysis
             if (def is LoadArrayInst or LoadFieldInst or LoadPtrInst) {
                 return _memInterfs.ContainsRange(defIdx, useIdx);
             }
-            //Assume that instructions with side-effects can interfere with anything else
-            if (_sideEffects.ContainsRange(defIdx, useIdx)) {
-                foreach (var oper in def.Operands) {
-                    if (!IsInvariant(oper)) {
-                        return true;
-                    }
-                }
+            //Consider:
+            //  int r1 = call Foo() //may throw
+            //  int r2 = call Bar() //can't be inlined
+            //  int r3 = add r1, r2
+            //If we inlined r1 into r3, Bar() would be called before Foo().
+            if (_sideEffects.ContainsRange(defIdx, useIdx) && def.HasSideEffects) {
+                return true;
             }
             return false;
         }
 
-        private static bool IsInvariant(Value oper)
+        private int GetLastSafeUsePoint(Instruction def)
         {
-            //Instructions with more than two uses always have a invariant variable for its entire live range
-            return oper is Const or Argument or Instruction { NumUses: >= 2 };
+            //If `inst` operands are ordered in the same way as they are evaluated in an expression,
+            //we only need to check for side effects up to the next operand def.
+            //  int r1 = call A()
+            //  int r2 = call B()           //last safe point for r1 (if r2 can also be inlined)
+            //  int r3 = call C(r1, r2)
+            var (use, operIdx) = def.Uses().First();
+            int pos = _indices[use];
+
+            if (HasConsistentEvalOrder(use)) {
+                int minPos = _indices[def] + 1;
+
+                for (int i = operIdx + 1; i < use.Operands.Length; i++) {
+                    if (use.Operands[i] is Instruction oper && oper.Block == use.Block && _indices[oper] >= minPos) {
+                        return CanBeInlinedIntoUse(oper) ? _indices[oper] : pos;
+                    }
+                }
+            }
+            return pos;
+        }
+
+        //Returns whether the instruction operands are ordered in the same way as they would be pushed in the stack
+        private static bool HasConsistentEvalOrder(Instruction inst)
+        {
+            return inst is not IntrinsicInst or SwitchInst or VarAccessInst;
         }
     }
 }

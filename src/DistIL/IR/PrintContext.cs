@@ -16,19 +16,20 @@ public class PrintContext
         SymTable = symTable;
     }
 
-    public void Print(Value value) => value.Print(this);
-    public void PrintAsOperand(Value value) => value.PrintAsOperand(this);
+    public virtual void Print(Value value) => value.Print(this);
+    public virtual void PrintAsOperand(Value value) => value.PrintAsOperand(this);
 
     public virtual void Print(string str, PrintToner toner = default) => Output.Write(str);
 
     public void Print([InterpolatedStringHandlerArgument("")] InterpolationHandler handler) { }
     
-    public void PrintSequence<T>(string prefix, string postfix, IReadOnlyList<T> elems, Action<T> printElem)
+    public void PrintSequence<T>(string prefix, string postfix, IEnumerable<T> elems, Action<T> printElem)
     {
         Print(prefix);
-        for (int i = 0; i < elems.Count; i++) {
-            if (i > 0) Print(", ");
-            printElem(elems[i]);
+        int i = 0;
+        foreach (var elem in elems) {
+            if (i++ != 0) Print(", ");
+            printElem(elem);
         }
         Print(postfix);
     }
@@ -82,9 +83,9 @@ public class PrintContext
         public void AppendFormatted(Value value)
         {
             if (value is Instruction) {
-                value.PrintAsOperand(_ctx);
+                _ctx.PrintAsOperand(value);
             } else {
-                value.Print(_ctx);
+                _ctx.Print(value);
             }
             _nextToner = default;
         }

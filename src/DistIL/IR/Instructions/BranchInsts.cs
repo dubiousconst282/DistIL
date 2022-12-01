@@ -49,7 +49,7 @@ public class BranchInst : Instruction
         if (IsConditional) {
             ctx.Print($"{Cond} ? {Then} : {Else}");
         } else {
-            Then.PrintAsOperand(ctx);
+            ctx.PrintAsOperand(Then);
         }
     }
 }
@@ -136,7 +136,7 @@ public class SwitchInst : Instruction
         ctx.Push(", [");
 
         ctx.Print("_: ");
-        DefaultTarget.PrintAsOperand(ctx);
+        ctx.PrintAsOperand(DefaultTarget);
         
         for (int i = 0; i < NumTargets; i++) {
             ctx.PrintLine(",");

@@ -40,7 +40,7 @@ public class IntrinsicInst : Instruction
         ctx.Print($" {PrintToner.MemberName}{Intrinsic.Namespace}::{PrintToner.MethodName}{Intrinsic.Name}(");
         for (int i = 0; i < _operands.Length; i++) {
             if (i > 0) ctx.Print(", ");
-            _operands[i].PrintAsOperand(ctx);
+            ctx.PrintAsOperand(_operands[i]);
         }
         ctx.Print(")");
     }

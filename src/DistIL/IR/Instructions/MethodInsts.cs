@@ -47,11 +47,11 @@ public class CallInst : Instruction
             if (i == 0 && method.IsInstance && !isCtor) {
                 ctx.Print("this", PrintToner.Keyword);
             } else {
-                var paramType = method.ParamSig[i + (isCtor ? 1 : 0)].Type;
+                var paramType = method.ParamSig[i + (isCtor ? 1 : 0)];
                 paramType.Print(ctx);
             }
             ctx.Print(": ");
-            args[i].PrintAsOperand(ctx);
+            ctx.PrintAsOperand(args[i]);
         }
         ctx.Print(")");
         if (constraint != null) {

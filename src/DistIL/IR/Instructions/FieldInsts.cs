@@ -33,11 +33,11 @@ public abstract class FieldAccessInst : Instruction, AccessInst
     protected override void PrintOperands(PrintContext ctx)
     {
         ctx.Print(" ");
-        Field.PrintAsOperand(ctx);
+        ctx.PrintAsOperand(Field);
 
         foreach (var oper in _operands) {
             ctx.Print(", ");
-            oper.PrintAsOperand(ctx);
+            ctx.PrintAsOperand(oper);
         }
     }
 }

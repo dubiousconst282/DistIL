@@ -7,14 +7,19 @@ using DistIL.Analysis;
 
 public class IRPrinter
 {
+    /// <summary> Renders the method's CFG into a graphviz file. </summary>
+    /// <remarks>
+    /// Graphviz files can be rendered in several ways, one of them is through this VSCode extension: 
+    /// https://marketplace.visualstudio.com/items?itemName=tintinweb.graphviz-interactive-preview
+    /// </remarks>
     public static void ExportDot(MethodBody method, string filename)
     {
         using var tw = new StreamWriter(filename);
         ExportDot(method, tw);
     }
-    /// <summary> Renders the method's CFG into a dot to the specified TextWriter. </summary>
     public static void ExportDot(MethodBody method, TextWriter tw)
     {
+        //TODO: IGraphvizDecorator to allow analyses to draw custom elements
         var pc = new GraphvizPrintContext(tw, method.GetSymbolTable());
         bool hasGuards = false;
 
@@ -118,12 +123,31 @@ public class IRPrinter
         }
     }
 
+    public static void ExportForest(MethodBody method, string filename)
+    {
+        using var tw = new StreamWriter(filename);
+        var forest = new ForestAnalysis(method);
+        var pc = new ForestPrintContext(tw, method.GetSymbolTable(), forest);
+
+        foreach (var block in method) {
+            tw.Write($"{block}:");
+            pc.Push();
+
+            int i = 0;
+            foreach (var inst in block) {
+                if (!forest.IsTreeRoot(inst)) continue;
+
+                if (i++ > 0) pc.PrintLine();
+                pc.Print(inst);
+            }
+            pc.Pop();
+        }
+    }
+
     class GraphvizPrintContext : PrintContext
     {
-        public GraphvizPrintContext(TextWriter output, SymbolTable symTable) 
-            : base(output, symTable)
-        {
-        }
+        public GraphvizPrintContext(TextWriter output, SymbolTable symTable)
+            : base(output, symTable) { }
 
         public override void Print(string str, PrintToner toner = PrintToner.Default)
         {
@@ -170,9 +194,7 @@ public class IRPrinter
         const string Esc = "\x1B[";
 
         public VTAnsiPrintContext(TextWriter output, SymbolTable symTable)
-            : base(output, symTable)
-        {
-        }
+            : base(output, symTable) { }
 
         public override void Print(string str, PrintToner toner = PrintToner.Default)
         {
@@ -199,59 +221,25 @@ public class IRPrinter
         };
     }
 
-    public static void ExportForest(MethodBody method, string filename)
+    class ForestPrintContext : PrintContext
     {
-        using var tw = new StreamWriter(filename);
-        ExportForest(method, tw);
-    }
-    public static void ExportForest(MethodBody method, TextWriter tw)
-    {
-        var pc = new PrintContext(tw, method.GetSymbolTable());
-        var forest = new ForestAnalysis(method);
+        readonly ForestAnalysis _forest;
 
-        foreach (var block in method) {
-            tw.Write($"{block}:");
-            pc.Push();
-
-            int i = 0;
-            foreach (var inst in block) {
-                if (!forest.IsTreeRoot(inst)) continue;
-
-                if (i++ > 0) pc.PrintLine();
-
-                if (inst.HasResult) {
-                    inst.ResultType.Print(pc);
-                    pc.Print(" ");
-                    inst.PrintAsOperand(pc);
-                    pc.Print(" = ");
-                }
-                PrintExpr(inst, 0);
-            }
-            pc.Pop();
+        public ForestPrintContext(TextWriter output, SymbolTable symTable, ForestAnalysis forest)
+            : base(output, symTable)
+        {
+            _forest = forest;
         }
 
-        void PrintExpr(Value val, int depth)
+        public override void PrintAsOperand(Value value)
         {
-            if (val is Instruction inst) {
-                PrintExpr_I(inst, depth);
+            if (value is Instruction inst && _forest.IsLeaf(inst)) {
+                Print("(");
+                inst.PrintWithoutPrefix(this);
+                Print(")");
             } else {
-                val.PrintAsOperand(pc);
+                base.PrintAsOperand(value);
             }
-        }
-        void PrintExpr_I(Instruction inst, int depth)
-        {
-            if (depth > 0 && forest.IsTreeRoot(inst)) {
-                inst.PrintAsOperand(pc);
-                return;
-            }
-            if (depth > 0) pc.Print("(");
-            pc.Print(inst.InstName);
-            int operIdx = 0;
-            foreach (var oper in inst.Operands) {
-                pc.Print(operIdx++ > 0 ? ", " : " ");
-                PrintExpr(oper, depth + 1);
-            }
-            if (depth > 0) pc.Print(")");
         }
     }
 }

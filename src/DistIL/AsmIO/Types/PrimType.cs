@@ -33,14 +33,20 @@ public class PrimType : TypeDesc
 
     public override TypeKind Kind { get; }
     public override StackType StackType { get; }
-    public override TypeDesc? BaseType => null;
+    public override TypeDesc? BaseType => StackType switch {
+        < StackType.Object => ValueType,
+        StackType.Struct => this == ValueType ? Object : ValueType,
+        StackType.Object => this == Object ? null : Object
+    };
 
     public override string Namespace => "System";
     public override string Name { get; }
+    public string? Alias { get; }
 
     public override bool IsValueType => StackType != StackType.Object;
 
-    public string? Alias { get; }
+    public override IReadOnlyList<MethodDesc> Methods => throw new InvalidOperationException();
+    public override IReadOnlyList<FieldDesc> Fields => throw new InvalidOperationException();
 
     //Cached compound types
     private ArrayType? _arrayType;
@@ -63,9 +69,10 @@ public class PrimType : TypeDesc
     public static PrimType? GetFromAlias(string alias) => _fromName.GetValueOrDefault((alias, true));
 
     public static PrimType? GetFromDefinition(TypeDef def)
-        => def.Module == def.Module.Resolver.CoreLib && def.Namespace == "System"
-            ? _fromName.GetValueOrDefault((def.Name, false))
-            : null;
+        => IsSystemType(def) ? _fromName.GetValueOrDefault((def.Name, false)) : null;
+
+    private static bool IsSystemType(TypeDef type)
+        => type.Namespace == "System" && type.Module == type.Module.Resolver.CoreLib;
 
     internal static TypeDesc GetFromSrmCode(PrimitiveTypeCode typeCode)
     {
@@ -93,6 +100,7 @@ public class PrimType : TypeDesc
     }
 
     public TypeDef GetDefinition(ModuleResolver resolver) => resolver.SysTypes.GetPrimitiveDef(Kind);
+    public bool IsDefinition(TypeDef def) => def.Name == Name && IsSystemType(def);
 
     public override ArrayType CreateArray() => _arrayType ??= new(this);
     public override PointerType CreatePointer() => _ptrType ??= new(this);
@@ -108,5 +116,6 @@ public class PrimType : TypeDesc
     }
 
     public override bool Equals(TypeDesc? other)
-        => other is PrimType o && o.Kind == Kind;
+        => (other is PrimType o && o.Kind == Kind) ||
+           (other is TypeDef d && IsDefinition(d));
 }

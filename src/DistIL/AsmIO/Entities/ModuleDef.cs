@@ -65,6 +65,11 @@ public class ModuleDef : ModuleEntity
         new ModuleWriter(this).Emit(builder);
         builder.WriteContentTo(stream);
     }
+    public void Save(string filename)
+    {
+        using var stream = File.Create(filename);
+        Save(stream);
+    }
 
     public override string ToString()
         => AsmName.ToString();

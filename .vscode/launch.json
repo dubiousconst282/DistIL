@@ -5,25 +5,30 @@
             // Use IntelliSense to find out which attributes exist for C# debugging
             // Use hover for the description of the existing attributes
             // For further information visit https://github.com/OmniSharp/omnisharp-vscode/blob/master/debugger-launchjson.md
-            "name": ".NET Core Launch (console)",
+            "name": "Launch DistIL.Cli",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
             // If you have changed target frameworks, make sure to update the program path.
             "program": "${workspaceFolder}/src/DistIL.Cli/bin/Debug/DistIL.Cli.dll",
+            // Tip: run `git update-index --assume-unchanged .vscode/launch.json` to prevent
+            // this file from showing up on git changes.
             "args": [
-                "${workspaceFolder}/logs/TestSamples/CsSamples/bin/Debug/IRTests.dll",
-                "${workspaceFolder}/logs/WriterOut.dll",
-                "${workspaceFolder}/logs/dumps/",
-                ".+"
+                "-i", "TestSamples/CsSamples/bin/Debug/IRTests.dll",
+                "-o", "WriterOut.dll",
+                
+                "--dump-dir", "dumps/",
+                "--dump-fmts", "plaintext, graphviz",
+                "--purge-dumps",
+                "--filter", "Linq2_1"
             ],
-            "cwd": "${workspaceFolder}/src/DistIL.Cli/",
+            "cwd": "${workspaceFolder}/logs/",
             // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
             "console": "internalConsole",
             "stopAtEntry": false
         },
         {
-            "name": ".NET Core Attach",
+            "name": "Attach",
             "type": "coreclr",
             "request": "attach"
         }

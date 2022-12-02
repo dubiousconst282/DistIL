@@ -54,7 +54,6 @@ public class ExpandLinq : MethodPass
             var declType = (method.DeclaringType as TypeSpec)?.Definition ?? method.DeclaringType;
 
             if (declType == t_IEnumerableOfT0.Definition || declType.Inherits(t_IEnumerableOfT0)) {
-                //FIXME: Consumed queries don't work with nested loops
                 return CreateQuery(call, pipe => new ConsumedQuery(call, pipe));
             }
         }

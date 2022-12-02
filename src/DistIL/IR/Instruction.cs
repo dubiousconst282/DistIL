@@ -111,6 +111,13 @@ public abstract class Instruction : TrackedValue
         }
     }
 
+    /// <summary> Returns a reference wrapper to the `index`-th operand. </summary>
+    public UseRef GetOperandRef(int index)
+    {
+        Ensure.IndexValid(index, _operands.Length);
+        return new() { Owner = this, Index = index };
+    }
+
     /// <summary> 
     /// Extends the operand array by `amount` and returns the index of the first new element. 
     /// Newly allocated elements are set to null, they should be initialized immediately after calling this,

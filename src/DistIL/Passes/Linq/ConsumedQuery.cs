@@ -29,15 +29,17 @@ internal class ConsumedQuery : LinqQuery
         ) {
             return false;
         }
-        var header = new IRBuilder(moveNextCall);
+        var prevHeader = moveNextCall.Block;
+        var header = new IRBuilder(prevHeader, moveNextCall.Prev);
+        prevHeader.Split(moveNextCall);
 
         var latch = NewBlock("NewLatch", insertAfter: oldLatchBlock);
-        oldLatchBlock.SetBranch(latch.Block);
+        oldLatchBlock.Last.ReplaceOperands(prevHeader, latch.Block); //old latch terminator could be a LeaveInst
 
-        var currIndex = header.CreatePhi(PrimType.Int32).SetName("currIdx");
+        var currIndex = prevHeader.InsertPhi(PrimType.Int32).SetName("currIdx");
         var nextIndex = latch.CreateAdd(currIndex, ConstInt.CreateI(1));
         currIndex.AddArg((preHeaderBlock, ConstInt.CreateI(0)), (latch.Block, nextIndex));
-        latch.SetBranch(moveNextCall.Block);
+        latch.SetBranch(prevHeader);
 
         Pipeline.EmitHead(new IRBuilder(preHeaderBlock));
 

@@ -23,30 +23,11 @@ public class ExpandLinq : MethodPass
             }
         }
 
-        //Overlapping queries must be expanded in a specific order, because the SubjectCall instruction of
-        //a query source won't be updated after a dependency query is expanded.
-        //We could sort them based on the dominator tree order or just by traversing them using some sort of DFS.
-        //These queries seem to be quite rare, so we'll just give up for now. 
-        if (queries.Any(q1 => queries.Any(q2 => GetSource(q2).PhysicalSource == q1.SubjectCall))) {
-            return;
-        }
-
         foreach (var query in queries) {
             if (query.Emit()) {
-                Console.WriteLine($"ExpandLinq at {ctx.Method}");
+                Console.WriteLine($"ExpandLinq({queries.Count} {query is ConsumedQuery}) at {ctx.Method}");
                 ctx.InvalidateAll();
             }
-        }
-    }
-
-    private static LinqSourceNode GetSource(LinqQuery query)
-    {
-        var node = query.Pipeline;
-        while (true) {
-            if (node is LinqSourceNode src) {
-                return src;
-            }
-            node = node.Source!;
         }
     }
 
@@ -74,7 +55,7 @@ public class ExpandLinq : MethodPass
 
             if (declType == t_IEnumerableOfT0.Definition || declType.Inherits(t_IEnumerableOfT0)) {
                 //FIXME: Consumed queries don't work with nested loops
-                //return CreateQuery(call, pipe => new ConsumedQuery(call, pipe));
+                return CreateQuery(call, pipe => new ConsumedQuery(call, pipe));
             }
         }
         return null;
@@ -82,21 +63,26 @@ public class ExpandLinq : MethodPass
 
     private LinqQuery? CreateQuery(CallInst call, Func<LinqStageNode, LinqQuery> factory, bool profitableIfEnumerator = false)
     {
-        var pipe = CreateStage(call.Args[0]);
+        var pipe = CreateStage(call.GetOperandRef(0));
         if (pipe is EnumeratorSource && !profitableIfEnumerator) {
             return null;
         }
         return factory(pipe);
     }
 
-    private LinqStageNode CreateStage(Value source)
+    //UseRefs allows for overlapping queries to be expanded with no specific order.
+    private LinqStageNode CreateStage(UseRef sourceRef)
     {
+        var source = sourceRef.Operand;
+
         if (source is CallInst call && call.Method.DeclaringType == t_Enumerable) {
+            var innerSrc = call.GetOperandRef(0);
+
             var stage = call.Method.Name switch {
-                "Select"    => new SelectStage(call,    CreateStage(call.Args[0])),
-                "Where"     => new WhereStage(call,     CreateStage(call.Args[0])),
-                "OfType"    => new OfTypeStage(call,    CreateStage(call.Args[0])),
-                "Cast"      => new CastStage(call,      CreateStage(call.Args[0])),
+                "Select"    => new SelectStage(call,    CreateStage(innerSrc)),
+                "Where"     => new WhereStage(call,     CreateStage(innerSrc)),
+                "OfType"    => new OfTypeStage(call,    CreateStage(innerSrc)),
+                "Cast"      => new CastStage(call,      CreateStage(innerSrc)),
                 _ => default(LinqStageNode)
             };
             if (stage != null) {
@@ -104,11 +90,11 @@ public class ExpandLinq : MethodPass
             }
         }
         if (source.ResultType is ArrayType) {
-            return new ArraySource(source);
+            return new ArraySource(sourceRef);
         }
         if (source.ResultType is TypeSpec spec && spec.Definition.Inherits(t_IListOfT0)) {
-            return new ListSource(source);
+            return new ListSource(sourceRef);
         }
-        return new EnumeratorSource(source);
+        return new EnumeratorSource(sourceRef);
     }
 }

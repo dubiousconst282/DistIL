@@ -140,20 +140,23 @@ public struct ValueUseIterator : Iterator<(Instruction Inst, int OperIdx)>
     }
 }
 
-internal struct UseRef
+/// <summary> Represents a reference to an instruction operand. </summary>
+public struct UseRef
 {
     public Instruction Owner;
     public int Index;
 
     public bool Exists => Owner != null;
 
-    public ref UseRef Prev => ref Def.Prev;
-    public ref UseRef Next => ref Def.Next;
+    internal ref UseRef Prev => ref Def.Prev;
+    internal ref UseRef Next => ref Def.Next;
 
-    public ref UseDef Def => ref Owner._useDefs[Index];
+    internal ref UseDef Def => ref Owner._useDefs[Index];
+
+    /// <remarks> Note: assigning to this ref may corrupt the value's use-chain. </remarks>
     public ref Value Operand => ref Owner._operands[Index];
 
-    public override string ToString() => Owner == null ? "<null>" : $"<{Owner}> at {Index}";
+    public override string ToString() => Owner == null ? "null" : $"<{Owner}> at {Index}";
 }
 internal struct UseDef
 {

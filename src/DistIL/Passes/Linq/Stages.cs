@@ -50,7 +50,7 @@ internal class OfTypeStage : LinqStageNode
         var currItem = Source!.EmitCurrent(builder, currIndex, skipBlock);
 
         if (currItem.ResultType.IsValueType) {
-            currItem = builder.CreateIntrinsic(CilIntrinsic.Box, currItem);
+            currItem = builder.CreateIntrinsic(CilIntrinsic.Box, currItem.ResultType, currItem);
         }
         var castItem = builder.CreateIntrinsic(CilIntrinsic.AsInstance, destType, currItem);
         builder.Fork(castItem, skipBlock);
@@ -75,7 +75,7 @@ internal class CastStage : LinqStageNode
         var currItem = Source!.EmitCurrent(builder, currIndex, skipBlock);
 
         if (currItem.ResultType.IsValueType) {
-            currItem = builder.CreateIntrinsic(CilIntrinsic.Box, currItem);
+            currItem = builder.CreateIntrinsic(CilIntrinsic.Box, currItem.ResultType, currItem);
         }
         return builder.CreateIntrinsic(CilIntrinsic.CastClass, destType, currItem);
     }

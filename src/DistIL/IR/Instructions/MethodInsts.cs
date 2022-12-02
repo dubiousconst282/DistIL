@@ -3,7 +3,7 @@ namespace DistIL.IR;
 public class CallInst : Instruction
 {
     public MethodDesc Method { get; set; }
-    public ReadOnlySpan<Value> Args => _operands;
+    public ReadOnlySpan<Value> Args => _operands; //TODO: get rid of this, use Operands directly.
 
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     public int NumArgs => _operands.Length;

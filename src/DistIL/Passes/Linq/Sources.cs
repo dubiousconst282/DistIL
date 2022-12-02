@@ -5,7 +5,9 @@ using DistIL.IR.Utils;
 
 internal class ArraySource : LinqSourceNode
 {
-    public ArraySource(Value array)
+    public Value Array => PhysicalSource.Operand;
+
+    public ArraySource(UseRef array)
         : base(physicalSource: array) { }
 
     public override Value EmitMoveNext(IRBuilder builder, Value currIndex)
@@ -16,18 +18,19 @@ internal class ArraySource : LinqSourceNode
     public override Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock)
     {
         //array[lq_index]
-        return builder.CreateArrayLoad(PhysicalSource, currIndex);
+        return builder.CreateArrayLoad(Array, currIndex);
     }
     public override Value EmitSourceCount(IRBuilder builder)
     {
-        return builder.CreateConvert(builder.CreateArrayLen(PhysicalSource), PrimType.Int32);
+        return builder.CreateConvert(builder.CreateArrayLen(Array), PrimType.Int32);
     }
 }
 internal class ListSource : LinqSourceNode
 {
-    public TypeDefOrSpec Type => (TypeDefOrSpec)PhysicalSource.ResultType;
+    public Value List => PhysicalSource.Operand;
+    public TypeDefOrSpec Type => (TypeDefOrSpec)List.ResultType;
 
-    public ListSource(Value list)
+    public ListSource(UseRef list)
         : base(physicalSource: list) { }
 
     public override Value EmitMoveNext(IRBuilder builder, Value currIndex)
@@ -39,12 +42,12 @@ internal class ListSource : LinqSourceNode
     {
         //list[lq_index]
         var getter = Type.FindMethod("get_Item", new MethodSig(Type.GenericParams[0], new TypeSig[] { PrimType.Int32 }));
-        return builder.CreateCallVirt(getter, PhysicalSource, currIndex);
+        return builder.CreateCallVirt(getter, List, currIndex);
     }
     public override Value EmitSourceCount(IRBuilder builder)
     {
         var getter = Type.FindMethod("get_Count");
-        return builder.CreateCallVirt(getter, PhysicalSource);
+        return builder.CreateCallVirt(getter, List);
     }
 }
 internal class EnumeratorSource : LinqSourceNode
@@ -52,7 +55,7 @@ internal class EnumeratorSource : LinqSourceNode
     private Value? _enumerator;
     private TypeDesc? _enumeratorType;
 
-    public EnumeratorSource(Value enumerable)
+    public EnumeratorSource(UseRef enumerable)
         : base(physicalSource: enumerable) { }
 
     public override Value EmitMoveNext(IRBuilder builder, Value currIndex)
@@ -67,7 +70,7 @@ internal class EnumeratorSource : LinqSourceNode
     }
     public override void EmitHead(IRBuilder builder)
     {
-        var source = PhysicalSource;
+        var source = PhysicalSource.Operand;
         var sourceType = source.ResultType;
 
         //This can still potentially change behavior (if the box is used somewhere else and GetEnumerator() mutates),

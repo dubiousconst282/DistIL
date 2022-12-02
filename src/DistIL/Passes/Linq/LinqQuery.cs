@@ -54,9 +54,9 @@ internal abstract class LinqStageNode
 }
 internal abstract class LinqSourceNode : LinqStageNode
 {
-    public Value PhysicalSource { get; }
+    public UseRef PhysicalSource { get; }
 
-    protected LinqSourceNode(Value physicalSource, CallInst? subjectCall = null)
+    protected LinqSourceNode(UseRef physicalSource, CallInst? subjectCall = null)
         : base(subjectCall, null)
     {
         PhysicalSource = physicalSource;

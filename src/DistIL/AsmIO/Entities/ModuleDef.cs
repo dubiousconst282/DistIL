@@ -74,6 +74,7 @@ public class ModuleDef : ModuleEntity
     public override string ToString()
         => AsmName.ToString();
 
+    //TODO: This is slow and overly complicated, switch over to a plain Dictionary.
     internal void SortTypes()
     {
         _typeDefs.Sort(CompareTypeName);

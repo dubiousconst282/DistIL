@@ -25,8 +25,12 @@ public class ModulePassManager
 
     public void Run(ModuleDef module)
     {
+        var callGraph = new CallGraph(module);
+        var definedMethods = new List<MethodDef>(callGraph.NumMethods);
+        callGraph.Traverse(postVisit: definedMethods.Add);
+
         foreach (var pass in Pipeline) {
-            pass.Run(new ModuleTransformContext(module));
+            pass.Run(new ModuleTransformContext(module, definedMethods));
         }
     }
 }
@@ -42,7 +46,7 @@ public class MethodPassManager : ModulePass
 
     public override void Run(ModuleTransformContext ctx)
     {
-        foreach (var method in ctx.Module.AllMethods()) {
+        foreach (var method in ctx.DefinedMethods) {
             if (method.Body == null) continue;
 
             var methodCtx = new MethodTransformContext(method.Body);
@@ -59,7 +63,7 @@ public class MethodTransformContext : IMethodAnalysisManager
     public MethodDef Definition => Method.Definition;
     public ModuleDef Module => Method.Definition.Module;
     
-    private Dictionary<Type, (IMethodAnalysis Analysis, bool Valid)> _analyses = new();
+    readonly Dictionary<Type, (IMethodAnalysis Analysis, bool Valid)> _analyses = new();
 
     public MethodTransformContext(MethodBody method)
     {
@@ -68,23 +72,15 @@ public class MethodTransformContext : IMethodAnalysisManager
 
     public A GetAnalysis<A>(bool preserve = false) where A : IMethodAnalysis
     {
+        if (!preserve && !_analyses.ContainsKey(typeof(A))) {
+            return (A)A.Create(this);
+        }
         ref var info = ref _analyses.GetOrAddRef(typeof(A));
         if (info.Analysis == null || !info.Valid) {
             info.Analysis = A.Create(this);
         }
         info.Valid = preserve;
         return (A)info.Analysis;
-    }
-    public void Preserve<A>() where A : IMethodAnalysis
-    {
-        ref var info = ref _analyses.GetOrAddRef(typeof(A));
-        info.Valid = true;
-    }
-    public void PreserveAll()
-    {
-        foreach (var key in _analyses.Keys) {
-            _analyses.GetOrAddRef(key).Valid = true;
-        }
     }
     public void InvalidateAll()
     {
@@ -94,9 +90,12 @@ public class MethodTransformContext : IMethodAnalysisManager
 public class ModuleTransformContext
 {
     public ModuleDef Module { get; }
+    /// <summary> Methods defined in the module, in topological call order. </summary>
+    public IReadOnlyCollection<MethodDef> DefinedMethods { get; }
 
-    public ModuleTransformContext(ModuleDef module)
+    public ModuleTransformContext(ModuleDef module, IReadOnlyCollection<MethodDef> definedMethods)
     {
         Module = module;
+        DefinedMethods = definedMethods;
     }
 }

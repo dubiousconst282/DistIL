@@ -229,8 +229,8 @@ class ImportPass : ModulePass
 
     public override void Run(ModuleTransformContext ctx)
     {
-        foreach (var method in ctx.Module.AllMethods()) {
-            if (method.ILBody == null || (Filter != null && !Filter.Invoke(method))) continue;
+        foreach (var method in ctx.DefinedMethods) {
+            if (Filter != null && !Filter.Invoke(method)) continue;
 
             try {
                 method.Body = ILImporter.ImportCode(method);
@@ -244,7 +244,7 @@ class ExportPass : ModulePass
 {
     public override void Run(ModuleTransformContext ctx)
     {
-        foreach (var method in ctx.Module.AllMethods()) {
+        foreach (var method in ctx.DefinedMethods) {
             if (method.Body == null) continue;
 
             try {

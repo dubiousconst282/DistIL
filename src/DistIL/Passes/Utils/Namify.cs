@@ -6,7 +6,6 @@ public class NamifyIR : MethodPass
     public override void Run(MethodTransformContext ctx)
     {
         Run(ctx.Method);
-        ctx.PreserveAll();
     }
 
     public static void Run(MethodBody body)
@@ -43,20 +42,12 @@ public class NamifyIR : MethodPass
     }
     private static string GetBaseName(Instruction inst)
     {
-        if (inst is CompareInst cmp) return $"{cmp.Op.ToString().ToLower()}";
-        if (inst is BinaryInst bin) {
-            if (bin.Right is ConstInt { Value: 1 } && bin.Op is BinaryOp.Add or BinaryOp.Sub) {
-                return bin.Op == BinaryOp.Add ? "inc" : "dec";
-            }
-            return bin.Op.ToString().ToLower();
-        }
         if (inst is CallInst call) {
-            return call.Method.Name;
+            return "c_" + call.Method.Name;
         }
         if (inst is LoadFieldInst fld) {
-            return fld.Field.Name;
+            return "ldf_" + fld.Field.Name;
         }
-        if (inst is PhiInst) return "phi";
         return "i";
     }
 }

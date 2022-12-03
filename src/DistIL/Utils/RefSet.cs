@@ -1,12 +1,13 @@
 namespace DistIL.Util;
 
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 /// <summary> Implements a compact unordered set of object references. </summary>
 /// <remarks> Enumerators will be invalidated and throw after mutations (adds/removes). </remarks>
 public class RefSet<T> where T : class
 {
-    T?[] _slots = new T[16];
+    T?[] _slots;
     int _count;
     //Used to invalidate the enumerator when the set is changed.
     //Add()/Remove() will set it to true, and GetEnumerator() to false.
@@ -15,10 +16,18 @@ public class RefSet<T> where T : class
 
     public int Count => _count;
 
-    //JIT can't inline static interface methods atm, so that's why we're doing it this way.
+    public RefSet()
+    {
+        _slots = new T[8];
+    }
+    public RefSet(int initialCapacity)
+    {
+        //The initial capacity cannot be less than the load factor
+        _slots = new T[Math.Max(4, BitOperations.RoundUpToPowerOf2((uint)initialCapacity))];
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int Hash(T obj)
-        => RuntimeHelpers.GetHashCode(obj);
+    private static int Hash(T obj) => RuntimeHelpers.GetHashCode(obj);
 
     public bool Add(T value)
     {
@@ -127,7 +136,7 @@ public class RefSet<T> where T : class
         }
     }
 
-    public Enumerator GetEnumerator() => new(this);
+    public Iterator GetEnumerator() => new(this);
 
     public override string ToString()
     {
@@ -145,7 +154,7 @@ public class RefSet<T> where T : class
         return sb.Append("]").ToString();
     }
 
-    public struct Enumerator : Iterator<T>
+    public struct Iterator : Iterator<T>
     {
         T?[] _slots;
         int _index;
@@ -153,7 +162,7 @@ public class RefSet<T> where T : class
 
         public T Current { get; private set; } = null!;
 
-        internal Enumerator(RefSet<T> owner) 
+        internal Iterator(RefSet<T> owner) 
             => (_slots, _owner, owner._changed) = (owner._slots, owner, false);
 
         public bool MoveNext()

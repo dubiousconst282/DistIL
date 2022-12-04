@@ -10,6 +10,7 @@ using DistIL.CodeGen.Cil;
 using DistIL.Frontend;
 using DistIL.IR.Utils;
 using DistIL.Passes;
+using DistIL.Util;
 
 var parser = new CommandLine.Parser(c => {
     c.CaseInsensitiveEnumValues = true;
@@ -58,11 +59,9 @@ static void RunOptimizer(OptimizerOptions options)
         });
     }
 
-    var mp3 = new MethodPassManager();
-    mp3.Add(new RemovePhis());
 
     var pm = new ModulePassManager();
-    pm.Add(new ImportPass() { Filter = options.GetCompiledFilter(true) });
+    pm.Add(new ImportPass() { Filter = options.GetCompiledFilter(true), BisectFilter = options.BisectFilter });
     pm.Add(mp1);
     pm.Add(mp2);
     pm.Add(mp3);
@@ -125,6 +124,9 @@ class OptimizerOptions
 
     [Option("filter", HelpText = kFilterHelp)]
     public string? MethodFilter { get; set; }
+
+    [Option("bisect", HelpText = "Binary searches for methods with bad codegen using a string composed by `g`ood and `b`ad characters.")]
+    public string? BisectFilter { get; set; }
 
     const string kFilterHelp = """
         Filters methods to optimize or dump using a wildcard pattern: 
@@ -190,7 +192,7 @@ class DumpPass : MethodPass
 
     public override void Run(MethodTransformContext ctx)
     {
-        if (Filter == null || Filter(ctx.Method.Definition)) {
+        if (Filter == null || Filter.Invoke(ctx.Method.Definition)) {
             var def = ctx.Method.Definition;
             string name = $"{def.DeclaringType.Name}::{def.Name}";
 
@@ -226,11 +228,29 @@ enum DumpFormats
 class ImportPass : ModulePass
 {
     public Predicate<MethodDef>? Filter { get; init; }
+    public string? BisectFilter { get; init; }
 
     public override void Run(ModuleTransformContext ctx)
     {
+        int index = 0;
+        var bisectRange = default(AbsRange);
+
+        if (BisectFilter != null) {
+            bisectRange = GetBisectRange(ctx.DefinedMethods.Count, BisectFilter);
+            File.Delete("bisect_log.txt");
+            Console.WriteLine($"Bisecting methods [{bisectRange}], ~{(int)Math.Log2(bisectRange.Length):0} steps left.");
+        }
+
         foreach (var method in ctx.DefinedMethods) {
+            index++;
+
             if (Filter != null && !Filter.Invoke(method)) continue;
+
+            if (!bisectRange.IsEmpty) {
+                if (!bisectRange.Contains(index)) continue;
+
+                File.AppendAllText("bisect_log.txt", $"{index} {method}\n");
+            }
 
             try {
                 method.Body = ILImporter.ImportCode(method);
@@ -238,6 +258,22 @@ class ImportPass : ModulePass
                 Console.WriteLine($"FailImp: {method} {ex.Message}");
             }
         }
+    }
+
+    private static AbsRange GetBisectRange(int count, string filter)
+    {
+        int start = 0, end = count;
+
+        for (int i = 0; i <= filter.Length; i++) {
+            int mid = (start + end) >>> 1;
+
+            if (i == filter.Length || char.ToUpper(filter[i]) == 'B') {
+                end = mid;
+            } else {
+                start = mid;
+            }
+        }
+        return (start, end);
     }
 }
 class ExportPass : ModulePass

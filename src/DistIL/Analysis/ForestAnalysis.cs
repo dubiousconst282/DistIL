@@ -101,8 +101,8 @@ public class ForestAnalysis : IMethodAnalysis
                 }
                 return false;
             }
-            //Like exposed variables, these can be aliased globally and requires
-            //something like alias analysis for precise results, which we don't have yet.
+            //Like exposed variables, these can be aliased globally and we need
+            //something like alias analysis for precise results.
             if (def is LoadArrayInst or LoadFieldInst or LoadPtrInst) {
                 return _memInterfs.ContainsRange(defIdx, useIdx);
             }
@@ -111,7 +111,7 @@ public class ForestAnalysis : IMethodAnalysis
             //  int r2 = call Bar() //can't be inlined
             //  int r3 = add r1, r2
             //If we inlined r1 into r3, Bar() would be called before Foo().
-            if (_sideEffects.ContainsRange(defIdx, useIdx) && def.HasSideEffects) {
+            if (_sideEffects.ContainsRange(defIdx, useIdx)) {
                 return true;
             }
             return false;

@@ -71,7 +71,7 @@ public class RemovePhis : MethodPass
                 //Create copies for each phi argument
                 for (int i = 0; i < phi.NumArgs; i++) {
                     var (pred, val) = phi.GetArg(i);
-                    var copy = CreateCopy(val, pred.Last, true);
+                    var copy = CreateCopy(val, GetLastInst(pred), true);
                     phi.SetValue(i, copy);
                 }
                 //Create copy for the phi and replace uses with it
@@ -196,7 +196,7 @@ public class RemovePhis : MethodPass
                 copy.ReplaceWith(dstSlot);
             }
             if (copiesToSeq.Count > 0) {
-                Sequentialize(copiesToSeq.AsSpan(), atEnd ? block.Last : block.First);
+                Sequentialize(copiesToSeq.AsSpan(), atEnd ? GetLastInst(block) : block.First);
                 copiesToSeq.Clear();
             }
         }
@@ -234,6 +234,15 @@ public class RemovePhis : MethodPass
             }
         }
         return type ?? PrimType.Object;
+    }
+
+    private static Instruction GetLastInst(BasicBlock block)
+    {
+        var inst = block.Last;
+        if (inst.Prev is CompareInst { NumUses: 1 } cmp && cmp.Users().First() == inst) {
+            return cmp;
+        }
+        return inst;
     }
 
     private bool MergeIfNotIntersecting(MergeNode[] listA, MergeNode[] listB)

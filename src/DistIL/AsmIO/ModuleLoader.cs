@@ -240,14 +240,14 @@ internal class ModuleLoader
         };
         readonly MetadataReader _reader;
         readonly Entity[] _entities; //entities laid out linearly
-        readonly (int Start, int End)[] _ranges; //inclusive range in _entities for each TableIndex
+        readonly AbsRange[] _ranges; //inclusive range in _entities for each TableIndex
         int _index; //current index in _entities for Create()
 
         public EntityList(MetadataReader reader)
         {
             _reader = reader;
             _entities = new Entity[s_Tables.Sum(reader.GetTableRowCount)];
-            _ranges = new (int, int)[s_Tables.Max(v => (int)v) + 1];
+            _ranges = new AbsRange[s_Tables.Max(v => (int)v) + 1];
         }
 
         public void Create<TInfo>(Func<TInfo, Entity> factory)

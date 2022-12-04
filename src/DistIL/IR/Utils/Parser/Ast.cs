@@ -2,10 +2,10 @@ namespace DistIL.IR.Utils.Parser;
 
 internal record Node
 {
-    public (int Start, int End) Location = (-1, -1);
+    public AbsRange Location = default;
 
-    //Stuff to ignore Location field
-    public override int GetHashCode() => base.GetHashCode();
+    //Stuff to exclude Location field
+    public override int GetHashCode() => 0;
     public virtual bool Equals(Node? other) => other is not null;
     protected virtual bool PrintMembers(StringBuilder sb) => false;
 }

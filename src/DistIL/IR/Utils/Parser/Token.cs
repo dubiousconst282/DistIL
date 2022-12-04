@@ -4,7 +4,7 @@ internal struct Token
 {
     public TokenType Type { get; }
     public object? Value { get; }
-    public (int Start, int End) Position { get; }
+    public AbsRange Position { get; }
 
     public string StrValue => Value as string ?? throw new InvalidOperationException();
 

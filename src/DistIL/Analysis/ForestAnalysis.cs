@@ -139,10 +139,10 @@ public class ForestAnalysis : IMethodAnalysis
             return pos;
         }
 
-        //Returns whether the instruction operands are ordered in the same way as they would be pushed in the stack
+        //Returns whether the instruction operands are ordered in the same way as they would be pushed on the stack
         private static bool HasConsistentEvalOrder(Instruction inst)
         {
-            return inst is not IntrinsicInst or SwitchInst or VarAccessInst;
+            return inst is not (IntrinsicInst or SwitchInst or VarAccessInst);
         }
     }
 }

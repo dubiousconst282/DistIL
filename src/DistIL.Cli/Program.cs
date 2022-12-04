@@ -46,6 +46,9 @@ static void RunOptimizer(OptimizerOptions options)
     mp2.Add(new SimplifyCFG());
     //mp2.Add(new ValueNumbering());
 
+    var mp3 = new MethodPassManager();
+    mp3.Add(new RemovePhis());
+
     if (options.DumpDir != null) {
         if (options.PurgeDumps && Directory.Exists(options.DumpDir)) {
             Directory.Delete(options.DumpDir, true);
@@ -59,9 +62,11 @@ static void RunOptimizer(OptimizerOptions options)
         });
     }
 
-
     var pm = new ModulePassManager();
-    pm.Add(new ImportPass() { Filter = options.GetCompiledFilter(true), BisectFilter = options.BisectFilter });
+    pm.Add(new ImportPass() {
+        Filter = options.GetCompiledFilter(true),
+        BisectFilter = options.BisectFilter
+    });
     pm.Add(mp1);
     pm.Add(mp2);
     pm.Add(mp3);

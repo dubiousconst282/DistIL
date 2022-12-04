@@ -46,7 +46,7 @@ public class LayoutedCFG
         var regionAnalysis = new ProtectedRegionAnalysis(method);
         LayoutRegion(regionAnalysis.Root);
 
-        (int Start, int End) LayoutRegion(ProtectedRegion node)
+        AbsRange LayoutRegion(ProtectedRegion node)
         {
             int startIdx = blockIdx;
             var regionBlockIndices = new BitSet();
@@ -101,7 +101,7 @@ public class LayoutedCFG
         var sb = new StringBuilder();
         sb.AppendJoin(" ", Blocks.AsEnumerable());
         foreach (ref var region in Regions.AsSpan()) {
-            string PrintRange((int s, int e) r) => $"{Blocks[r.s]}..{Blocks[r.e - 1]}";
+            string PrintRange(AbsRange r) => $"{Blocks[r.Start]}..{Blocks[r.End - 1]}";
 
             sb.Append($"\nTry={PrintRange(region.TryRange)} Handler={PrintRange(region.HandlerRange)} for `{region.Guard}`");
         }
@@ -111,9 +111,9 @@ public class LayoutedCFG
 public struct LayoutedRegion
 {
     public GuardInst Guard;
-    public (int Start, int End) TryRange, HandlerRange, FilterRange;
+    public AbsRange TryRange, HandlerRange, FilterRange;
 
-    internal void UpdateRanges(BasicBlock entryBlock, (int start, int end) range)
+    internal void UpdateRanges(BasicBlock entryBlock, AbsRange range)
     {
         if (entryBlock == Guard.HandlerBlock) {
             HandlerRange = range;

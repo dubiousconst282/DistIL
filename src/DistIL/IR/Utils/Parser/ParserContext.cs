@@ -43,7 +43,7 @@ public struct ParseError
 {
     public string SourceCode { get; }
     public string Message { get; }
-    public (int Start, int End) Position { get; }
+    public AbsRange Position { get; }
 
     public ParseError(string srcCode, string msg, int start, int end)
     {

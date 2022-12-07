@@ -1,11 +1,11 @@
 # DistIL
 Experimental optimizer and compiler IR for .NET CIL
 
-One of the primary targets is optimizations for well known libraries and usage patterns, most of which are simple to implement using pattern matching and in most cases don't require other analyses.  
-A notable example is Linq expansion/inlining, which is currently implemented in just a few hundred lines of code (not including method/lambda inlining), and is capable of producing seemingly complex outputs:
+One of the primary targets is optimizations for well known libraries and usage patterns, most of which are simple to implement using pattern matching and often don't require other analyses.  
+A notable example is Linq expansion/inlining, which is currently implemented in just a few hundred lines of code (not including method/lambda inlining), and is capable of producing seemingly complex results:
 
 <table>
-  <tr> <th>Original code</th> <th>Decompiled output (braces removed for brevity)</th> </tr>
+  <tr> <th>Original code</th> <th>Decompiled output (reformatted for brevity)</th> </tr>
   <tr>    
     <td>
       <pre lang="csharp">
@@ -32,7 +32,37 @@ List&lt;int> Linq2(List&lt;object> src) {
   </tr>
 </table>
 
-A few other analyses and transforms such as constant folding, method inlining, SSA construction and deconstruction are implemented as well. Other optimizations such as object stack allocation/SROA and general loop optimizations are also planned for the near future (or at least fantasized of).
+Another intriguing transform is an extension to value numbering, which is aware of state across calls to well known instance methods, and thus able to eliminate duplicate calls for some of them:
+
+<table>
+  <tr> <th>Original code</th> <th>Decompiled output</th> </tr>
+  <tr>    
+    <td>
+      <pre lang="csharp">
+string GetInfo(string key)
+  => GetName(key) + " #" + GetCode(key);
+//_things and _codes are Dictionary fields
+string GetName(string key)
+  => _things[key].Name.Substring(0, 8);
+int GetCode(string key)
+  => _codes[GetName(key)];
+      </pre>
+    </td>
+    <td>
+      <pre lang="csharp">
+public string GetInfo(string key) {
+    //After both Get() calls are inlined, VN will
+    //see and reuse the dictionary lookup calls:
+    string text = _things[key].Name.Substring(0, 8);
+    return text + " #" + _codes[text];
+}
+//...
+      </pre>
+    </td>
+  </tr>
+</table>
+
+A few other analyses and transforms such as constant folding, method inlining, SSA construction and deconstruction are implemented as well. More sophisticated optimizations such as object stack allocation/SROA and general loop optimizations are also planned for the near future (or at least fantasized of).
 
 DistIL is currently capable of sucessfully processing itself, and a few other libraries such as _ICSharpCode.Decompiler_ and _ImageSharp_, without observably breaking them.
 

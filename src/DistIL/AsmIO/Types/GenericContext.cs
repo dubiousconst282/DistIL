@@ -29,11 +29,22 @@ public readonly struct GenericContext
 
     public ImmutableArray<TypeDesc> FillParams(IReadOnlyCollection<TypeDesc> pars)
     {
+        TryFillParams(pars, out var args);
+        return args;
+    }
+    public bool TryFillParams(IReadOnlyCollection<TypeDesc> pars, out ImmutableArray<TypeDesc> args)
+    {
         var builder = ImmutableArray.CreateBuilder<TypeDesc>(pars.Count);
+        bool differs = false;
+
         foreach (var type in pars) {
-            builder.Add(type.GetSpec(this));
+            var newType = type.GetSpec(this);
+            builder.Add(newType);
+
+            differs |= !ReferenceEquals(type, newType);
         }
-        return builder.MoveToImmutable();
+        args = builder.MoveToImmutable();
+        return differs;
     }
 
     public TypeDesc? GetArgument(int index, bool isMethodParam)

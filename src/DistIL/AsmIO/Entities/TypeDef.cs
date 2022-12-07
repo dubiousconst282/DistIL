@@ -311,7 +311,9 @@ public class TypeSpec : TypeDefOrSpec
 
     public override TypeSpec GetSpec(GenericContext context)
     {
-        return new TypeSpec(Definition, context.FillParams(GenericParams));
+        return context.TryFillParams(GenericParams, out var genArgs)
+            ? new TypeSpec(Definition, genArgs)
+            : this;
     }
 
     public override void Print(PrintContext ctx, bool includeNs = false)

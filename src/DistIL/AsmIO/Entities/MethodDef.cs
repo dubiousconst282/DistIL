@@ -34,31 +34,6 @@ public abstract class MethodDesc : MemberDesc
 
     public abstract MethodDesc GetSpec(GenericContext ctx);
 }
-public class ParamDef
-{
-    public TypeSig Sig { get; set; }
-    public string Name { get; set; }
-    public ParameterAttributes Attribs { get; set; }
-    public object? DefaultValue { get; set; }
-    public byte[]? MarshallingDesc { get; set; }
-
-    public TypeDesc Type => Sig.Type;
-
-    internal IList<CustomAttrib>? _customAttribs;
-
-    public ParamDef(TypeSig sig, string name, ParameterAttributes attribs = default)
-    {
-        Sig = sig;
-        Name = name;
-        Attribs = attribs;
-    }
-
-    public IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
-        => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
-
-    public override string ToString() => Sig.ToString();
-}
-
 public abstract class MethodDefOrSpec : MethodDesc, ModuleEntity
 {
     /// <summary> Returns the parent definition if this is a MethodSpec, or the current instance if already a MethodDef. </summary>
@@ -112,7 +87,7 @@ public class MethodDef : MethodDefOrSpec
             "`this` parameter for generic type must be specialized with the default parameters");
     }
 
-    public override MethodDesc GetSpec(GenericContext ctx)
+    public override MethodDefOrSpec GetSpec(GenericContext ctx)
     {
         return IsGeneric || DeclaringType.IsGeneric
             ? new MethodSpec(DeclaringType.GetSpec(ctx), this, ctx.FillParams(GenericParams))
@@ -248,10 +223,39 @@ public class MethodSpec : MethodDefOrSpec
         return types;
     }
 
-    public override MethodDesc GetSpec(GenericContext ctx)
+    public override MethodSpec GetSpec(GenericContext ctx)
     {
-        return new MethodSpec(DeclaringType.GetSpec(ctx), Definition, ctx.FillParams(GenericParams));
+        var declType = DeclaringType.GetSpec(ctx);
+
+        return ctx.TryFillParams(GenericParams, out var genArgs) || declType != DeclaringType
+            ? new MethodSpec(declType, Definition, genArgs)
+            : this;
     }
+}
+
+public class ParamDef
+{
+    public TypeSig Sig { get; set; }
+    public string Name { get; set; }
+    public ParameterAttributes Attribs { get; set; }
+    public object? DefaultValue { get; set; }
+    public byte[]? MarshallingDesc { get; set; }
+
+    public TypeDesc Type => Sig.Type;
+
+    internal IList<CustomAttrib>? _customAttribs;
+
+    public ParamDef(TypeSig sig, string name, ParameterAttributes attribs = default)
+    {
+        Sig = sig;
+        Name = name;
+        Attribs = attribs;
+    }
+
+    public IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
+        => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
+
+    public override string ToString() => Sig.ToString();
 }
 
 public class ILMethodBody

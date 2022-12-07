@@ -15,6 +15,7 @@ public abstract class PtrAccessInst : Instruction, AccessInst
     public bool Volatile => (Flags & PointerFlags.Volatile) != 0;
 
     Value AccessInst.Location => Address;
+    TypeDesc AccessInst.LocationType => ElemType;
 
     protected PtrAccessInst(PointerFlags flags, params Value[] operands)
         : base(operands)

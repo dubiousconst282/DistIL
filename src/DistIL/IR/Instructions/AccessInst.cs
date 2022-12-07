@@ -4,6 +4,7 @@ namespace DistIL.IR;
 public interface AccessInst
 {
     Value Location { get; }
+    TypeDesc LocationType { get; }
 }
 /// <summary> Marker for an instruction that reads a variable, pointer, array, or field. </summary>
 public interface LoadInst : AccessInst
@@ -13,6 +14,7 @@ public interface LoadInst : AccessInst
 public interface StoreInst : AccessInst
 {
     Value Value { get; }
+    bool IsCoerced => MustBeCoerced(LocationType, Value);
 
     /// <summary>
     /// Creates a sequence of instructions that truncates or rounds the value to what it would have been after
@@ -21,23 +23,23 @@ public interface StoreInst : AccessInst
     /// </summary>
     public static Value Coerce(TypeDesc destType, Value val, Instruction insertBefore)
     {
-        if (!IsCoerced(destType, val)) {
+        if (!MustBeCoerced(destType, val)) {
             return val;
         }
         var conv = new ConvertInst(val, destType);
         conv.InsertBefore(insertBefore);
         return conv;
     }
-    public static bool IsCoerced(TypeDesc destType, Value srcValue)
+    public static bool MustBeCoerced(TypeDesc destType, Value srcValue)
     {
         var destKind = destType.Kind;
         if (destKind.IsSmallInt() && srcValue is ConstInt cons) {
             ulong mask = (1ul << destKind.BitSize()) - 1; //won't overflow as BitSize is <= 16
             return (cons.UValue & ~mask) != 0;
         }
-        return IsCoerced(destType, srcValue.ResultType);
+        return MustBeCoerced(destType, srcValue.ResultType);
     }
-    public static bool IsCoerced(TypeDesc destType, TypeDesc srcType)
+    public static bool MustBeCoerced(TypeDesc destType, TypeDesc srcType)
     {
         //III.1.6 Implicit argument coercion
 

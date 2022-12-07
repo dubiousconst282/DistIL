@@ -44,7 +44,7 @@ static void RunOptimizer(OptimizerOptions options)
     //mp2.Add(new LoopInvariantCodeMotion());
     mp2.Add(new DeadCodeElim());
     mp2.Add(new SimplifyCFG());
-    //mp2.Add(new ValueNumbering());
+    mp2.Add(new ValueNumbering());
 
     var mp3 = new MethodPassManager();
     mp3.Add(new RemovePhis());

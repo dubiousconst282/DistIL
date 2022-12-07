@@ -8,6 +8,7 @@ public abstract class VarAccessInst : Instruction, AccessInst
     }
 
     Value AccessInst.Location => Var;
+    TypeDesc AccessInst.LocationType => Var.ResultType;
 
     public VarAccessInst(TypeDesc resultType, params Value[] operands)
         : base(operands)
@@ -15,7 +16,7 @@ public abstract class VarAccessInst : Instruction, AccessInst
         ResultType = resultType;
     }
 }
-public class LoadVarInst : VarAccessInst
+public class LoadVarInst : VarAccessInst, LoadInst
 {
     public override string InstName => "ldvar";
 
@@ -34,8 +35,6 @@ public class StoreVarInst : VarAccessInst, StoreInst
     public override bool HasSideEffects => true;
     public override bool MayWriteToMemory => true;
     public override string InstName => "stvar";
-
-    public bool IsCoerced => StoreInst.IsCoerced(Var.ResultType, Value.ResultType);
 
     public StoreVarInst(Variable dest, Value value)
         : base(PrimType.Void, dest, value) {  }

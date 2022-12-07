@@ -19,6 +19,7 @@ public abstract class FieldAccessInst : Instruction, AccessInst
     public override bool MayThrow => IsInstance;
 
     Value AccessInst.Location => Field;
+    TypeDesc AccessInst.LocationType => Field.Type;
 
     protected FieldAccessInst(TypeDesc resultType, FieldDesc field, Value? obj)
         : this(resultType, field, obj == null ? Array.Empty<Value>() : new[] { obj }) { }

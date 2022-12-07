@@ -35,7 +35,7 @@ public abstract class ArrayAccessInst : Instruction, AccessInst
     public ArrayAccessFlags Flags { get; set; }
 
     Value AccessInst.Location => Array;
-    TypeDesc AccessInst.LocationType => ((ArrayType)Array.ResultType).ElemType;
+    TypeDesc AccessInst.LocationType => ElemType;
 
     protected ArrayAccessInst(ArrayAccessFlags flags, params Value[] operands)
         : base(operands)

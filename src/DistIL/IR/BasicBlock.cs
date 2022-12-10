@@ -76,14 +76,14 @@ public class BasicBlock : TrackedValue
     public void InsertAnteLast(Instruction newInst)
         => InsertRange(Last is { IsBranch: true } ? Last.Prev : Last, newInst, newInst);
 
-    /// <summary> Inserts a range of instructions into this block after pos (null means before the first instruction). </summary>
+    /// <summary> Inserts a range of instructions into this block after `pos` (null means before the first instruction). </summary>
     /// <param name="rangeFirst">The first instruction in the range.</param>
-    /// <param name="rangeLast">The last instruction in the range, or `first` if only one instruction is to be added.</param>
-    public void InsertRange(Instruction? pos, Instruction rangeFirst, Instruction rangeLast)
+    /// <param name="rangeLast">The last instruction in the range, or `rangeFirst` if only one instruction is to be added.</param>
+    internal void InsertRange(Instruction? pos, Instruction rangeFirst, Instruction rangeLast, bool transfering = false)
     {
         //Set parent block for range
         for (var inst = rangeFirst; true; inst = inst.Next!) {
-            Ensure.That(inst.Block != this); //prevent creating cycles
+            Ensure.That(inst.Block == null || transfering);
             inst.Block = this;
             if (inst == rangeLast) break;
         }
@@ -117,7 +117,7 @@ public class BasicBlock : TrackedValue
         Ensure.That(first.Block == this && last.Block == this);
 
         UnlinkRange(first, last);
-        newParent.InsertRange(newParentPos, first, last);
+        newParent.InsertRange(newParentPos, first, last, transfering: true);
     }
 
     public void Remove(Instruction inst)
@@ -169,39 +169,43 @@ public class BasicBlock : TrackedValue
         return newBlock;
     }
 
-    /// <summary> Insert intermediate blocks between critical predecessor edges. </summary>
-    public void SplitCriticalEdges()
+    /// <summary> 
+    /// Inserts an intermediate block between the edge (this -> succ), if it is critical.
+    /// Returns the new intermediate edge block, or `this` if the edge is not critical.
+    /// </summary>
+    public BasicBlock SplitCriticalEdge(BasicBlock succ)
     {
-        if (NumPreds < 2) return;
-
-        foreach (var pred in Preds) {
-            if (pred.NumSuccs < 2) continue;
-
-            var intermBlock = Method.CreateBlock(insertAfter: pred).SetName("CritEdge");
-            intermBlock.SetBranch(this);
-
-            //Redirect branches/phis to the intermediate block
-            pred.Last.ReplaceOperands(this, intermBlock);
-            foreach (var phi in Phis()) {
-                phi.ReplaceOperands(pred, intermBlock);
-            }
+        if (NumSuccs < 2 || succ.NumPreds < 2) {
+            return this;
         }
+        var intermBlock = Method.CreateBlock(insertAfter: succ.Prev).SetName("CritEdge");
+        intermBlock.SetBranch(succ);
+
+        //Redirect branches/phis to the intermediate block
+        Last.ReplaceOperands(succ, intermBlock);
+        succ.RedirectPhis(this, intermBlock);
+
+        return intermBlock;
     }
 
-    /// <summary> Replaces the incomming block of all phis in successor blocks from _this block_ with `newPred`. </summary>
-    public void RedirectSuccPhis(BasicBlock newPred)
+    /// <summary> Replaces the incomming block of all phis in successor blocks from this block to `newPred`. </summary>
+    public void RedirectSuccPhis(BasicBlock? newPred, bool removeTrivialPhis = true)
     {
         foreach (var succ in Succs) {
-            foreach (var phi in succ.Phis()) {
-                phi.ReplaceOperands(this, newPred);
-            }
+            succ.RedirectPhis(this, newPred, removeTrivialPhis);
         }
     }
 
-    public void RemovePredFromPhis(BasicBlock oldPred, bool removeTrivialPhis = true)
+    /// <summary> Replaces the incomming block of all phis in this block from `oldPred` to `newPred`. If `newPred` is null, `oldPred` is removed from the phi arguments. </summary>
+    /// <param name="removeTrivialPhis">Remove phis with a single argument.</param>
+    public void RedirectPhis(BasicBlock oldPred, BasicBlock? newPred, bool removeTrivialPhis = true)
     {
         foreach (var phi in Phis()) {
-            phi.RemoveArg(oldPred, removeTrivialPhis);
+            if (newPred != null) {
+                phi.ReplaceOperands(oldPred, newPred);
+            } else {
+                phi.RemoveArg(oldPred, removeTrivialPhis);
+            }
         }
     }
 

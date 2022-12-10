@@ -34,7 +34,7 @@ public class DeadCodeElim : MethodPass
                 if (block.Last is BranchInst { Cond: ConstInt { Value: var cond } } br) {
                     var (blockT, blockF) = cond != 0 ? (br.Then, br.Else!) : (br.Else!, br.Then);
                     
-                    blockF.RemovePredFromPhis(block);
+                    blockF.RedirectPhis(block, newPred: null);
                     block.SetBranch(blockT);
                 }
                 //Enqueue successors
@@ -49,7 +49,7 @@ public class DeadCodeElim : MethodPass
                 //Rewrite phis of reachable blocks
                 foreach (var succ in block.Succs) {
                     if (visitedBlocks.Contains(succ)) {
-                        succ.RemovePredFromPhis(block);
+                        succ.RedirectPhis(block, newPred: null);
                     }
                 }
                 block.Remove();

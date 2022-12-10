@@ -60,7 +60,7 @@ public class RemovePhis : MethodPass
             foreach (var phi in block.Phis()) {
                 foreach (var (pred, val) in phi) {
                     if (val is not Instruction) {
-                        pred.SplitCriticalEdges();
+                        pred.SplitCriticalEdge(block);
                     }
                 }
                 phiCopyInsPos = phi;

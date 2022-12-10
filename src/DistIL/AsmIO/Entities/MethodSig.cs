@@ -27,7 +27,11 @@ public readonly struct MethodSig
         ReturnType = retType;
         ParamTypes = paramTypes;
         NumGenericParams = numGenPars;
-        _header = new(SignatureKind.Method, default, isInstance == null ? kMaybeInstance : 0);
+        
+        var attrs = isInstance == null ? kMaybeInstance : 
+                    isInstance.Value ? SignatureAttributes.Instance : 
+                    0;
+        _header = new(SignatureKind.Method, default, attrs);
     }
 
     /// <remarks> Note that <paramref name="paramTypes"/> should not include the instance type (`this` parameter). </remarks>

@@ -5,7 +5,7 @@ internal partial class Materializer
 {
     readonly MethodBody _method;
     readonly SymbolTable _symTable;
-    readonly Dictionary<Node, Value> _cache = new();
+    readonly Dictionary<Node, Value> _cache = new(ReferenceEqualityComparer.Instance);
     readonly ParserContext _ctx;
 
     public Materializer(ParserContext ctx, MethodBody method)

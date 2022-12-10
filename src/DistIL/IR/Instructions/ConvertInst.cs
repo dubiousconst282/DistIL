@@ -26,10 +26,9 @@ public class ConvertInst : Instruction
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
-    public override void Print(PrintContext ctx)
+    protected override void PrintOperands(PrintContext ctx)
     {
-        base.Print(ctx);
-        ctx.Print(" -> ");
-        ResultType.Print(ctx);
+        base.PrintOperands(ctx);
+        ctx.Print($"{PrintToner.Comment} /* {Value.ResultType}{PrintToner.Comment} -> {ResultType}{PrintToner.Comment} */");
     }
 }

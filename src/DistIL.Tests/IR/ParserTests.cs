@@ -136,4 +136,53 @@ Block1:
         Assert.Equal("call", insts[1].Opcode);
         Assert.Equal(PrimType.Int32, insts[1].ResultType);
     }
+
+    [Fact]
+    public void Test_LexerScanning()
+    {
+        var code = """
+    Identifier : ->
+    //single line comment
+    /* multi line comment */
+    -55 12345 123UL -12L 3.14159 0.75f
+    "arbitrary string \" \n lorem ipsum"
+    Block1
+        Block2
+        Abc
+            Def
+    End
+    """;
+        var lexer = new Lexer(new ParserContext(code, _modResolver));
+
+        AssertNext(TokenType.Identifier, "Identifier");
+        AssertNext(TokenType.Colon);
+        AssertNext(TokenType.Arrow);
+        //Comment should have been skipped
+        AssertNext(TokenType.Literal, ConstInt.CreateI(-55));
+        AssertNext(TokenType.Literal, ConstInt.CreateI(12345));
+        AssertNext(TokenType.Literal, ConstInt.Create(PrimType.UInt64, 123));
+        AssertNext(TokenType.Literal, ConstInt.CreateL(-12));
+        AssertNext(TokenType.Literal, ConstFloat.CreateD(3.14159));
+        AssertNext(TokenType.Literal, ConstFloat.CreateS(0.75f));
+        AssertNext(TokenType.Literal, ConstString.Create("arbitrary string \" \n lorem ipsum"));
+
+        AssertNext(TokenType.Identifier, "Block1");
+        AssertNext(TokenType.Indent);
+        AssertNext(TokenType.Identifier, "Block2");
+        AssertNext(TokenType.Identifier, "Abc");
+        AssertNext(TokenType.Indent);
+        AssertNext(TokenType.Identifier, "Def");
+        AssertNext(TokenType.Dedent);
+        AssertNext(TokenType.Dedent);
+        AssertNext(TokenType.Identifier, "End");
+
+        AssertNext(TokenType.EOF);
+
+        void AssertNext(TokenType type, object? value = null)
+        {
+            var token = lexer.Next();
+            Assert.Equal(type, token.Type);
+            Assert.Equal(value, token.Value);
+        }
+    }
 }

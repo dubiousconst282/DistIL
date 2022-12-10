@@ -200,11 +200,11 @@ internal class Lexer
         return default;
     }
 
-    //[-] int [.fract] [E|e [+|-] exp] [UL|U|L|F|D]
-    static readonly Regex _numberRegex = new(@"-?\d+(\.\d+)?([Ee][+-]?\d+)?(UL|U|L|F|D)?", RegexOptions.IgnoreCase);
+    //[-] int [.fract] [E [+|-] exp] [UL|U|L|F|D]
+    static readonly Regex s_NumberRegex = new(@"(-?\d+(\.\d+(?:E[+-]?\d+)?)?)(UL|U|L|F|D)?", RegexOptions.IgnoreCase);
     private Value ParseNumber()
     {
-        var m = _numberRegex.Match(_str, _pos);
+        var m = s_NumberRegex.Match(_str, _pos);
         if (!m.Success) {
             Error("Malformed number");
             _pos++; //skip at least one char to prevent infinite loop
@@ -212,17 +212,18 @@ internal class Lexer
         }
         _pos += m.Length;
 
-        string postfix = m.Groups[3].Value;
+        var literal = m.Groups[1].ValueSpan;
+        var postfix = m.Groups[3].ValueSpan;
         bool F = postfix.EqualsIgnoreCase("F");
         bool D = postfix.EqualsIgnoreCase("D");
 
-        if (m.Groups[1].Success || m.Groups[2].Success || F || D) { //fraction or exponent
-            double r = double.Parse(m.ValueSpan, NumberStyles.Float, CultureInfo.InvariantCulture);
+        if (m.Groups[2].Success || F || D) { //fraction or exponent
+            double r = double.Parse(literal, NumberStyles.Float, CultureInfo.InvariantCulture);
 
             var type = F ? PrimType.Single : PrimType.Double;
             return ConstFloat.Create(type, r);
         } else {
-            long r = long.Parse(m.ValueSpan, NumberStyles.Integer, CultureInfo.InvariantCulture);
+            long r = long.Parse(literal, NumberStyles.Integer, CultureInfo.InvariantCulture);
 
             bool U = postfix.ContainsIgnoreCase("U");
             bool L = postfix.ContainsIgnoreCase("L");
@@ -284,13 +285,13 @@ internal class Lexer
 
     private bool SkipComment()
     {
-        var str = _str.AsSpan(_pos);
+        var str = _str.AsSpan(_pos); //first character was already consumed
         int len;
 
-        if (str.StartsWith("//")) {
-            len = str.IndexOf('\n') + 1;
-            if (len == 0) len = str.Length;
-        } else if (str.StartsWith("/*")) {
+        if (str[0] == '/') {
+            len = str.IndexOf('\n');
+            if (len < 0) len = str.Length;
+        } else if (str[0] == '*') {
             len = str.IndexOf("*/") + 2;
             if (len == 1) {
                 len = str.Length;

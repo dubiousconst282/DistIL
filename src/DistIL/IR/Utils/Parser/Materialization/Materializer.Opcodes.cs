@@ -2,12 +2,13 @@ namespace DistIL.IR.Utils.Parser;
 
 partial class Materializer
 {
-    public static bool IsValidOpcode(string opcode) => opcode is 
+    public static bool IsValidOpcode(string opcode) => opcode is
         "phi" or "goto" or "ret" or
         "call" or "callvirt" or "newobj" or
         "ldvar" or "stvar" or "varaddr" or
         "ldfld" or "stfld" or "fldaddr" or
-        "ldarr" or "starr" or "arraddr";
+        "ldarr" or "starr" or "arraddr" or "conv" ||
+        GetBinaryOp(opcode) != null || GetCompareOp(opcode) != null;
 
     public static bool OpcodeHasNoResult(string opcode) => opcode is
         "goto" or "ret" or
@@ -40,7 +41,9 @@ partial class Materializer
 
             ("arrlen", 1) => new ArrayLenInst(opers[0]),
             ("ldarr", 2) => new LoadArrayInst(opers[0], opers[1], resultType),
-            //("starr", 3) => new StoreArrayInst(opers[0], opers[1], opers[2], /* ?? */),
+            ("starr", 3) => new StoreArrayInst(opers[0], opers[1], opers[2], ((ArrayType)opers[0].ResultType).ElemType),
+
+            ("conv", 1) => new ConvertInst(opers[0], resultType),
 
             _ => null
         };

@@ -46,6 +46,12 @@ public class ArrayStack<T>
         return ref _arr[_head++];
     }
 
+    /// <summary> Pushes an element at the back of the stack, assuming it will be filled up to exactly the current capacity. </summary>
+    public void HackyFixedUnshift(T value)
+    {
+        _arr[^(++_head)] = value;
+    }
+
     /// <summary>
     /// If the stack is not empty, copies the value on top of the stack to `value` and return true; 
     /// otherwise, leaves `value` uninitialized and return false. 

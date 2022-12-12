@@ -18,10 +18,8 @@ public class DominatorTree : IMethodAnalysis
         ComputeChildren(nodes);
     }
 
-    public static IMethodAnalysis Create(IMethodAnalysisManager mgr)
-    {
-        return new DominatorTree(mgr.Method);
-    }
+    static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
+        => new DominatorTree(mgr.Method);
 
     /// <summary> Returns the immediate dominator of `block`, or itself if it's the entry block. </summary>
     public BasicBlock IDom(BasicBlock block)
@@ -227,10 +225,8 @@ public class DominanceFrontier : IMethodAnalysis
         }
     }
 
-    public static IMethodAnalysis Create(IMethodAnalysisManager mgr)
-    {
-        return new DominanceFrontier(mgr.GetAnalysis<DominatorTree>(preserve: true));
-    }
+    static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
+        => new DominanceFrontier(mgr.GetAnalysis<DominatorTree>(preserve: true));
 
     public RefSet<BasicBlock> Of(BasicBlock block)
         => _df.GetValueOrDefault(block, _emptySet);

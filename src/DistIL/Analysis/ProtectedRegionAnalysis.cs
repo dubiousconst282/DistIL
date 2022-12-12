@@ -45,10 +45,8 @@ public class ProtectedRegionAnalysis : IMethodAnalysis
         }
     }
 
-    public static IMethodAnalysis Create(IMethodAnalysisManager mgr)
-    {
-        return new ProtectedRegionAnalysis(mgr.Method);
-    }
+    static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
+        => new ProtectedRegionAnalysis(mgr.Method);
 
     public ProtectedRegion GetBlockRegion(BasicBlock block)
         => Root.FindBlockParent(block)

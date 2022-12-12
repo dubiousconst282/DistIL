@@ -25,10 +25,8 @@ public class ForestAnalysis : IMethodAnalysis
         }
     }
 
-    public static IMethodAnalysis Create(IMethodAnalysisManager mgr)
-    {
-        return new ForestAnalysis(mgr.Method);
-    }
+    static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
+        => new ForestAnalysis(mgr.Method);
 
     /// <summary> Returns whether the specified instruction is a the root of a tree/statement (i.e. must be emitted and/or assigned into a temp variable). </summary>
     public bool IsTreeRoot(Instruction inst) => _trees.Contains(inst);

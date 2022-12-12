@@ -54,10 +54,8 @@ public class LoopAnalysis : IMethodAnalysis
         return numFound == 1 ? preHeader : null;
     }
 
-    public static IMethodAnalysis Create(IMethodAnalysisManager mgr)
-    {
-        return new LoopAnalysis(mgr.Method, mgr.GetAnalysis<DominatorTree>(preserve: true));
-    }
+    static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
+        => new LoopAnalysis(mgr.Method, mgr.GetAnalysis<DominatorTree>(preserve: true));
 }
 public class LoopInfo
 {

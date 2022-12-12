@@ -56,10 +56,8 @@ public class LivenessAnalysis : IMethodAnalysis
             => (_liveSets.GetOrAddRef(block).Out ??= new()).Add(inst);
     }
 
-    public static IMethodAnalysis Create(IMethodAnalysisManager mgr)
-    {
-        return new LivenessAnalysis(mgr.Method);
-    }
+    static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
+        => new LivenessAnalysis(mgr.Method);
 
     /// <summary> Returns the live sets for `block`. </summary>
     public (InstSet? In, InstSet? Out) GetLiveSets(BasicBlock block) => _liveSets.GetValueOrDefault(block);

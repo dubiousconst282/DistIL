@@ -142,12 +142,15 @@ public abstract class DataFlowAnalysis
     }
 }
 
-public class VarLivenessAnalysis : DataFlowAnalysis
+public class VarLivenessAnalysis : DataFlowAnalysis, IMethodAnalysis
 {
     private readonly Palette<Variable> _varIds = new();
 
     public VarLivenessAnalysis(MethodBody method)
         : base(method, backward: true) { }
+
+    static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
+        => new VarLivenessAnalysis(mgr.Method);
 
     protected override void Initialize(BasicBlock block, out BlockState state)
     {

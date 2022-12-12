@@ -4,15 +4,14 @@ public class ValueNumbering : MethodPass
 {
     public override void Run(MethodTransformContext ctx)
     {
-        var map = new VNMap();
-
         foreach (var block in ctx.Method) {
+            var map = new VNMap();
+
             foreach (var inst in block) {
                 if (s_Taggers.TryGetValue(inst.GetType(), out var tagger)) {
                     tagger.Update(map, inst);
                 }
             }
-            map.Pop();
         }
     }
 
@@ -33,28 +32,28 @@ public class ValueNumbering : MethodPass
         {
             _map[inst] = value;
         }
-        public void Invalidate(Instruction key)
+        public void Invalidate(Instruction inst)
         {
-            _map.Remove(key);
+            _map.Remove(inst);
         }
-
-        public IEnumerable<Instruction> GetMemoizedAccesses()
+        
+        public void InvalidateAccesses<TInst>(TInst inst, Func<TInst, Instruction, bool> mayAlias)
         {
             //Load/Store insts are used interchangeably as location keys
-            return _map.Keys.Where(k => k is LoadInst or StoreInst);
+            foreach (var access in _map.Keys.Where(k => k is LoadInst or StoreInst)) {
+                if (mayAlias(inst, access)) {
+                    Invalidate(access);
+                }
+            }
         }
-        public IEnumerable<CallInst> GetMemoizedCalls()
+        public void InvalidateCalls(Func<CallInst, bool> mayAlias)
         {
-            return _map.Keys.OfType<CallInst>();
-        }
-
-        public void Push()
-        {
-            throw null!; //TODO: scoping for dominator based GVN
-        }
-        public void Pop()
-        {
-            _map.Clear();
+            //Load/Store insts are used interchangeably as location keys
+            foreach (var call in _map.Keys.OfType<CallInst>()) {
+                if (mayAlias(call)) {
+                    Invalidate(call);
+                }
+            }
         }
     }
 
@@ -131,7 +130,7 @@ public class ValueNumbering : MethodPass
         RegLoc<FieldAccessInst, LoadFieldInst, StoreFieldInst>(new() {
             CompareFn = (a, b) => a.Field.Equals(b.Field) && a.Obj == b.Obj,
             HashFn = (inst) => HashCode.Combine(inst.Field, inst.Obj),
-            //Field stores may alias in some cases, e.g:
+            //Field stores may alias local variables in some cases, e.g:
             //  Point& ptr = fldaddr Foo::wrapper
             //  int x1 = ldfld Point::X, ptr
             //  stfld Foo::wrapper, ...
@@ -198,16 +197,10 @@ public class ValueNumbering : MethodPass
                 return;
             }
             var store = (TStore)inst;
+            map.InvalidateAccesses(store, MayAliasFn);
 
-            foreach (var access in map.GetMemoizedAccesses()) {
-                if (MayAliasFn.Invoke(store, access)) {
-                    map.Invalidate(access);
-                }
-            }
             if (!store.IsCoerced) {
-                map.Replace(inst, store.Value);
-            } else {
-                map.Invalidate(inst);
+                map.Replace(store, store.Value);
             }
         }
     }
@@ -237,19 +230,11 @@ public class ValueNumbering : MethodPass
                     break;
                 }
                 case FuncKind.ObjMutator: {
-                    foreach (var otherCall in map.GetMemoizedCalls()) {
-                        if (GetKind(otherCall.Method) == FuncKind.ObjAccessor) {
-                            map.Invalidate(otherCall);
-                        }
-                    }
+                    map.InvalidateCalls((otherCall) => GetKind(otherCall.Method) == FuncKind.ObjAccessor);
                     break;
                 }
                 case FuncKind.Unknown: {
-                    foreach (var access in map.GetMemoizedAccesses()) {
-                        if (MayAffectAccess(call, access)) {
-                            map.Invalidate(access);
-                        }
-                    }
+                    map.InvalidateAccesses(call, MayAffectAccess);
                     break;
                 }
             }

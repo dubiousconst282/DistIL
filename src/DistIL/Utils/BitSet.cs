@@ -193,14 +193,14 @@ public class BitSet : IEquatable<BitSet>
         return sb.ToString();
     }
 
-    public Enumerator GetEnumerator() => new(_data, 0, _data.Length * 64);
-    public Enumerator GetRangeEnumerator(int start, int end)
+    public Iterator GetEnumerator() => new(_data, 0, _data.Length * 64);
+    public Iterator GetRangeEnumerator(int start, int end)
     {
         Ensure.That((uint)start <= (uint)end);
-        return new Enumerator(_data, start, Math.Min(end, _data.Length * 64));
+        return new Iterator(_data, start, Math.Min(end, _data.Length * 64));
     }
 
-    public struct Enumerator
+    public struct Iterator : Iterator<int>
     {
         ulong _word;
         int _basePos, _end;
@@ -208,7 +208,7 @@ public class BitSet : IEquatable<BitSet>
 
         public int Current { get; private set; } = 0;
 
-        internal Enumerator(ulong[] data, int start, int end)
+        internal Iterator(ulong[] data, int start, int end)
         {
             Debug.Assert(start >= 0 && (end >> 6) <= data.Length);
             _data = data;
@@ -234,6 +234,6 @@ public class BitSet : IEquatable<BitSet>
             }
         }
 
-        public Enumerator GetEnumerator() => this;
+        public Iterator GetEnumerator() => this;
     }
 }

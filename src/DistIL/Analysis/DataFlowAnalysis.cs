@@ -92,6 +92,35 @@ public abstract class DataFlowAnalysis
 
     protected ref BlockState GetState(BasicBlock block) => ref _states.GetRef(block);
 
+    protected virtual void PrintValue(PrintContext ctx, int index) => ctx.Print("#" + index);
+
+    public override string ToString()
+    {
+        var method = _states.Keys.First().Method;
+        var sw = new StringWriter();
+        var pc = new PrintContext(sw, method.GetSymbolTable()!);
+
+        foreach (var block in method) {
+            ref var state = ref GetState(block);
+            if (state.In.PopCount() == 0 && state.Out.PopCount() == 0) continue;
+
+            pc.PrintAsOperand(block);
+            Print("  ↑ ", state.In);
+            Print("  ↓ ", state.Out);
+            pc.Print("\n");
+        }
+        return sw.ToString();
+
+        void Print(string prefix, BitSet entries)
+        {
+            int i = 0;
+            foreach (int index in entries) {
+                pc.Print(i++ > 0 ? ", " : prefix);
+                PrintValue(pc, index);
+            }
+        }
+    }
+
     protected struct BlockState
     {
         public BitSet In, Out, Killed;
@@ -102,6 +131,7 @@ public abstract class DataFlowAnalysis
     public class Palette<T> where T : notnull
     {
         internal readonly Dictionary<T, int> _ids;
+        internal T[]? _items;
 
         public Palette(IEqualityComparer<T>? comparer = null)
             => _ids = new(comparer);
@@ -113,8 +143,16 @@ public abstract class DataFlowAnalysis
             }
             return id;
         }
-        public int Get(T value) => _ids.GetValueOrDefault(value, -1);
-        //TODO: T Get(int id);
+
+        public int IndexOf(T value) => _ids.GetValueOrDefault(value, -1);
+
+        public T Get(int id)
+        {
+            if (_items == null || _items.Length != _ids.Count) {
+                _items = _ids.Keys.ToArray();
+            }
+            return _items[id];
+        }
     }
     /// <summary> Ordered set of arbitrary items backed by a <see cref="BitSet"/>, which indexes a <see cref="Palette{T}"/>. </summary>
     public struct IndirectSet<T> where T : notnull
@@ -126,18 +164,23 @@ public abstract class DataFlowAnalysis
             => (Palette, Entries) = (palette, entries);
 
         public bool Contains(T value)
-            => Entries.Contains(Palette.Get(value)); //BitSet.Contains() allows negative indices
+            => Entries.Contains(Palette.IndexOf(value)); //BitSet.Contains() allows negative indices
 
         public override string ToString()
         {
             var sb = new StringBuilder();
-            foreach (var (item, id) in Palette._ids) {
-                if (!Entries.Contains(id)) continue;
-
+            foreach (var item in this) {
                 if (sb.Length > 0) sb.Append(", ");
                 sb.Append(item);
             }
             return sb.ToString();
+        }
+
+        public IEnumerator<T> GetEnumerator()
+        {
+            foreach (int id in Entries) {
+                yield return Palette.Get(id);
+            }
         }
     }
 }
@@ -170,6 +213,7 @@ public class VarLivenessAnalysis : DataFlowAnalysis, IMethodAnalysis
         }
         state = new() { Killed = killed, In = globals, Out = new BitSet() };
     }
+    protected override void PrintValue(PrintContext ctx, int index) => ctx.PrintAsOperand(_varIds.Get(index));
 
     public IndirectSet<Variable> GetLiveIn(BasicBlock block) => new(_varIds, GetState(block).In);
     public IndirectSet<Variable> GetLiveOut(BasicBlock block) => new(_varIds, GetState(block).Out);

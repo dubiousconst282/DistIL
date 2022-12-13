@@ -52,6 +52,9 @@ public class SimplifyCFG : MethodPass
             if (cond.Op == CompareOp.Eq) {
                 (br.Then, br.Else) = (br.Else!, br.Then);
             }
+            if (cond.NumUses == 0) {
+                cond.Remove();
+            }
             return true;
         }
         return false;

@@ -29,6 +29,10 @@ public class DeadCodeElim : MethodPass
                         inst.Remove();
                         changed = true;
                     }
+                    //TODO: remove variables whose users are all stores
+                    if (inst is StoreVarInst { Var.NumUses: 1 }) {
+                        inst.Remove();
+                    }
                 }
                 //`goto 1 ? T : F`  ->  `goto T`
                 if (block.Last is BranchInst { Cond: ConstInt { Value: var cond } } br) {

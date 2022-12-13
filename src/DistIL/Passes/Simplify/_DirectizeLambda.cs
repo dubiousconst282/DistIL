@@ -52,11 +52,15 @@ partial class SimplifyInsts : MethodPass
 
         static bool DirectizeWithCtorArgs(CallInst call, NewObjInst alloc)
         {
-            if (alloc is not { Args: [LoadFieldInst ownerObj, FuncAddrInst funcAddr] }) return false;
-            if (call.NumArgs != funcAddr.Method.ParamSig.Count) return false;
+            if (alloc is not { Args: [var ownerObj, FuncAddrInst { Method: var method }] }) return false;
+            if (call.NumArgs - (method.IsStatic ? 1 : 0) != method.ParamSig.Count) return false;
 
-            call.Method = funcAddr.Method;
-            call.SetArg(0, ownerObj);
+            if (method.IsInstance) {
+                call.Method = method;
+                call.SetArg(0, ownerObj);
+            } else {
+                call.ReplaceWith(new CallInst(method, call.Args[1..].ToArray()), insertIfInst: true);
+            }
             return true;
         }
         static bool DeleteCache(PhiInst phi, NewObjInst allocInst, LoadFieldInst cacheLoad)

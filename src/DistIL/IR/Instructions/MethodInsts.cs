@@ -110,5 +110,16 @@ public class FuncAddrInst : Instruction
         Method = method;
     }
 
+    protected override void PrintOperands(PrintContext ctx)
+    {
+        ctx.Print(" ");
+        ctx.Print(Method);
+        
+        if (Object != null) {
+            ctx.Print(", ");
+            ctx.Print(Object);
+        }
+    }
+
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }

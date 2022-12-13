@@ -16,7 +16,7 @@ public class CallGraph
 
             //TODO: deeper analysis for inlining heuristics
             foreach (ref var inst in method.ILBody.Instructions.AsSpan()) {
-                if (inst.Operand is MethodDefOrSpec oper && IsCall(inst.OpCode)) {
+                if (inst.Operand is MethodDefOrSpec oper) {
                     called ??= new(4);
                     called.Add(oper.Definition);
                 }
@@ -28,9 +28,6 @@ public class CallGraph
             };
         }
     }
-
-    private static bool IsCall(ILCode code)
-        => code is ILCode.Call or ILCode.Callvirt;
 
     /// <summary> Performs a depth-first traversal over the call graph. </summary>
     public void Traverse(Action<MethodDef>? preVisit = null, Action<MethodDef>? postVisit = null)

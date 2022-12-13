@@ -5,74 +5,102 @@ public class ScalarReplacement : MethodPass
 {
     public override void Run(MethodTransformContext ctx)
     {
-        var objs = new Dictionary<Value, ObjectInfo>();
+        var allocs = new List<NewObjInst>();
+        
+        //Find non-escaping object allocations
+        foreach (var inst in ctx.Method.Instructions()) {
+            if (inst is NewObjInst alloc && IsSimpleCtor(alloc) && !Escapes(alloc)) {
+                allocs.Add(alloc);
+            }
+        }
 
-        //Analyze method (collect accesses and whether object escapes)
-        foreach (var rawInst in ctx.Method.Instructions()) {
-            switch (rawInst) {
-                //Collect new objects
-                case NewObjInst inst: {
-                    if (IsDefaultCtor(inst)) {
-                        objs.Add(inst, new ObjectInfo() { Object = rawInst });
-                    }
+        //Replace fields with local variables
+        foreach (var obj in allocs) {
+            Console.WriteLine("SROA " + ctx.Method);
+            InlineAlloc(obj);
+        }
+    }
+
+    private static void InlineAlloc(NewObjInst alloc)
+    {
+        //FieldSpecs don't have proper equality comparisons and may have multiple 
+        //instances for the same spec, we must use the definition as key instead.
+        var fieldSlots = new Dictionary<FieldDef, Variable>();
+
+        //At this point we know that the constructor doesn't let the instance escape,
+        //inlining it here will add the accessed fields to the use chain of `alloc`.
+        var ctorArgs = new Value[alloc.NumArgs + 1];
+        ctorArgs[0] = alloc;
+        alloc.Args.CopyTo(ctorArgs.AsSpan(1));
+        InlineMethods.Inline(alloc, (MethodDefOrSpec)alloc.Constructor, ctorArgs);
+
+        foreach (var user in alloc.Users()) {
+            switch (user) {
+                case LoadFieldInst load: {
+                    var slot = GetSlot(load.Field);
+                    load.ReplaceWith(new LoadVarInst(slot), insertIfInst: true);
                     break;
                 }
-                //Collect member accesses
-                case FieldAccessInst inst: {
-                    if (inst.IsInstance && objs.TryGetValue(inst.Obj, out var info)) {
-                        info.Accesses.Add(inst);
-                    }
+                case FieldAddrInst addr: {
+                    var slot = GetSlot(addr.Field);
+                    slot.IsExposed = true;
+                    addr.ReplaceWith(new VarAddrInst(slot), insertIfInst: true);
                     break;
                 }
-                //Mark operands of unhandled instructions as escaping
+                case StoreFieldInst store: {
+                    var slot = GetSlot(store.Field);
+                    store.ReplaceWith(new StoreVarInst(slot, store.Value), insertIfInst: true);
+                    break;
+                }
                 default: {
-                    foreach (var oper in rawInst.Operands) {
-                        if (objs.TryGetValue(oper, out var info)) {
-                            info.Escapes = true;
-                        }
+                    if (IsObjectCtorCall(user)) {
+                        user.Remove(); //nop from the inlined ctor
+                        break;
                     }
-                    break;
+                    throw new UnreachableException();
                 }
             }
         }
+        //Allocation is redundant now
+        alloc.Remove();
 
-        //Replace with scalars
-        int objId = 1;
-        foreach (var (obj, info) in objs) {
-            if (info.Escapes) continue;
-
-            foreach (var access in info.Accesses) {
-                var field = access.Field;
-                if (!info.Scalars.TryGetValue(field, out var variable)) {
-                    variable = new Variable(field.Type, name: $"sroa{objId}_{field.Name}");
-                    //TODO: initialize var
-                    var initSt = new StoreVarInst(variable, ConstInt.CreateI(0));
-                    initSt.InsertAfter((NewObjInst)info.Object);
-                    info.Scalars[field] = variable;
-                }
-                if (access is LoadFieldInst) {
-                    access.ReplaceWith(new LoadVarInst(variable), insertIfInst: true);
-                } else if (access is StoreFieldInst st) {
-                    access.ReplaceWith(new StoreVarInst(variable, st.Value), insertIfInst: true);
-                }
-            }
-            if (obj is NewObjInst nwo) {
-                nwo.Remove();
-            }
-            objId++;
+        Variable GetSlot(FieldDesc field)
+        {
+            var def = ((FieldDefOrSpec)field).Definition;
+            return fieldSlots.GetOrAddRef(def) ??= new Variable(field.Sig, "sroa." + field.Name);
         }
     }
 
-    private bool IsDefaultCtor(NewObjInst inst)
+    private static bool IsSimpleCtor(NewObjInst alloc)
     {
-        return true; //TODO
+        if (alloc.Constructor is not MethodDefOrSpec { Definition.Body: MethodBody body }) {
+            return false;
+        }
+        //Ctor must be small and instance obj cannot escape
+        return body.NumBlocks < 8 && !Escapes(body.Args[0], isCtor: true);
+    }
+    private static bool Escapes(TrackedValue obj, bool isCtor = false)
+    {
+        //Consider obj as escaping if it is being passed somewhere
+        return !obj.Users().All(u => 
+            (u is LoadFieldInst or FieldAddrInst) || 
+            (u is StoreFieldInst st && st.Value != obj) ||
+            (isCtor && IsObjectCtorCall(u))
+        );
     }
 
-    class ObjectInfo
+    private static bool IsObjectCtorCall(Instruction inst)
     {
-        public Value Object = null!; //Variable or Instruction
-        public List<FieldAccessInst> Accesses = new(); //List of instructions accessing Object. e.g. LoadFieldInst/StoreFieldInst
-        public bool Escapes = false; //Whether Object escapes (e.g. used as a call argument or stored in an array)
-        public Dictionary<FieldDesc, Variable> Scalars = new(); //Map of Field -> Local
+        return inst is CallInst { Method.Name: ".ctor", Method.DeclaringType: var declType } &&
+            IsSystemType(declType, typeof(object));
+    }
+
+    //TODO: make this a public extension method
+    private static bool IsSystemType(TypeDesc desc, Type rtType)
+    {
+        return desc is TypeDefOrSpec def && 
+               def.Module == def.Module.Resolver.CoreLib && 
+               def.Name == rtType.Name &&
+               def.Namespace == rtType.Namespace;
     }
 }

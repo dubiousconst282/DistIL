@@ -18,6 +18,20 @@ internal static class Ensure
             => throw new InvalidOperationException(msg);
     }
 
+    /// <summary> Throws an <see cref="NullReferenceException"/> if <paramref name="obj"/> is null. </summary>
+    [DebuggerStepThrough]
+    public static T NotNull<T>(T? obj, [CallerArgumentExpression("obj")] string? msg = null) where T : class
+    {
+        if (obj == null) {
+            ThrowHelper(msg);
+        }
+        return obj;
+
+        [DoesNotReturn, StackTraceHidden]
+        static void ThrowHelper(string? msg)
+            => throw new NullReferenceException(msg);
+    }
+
     [DebuggerStepThrough]
     public static void IndexValid(int index, int length)
     {

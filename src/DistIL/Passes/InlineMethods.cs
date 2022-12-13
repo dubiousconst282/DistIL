@@ -2,6 +2,7 @@ namespace DistIL.Passes;
 
 using DistIL.IR.Utils;
 
+using ImplAttribs = System.Reflection.MethodImplAttributes;
 using MethodAttribs = System.Reflection.MethodAttributes;
 
 public class InlineMethods : MethodPass
@@ -40,22 +41,36 @@ public class InlineMethods : MethodPass
             callee.ILBody?.Instructions.Count <= _opts.MaxCalleeSize &&
             (callee.Attribs & blockedAttribs) == 0 &&
             (callee.Attribs & staticVirt) != staticVirt &&
+            (callee.ImplAttribs & ImplAttribs.NoInlining) == 0 &&
             callee.GetCustomAttribs().Find("System.Runtime.CompilerServices", "IntrinsicAttribute") == null &&
             callee.GetCustomAttribs().Find("System.Runtime.CompilerServices", "AsyncStateMachine") == null;
     }
 
     public static bool Inline(CallInst call)
     {
-        if (call.Method is not MethodDefOrSpec { Definition.Body: MethodBody calleeBody } callee) {
+        if (call.Method is not MethodDefOrSpec { Definition.Body: MethodBody } callee) {
             return false;
         }
+        var result = Inline(call, callee, call.Args);
+
+        if (result != null) {
+            call.ReplaceWith(result);
+        } else {
+            call.Remove();
+        }
+        return true;
+    }
+
+    public static Value? Inline(Instruction call, MethodDefOrSpec callee, ReadOnlySpan<Value> args)
+    {
         var callerBody = call.Block.Method;
+        var calleeBody = Ensure.NotNull(callee.Definition.Body);
         var cloner = new IRCloner(new GenericContext(callee));
 
         //Add argument mappings
         for (int i = 0; i < calleeBody.Args.Length; i++) {
             var arg = calleeBody.Args[i];
-            var val = StoreInst.Coerce(arg.ResultType, call.Args[i], insertBefore: call);
+            var val = StoreInst.Coerce(arg.ResultType, args[i], insertBefore: call);
             cloner.AddMapping(arg, val);
         }
 
@@ -82,19 +97,16 @@ public class InlineMethods : MethodPass
 
         if (result != null) {
             //After inlining, `call` will be at the start of the continuation block.
-            var truncResult = StoreInst.Coerce(call.ResultType, result, insertBefore: call);
-            call.ReplaceWith(truncResult);
-        } else if (call.NumUses == 0) {
-            call.Remove();
-        } else {
+            return StoreInst.Coerce(call.ResultType, result, insertBefore: call);
+        } else if (callee.ReturnType != PrimType.Void) {
             //This could happen if we inline a method that ends with ThrowInst, but it still returns something.
             //Code after `call` should be unreachable now, but we need to replace its uses with undef to avoid making the IR invalid.
-            call.ReplaceWith(new Undef(call.ResultType));
+            return new Undef(call.ResultType);
         }
-        return true;
+        return null;
     }
 
-    private static Value? InlineOneBlock(CallInst call, BasicBlock block)
+    private static Value? InlineOneBlock(Instruction call, BasicBlock block)
     {
         var ret = (ReturnInst)block.Last;
 
@@ -106,7 +118,7 @@ public class InlineMethods : MethodPass
         return ret?.Value;
     }
 
-    private static Value? InlineManyBlocks(CallInst call, BasicBlock entryBlock, List<BasicBlock> returningBlocks)
+    private static Value? InlineManyBlocks(Instruction call, BasicBlock entryBlock, List<BasicBlock> returningBlocks)
     {
         var startBlock = call.Block;
         var endBlock = startBlock.Split(call, branchTo: entryBlock);

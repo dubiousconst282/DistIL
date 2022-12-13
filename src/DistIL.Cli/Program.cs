@@ -40,11 +40,12 @@ static void RunOptimizer(OptimizerOptions options)
     mp2.Add(new ExpandLinq(module));
     mp2.Add(new SimplifyInsts(module)); //lambdas and devirtualization
     mp2.Add(new InlineMethods());
+    mp2.Add(new ScalarReplacement());
     mp2.Add(new SimplifyInsts(module));
     //mp2.Add(new LoopInvariantCodeMotion());
+    mp2.Add(new ValueNumbering());
     mp2.Add(new DeadCodeElim());
     mp2.Add(new SimplifyCFG());
-    mp2.Add(new ValueNumbering());
 
     var mp3 = new MethodPassManager();
     mp3.Add(new RemovePhis());
@@ -164,7 +165,7 @@ class OptimizerOptions
             var methodToken = WildcardToRegex(tokens.Groups[2].Value);
             var sigToken = WildcardToRegex(tokens.Groups[3].Value, true);
 
-            return @$"{typeToken}::{methodToken}\({sigToken}\)";
+            return @$"(?:{typeToken}::{methodToken}\({sigToken}\))";
         }));
         var regex = new Regex("^" + pattern + "$", RegexOptions.CultureInvariant);
 

@@ -39,6 +39,16 @@ public static class Iterators
         return true;
     }
 
+    public static bool Contains<T>(this Iterator<T> itr, T value)
+    {
+        while (itr.MoveNext()) {
+            if (EqualityComparer<T>.Default.Equals(itr.Current, value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// <summary> Returns the number of *remaining* elements in the iterator. </summary>
     public static int Count<T>(this Iterator<T> itr)
     {

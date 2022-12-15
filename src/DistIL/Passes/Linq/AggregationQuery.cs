@@ -8,63 +8,43 @@ internal class AggregationQuery : LinqQuery
     public AggregationQuery(CallInst call, LinqStageNode pipeline)
         : base(call, pipeline) { }
 
+    //Emit a loop like this:
+    //
+    //PreHeader:
+    //  var seed = Seed()
+    //  goto Header
+    //Header:
+    //  var currAccum = phi [PreHeader -> seed, Latch -> nextAccum]
+    //  int currIdx = phi [PreHeader -> 0, Latch -> nextIdx]
+    //  bool hasNext = Source.MoveNext(currIdx)
+    //  goto hasNext ? Body : Exit
+    //Body:
+    //  T currItem = Source.Current()
+    //  var nextAccum = AccumFn(accum, currItem)
+    //  goto Latch
+    //Latch:
+    //  int nextIdx = add currIdx, 1
+    //  goto Header
+    //Exit:
+    //  ...
     public override bool Emit()
     {
-        //Emit a loop like this:
-        //
-        //PreHeader:
-        //  var seed = Seed()
-        //  goto Header
-        //Header:
-        //  var currAccum = phi [PreHeader -> seed, Latch -> nextAccum]
-        //  int currIdx = phi [PreHeader -> 0, Latch -> nextIdx]
-        //  bool hasNext = Source.MoveNext(currIdx)
-        //  goto hasNext ? Body : Exit
-        //Body:
-        //  T currItem = Source.Current()
-        //  var nextAccum = AccumFn(accum, currItem)
-        //  goto Latch
-        //Latch:
-        //  int nextIdx = add currIdx, 1
-        //  goto Header
-        //Exit:
-        //  ...
-        var preHeader = NewBlock("PreHeader");
-        var header = NewBlock("Header");
-        var body = NewBlock("Body");
-        var latch = NewBlock("Latch");
-        var exit = NewBlock("Exit");
+        var loop = new LoopBuilder(createBlock: name => NewBlock(name));
+        var index = loop.CreateInductor().SetName("lq_index");
 
-        Pipeline.EmitHead(preHeader);
-        
-        var seed = GetSeed(preHeader);
-        preHeader.SetBranch(header.Block);
+        Pipeline.EmitHead(loop.PreHeader);
+        var seed = GetSeed(loop.PreHeader);
+        var accum = default(Value)!;
 
-        var currIndex = header.CreatePhi(PrimType.Int32).SetName("currIdx");
-        var currAccum = header.CreatePhi(seed.ResultType).SetName("currAccum");;
-        var hasNext = Pipeline.EmitMoveNext(header, currIndex);
-        header.SetBranch(hasNext, body.Block, exit.Block);
-
-        var currItem = Pipeline.EmitCurrent(body, currIndex, latch.Block);
-        var itrAccum = Accumulate(body, currAccum, currItem);
-        body.SetBranch(latch.Block);
-
-        var nextIdx = latch.CreateAdd(currIndex, ConstInt.CreateI(1)).SetName("nextIdx");
-        var nextAccum = itrAccum;
-        if (latch.Block.NumPreds >= 2) {
-            var phiArgs = latch.Block.Preds.AsEnumerable()
-                    .Select(pred => new PhiArg(pred, pred == body.Block ? itrAccum : currAccum))
-                    .ToArray();
-            nextAccum = latch.CreatePhi(phiArgs);
-        }
-        currIndex.AddArg((preHeader.Block, ConstInt.CreateI(0)), (latch.Block, nextIdx));
-        currAccum.AddArg((preHeader.Block, seed), (latch.Block, nextAccum));
-        latch.SetBranch(header.Block);
-
-        var newBlock = SubjectCall.Block.Split(SubjectCall, branchTo: preHeader.Block);
-
-        var result = MapResult(exit, currAccum);
-        exit.SetBranch(newBlock);
+        loop.Build(
+            emitCond: header => Pipeline.EmitMoveNext(header, index),
+            emitBody: body => {
+                var currItem = Pipeline.EmitCurrent(body, index, loop.Latch.Block);
+                accum = loop.CreateAccum(seed, emitUpdate: curr => Accumulate(body, curr, currItem)).SetName("lq_accum");
+            }
+        );
+        var result = MapResult(loop.Exit, accum);
+        loop.InsertBefore(SubjectCall);
 
         SubjectCall.ReplaceWith(result);
         Pipeline.DeleteSubject();

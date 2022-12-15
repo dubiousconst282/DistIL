@@ -23,14 +23,14 @@ public class ModulePassManager
         Pipeline.Add(pass);
     }
 
-    public void Run(ModuleDef module)
+    public void Run(Compilation comp)
     {
-        var callGraph = new CallGraph(module);
+        var callGraph = new CallGraph(comp.Module);
         var definedMethods = new List<MethodDef>(callGraph.NumMethods);
         callGraph.Traverse(postVisit: definedMethods.Add);
 
         foreach (var pass in Pipeline) {
-            pass.Run(new ModuleTransformContext(module, definedMethods));
+            pass.Run(new ModuleTransformContext(comp, comp.Module, definedMethods));
         }
     }
 }
@@ -49,29 +49,43 @@ public class MethodPassManager : ModulePass
         foreach (var method in ctx.DefinedMethods) {
             if (method.Body == null) continue;
 
-            var methodCtx = new MethodTransformContext(method.Body);
+            using var methodScope = ctx.Logger.Push(s_MethodScope, $"Applying passes to '{method}'");
+            var methodCtx = new MethodTransformContext(ctx.Compilation, method.Body);
+
             foreach (var pass in Pipeline) {
+                using var transformScope = ctx.Logger.Push(s_TransformScope, pass.GetType().Name);
+
                 pass.Run(methodCtx);
             }
         }
     }
+
+    static readonly LoggerScopeInfo s_MethodScope = new("DistIL.MethodPassManager");
+    static readonly LoggerScopeInfo s_TransformScope = new("DistIL.TransformMethod");
 }
 
 public class MethodTransformContext : IMethodAnalysisManager
 {
+    public Compilation Compilation { get; }
     public MethodBody Method { get; }
+
     public MethodDef Definition => Method.Definition;
     public ModuleDef Module => Method.Definition.Module;
+
+    public ICompilationLogger Logger => Compilation.Logger;
     
     readonly Dictionary<Type, (IMethodAnalysis Analysis, bool Valid)> _analyses = new();
 
-    public MethodTransformContext(MethodBody method)
+    public MethodTransformContext(Compilation comp, MethodBody method)
     {
+        Compilation = comp;
         Method = method;
     }
 
     public A GetAnalysis<A>(bool preserve = false) where A : IMethodAnalysis
     {
+        Logger.Trace($"Get analysis {typeof(A).Name}");
+
         if (!preserve && !_analyses.ContainsKey(typeof(A))) {
             return (A)A.Create(this);
         }
@@ -89,12 +103,16 @@ public class MethodTransformContext : IMethodAnalysisManager
 }
 public class ModuleTransformContext
 {
+    public Compilation Compilation { get; }
     public ModuleDef Module { get; }
     /// <summary> Methods defined in the module, in topological call order. </summary>
     public IReadOnlyCollection<MethodDef> DefinedMethods { get; }
 
-    public ModuleTransformContext(ModuleDef module, IReadOnlyCollection<MethodDef> definedMethods)
+    public ICompilationLogger Logger => Compilation.Logger;
+
+    public ModuleTransformContext(Compilation comp, ModuleDef module, IReadOnlyCollection<MethodDef> definedMethods)
     {
+        Compilation = comp;
         Module = module;
         DefinedMethods = definedMethods;
     }

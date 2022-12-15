@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using CommandLine;
 using CommandLine.Text;
 
+using DistIL;
 using DistIL.AsmIO;
 using DistIL.CodeGen.Cil;
 using DistIL.Frontend;
@@ -73,7 +74,8 @@ static void RunOptimizer(OptimizerOptions options)
     pm.Add(mp3);
     pm.Add(new ExportPass());
 
-    pm.Run(module);
+    var comp = new Compilation(module, new ConsoleLogger() { MinLevel = LogLevel.Debug }, new CompilationSettings());
+    pm.Run(comp);
 
     AddIgnoreAccessAttrib(module, new[] { module.AsmName.Name!, "System.Private.CoreLib" });
 

@@ -16,7 +16,7 @@ public class ScalarReplacement : MethodPass
 
         //Replace fields with local variables
         foreach (var obj in allocs) {
-            Console.WriteLine("SROA " + ctx.Method);
+            ctx.Logger.Info($"Scalarizing allocation for {obj.Constructor.DeclaringType}");
             InlineAlloc(obj);
         }
     }

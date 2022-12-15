@@ -25,7 +25,7 @@ public class ExpandLinq : MethodPass
 
         foreach (var query in queries) {
             if (query.Emit()) {
-                Console.WriteLine($"ExpandLinq({queries.Count} {query is ConsumedQuery}) at {ctx.Method}");
+                ctx.Logger.Info($"{query.GetType().Name} expanded");
                 ctx.InvalidateAll();
             }
         }

@@ -5,50 +5,31 @@ using DistIL.IR.Utils;
 
 internal class AggregationQuery : LinqQuery
 {
-    public AggregationQuery(CallInst call, LinqStageNode pipeline)
-        : base(call, pipeline) { }
+    public AggregationQuery(CallInst call)
+        : base(call) { }
 
-    //Emit a loop like this:
-    //
-    //PreHeader:
-    //  var seed = Seed()
-    //  goto Header
-    //Header:
-    //  var currAccum = phi [PreHeader -> seed, Latch -> nextAccum]
-    //  int currIdx = phi [PreHeader -> 0, Latch -> nextIdx]
-    //  bool hasNext = Source.MoveNext(currIdx)
-    //  goto hasNext ? Body : Exit
-    //Body:
-    //  T currItem = Source.Current()
-    //  var nextAccum = AccumFn(accum, currItem)
-    //  goto Latch
-    //Latch:
-    //  int nextIdx = add currIdx, 1
-    //  goto Header
-    //Exit:
-    //  ...
-    public override bool Emit()
+    Value? _accumulator, _seed, _isEmpty;
+
+    public override void EmitHead(IRBuilder builder, Value? estimCount)
     {
-        var loop = new LoopBuilder(createBlock: name => NewBlock(name));
-        var index = loop.CreateInductor().SetName("lq_index");
+        _seed = GetSeed(builder);
+    }
+    public override void EmitTail(IRBuilder builder)
+    {
+        if (_isEmpty != null) {
+            builder.Throw(typeof(InvalidOperationException), _isEmpty);
+        }
+        SubjectCall.ReplaceUses(MapResult(builder, _accumulator!));
+    }
 
-        Pipeline.EmitHead(loop.PreHeader);
-        var seed = GetSeed(loop.PreHeader);
-        var accum = default(Value)!;
+    public override void EmitBody(IRBuilder builder, Value currItem, in BodyLoopData loopData)
+    {
+        var skipBlock = loopData.SkipBlock;
+        _accumulator = loopData.CreateAccum(_seed!, emitUpdate: curr => Accumulate(builder, curr, currItem, skipBlock));
 
-        loop.Build(
-            emitCond: header => Pipeline.EmitMoveNext(header, index),
-            emitBody: body => {
-                var currItem = Pipeline.EmitCurrent(body, index, loop.Latch.Block);
-                accum = loop.CreateAccum(seed, emitUpdate: curr => Accumulate(body, curr, currItem)).SetName("lq_accum");
-            }
-        );
-        var result = MapResult(loop.Exit, accum);
-        loop.InsertBefore(SubjectCall);
-
-        SubjectCall.ReplaceWith(result);
-        Pipeline.DeleteSubject();
-        return true;
+        if (_seed is Undef) {
+            _isEmpty = loopData.CreateAccum(ConstInt.Create(PrimType.Bool, 1), emitUpdate: curr => ConstInt.Create(PrimType.Bool, 0));
+        }
     }
 
     protected virtual Value GetSeed(IRBuilder builder)
@@ -56,12 +37,9 @@ internal class AggregationQuery : LinqQuery
         if (SubjectCall.NumArgs >= 3) {
             return SubjectCall.Args[1];
         }
-        //There are two obvious ways we can handle unseeded aggregates (neither are great):
-        // - Duplicate MoveNext() and Current here (problematic because we will need a loop for e.g. Where() sources)
-        // - Return undef() here and emit a check for `index == 0` in Accumulate()
-        throw new NotImplementedException();
+        return new Undef(SubjectCall.ResultType);
     }
-    protected virtual Value Accumulate(IRBuilder builder, Value currAccum, Value currItem)
+    protected virtual Value Accumulate(IRBuilder builder, Value currAccum, Value currItem, BasicBlock skipBlock)
     {
         int lambdaIdx = SubjectCall.NumArgs >= 3 ? 2 : 1;
         return builder.CreateLambdaInvoke(SubjectCall.Args[lambdaIdx], currAccum, currItem);
@@ -76,23 +54,24 @@ internal class AggregationQuery : LinqQuery
 }
 internal class CountQuery : AggregationQuery
 {
-    public CountQuery(CallInst call, LinqStageNode pipeline)
-        : base(call, call.NumArgs >= 2 ? new WhereStage(call, pipeline) : pipeline)
-    {
-        //Should not expand unfiltered Count() on array/list
-        Debug.Assert(pipeline is not (ArraySource or ListSource) || call.NumArgs >= 2);
-    }
+    public CountQuery(CallInst call)
+        : base(call) { }
 
     protected override Value GetSeed(IRBuilder builder)
     {
-        return ConstInt.CreateI(0);
+        return ConstInt.CreateL(0);
     }
-    protected override Value Accumulate(IRBuilder builder, Value currAccum, Value currItem)
+    protected override Value Accumulate(IRBuilder builder, Value currAccum, Value currItem, BasicBlock skipBlock)
     {
-        return builder.CreateAdd(currAccum, ConstInt.CreateI(1));
+        if (SubjectCall.Args.Length >= 2) {
+            var cond = builder.CreateLambdaInvoke(SubjectCall.Args[1], currItem);
+            builder.Fork(cond, skipBlock);
+        }
+        return builder.CreateAdd(currAccum, ConstInt.CreateL(1));
     }
     protected override Value MapResult(IRBuilder builder, Value accum)
     {
-        return accum;
+        //TODO: overflow check is redundant if source is known to be a Array/List
+        return builder.CreateConvert(accum, PrimType.Int32, checkOverflow: true, srcUnsigned: true);
     }
 }

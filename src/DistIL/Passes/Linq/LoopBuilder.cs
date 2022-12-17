@@ -23,13 +23,19 @@ public class LoopBuilder
     //  goto Header
     //Exit:
     //  ...
-    public LoopBuilder(Func<string, IRBuilder> createBlock)
+    public LoopBuilder(BasicBlock blockPos)
     {
-        PreHeader = createBlock("PreHeader");
-        Header = createBlock("Header");
-        Body = createBlock("Body");
-        Latch = createBlock("Latch");
-        Exit = createBlock("Exit");
+        PreHeader = CreateBlock("PreHeader");
+        Header = CreateBlock("Header");
+        Body = CreateBlock("Body");
+        Latch = CreateBlock("Latch");
+        Exit = CreateBlock("Exit");
+
+        IRBuilder CreateBlock(string name)
+        {
+            blockPos = blockPos.Method.CreateBlock(insertAfter: blockPos).SetName("LQ_" + name);
+            return new IRBuilder(blockPos);
+        }
     }
 
     public void Build(
@@ -47,10 +53,12 @@ public class LoopBuilder
         foreach (var (headPhi, latchPhi, next) in _pendingAccums) {
             //Phi inputs must dominate their corresponding predecessor block,
             //we only support updates in the latch, or in a direct pred of it.
-            Debug.Assert(next.Block.Succs.Contains(Latch.Block));
-
-            foreach (var pred in Latch.Block.Preds) {
-                latchPhi.AddArg(pred, pred == next.Block ? next : headPhi);
+            if (Latch.Block.NumPreds >= 2) {
+                foreach (var pred in Latch.Block.Preds) {
+                    latchPhi.AddArg(pred, pred == next.Block ? next : headPhi);
+                }
+            } else {
+                latchPhi.ReplaceWith(next);
             }
         }
         Latch.SetBranch(Header.Block);

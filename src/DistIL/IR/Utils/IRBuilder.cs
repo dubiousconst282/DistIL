@@ -46,6 +46,13 @@ public class IRBuilder
         SetPosition(newBlock);
     }
 
+    public void Fork(Action<IRBuilder, BasicBlock> emitTerminator)
+    {
+        var newBlock = Method.CreateBlock(insertAfter: Block);
+        emitTerminator(this, newBlock);
+        SetPosition(newBlock);
+    }
+
     public Value CreateBin(BinaryOp op, Value left, Value right)
     {
         return ConstFolding.FoldBinary(op, left, right) ??
@@ -89,6 +96,14 @@ public class IRBuilder
 
     public CallInst CreateCallVirt(MethodDesc method, params Value[] args)
         => Add(new CallInst(method, args, true));
+
+    /// <summary> Searches for `methodName` in the instance object type (first argument), and creates a callvirt instruction for it. </summary>
+    public CallInst CreateCallVirt(string methodName, params Value[] args)
+    {
+        var instanceType = args[0].ResultType;
+        var method = instanceType.FindMethod(methodName, searchBaseAndItfs: true);
+        return CreateCallVirt(method, args);
+    }
 
     public NewObjInst CreateNewObj(MethodDesc ctor, params Value[] args)
         => Add(new NewObjInst(ctor, args));
@@ -136,6 +151,17 @@ public class IRBuilder
 
     public void CreateMarker(string text)
         => Add(new IntrinsicInst(IRIntrinsic.Marker, ConstString.Create(text)));
+
+    /// <summary> Creates the `default` value. </summary>
+    public Value CreateDefaultOf(TypeDesc type)
+    {
+        if (type.Kind == TypeKind.Struct) {
+            var slot = new Variable(type, exposed: true);
+            CreateIntrinsic(CilIntrinsic.InitObj, type, CreateVarAddr(slot));
+            return CreateVarLoad(slot);
+        }
+        return Const.CreateZero(type);
+    }
 
     /// <summary> Adds the specified instruction at the current position. </summary>
     public TInst Add<TInst>(TInst inst) where TInst : Instruction

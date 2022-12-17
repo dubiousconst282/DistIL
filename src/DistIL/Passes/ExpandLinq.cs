@@ -15,37 +15,41 @@ public class ExpandLinq : MethodPass
 
     public override void Run(MethodTransformContext ctx)
     {
-        var queries = new List<LinqQuery>();
+        var queries = new List<LinqSourceNode>();
 
         foreach (var inst in ctx.Method.Instructions().OfType<CallInst>()) {
-            if (CreateQuery(inst) is { } query) {
-                queries.Add(query);
+            if (CreateQuery(inst) is { } node) {
+                queries.Add(node);
             }
         }
 
         foreach (var query in queries) {
-            if (query.Emit()) {
-                ctx.Logger.Info($"{query.GetType().Name} expanded");
-                ctx.InvalidateAll();
-            }
+            query.Emit();
+            query.DeleteSubject();
+        }
+        if (queries.Count > 0) {
+            ctx.Logger.Info($"Expanded {queries.Count} queries");
+            ctx.InvalidateAll();
         }
     }
 
-    private LinqQuery? CreateQuery(CallInst call)
+    private LinqSourceNode? CreateQuery(CallInst call)
     {
         var method = call.Method;
         if (method.DeclaringType == t_Enumerable) {
             return method.Name switch {
                 "ToList" or "ToHashSet"
-                    => CreateQuery(call, pipe => new ConcretizationQuery(call, pipe)),
+                    => CreateQuery(call, new ConcretizationQuery(call)),
                 "ToArray"
-                    => CreateQuery(call, pipe => new ArrayConcretizationQuery(call, pipe)),
+                    => CreateQuery(call, new ArrayConcretizationQuery(call)),
                 "ToDictionary"
-                    => CreateQuery(call, pipe => new DictionaryConcretizationQuery(call, pipe)),
+                    => CreateQuery(call, new DictionaryConcretizationQuery(call)),
                 "Count" when call.NumArgs == 2 //avoid expanding {List|Array}.Count()
-                    => CreateQuery(call, pipe => new CountQuery(call, pipe)),
-                "Aggregate" when call.NumArgs >= 3 //unseeded aggregates are not supported
-                    => CreateQuery(call, pipe => new AggregationQuery(call, pipe)),
+                    => CreateQuery(call, new CountQuery(call)),
+                "Aggregate"
+                    => CreateQuery(call, new AggregationQuery(call)),
+                "First" or "FirstOrDefault"
+                    => CreateQuery(call, new PeekFirstQuery(call)),
                 _ => null
             };
         }
@@ -54,46 +58,46 @@ public class ExpandLinq : MethodPass
             var declType = (method.DeclaringType as TypeSpec)?.Definition ?? method.DeclaringType;
 
             if (declType == t_IEnumerableOfT0.Definition || declType.Inherits(t_IEnumerableOfT0)) {
-                return CreateQuery(call, pipe => new ConsumedQuery(call, pipe));
+                //return CreateQuery(call, pipe => new ConsumedQuery(call, pipe));
             }
         }
         return null;
     }
 
-    private LinqQuery? CreateQuery(CallInst call, Func<LinqStageNode, LinqQuery> factory, bool profitableIfEnumerator = false)
+    private LinqSourceNode? CreateQuery(CallInst call, LinqQuery query, bool profitableIfEnumerator = false)
     {
-        var pipe = CreateStage(call.GetOperandRef(0));
-        if (pipe is EnumeratorSource && !profitableIfEnumerator) {
+        var root = CreatePipe(call.GetOperandRef(0), query);
+        if (root is EnumeratorSource && root.Sink == query && !profitableIfEnumerator) {
             return null;
         }
-        return factory(pipe);
+        return root;
     }
 
     //UseRefs allows for overlapping queries to be expanded with no specific order.
-    private LinqStageNode CreateStage(UseRef sourceRef)
+    private LinqSourceNode CreatePipe(UseRef sourceRef, LinqStageNode sink)
     {
         var source = sourceRef.Operand;
 
         if (source is CallInst call && call.Method.DeclaringType == t_Enumerable) {
-            var innerSrc = call.GetOperandRef(0);
-
-            var stage = call.Method.Name switch {
-                "Select"    => new SelectStage(call,    CreateStage(innerSrc)),
-                "Where"     => new WhereStage(call,     CreateStage(innerSrc)),
-                "OfType"    => new OfTypeStage(call,    CreateStage(innerSrc)),
-                "Cast"      => new CastStage(call,      CreateStage(innerSrc)),
+            var node = call.Method.Name switch {
+                "Select"        => new SelectStage(call, sink),
+                "Where"         => new WhereStage(call, sink),
+                "OfType"        => new OfTypeStage(call, sink),
+                "Cast"          => new CastStage(call, sink),
+                //TODO: SelectMany stage needs to properly handle accum vars when nesting LoopBuilders
+                //"SelectMany"    => new FlattenStage(call, sink),
                 _ => default(LinqStageNode)
             };
-            if (stage != null) {
-                return stage;
+            if (node != null) {
+                return CreatePipe(call.GetOperandRef(0), node);
             }
         }
         if (source.ResultType is ArrayType) {
-            return new ArraySource(sourceRef);
+            return new ArraySource(sourceRef, sink);
         }
         if (source.ResultType is TypeSpec spec && spec.Definition.Inherits(t_IListOfT0)) {
-            return new ListSource(sourceRef);
+            return new ListSource(sourceRef, sink);
         }
-        return new EnumeratorSource(sourceRef);
+        return new EnumeratorSource(sourceRef, sink);
     }
 }

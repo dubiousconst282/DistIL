@@ -162,7 +162,7 @@ public class BasicBlock : TrackedValue
     {
         Ensure.That(pos.Block == this && !pos.IsHeader);
 
-        var newBlock = Method.CreateBlock();
+        var newBlock = Method.CreateBlock(insertAfter: this);
         RedirectSuccPhis(newBlock);
         MoveRange(newBlock, null, pos, Last);
         SetBranch(branchTo ?? newBlock);

@@ -57,14 +57,12 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
         }
         if (searchBaseAndItfs) {
             foreach (var itf in Interfaces) {
-                if (itf.FindMethod(name, sig, spec, searchBaseAndItfs, throwIfNotFound: false) is { } method) {
-                    return method;
+                if (itf.FindMethod(name, sig, spec, searchBaseAndItfs, throwIfNotFound: false) is { } itfMethod) {
+                    return itfMethod;
                 }
             }
-            for (var parent = BaseType; parent != null; parent = BaseType) {
-                if (parent.FindMethod(name, sig, spec, searchBaseAndItfs, throwIfNotFound: false) is { } method) {
-                    return method;
-                }
+            if (BaseType?.FindMethod(name, sig, spec, searchBaseAndItfs, throwIfNotFound: false) is { } baseMethod) {
+                return baseMethod;
             }
         }
         if (throwIfNotFound) {

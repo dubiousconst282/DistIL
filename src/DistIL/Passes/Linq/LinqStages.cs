@@ -5,82 +5,92 @@ using DistIL.IR.Utils;
 
 internal class SelectStage : LinqStageNode
 {
-    public Value MapLambda => SubjectCall!.Args[1];
+    public SelectStage(CallInst call, LinqStageNode sink)
+        : base(call, sink) { }
 
-    public SelectStage(CallInst call, LinqStageNode? source)
-        : base(call, source) { }
-
-    public override Value EmitMoveNext(IRBuilder builder, Value currIndex)
+    public override void EmitBody(IRBuilder builder, Value currItem, in BodyLoopData loopData)
     {
-        return Source!.EmitMoveNext(builder, currIndex);
-    }
-    public override Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock)
-    {
-        var currItem = Source!.EmitCurrent(builder, currIndex, skipBlock);
-        return builder.CreateLambdaInvoke_ItemAndIndex(MapLambda, currItem, currIndex);
+        var mapLambda = SubjectCall!.Args[1];
+        var mappedItem = builder.CreateLambdaInvoke_ItemAndIndex(mapLambda, currItem, loopData.CreateAccum);
+        Sink.EmitBody(builder, mappedItem, loopData);
     }
 }
 internal class WhereStage : LinqStageNode
 {
-    public Value FilterLambda => SubjectCall!.Args[1];
+    public WhereStage(CallInst call, LinqStageNode sink)
+        : base(call, sink) { }
 
-    public WhereStage(CallInst call, LinqStageNode? source)
-        : base(call, source) { }
-
-    public override Value EmitMoveNext(IRBuilder builder, Value currIndex)
+    public override void EmitBody(IRBuilder builder, Value currItem, in BodyLoopData loopData)
     {
-        return Source!.EmitMoveNext(builder, currIndex);
-    }
-    public override Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock)
-    {
-        var currItem = Source!.EmitCurrent(builder, currIndex, skipBlock);
-        var predCond = builder.CreateLambdaInvoke_ItemAndIndex(FilterLambda, currItem, currIndex);
-        builder.Fork(predCond, skipBlock);
-        return currItem;
+        var filterLambda = SubjectCall!.Args[1];
+        var predCond = builder.CreateLambdaInvoke_ItemAndIndex(filterLambda, currItem, loopData.CreateAccum);
+        builder.Fork(predCond, loopData.SkipBlock);
+        Sink.EmitBody(builder, currItem, loopData);
     }
 }
 internal class OfTypeStage : LinqStageNode
 {
-    public OfTypeStage(CallInst call, LinqStageNode? source)
-        : base(call, source) { }
+    public OfTypeStage(CallInst call, LinqStageNode sink)
+        : base(call, sink) { }
 
-    public override Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock)
+    public override void EmitBody(IRBuilder builder, Value currItem, in BodyLoopData loopData)
     {
         var destType = SubjectCall!.Method.GenericParams[0];
-        var currItem = Source!.EmitCurrent(builder, currIndex, skipBlock);
 
         if (currItem.ResultType.IsValueType) {
             currItem = builder.CreateIntrinsic(CilIntrinsic.Box, currItem.ResultType, currItem);
         }
-        var castItem = builder.CreateIntrinsic(CilIntrinsic.AsInstance, destType, currItem);
-        builder.Fork(castItem, skipBlock);
+        currItem = builder.CreateIntrinsic(CilIntrinsic.AsInstance, destType, currItem);
+        builder.Fork(currItem, loopData.SkipBlock);
 
-        return destType.IsValueType
-            ? builder.CreateIntrinsic(CilIntrinsic.UnboxObj, destType, currItem)
-            : castItem;
-    }
-    public override Value EmitMoveNext(IRBuilder builder, Value currIndex)
-    {
-        return Source!.EmitMoveNext(builder, currIndex);
+        if (destType.IsValueType) {
+            currItem = builder.CreateIntrinsic(CilIntrinsic.UnboxObj, destType, currItem);
+        }
+        Sink.EmitBody(builder, currItem, loopData);
     }
 }
 internal class CastStage : LinqStageNode
 {
-    public CastStage(CallInst call, LinqStageNode? source)
-        : base(call, source) { }
+    public CastStage(CallInst call, LinqStageNode sink)
+        : base(call, sink) { }
 
-    public override Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock)
+    public override void EmitBody(IRBuilder builder, Value currItem, in BodyLoopData loopData)
     {
         var destType = SubjectCall!.Method.GenericParams[0];
-        var currItem = Source!.EmitCurrent(builder, currIndex, skipBlock);
 
         if (currItem.ResultType.IsValueType) {
             currItem = builder.CreateIntrinsic(CilIntrinsic.Box, currItem.ResultType, currItem);
         }
-        return builder.CreateIntrinsic(CilIntrinsic.CastClass, destType, currItem);
+        currItem = builder.CreateIntrinsic(CilIntrinsic.CastClass, destType, currItem);
+
+        Sink.EmitBody(builder, currItem, loopData);
     }
-    public override Value EmitMoveNext(IRBuilder builder, Value currIndex)
+}
+
+internal class FlattenStage : LinqStageNode
+{
+    public FlattenStage(CallInst call, LinqStageNode sink)
+        : base(call, sink) { }
+
+    public override void EmitBody(IRBuilder builder, Value currItem, in BodyLoopData loopData)
     {
-        return Source!.EmitMoveNext(builder, currIndex);
+        var loop = new LoopBuilder(SubjectCall.Block);
+
+        var subCollection = builder.CreateLambdaInvoke(SubjectCall.Args[1], currItem);
+        var enumerator = builder.CreateCallVirt("GetEnumerator", subCollection);
+
+        var innerLoopData = loopData;
+        innerLoopData.CreateAccum = (a, b) => throw new NotImplementedException(); //TODO
+        innerLoopData.SkipBlock = loop.Latch.Block;
+
+        loop.Build(
+            emitCond: header => header.CreateCallVirt("MoveNext", enumerator),
+            emitBody: body => {
+                var currItem = body.CreateCallVirt("get_Current", enumerator);
+                Sink.EmitBody(body, currItem, innerLoopData);
+            }
+        );
+        builder.SetBranch(loop.PreHeader.Block);
+        builder.SetPosition(loop.Exit.Block);
     }
 }

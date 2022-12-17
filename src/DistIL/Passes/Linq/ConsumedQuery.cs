@@ -2,6 +2,7 @@ namespace DistIL.Passes.Linq;
 
 using DistIL.IR.Utils;
 
+/*
 internal class ConsumedQuery : LinqQuery
 {
     public ConsumedQuery(CallInst getEnumerCall, LinqStageNode pipeline)
@@ -78,3 +79,4 @@ internal class ConsumedQuery : LinqQuery
         return numPreds == 2 && preHeader != null && latch != null;
     }
 }
+*/

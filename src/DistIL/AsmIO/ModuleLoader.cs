@@ -48,9 +48,6 @@ internal class ModuleLoader
 
     private void CreateTypes()
     {
-        _mod._typeDefs.EnsureCapacity(_reader.TypeDefinitions.Count);
-        _mod._exportedTypes.EnsureCapacity(_reader.ExportedTypes.Count);
-
         _entities.Create<AssemblyReference>(info => _resolver.Resolve(info.GetAssemblyName(), throwIfNotFound: true));
         _entities.Create<TypeReference>(ResolveTypeRef);
         _entities.Create<TypeDefinition>(info => {
@@ -67,7 +64,6 @@ internal class ModuleLoader
         foreach (var handle in _reader.ExportedTypes) {
             _mod._exportedTypes.Add(ResolveExportedType(handle));
         }
-        _mod.SortTypes();
     }
     private void LoadTypes()
     {
@@ -352,5 +348,4 @@ internal class ModuleLoader
 internal class ModifiedTypeSpecTableWrapper_ : Entity
 {
     public TypeSig Sig = null!;
-    public string Name => "";
 }

@@ -10,9 +10,15 @@ partial class ModuleWriter
     {
         int typeIdx = 1, fieldIdx = 1, methodIdx = 1;
 
-        foreach (var type in _mod.TypeDefs) {
-            _handleMap.Add(type, MetadataTokens.TypeDefinitionHandle(typeIdx++));
+        //Global type must be at exactly the first table entry
+        var globalType = _mod.FindType(null, "<Module>") 
+            ?? throw new InvalidOperationException("Module is missing its global type");
+        _handleMap.Add(globalType, MetadataTokens.TypeDefinitionHandle(typeIdx++));
 
+        foreach (var type in _mod.TypeDefs) {
+            if (type != globalType) {
+                _handleMap.Add(type, MetadataTokens.TypeDefinitionHandle(typeIdx++));
+            }
             foreach (var field in type.Fields) {
                 _handleMap.Add(field, MetadataTokens.FieldDefinitionHandle(fieldIdx++));
             }
@@ -20,9 +26,6 @@ partial class ModuleWriter
                 _handleMap.Add(method, MetadataTokens.MethodDefinitionHandle(methodIdx++));
             }
         }
-
-        var globalType = _mod.FindType(null, "<Module>");
-        Debug.Assert(globalType != null && _mod.TypeDefs[0] == globalType); //Global type row id must be #1
     }
 
     //Add reference to an entity defined in another module

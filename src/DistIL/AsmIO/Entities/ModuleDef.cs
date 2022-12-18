@@ -1,5 +1,6 @@
 namespace DistIL.AsmIO;
 
+using System.Collections;
 using System.IO;
 using System.Reflection;
 using System.Reflection.Metadata;
@@ -11,23 +12,28 @@ public class ModuleDef : ModuleEntity
     public AssemblyFlags AsmFlags { get; set; }
 
     public MethodDef? EntryPoint { get; set; }
-    public IReadOnlyList<TypeDef> TypeDefs => _typeDefs;
-    public IReadOnlyList<TypeDef> ExportedTypes => _exportedTypes;
+
+    /// <summary> All types defined in this module (incl. nested). </summary>
+    public IReadOnlyCollection<TypeDef> TypeDefs => _typeDefs;
+
+    /// <summary> All types exported by this module (incl. nested). </summary>
+    public IReadOnlyCollection<TypeDef> ExportedTypes => _exportedTypes;
 
     public ModuleResolver Resolver { get; init; } = null!;
 
     ModuleDef ModuleEntity.Module => this;
 
-    internal List<TypeDef> _typeDefs = new(), _exportedTypes = new();
+    internal TypeList _typeDefs = new(), _exportedTypes = new();
+
     internal Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); //root assemblies for references of forwarded types
     internal List<CustomAttrib> _asmCustomAttribs = new(), _modCustomAttribs = new();
 
     public TypeDef? FindType(string? ns, string name, bool includeExports = true, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
     {
-        var type = SearchType(_typeDefs, ns, name);
+        var type = _typeDefs.Find(ns, name);
 
         if (type == null && includeExports) {
-            type = SearchType(_exportedTypes, ns, name);
+            type = _exportedTypes.Find(ns, name);
         }
         if (type == null && throwIfNotFound) {
             throw new InvalidOperationException($"Type {ns}.{name} not found");
@@ -41,15 +47,14 @@ public class ModuleDef : ModuleEntity
         TypeDefOrSpec? baseType = null,
         ImmutableArray<GenericParamType> genericParams = default)
     {
-        var index = SearchTypeIndex(_typeDefs, ns, name);
-        if (index >= 0) {
+        if (FindType(ns, name) != null) {
             throw new InvalidOperationException("A type with the same name already exists");
         }
         var type = new TypeDef(
             this, ns, name, attrs, genericParams,
             baseType ?? Resolver.SysTypes.Object
         );
-        _typeDefs.Insert(~index, type);
+        _typeDefs.Add(type);
         return type;
     }
 
@@ -74,55 +79,26 @@ public class ModuleDef : ModuleEntity
     public override string ToString()
         => AsmName.ToString();
 
-    //TODO: This is slow and overly complicated, switch over to a plain Dictionary.
-    internal void SortTypes()
+    internal class TypeList : IReadOnlyCollection<TypeDef>
     {
-        _typeDefs.Sort(CompareTypeName);
-        _exportedTypes.Sort(CompareTypeName);
-    }
+        readonly Dictionary<(string? Ns, string Name), TypeDef> _roots = new();
+        readonly List<TypeDef> _nested = new();
 
-    private static TypeDef? SearchType(List<TypeDef> types, string? ns, string name)
-    {
-        int index = SearchTypeIndex(types, ns, name);
-        return index < 0 ? null : types[index];
-    }
-    private static int SearchTypeIndex(List<TypeDef> types, string? ns, string name)
-    {
-        int min = 0, max = types.Count - 1;
-        while (min <= max) {
-            int mid = (min + max) >>> 1;
-            int c = -CompareTypeName(types[mid], ns, name);
+        public int Count => _roots.Count + _nested.Count;
 
-            if (c < 0) {
-                max = mid - 1;
-            } else if (c > 0) {
-                min = mid + 1;
+        public void Add(TypeDef type)
+        {
+            if (type.IsNested) {
+                _nested.Add(type);
             } else {
-                return mid;
+                _roots.Add((type.Namespace, type.Name), type);
             }
         }
-        return ~min;
-    }
-    private static int CompareTypeName(TypeDef typeA, string? nsB, string nameB, bool weightUpNested = true)
-    {
-        //Nested types are all at the end, and can never match a name
-        if (typeA.IsNested && weightUpNested) {
-            return +1;
-        }
-        int c = string.CompareOrdinal(typeA.Name, nameB);
+        
+        public TypeDef? Find(string? ns, string name)
+            => _roots.GetValueOrDefault((ns, name));
 
-        if (c == 0) {
-            c = string.CompareOrdinal(typeA.Namespace, nsB);
-        }
-        //Force global type to always be the first item on the table
-        if (c != 0 && (typeA.Name == "<Module>" || nameB == "<Module>")) {
-            return nameB == "<Module>" ? +1 : -1;
-        }
-        return c;
-    }
-    internal static int CompareTypeName(TypeDef typeA, TypeDef typeB)
-    {
-        int c = typeA.IsNested.CompareTo(typeB.IsNested);
-        return c == 0 ? CompareTypeName(typeA, typeB.Namespace, typeB.Name, false) : c;
+        public IEnumerator<TypeDef> GetEnumerator() => _roots.Values.Concat(_nested).GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

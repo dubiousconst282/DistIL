@@ -104,10 +104,10 @@ public class ILImporter
             //  "If handlers are nested, the most deeply nested try blocks shall come
             //  before the try blocks that enclose them."
             //TODO: consider using the region tree for this
+            //FIXME: insert dummy jump block for regions starting in the entry block of a handler/filter
             if (IsBlockNestedBy(region, state.EntryBlock)) {
                 var newBlock = _body.CreateBlock(insertAfter: state.EntryBlock.Prev);
 
-                //FIXME: Block.RedirectPreds()?
                 foreach (var pred in state.EntryBlock.Preds) {
                     Debug.Assert(pred.NumSuccs == 1);
                     pred.SetBranch(newBlock);

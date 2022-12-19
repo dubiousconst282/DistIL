@@ -46,6 +46,9 @@ public class IRVerifier
                     guard.HandlerBlock.NumPreds == 1 && (!guard.HasFilter || guard.FilterBlock.NumPreds == 1), guard,
                     "Guard handler/filter block must have a single predecessor");
                 Check(
+                    guard.HandlerBlock.First is not GuardInst && (!guard.HasFilter || guard.FilterBlock.First is not GuardInst), guard,
+                    "Handler/filter entry block should not have guards");
+                Check(
                     guard.Prev is null or GuardInst, guard,
                     "Guards must come before phi and normal instructions");
                 break;

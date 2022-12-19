@@ -25,8 +25,7 @@ public static class CollectionsEx
     public static unsafe ref V? GetOrAddRef<K, V>(this Dictionary<K, V> dict, K key)
         where K : notnull
     {
-        bool b;
-        return ref CollectionsMarshal.GetValueRefOrAddDefault(dict, key, out *&b);
+        return ref CollectionsMarshal.GetValueRefOrAddDefault(dict, key, out _);
     }
 
     /// <summary> Gets the reference of an entry in the dictionary. </summary>

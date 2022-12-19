@@ -1,8 +1,10 @@
 namespace DistIL.AsmIO;
 
+using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Metadata;
+using System.Runtime.CompilerServices;
 
 public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
 {
@@ -76,6 +78,8 @@ public class TypeDef : TypeDefOrSpec
     private IList<CustomAttrib>? _customAttribs;
     private Dictionary<(Entity, Entity?), IList<CustomAttrib>>? _itfCustomAttribs;
 
+    private SpecCache? _specCache;
+
     private static readonly Dictionary<MethodDesc, MethodDef> s_EmptyItfMethodImpls = new();
     private static IReadOnlyList<T> EmptyIfNull<T>(List<T>? list) => list ?? (IReadOnlyList<T>)Array.Empty<T>();
 
@@ -95,14 +99,19 @@ public class TypeDef : TypeDefOrSpec
 
     public override TypeDefOrSpec GetSpec(GenericContext context)
     {
-        return IsGeneric
-            ? new TypeSpec(this, context.FillParams(GenericParams))
-            : this;
+        return IsGeneric ? GetCachedSpec(GenericParams, context) : this;
     }
     public TypeSpec GetSpec(ImmutableArray<TypeDesc> genArgs)
     {
         Ensure.That(IsGeneric && genArgs.Length == GenericParams.Count);
-        return new TypeSpec(this, genArgs);
+        return GetCachedSpec(genArgs, default);
+    }
+
+    internal TypeSpec GetCachedSpec(IReadOnlyList<TypeDesc> pars, GenericContext ctx)
+    {
+        _specCache ??= new();
+        ref var spec = ref _specCache.Get(pars, ctx, out var filledArgs);
+        return spec ??= new TypeSpec(this, filledArgs);
     }
 
     public TypeDef? GetNestedType(string name)
@@ -251,6 +260,66 @@ public class TypeDef : TypeDefOrSpec
         loader.FillGenericParams(GenericParams, info.GetGenericParameters());
         _customAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
     }
+
+    class SpecCache
+    {
+        //TODO: experiment with WeakRefs/ConditionalWeakTable
+        readonly Dictionary<SpecKey, TypeSpec> _entries = new();
+
+        public ref TypeSpec? Get(IReadOnlyList<TypeDesc> pars, GenericContext ctx, out ImmutableArray<TypeDesc> filledArgs)
+        {
+            var key = new SpecKey(pars, ctx);
+            ref var slot = ref _entries.GetOrAddRef(key, out bool exists);
+            filledArgs = exists ? default : key.GetArgs();
+            return ref slot;
+        }
+
+        struct SpecKey : IEquatable<SpecKey>
+        {
+            readonly object _data; //Either<TypeDesc, TypeDesc[]>
+
+            public SpecKey(IReadOnlyList<TypeDesc> pars, GenericContext ctx)
+            {
+                if (pars.Count == 1) {
+                    _data = pars[0].GetSpec(ctx);
+                } else {
+                    var args = ctx.FillParams(pars);
+                    //take the internal array directly to avoid boxing
+                    _data = Unsafe.As<ImmutableArray<TypeDesc>, TypeDesc[]>(ref args);
+                }
+            }
+
+            public ImmutableArray<TypeDesc> GetArgs()
+            {
+                return _data is TypeDesc[] arr
+                    ? Unsafe.As<TypeDesc[], ImmutableArray<TypeDesc>>(ref arr)
+                    : ImmutableArray.Create((TypeDesc)_data);
+            }
+
+            public bool Equals(SpecKey other)
+            {
+                if (_data is TypeDesc[] sig) {
+                    return other._data is TypeDesc[] otherSig && sig.AsSpan().SequenceEqual(otherSig);
+                }
+                return _data.Equals(other._data); //TypeDesc
+            }
+
+            public override int GetHashCode()
+            {
+                if (_data is TypeDesc[] sig) {
+                    var hash = new HashCode();
+                    foreach (var type in sig) {
+                        hash.Add(type);
+                    }
+                    return hash.ToHashCode();
+                }
+                return _data.GetHashCode();
+            }
+
+            public override bool Equals(object? obj)
+                => throw new InvalidOperationException();
+        }
+    }
 }
 
 /// <summary> Represents a generic type instantiation. </summary>
@@ -269,17 +338,13 @@ public class TypeSpec : TypeDefOrSpec
     public override string? Namespace => Definition.Namespace;
     public override string Name => Definition.Name;
 
-    //TypeSpec members cannot be changed because they reflect the parent def
-    //TODO: find a way to cache TypeSpec members
-    public override IReadOnlyList<FieldSpec> Fields {
-        get => Definition.Fields.Select(f => new FieldSpec(this, f)).ToList();
-    }
-    public override IReadOnlyList<MethodSpec> Methods {
-        get => Definition.Methods.Select(m => new MethodSpec(this, m)).ToList();
-    }
-    public override IReadOnlyList<TypeDesc> Interfaces {
-        get => Definition.Interfaces.Select(t => t.GetSpec(new GenericContext(this))).ToList();
-    }
+    public override IReadOnlyList<FieldSpec> Fields => _fields ??= new(Definition.Fields, def => new FieldSpec(this, def));
+    public override IReadOnlyList<MethodSpec> Methods => _methods ??= new(Definition.Methods, def => new MethodSpec(this, def));
+    public override IReadOnlyList<TypeDesc> Interfaces => _interfaces ??= new(Definition.Interfaces, def => def.GetSpec(new GenericContext(this)));
+
+    MemberList<FieldDef, FieldSpec>? _fields;
+    MemberList<MethodDef, MethodSpec>? _methods;
+    MemberList<TypeDesc, TypeDesc>? _interfaces;
 
     internal TypeSpec(TypeDef def, ImmutableArray<TypeDesc> args)
     {
@@ -300,20 +365,21 @@ public class TypeSpec : TypeDefOrSpec
         if (method.DeclaringType != Definition || !spec.IsNullOrEmpty) {
             return method.GetSpec(actualSpec);
         }
-        return new MethodSpec(this, (MethodDef)method);
+        var memberList = (MemberList<MethodDef, MethodSpec>)Methods;
+        return memberList.GetMapping((MethodDef)method);
     }
 
     public override FieldDesc? FindField(string name, [DoesNotReturnIf(true)] bool throwIfNotFound = true)
     {
         var field = Definition.FindField(name, throwIfNotFound);
-        return field != null ? new FieldSpec(this, (FieldDef)field) : null;
+        var memberList = (MemberList<FieldDef, FieldSpec>)Fields;
+
+        return field == null ? null : memberList.GetMapping((FieldDef)field);
     }
 
     public override TypeSpec GetSpec(GenericContext context)
     {
-        return context.TryFillParams(GenericParams, out var genArgs)
-            ? new TypeSpec(Definition, genArgs)
-            : this;
+        return Definition.GetCachedSpec(GenericParams, context);
     }
 
     public override void Print(PrintContext ctx, bool includeNs = false)
@@ -323,6 +389,31 @@ public class TypeSpec : TypeDefOrSpec
     }
 
     public override bool Equals(TypeDesc? other)
-        => other is TypeSpec o && o.Definition.Equals(Definition) &&
+        => other is TypeSpec o && o.Definition == Definition &&
            o.GenericParams.SequenceEqual(GenericParams);
+
+    class MemberList<TDef, TSpec> : IReadOnlyList<TSpec> where TDef : EntityDesc
+    {
+        readonly IReadOnlyList<TDef> _source;
+        readonly Func<TDef, TSpec> _specFactory;
+        Dictionary<TDef, TSpec>? _mappings;
+
+        public TSpec this[int index] => GetMapping(_source[index]);
+        public int Count => _source.Count;
+
+        public MemberList(IReadOnlyList<TDef> defs, Func<TDef, TSpec> getSpec)
+        {
+            _source = defs;
+            _specFactory = getSpec;
+        }
+
+        public TSpec GetMapping(TDef def)
+        {
+            _mappings ??= new(ReferenceEqualityComparer.Instance);
+            return _mappings.GetOrAddRef(def) ??= _specFactory.Invoke(def);
+        }
+
+        public IEnumerator<TSpec> GetEnumerator() => _source.Select(GetMapping).GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
 }

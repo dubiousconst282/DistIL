@@ -84,8 +84,8 @@ public class ExpandLinq : MethodPass
                 "Where"         => new WhereStage(call, sink),
                 "OfType"        => new OfTypeStage(call, sink),
                 "Cast"          => new CastStage(call, sink),
-                //TODO: SelectMany stage needs to properly handle accum vars when nesting LoopBuilders
-                //"SelectMany"    => new FlattenStage(call, sink),
+                "Skip"          => new SkipStage(call, sink),
+                "SelectMany"    => new FlattenStage(call, sink),
                 _ => default(LinqStageNode)
             };
             if (node != null) {

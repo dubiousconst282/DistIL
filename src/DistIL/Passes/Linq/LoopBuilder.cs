@@ -6,7 +6,7 @@ public class LoopBuilder
 {
     public readonly IRBuilder PreHeader, Header, Latch, Exit;
     public readonly IRBuilder Body;
-    private List<(PhiInst HeadPhi, PhiInst LatchPhi, Instruction Next)> _pendingAccums = new();
+    private List<(PhiInst HeadPhi, Instruction Next)> _pendingAccums = new();
 
     //PreHeader:
     //  ...
@@ -50,18 +50,31 @@ public class LoopBuilder
         emitBody(Body);
         Body.SetBranch(Latch.Block);
 
-        foreach (var (headPhi, latchPhi, next) in _pendingAccums) {
-            //Phi inputs must dominate their corresponding predecessor block,
-            //we only support updates in the latch, or in a direct pred of it.
-            if (Latch.Block.NumPreds >= 2) {
-                foreach (var pred in Latch.Block.Preds) {
-                    latchPhi.AddArg(pred, pred == next.Block ? next : headPhi);
-                }
-            } else {
-                latchPhi.ReplaceWith(next);
-            }
+        foreach (var (headPhi, next) in _pendingAccums) {
+            headPhi.ReplaceOperands(next, InsertAccumPhis(Latch.Block, next, headPhi));
         }
         Latch.SetBranch(Header.Block);
+    }
+
+    //Naive algorithm that inserts phis for each predecessor to form strict SSA (def dominates all uses).
+    private Value InsertAccumPhis(BasicBlock block, Instruction def, Instruction dom)
+    {
+        if (block == def.Block) {
+            return def;
+        }
+        if (block == dom.Block) {
+            return dom;
+        }
+        if (block.NumPreds == 1) {
+            return InsertAccumPhis(block.Preds.First(), def, dom);
+        }
+        Debug.Assert(block.NumPreds > 0);
+
+        var phi = block.InsertPhi(def.ResultType);
+        foreach (var pred in block.Preds) {
+            phi.AddArg(pred, InsertAccumPhis(pred, def, dom));
+        }
+        return phi;
     }
 
     /// <summary> Creates a loop accumulator/induction variable. </summary>
@@ -70,12 +83,8 @@ public class LoopBuilder
         var phi = Header.CreatePhi(seed.ResultType);
         var next = emitUpdate(phi);
 
-        if (next is Instruction inst && inst.Block != Latch.Block) {
-            //We must build pending accum phis at the end, because the block in which
-            //the update inst is might be incomplete when CreateAccum() is called.
-            var latchPhi = Latch.CreatePhi(seed.ResultType);
-            _pendingAccums.Add((phi, latchPhi, inst));
-            next = latchPhi;
+        if (next is Instruction nextI && nextI.Block != Latch.Block) {
+            _pendingAccums.Add((phi, nextI));
         }
         phi.AddArg((PreHeader.Block, seed), (Latch.Block, next));
         return phi;

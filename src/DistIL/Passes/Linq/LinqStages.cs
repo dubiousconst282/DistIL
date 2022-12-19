@@ -66,7 +66,25 @@ internal class CastStage : LinqStageNode
         Sink.EmitBody(builder, currItem, loopData);
     }
 }
+internal class SkipStage : LinqStageNode
+{
+    public SkipStage(CallInst call, LinqStageNode sink)
+        : base(call, sink) { }
 
+    public override void EmitBody(IRBuilder builder, Value currItem, in BodyLoopData loopData)
+    {
+        var loopData_ = loopData;
+
+        loopData_.CreateAccum(ConstInt.CreateI(0), emitUpdate: curr => {
+            //goto ++curr > skipCount ? NextBody : Continue;
+            var next = builder.CreateAdd(curr, ConstInt.CreateI(1));
+            builder.Fork(builder.CreateSgt(next, SubjectCall.Args[1]), loopData_.SkipBlock);
+
+            Sink.EmitBody(builder, currItem, loopData_);
+            return next;
+        });
+    }
+}
 internal class FlattenStage : LinqStageNode
 {
     public FlattenStage(CallInst call, LinqStageNode sink)
@@ -80,7 +98,6 @@ internal class FlattenStage : LinqStageNode
         var enumerator = builder.CreateCallVirt("GetEnumerator", subCollection);
 
         var innerLoopData = loopData;
-        innerLoopData.CreateAccum = (a, b) => throw new NotImplementedException(); //TODO
         innerLoopData.SkipBlock = loop.Latch.Block;
 
         loop.Build(

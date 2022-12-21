@@ -12,20 +12,19 @@ public class IRPrinter
     /// Graphviz files can be rendered in several ways, one of them is through this VSCode extension: 
     /// https://marketplace.visualstudio.com/items?itemName=tintinweb.graphviz-interactive-preview
     /// </remarks>
-    public static void ExportDot(MethodBody method, string filename)
+    public static void ExportDot(MethodBody method, string filename, IReadOnlyList<IPrintDecorator>? decorators = null)
     {
         using var tw = new StreamWriter(filename);
-        ExportDot(method, tw);
+        ExportDot(method, tw, decorators);
     }
-    public static void ExportDot(MethodBody method, TextWriter tw)
+    public static void ExportDot(MethodBody method, TextWriter tw, IReadOnlyList<IPrintDecorator>? decorators = null)
     {
-        //TODO: IGraphvizDecorator to allow analyses to draw custom elements
         var pc = new GraphvizPrintContext(tw, method.GetSymbolTable());
         bool hasGuards = false;
 
         tw.WriteLine("digraph {");
         tw.WriteLine("  node[shape=plaintext fontname=consolas fontsize=12 fontcolor=\"#D4D4D4\"]");
-        tw.WriteLine("  edge[fontname=consolas fontsize=10]");
+        tw.WriteLine("  edge[fontname=consolas fontsize=10 fontcolor=\"#D4D4D4\"]");
         tw.WriteLine("  bgcolor=\"#303031\"");
 
         foreach (var block in method) {
@@ -34,12 +33,14 @@ public class IRPrinter
             tw.Write("      <tr><td colspan='2' balign='left'>\n");
 
             tw.Write($"{block}:\n");
-            int i = 0;
+            Decorate(d => d.DecorateLabel(pc, block));
 
+            int i = 0;
             pc.Push();
             foreach (var inst in block) {
                 if (i++ != 0) pc.PrintLine();
                 inst.Print(pc);
+                Decorate(d => d.DecorateInst(pc, inst));
             }
             pc.Pop();
 
@@ -48,25 +49,26 @@ public class IRPrinter
             tw.Write("  >]\n");
 
             foreach (var succ in block.Succs) {
-                string port = "s", style = "";
+                string port = "s";
+                var style = new GraphvizEdgeStyle();
+
                 if (block.Last is BranchInst { IsConditional: true } br) {
                     port = succ == br.Then ? "sw" : "se";
                 } else if (block.Last is LeaveInst) {
-                    style = "[color=red]";
+                    style.Color = "red";
                 }
-                foreach (var guard in block.Guards()) {
-                    if (guard.HandlerBlock == succ || guard.FilterBlock == succ) {
-                        (style, port) = ("[style=dashed color=gray]", "e");
-                        break;
-                    }
+                if (block.Guards().Any(g => g.HandlerBlock == succ || g.FilterBlock == succ)) {
+                    port = "e";
+                    style.Dashed = true;
+                    style.Color = "gray";
                 }
+                Decorate(d => d.DecorateEdge(block, succ, ref style));
                 tw.Write($"  {block}:{port} -> {succ}{style}\n");
             }
             tw.Write("\n");
 
             hasGuards |= block.Guards().Any();
         }
-
         if (hasGuards) {
             int clusterId = 0;
             var regionAnalysis = new ProtectedRegionAnalysis(method);
@@ -94,6 +96,15 @@ public class IRPrinter
             }
         }
         tw.Write("}\n");
+
+        void Decorate(Action<IPrintDecorator> fn)
+        {
+            if (decorators != null) {
+                foreach (var decor in decorators) {
+                    fn(decor);
+                }
+            }
+        }
     }
 
     public static void ExportPlain(MethodBody method, string filename)
@@ -239,6 +250,39 @@ public class IRPrinter
                 Print(")");
             } else {
                 base.PrintAsOperand(value);
+            }
+        }
+    }
+}
+
+/// <summary> Prints additional information on specific locations of the textual form IR. </summary>
+public interface IPrintDecorator
+{
+    void DecorateLabel(PrintContext ctx, BasicBlock block) { }
+    void DecorateInst(PrintContext ctx, Instruction inst) { }
+
+    /// <remarks> Graphviz only. </remarks>
+    void DecorateEdge(BasicBlock block, BasicBlock succ, ref GraphvizEdgeStyle style) { }
+}
+public struct GraphvizEdgeStyle
+{
+    public string? Color;
+    public string? OutLabel, InLabel;
+    public bool Dashed;
+
+    public override string ToString()
+    {
+        var sb = new StringBuilder("[");
+        Add("color=", Color);
+        Add("style=", Dashed ? "dashed" : null);
+        Add("taillabel=", OutLabel);
+        Add("headlabel=", InLabel);
+        return sb.Length == 1 ? "" : sb.Append(']').ToString();
+
+        void Add(string key, string? val)
+        {
+            if (val != null) {
+                sb.Append(key).Append('"').Append(val.Replace("\n", "\\\n")).Append('"');
             }
         }
     }

@@ -90,6 +90,25 @@ public class PrintContext
             _nextToner = default;
         }
 
+        public void AppendFormatted(IEnumerable<Value> values, string format)
+        {
+            //Trailing whitespace is not allowed in interpolated strings,
+            //so we use '$' as a backward escaping character instead.
+            string separator = format.TrimEnd('$');
+            int i = 0;
+            foreach (var value in values) {
+                if (i ++ > 0) {
+                    _ctx.Print(separator, _nextToner);
+                }
+                if (value is Instruction) {
+                    _ctx.PrintAsOperand(value);
+                } else {
+                    _ctx.Print(value);
+                }
+            }
+            _nextToner = default;
+        }
+
         private void Print(string str)
         {
             _ctx.Print(str, _nextToner);

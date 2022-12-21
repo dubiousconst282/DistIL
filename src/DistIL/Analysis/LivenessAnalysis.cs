@@ -1,6 +1,8 @@
 namespace DistIL.Analysis;
 
-using InstSet = RefSet<Instruction>;
+using DistIL.IR.Utils;
+
+using VarSet = RefSet<Instruction>;
 
 /// <summary>
 /// Liveness analysis for SSA definitions. The current implementation is based on the 
@@ -9,12 +11,13 @@ using InstSet = RefSet<Instruction>;
 /// See "Computing Liveness Sets for SSA-Form Programs" (https://hal.inria.fr/inria-00558509v2/document)
 /// and section 7.4 of the SSA book.
 /// </summary>
-public class LivenessAnalysis : IMethodAnalysis
+public class LivenessAnalysis : IMethodAnalysis, IPrintDecorator
 {
-    readonly Dictionary<BasicBlock, (InstSet? In, InstSet? Out)> _liveSets = new();
+    readonly Dictionary<BasicBlock, (VarSet? In, VarSet? Out)> _liveSets = new();
 
     public LivenessAnalysis(MethodBody method)
     {
+        //TODO: This might be actually slower than an iterative data-flow analysis
         var worklist = new ArrayStack<BasicBlock>();
 
         //Visit all instructions defining a value
@@ -59,14 +62,19 @@ public class LivenessAnalysis : IMethodAnalysis
     static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
         => new LivenessAnalysis(mgr.Method);
 
-    /// <summary> Returns the live sets for `block`. </summary>
-    public (InstSet? In, InstSet? Out) GetLiveSets(BasicBlock block) => _liveSets.GetValueOrDefault(block);
+    static readonly VarSet s_EmptySet = new(0);
+
+    /// <summary> Returns the set of variables live when `block` exists. </summary>
+    /// <remarks> The returned set may be an empty singleton and it _should not_ be modified. </remarks>
+    public VarSet GetLiveOut(BasicBlock block) => _liveSets.GetValueOrDefault(block).Out ?? s_EmptySet;
 
     /// <summary> Checks if `inst` is live at the start of `block`. </summary>
-    public bool IsLiveIn(BasicBlock block, Instruction inst) => GetLiveSets(block).In?.Contains(inst) ?? false;
+    public bool IsLiveIn(BasicBlock block, Instruction inst)
+        => _liveSets.GetValueOrDefault(block).In?.Contains(inst) ?? false;
 
     /// <summary> Checks if `inst` is live when `block` exits. </summary>
-    public bool IsLiveOut(BasicBlock block, Instruction inst) => GetLiveSets(block).Out?.Contains(inst) ?? false;
+    public bool IsLiveOut(BasicBlock block, Instruction inst)
+        => _liveSets.GetValueOrDefault(block).Out?.Contains(inst) ?? false;
 
     /// <summary> Checks if `inst` is live after `pos` executes. </summary>
     public bool IsLiveAfter(Instruction inst, Instruction pos)
@@ -85,18 +93,20 @@ public class LivenessAnalysis : IMethodAnalysis
         return false;
     }
 
-    public override string ToString()
+    void IPrintDecorator.DecorateEdge(BasicBlock block, BasicBlock succ, ref GraphvizEdgeStyle style)
     {
-        var sb = new StringBuilder();
-        var pc = new PrintContext(new StringWriter(sb), _liveSets.First().Key.Method.GetSymbolTable());
+        var liveOut = GetLiveOut(block);
+        if (liveOut.Count == 0) return;
 
-        foreach (var (block, (liveIn, liveOut)) in _liveSets) {
-            if (liveIn?.Count + liveOut?.Count == 0) continue;
+        var sw = new StringWriter();
+        var pc = new PrintContext(sw, block.GetSymbolTable()!);
+
+        foreach (var def in liveOut) {
+            if (!IsLiveIn(succ, def)) continue;
             
-            sb.Append($"{block}:\n");
-            pc.PrintSequence("   In: [", "]", liveIn!.GetEnumerator().AsEnumerable(), pc.PrintAsOperand);
-            pc.PrintSequence("  Out: [", "]", liveOut!.GetEnumerator().AsEnumerable(), pc.PrintAsOperand);
+            pc.PrintAsOperand(def);
+            pc.Print(" ");
         }
-        return sb.ToString();
+        style.OutLabel = sw.ToString();
     }
 }

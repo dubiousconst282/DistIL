@@ -73,6 +73,18 @@ public class BitSet : IEquatable<BitSet>
         return GetRangeEnumerator(start, end).MoveNext();
     }
 
+    /// <summary> Returns the index of the first unset bit. </summary>
+    public int FirstUnsetIndex()
+    {
+        for (int i = 0; i < _data.Length; i++) {
+            ulong mask = ~_data[i];
+            if (mask != 0) {
+                return (i * 64) + BitOperations.TrailingZeroCount(mask);
+            }
+        }
+        return _data.Length * 64;
+    }
+
     /// <summary> Removes the elements of the specified set from this set, and returns whether any change occurred. </summary>
     public bool Intersect(BitSet other)
     {

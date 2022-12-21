@@ -53,7 +53,7 @@ public class RegisterAllocator : IPrintDecorator
         foreach (var (inst, node) in _interfs.GetNodes()) {
             if (node.Color != 0) continue; //already assigned
 
-            foreach (var neighbor in node.Adjacent) {
+            foreach (var neighbor in _interfs.GetAdjacent(node)) {
                 if (neighbor.Color != 0) {
                     usedColors.Add(neighbor.Color - 1);
                 }

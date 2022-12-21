@@ -2,7 +2,8 @@ namespace DistIL.Analysis;
 
 public class InterferenceGraph : IMethodAnalysis
 {
-    readonly Dictionary<Instruction, Node> _nodes = new();
+    Dictionary<Instruction, int> _defNodeIds = new();
+    Node[] _nodes = new Node[16];
 
     public InterferenceGraph(MethodBody method, LivenessAnalysis liveness)
     {
@@ -42,77 +43,103 @@ public class InterferenceGraph : IMethodAnalysis
         var na = GetOrCreateNode(a);
         var nb = GetOrCreateNode(b);
 
-        na.Adjacent.Add(nb);
-        nb.Adjacent.Add(na);
+        nb.Adjacent.Add(na.Id);
+        na.Adjacent.Add(nb.Id);
     }
 
-    public bool HasEdge(Instruction a, Instruction b)
-    {
-        return _nodes.TryGetValue(a, out var na) &&
-               _nodes.TryGetValue(b, out var nb) &&
-                na.Adjacent.Contains(nb);
-    }
+    public bool HasEdge(Instruction a, Instruction b) => CheckOrMerge(a, b, false);
 
-    public bool TryMerge(Instruction a, Instruction b)
+    public bool TryMerge(Instruction a, Instruction b) => CheckOrMerge(a, b, true);
+
+    private bool CheckOrMerge(Instruction a, Instruction b, bool merge)
     {
-        if (!_nodes.TryGetValue(a, out var na) ||
-            !_nodes.TryGetValue(b, out var nb) ||
-            na.Adjacent.Contains(nb)
-        ) {
+        if (!_defNodeIds.TryGetValue(a, out int ia) || !_defNodeIds.TryGetValue(b, out int ib)) {
             return false;
         }
+        var na = GetNode(ia);
+        var nb = GetNode(ib);
 
-        foreach (var node in nb.Adjacent) {
-            node.Adjacent.Remove(nb);
-            node.Adjacent.Add(na);
-            na.Adjacent.Add(node);
-        }
-        _nodes[b] = na;
+        bool interferes = na.Adjacent.Contains(nb.Id);
+        return merge ? !interferes && MergeNodes(na, nb) : interferes;
+    }
 
-        foreach (var kak in _nodes) {
-            if (kak.Value == nb) {
-                _nodes[kak.Key] = na;
+    private bool MergeNodes(Node a, Node b)
+    {
+        if (a != b) {
+            //Replace all existing edges to B with A
+            foreach (var id in b.Adjacent) {
+                var node = GetNode(id);
+                node.Adjacent.Remove(b.Id);
+                node.Adjacent.Add(a.Id);
             }
+            a.Adjacent.Union(b.Adjacent);
+
+            b.MergedWith = a;
         }
         return true;
     }
 
     public Node? GetNode(Instruction def)
-        => _nodes.GetValueOrDefault(def);
+    {
+        return _defNodeIds.TryGetValue(def, out int id) ? GetNode(id) : null;
+    }
 
     public Node GetOrCreateNode(Instruction def)
-        => _nodes.GetOrAddRef(def)
-            ??= new Node() { Index = _nodes.Count - 1 };
+    {
+        ref int id = ref _defNodeIds.GetOrAddRef(def, out bool exists);
+        if (!exists) {
+            id = _defNodeIds.Count - 1;
+            
+            if (id >= _nodes.Length) {
+                Array.Resize(ref _nodes, _nodes.Length * 2);
+            }
+            return _nodes[id] = new Node(id);
+        }
+        return GetNode(id);
+    }
 
-    public IReadOnlyDictionary<Instruction, Node> GetNodes()
-        => _nodes;
+    private Node GetNode(int id)
+    {
+        var node = _nodes[id];
+        while (node.MergedWith != null) {
+            node = node.MergedWith;
+        }
+        return node;
+    }
+
+    public IEnumerable<(Instruction K, Node V)> GetNodes()
+        => _defNodeIds.Select(e => (e.Key, GetNode(e.Value)));
+
+    public IEnumerable<Node> GetAdjacent(Node node)
+        => node.Adjacent.GetEnumerator().AsEnumerable().Select(GetNode);
 
     public override string ToString()
     {
         var sw = new StringWriter();
-        var pc = new PrintContext(sw, _nodes.First().Key.GetSymbolTable()!);
+        var pc = new PrintContext(sw, _defNodeIds.First().Key.GetSymbolTable()!);
 
         sw.Write("graph {\n");
         sw.Write("  node[shape=\"box\"]\n");
 
-        var edges = new HashSet<(int A, int B)>();
-        
-        foreach (var nodeA in _nodes.Values) {
-            foreach (var nodeB in nodeA.Adjacent) {
-                int idxA = nodeA.Index;
-                int idxB = nodeB.Index;
-                var key = idxA > idxB ? (idxB, idxA) : (idxA, idxB);
+        var edges = new HashSet<(int, int)>();
 
+        foreach (var (_, nodeA) in GetNodes()) {
+            foreach (var nodeB in GetAdjacent(nodeA)) {
+                var key = (A: nodeA.Id, B: nodeB.Id);
+
+                if (key.A > key.B) {
+                    key = (key.B, key.A);
+                }
                 if (edges.Add(key)) {
-                    pc.Print($"  n{idxA} -- n{idxB}\n");
+                    pc.Print($"  n{key.A} -- n{key.B}\n");
                 }
             }
         }
 
-        foreach (var group in _nodes.GroupBy(e => e.Value, e => e.Key)) {
-            sw.Write($"n{group.Key.Index}[label=<");
+        foreach (var group in _defNodeIds.GroupBy(e => GetNode(e.Value), e => e.Key)) {
+            sw.Write($"n{group.Key.Id}[label=<");
             sw.Write("<font color=\"blue\" point-size=\"10\">");
-            sw.Write(group.First().ResultType);
+            pc.Print(group.First().ResultType);
             sw.Write(" </font>");
 
             pc.Print($"{group: $}");
@@ -129,9 +156,13 @@ public class InterferenceGraph : IMethodAnalysis
 
     public class Node
     {
-        public HashSet<Node> Adjacent = new();
-        public int Index;
+        public readonly BitSet Adjacent = new();
+        public readonly int Id;
         public int Color;
         public Variable? Register;
+
+        internal Node? MergedWith;
+
+        public Node(int id) => Id = id;
     }
 }

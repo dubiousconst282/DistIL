@@ -1,7 +1,7 @@
 namespace DistIL.Analysis;
 
 //https://en.wikipedia.org/wiki/Data-flow_analysis
-/// <summary> Generic base for a gen-kill data flow analysis. </summary>
+/// <summary> Generic framework for gen-kill data flow problems. </summary>
 public abstract class DataFlowAnalysis
 {
     protected readonly Dictionary<BasicBlock, BlockState> _states;
@@ -126,68 +126,11 @@ public abstract class DataFlowAnalysis
         public BitSet In, Out, Killed;
         internal bool InWorklist;
     }
-
-    /// <summary> Bi-directional map of <typeparamref name="T"/> and sequential integer ids. </summary>
-    public class Palette<T> where T : notnull
-    {
-        internal readonly Dictionary<T, int> _ids;
-        internal T[]? _items;
-
-        public Palette(IEqualityComparer<T>? comparer = null)
-            => _ids = new(comparer);
-
-        public int Alloc(T value)
-        {
-            if (!_ids.TryGetValue(value, out int id)) {
-                _ids[value] = id = _ids.Count;
-            }
-            return id;
-        }
-
-        public int IndexOf(T value) => _ids.GetValueOrDefault(value, -1);
-
-        public T Get(int id)
-        {
-            if (_items == null || _items.Length != _ids.Count) {
-                _items = _ids.Keys.ToArray();
-            }
-            return _items[id];
-        }
-    }
-    /// <summary> Ordered set of arbitrary items backed by a <see cref="BitSet"/>, which indexes a <see cref="Palette{T}"/>. </summary>
-    public struct IndirectSet<T> where T : notnull
-    {
-        public readonly Palette<T> Palette;
-        public readonly BitSet Entries;
-
-        public IndirectSet(Palette<T> palette, BitSet entries)
-            => (Palette, Entries) = (palette, entries);
-
-        public bool Contains(T value)
-            => Entries.Contains(Palette.IndexOf(value)); //BitSet.Contains() allows negative indices
-
-        public override string ToString()
-        {
-            var sb = new StringBuilder();
-            foreach (var item in this) {
-                if (sb.Length > 0) sb.Append(", ");
-                sb.Append(item);
-            }
-            return sb.ToString();
-        }
-
-        public IEnumerator<T> GetEnumerator()
-        {
-            foreach (int id in Entries) {
-                yield return Palette.Get(id);
-            }
-        }
-    }
 }
 
 public class VarLivenessAnalysis : DataFlowAnalysis, IMethodAnalysis
 {
-    private readonly Palette<Variable> _varIds = new();
+    private readonly IndexMap<Variable> _varIds = new();
 
     public VarLivenessAnalysis(MethodBody method)
         : base(method, backward: true) { }
@@ -202,7 +145,7 @@ public class VarLivenessAnalysis : DataFlowAnalysis, IMethodAnalysis
 
         foreach (var inst in block) {
             if (inst is VarAccessInst acc) {
-                int varId = _varIds.Alloc(acc.Var);
+                int varId = _varIds.Add(acc.Var);
 
                 if (inst is StoreVarInst) {
                     killed.Add(varId);
@@ -213,8 +156,8 @@ public class VarLivenessAnalysis : DataFlowAnalysis, IMethodAnalysis
         }
         state = new() { Killed = killed, In = globals, Out = new BitSet() };
     }
-    protected override void PrintValue(PrintContext ctx, int index) => ctx.PrintAsOperand(_varIds.Get(index));
+    protected override void PrintValue(PrintContext ctx, int index) => ctx.PrintAsOperand(_varIds.At(index));
 
-    public IndirectSet<Variable> GetLiveIn(BasicBlock block) => new(_varIds, GetState(block).In);
-    public IndirectSet<Variable> GetLiveOut(BasicBlock block) => new(_varIds, GetState(block).Out);
+    public JointBitSet<Variable> GetLiveIn(BasicBlock block) => new(_varIds, GetState(block).In);
+    public JointBitSet<Variable> GetLiveOut(BasicBlock block) => new(_varIds, GetState(block).Out);
 }

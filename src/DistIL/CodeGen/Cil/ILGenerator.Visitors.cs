@@ -203,7 +203,7 @@ partial class ILGenerator
     public void Visit(BranchInst inst)
     {
         if (inst.IsJump) {
-            EmitFallthroughBranch(ILCode.Br, inst.Then);
+            EmitFallthrough(ILCode.Br, inst.Then);
             return;
         }
         //Invert condition if we can fallthrough the true branch
@@ -231,14 +231,13 @@ partial class ILGenerator
             Push(inst.Cond);
             code = invert ? ILCode.Brfalse : ILCode.Brtrue;
         }
-        //FIXME: this is confusing
-        var (thenBlock, elseBlock) = invert ? (inst.Then, inst.Else) : (inst.Else, inst.Then);
-        EmitFallthroughBranch(code, thenBlock, elseBlock);
+        var (thenBlock, elseBlock) = invert ? (inst.Else, inst.Then) : (inst.Then, inst.Else);
+        EmitBranchAndFallthrough(code, thenBlock, elseBlock);
     }
     public void Visit(SwitchInst inst)
     {
         Push(inst.TargetIndex);
-        EmitFallthroughBranch(ILCode.Switch, inst.DefaultTarget, inst.GetIndexedTargets());
+        EmitBranchAndFallthrough(ILCode.Switch, inst.GetIndexedTargets(), inst.DefaultTarget);
     }
     public void Visit(ReturnInst inst)
     {
@@ -265,7 +264,7 @@ partial class ILGenerator
     }
     public void Visit(LeaveInst inst)
     {
-        EmitFallthroughBranch(ILCode.Leave, inst.Target);
+        EmitFallthrough(ILCode.Leave, inst.Target);
     }
     public void Visit(ResumeInst inst)
     {

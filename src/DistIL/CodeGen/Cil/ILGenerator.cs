@@ -111,17 +111,24 @@ public partial class ILGenerator : InstVisitor
         }
     }
     
-    private void EmitFallthroughBranch(ILCode code, BasicBlock target, object? operand = null)
+    private void EmitFallthrough(ILCode code, BasicBlock target)
     {
         //Emit phi-related copies before branching
         EmitOutgoingPhiCopies();
 
-        if (code != ILCode.Br) {
-            Debug.Assert(operand != null);
-            _asm.Emit(code, operand);
+        if (_nextBlock != target || code != ILCode.Br) {
+            _asm.Emit(code, target);
         }
-        if (_nextBlock != target) {
-            _asm.Emit(ILCode.Br, target);
+    }
+
+    private void EmitBranchAndFallthrough(ILCode code, object operand, BasicBlock fallthrough)
+    {
+        EmitOutgoingPhiCopies();
+
+        _asm.Emit(code, operand);
+
+        if (_nextBlock != fallthrough) {
+            _asm.Emit(ILCode.Br, fallthrough);
         }
     }
 

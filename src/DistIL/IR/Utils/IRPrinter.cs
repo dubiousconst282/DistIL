@@ -172,9 +172,12 @@ public class IRPrinter
 
             //Graphviz doesn't render spaces between font tags correctly,
             //this workaround seem to work most of the time.
-            if (str.StartsWith(' ')) {
-                Output.Write("<b> </b>");
-                str = str[1..];
+            int untrimmedLen = str.Length;
+            str = str.TrimStart(' ');
+
+            if (str.Length != untrimmedLen) {
+                string ws = new(' ', untrimmedLen - str.Length);
+                Output.Write("<b>" + ws + "</b>");
             }
             
             string? color = null;

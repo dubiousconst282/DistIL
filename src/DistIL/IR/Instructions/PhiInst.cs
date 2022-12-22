@@ -129,6 +129,9 @@ public class PhiInst : Instruction
     private static TypeDesc GetCommonType(TypeDesc? currType, Value[] opers, int currIndex)
     {
         var value = opers[currIndex + 1];
+        if (value is ConstNull) {
+            return currType ?? PrimType.Object;
+        }
         if (ReferenceEquals(currType, PrimType.Object) && !HasConcreteValueBefore(opers, currIndex)) {
             return value.ResultType;
         }

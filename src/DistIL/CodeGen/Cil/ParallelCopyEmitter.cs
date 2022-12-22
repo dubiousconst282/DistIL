@@ -17,6 +17,8 @@ public class ParallelCopyEmitter
 
     public void Add(Variable dest, Variable src)
     {
+        if (dest == src) return;
+        
         Loc(src) = src;
         Pred(dest) = src;
 

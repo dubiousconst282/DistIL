@@ -35,7 +35,9 @@ public class RegisterAllocator : IPrintDecorator
 
                     //If the value is either a const or an interfering instruction,
                     //schedule a parallel copy at the end of `pred`.
-                    if (value is not Instruction valI || !_interfs.TryMerge(phi, valI)) {
+                    //Note that we can't coalesce values of different object types,
+                    //because that could lead to bad behavior for e.g. interface resolution. 
+                    if (value is not Instruction valI || phi.ResultType != valI.ResultType || !_interfs.TryMerge(phi, valI)) {
                         var actualPred = pred.SplitCriticalEdge(block);
                         var copies = _phiCopies.GetOrAddRef(actualPred) ??= new();
                         copies.Add((phi, value));
@@ -82,7 +84,11 @@ public class RegisterAllocator : IPrintDecorator
     void IPrintDecorator.DecorateInst(PrintContext ctx, Instruction inst)
     {
         if (inst.HasResult && GetRegister(inst) is { } reg) {
-            ctx.Print(" @ " + reg.Name, PrintToner.Comment);
+            ctx.Print(" @" + reg.Name, PrintToner.Comment);
+        }
+        if (inst.Next == null && GetPhiCopies(inst.Block) is { } copies) {
+            ctx.PrintLine();
+            ctx.Print($"@({copies.Select(e => e.Dest):, $}) = ({copies.Select(e => e.Value):, $})");
         }
     }
 }

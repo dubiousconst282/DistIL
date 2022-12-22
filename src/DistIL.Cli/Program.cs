@@ -36,10 +36,12 @@ static void RunOptimizer(OptimizerOptions options)
     var mp1 = new MethodPassManager();
     mp1.Add(new SimplifyCFG());
     mp1.Add(new SsaTransform());
+    mp1.Add(new ExpandLinq(module));
+    mp1.Add(new SimplifyInsts(module)); //lambdas and devirtualization
 
+    //TODO: check if we actually need separate pipelines now that passes are
+    //      applied in topological call graph order
     var mp2 = new MethodPassManager();
-    mp2.Add(new ExpandLinq(module));
-    mp2.Add(new SimplifyInsts(module)); //lambdas and devirtualization
     mp2.Add(new InlineMethods());
     mp2.Add(new ScalarReplacement());
     mp2.Add(new SimplifyInsts(module));
@@ -47,9 +49,6 @@ static void RunOptimizer(OptimizerOptions options)
     mp2.Add(new ValueNumbering());
     mp2.Add(new DeadCodeElim());
     mp2.Add(new SimplifyCFG());
-
-    var mp3 = new MethodPassManager();
-    mp3.Add(new RemovePhis());
 
     if (options.DumpDir != null) {
         if (options.PurgeDumps && Directory.Exists(options.DumpDir)) {
@@ -71,7 +70,6 @@ static void RunOptimizer(OptimizerOptions options)
     });
     pm.Add(mp1);
     pm.Add(mp2);
-    pm.Add(mp3);
     pm.Add(new ExportPass());
 
     var comp = new Compilation(module, new ConsoleLogger() { MinLevel = LogLevel.Debug }, new CompilationSettings());

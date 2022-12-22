@@ -203,10 +203,10 @@ partial class ILGenerator
     public void Visit(BranchInst inst)
     {
         if (inst.IsJump) {
-            EmitFallthrough(inst.Then);
+            EmitFallthrough(ILCode.Br, inst.Then);
             return;
         }
-        //Invert condition if we can fallthrough one of its branches
+        //Invert condition if we can fallthrough the true branch
         bool invert = _nextBlock == inst.Then; 
         var code = ILCode.Nop;
 
@@ -231,14 +231,13 @@ partial class ILGenerator
             Push(inst.Cond);
             code = invert ? ILCode.Brfalse : ILCode.Brtrue;
         }
-        _asm.Emit(code, invert ? inst.Else : inst.Then);
-        EmitFallthrough(invert ? inst.Then : inst.Else);
+        var (thenBlock, elseBlock) = invert ? (inst.Else, inst.Then) : (inst.Then, inst.Else);
+        EmitBranchAndFallthrough(code, thenBlock, elseBlock);
     }
     public void Visit(SwitchInst inst)
     {
         Push(inst.TargetIndex);
-        _asm.Emit(ILCode.Switch, inst.GetIndexedTargets());
-        EmitFallthrough(inst.DefaultTarget);
+        EmitBranchAndFallthrough(ILCode.Switch, inst.GetIndexedTargets(), inst.DefaultTarget);
     }
     public void Visit(ReturnInst inst)
     {
@@ -260,11 +259,12 @@ partial class ILGenerator
 
     public void Visit(GuardInst inst)
     {
-        _asm.Emit(ILCode.Nop);
+        //Guards are purely metadata and don't do anything.
+        //See ILGenerator.Generate() for how they're actually emitted.
     }
     public void Visit(LeaveInst inst)
     {
-        _asm.Emit(ILCode.Leave, inst.Target);
+        EmitFallthrough(ILCode.Leave, inst.Target);
     }
     public void Visit(ResumeInst inst)
     {
@@ -278,6 +278,7 @@ partial class ILGenerator
 
     public void Visit(PhiInst inst)
     {
-        throw new NotSupportedException("Phis should be removed before code gen.");
+        //Note that copying of phi arguments is done before the block terminator is emitted
+        throw new UnreachableException();
     }
 }

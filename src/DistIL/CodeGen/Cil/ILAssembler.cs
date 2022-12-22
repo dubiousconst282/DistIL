@@ -200,8 +200,13 @@ internal class ILAssembler
     public override string ToString()
     {
         var sb = new StringBuilder();
-        foreach (ref var inst in GetInstructions()) {
-            sb.AppendLine(inst.ToString());
+
+        var labels = _blockStarts.ToLookup(e => e.Value, e => e.Key);
+        for (int i = 0; i < _index; i++) {
+            foreach (var block in labels[i]) {
+                sb.Append(block + ":\n");
+            }
+            sb.Append("  ").Append(_insts[i].ToString().AsSpan("IL_0000: ".Length)).Append("\n");
         }
         return sb.ToString();
     }

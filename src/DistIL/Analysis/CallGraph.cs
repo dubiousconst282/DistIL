@@ -12,7 +12,7 @@ public class CallGraph
         foreach (var method in module.AllMethods()) {
             if (method.ILBody == null) continue;
 
-            var called = default(RefSet<MethodDef>);
+            var called = default(HashSet<MethodDef>);
 
             //TODO: deeper analysis for inlining heuristics
             foreach (ref var inst in method.ILBody.Instructions.AsSpan()) {
@@ -92,7 +92,7 @@ public class CallGraph
 
     private struct Node
     {
-        public RefSet<MethodDef>? Called;
+        public HashSet<MethodDef>? Called;
         public int Id;
     }
 }

@@ -35,9 +35,14 @@ public class RegisterAllocator : IPrintDecorator
 
                     //If the value is either a const or an interfering instruction,
                     //schedule a parallel copy at the end of `pred`.
-                    //Note that we can't coalesce values of different object types,
-                    //because that could lead to bad behavior for e.g. interface resolution. 
-                    if (value is not Instruction valI || phi.ResultType != valI.ResultType || !_interfs.TryMerge(phi, valI)) {
+                    //
+                    //We can't coalesce arguments that have a more concrete type than that of the phi, because
+                    //color assignment will arbitrarily pick a type from any of the coalesced defs, and it could 
+                    //cause issues with interface resolution:
+                    //  List r1 = ...
+                    //  HashSet r2 = ...
+                    //  IEnumerable r3 = phi [... -> r1], [... -> r2]
+                    if (value is not Instruction valI || !phi.ResultType.IsAssignableTo(valI.ResultType) || !_interfs.TryMerge(phi, valI)) {
                         var actualPred = pred.SplitCriticalEdge(block);
                         var copies = _phiCopies.GetOrAddRef(actualPred) ??= new();
                         copies.Add((phi, value));
@@ -52,6 +57,7 @@ public class RegisterAllocator : IPrintDecorator
     {
         var usedColors = new BitSet();
 
+        //TODO: Coloring can be optimal since we're using a SSA graph (perfect elimination order)
         foreach (var (inst, node) in _interfs.GetNodes()) {
             if (node.Color != 0) continue; //already assigned
 

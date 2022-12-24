@@ -32,10 +32,8 @@ public interface StoreInst : AccessInst
     }
     public static bool MustBeCoerced(TypeDesc destType, Value srcValue)
     {
-        var destKind = destType.Kind;
-        if (destKind.IsSmallInt() && srcValue is ConstInt cons) {
-            ulong mask = (1ul << destKind.BitSize()) - 1; //won't overflow as BitSize is <= 16
-            return (cons.UValue & ~mask) != 0;
+        if (destType.Kind.IsSmallInt() && srcValue is ConstInt cons) {
+            return !cons.FitsInType(destType);
         }
         return MustBeCoerced(destType, srcValue.ResultType);
     }

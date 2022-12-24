@@ -28,9 +28,24 @@ public class ConstInt : Const
         Value = value;
     }
 
+    /// <summary> Checks whether the constant value fits in the specified type, without being truncated. The value is treated as unsigned. </summary>
+    public bool FitsInType(TypeDesc type)
+    {
+        ulong mask = (ulong)GetMask(type.Kind.BitSize());
+        return (UValue & ~mask) == 0;
+    }
+
     private static long GetMask(int size) => size == 64 ? ~0L : (1L << size) - 1;
 
-    public static ConstInt CreateI(int value) => new(PrimType.Int32, value);
+    static readonly ConstInt?[] s_SmallIntCache = new ConstInt?[8];
+
+    public static ConstInt CreateI(int value)
+    {
+        if (value is >= -1 and < 7) {
+            return s_SmallIntCache[value + 1] ??= new(PrimType.Int32, value);
+        }
+        return new(PrimType.Int32, value);
+    }
     public static ConstInt CreateL(long value) => new(PrimType.Int64, value);
 
     public static ConstInt Create(TypeDesc type, long value) => new(type, value);

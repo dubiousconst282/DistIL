@@ -14,8 +14,8 @@ public class PhiInst : Instruction
     {
         ResultType = type;
     }
-    public PhiInst(params PhiArg[] args)
-        : base(InterleaveArgs(args, out var type))
+    public PhiInst(TypeDesc type, params PhiArg[] args)
+        : base(InterleaveArgs(args))
     {
         ResultType = type;
     }
@@ -66,7 +66,6 @@ public class PhiInst : Instruction
         Debug.Assert(_operands[index] == null);
         ReplaceOperand(index + 0, block);
         ReplaceOperand(index + 1, value);
-        ResultType = GetCommonType(ResultType, _operands, index);
     }
 
     public void RemoveArg(int index, bool removeTrivialPhi)
@@ -111,10 +110,9 @@ public class PhiInst : Instruction
         }
     }
     
-    private static Value[] InterleaveArgs(PhiArg[] args, out TypeDesc resultType)
+    private static Value[] InterleaveArgs(PhiArg[] args)
     {
         Ensure.That(args.Length > 0, "Phi argument array cannot be empty");
-        resultType = null!;
 
         var opers = new Value[args.Length * 2];
 
@@ -122,32 +120,8 @@ public class PhiInst : Instruction
             var (block, value) = args[i];
             opers[i * 2 + 0] = block;
             opers[i * 2 + 1] = value;
-            resultType = GetCommonType(resultType, opers, i * 2);
         }
         return opers;
-    }
-    private static TypeDesc GetCommonType(TypeDesc? currType, Value[] opers, int currIndex)
-    {
-        var value = opers[currIndex + 1];
-        if (value is ConstNull) {
-            return currType ?? PrimType.Object;
-        }
-        if (ReferenceEquals(currType, PrimType.Object) && !HasConcreteValueBefore(opers, currIndex)) {
-            return value.ResultType;
-        }
-        return TypeDesc.GetCommonAssignableType(currType, value.ResultType)
-            ?? throw new InvalidOperationException("Phi arguments must be stack assignable to each other");
-
-
-        static bool HasConcreteValueBefore(Value[] opers, int endIndex)
-        {
-            for (int i = 0; i < endIndex; i += 2) {
-                if (opers[i + 1] is not ConstNull) {
-                    return true;
-                }
-            }
-            return false;
-        }
     }
 }
 //typedef PhiArg = (BasicBlock block, Value value);

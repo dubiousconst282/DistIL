@@ -1,5 +1,6 @@
 namespace DistIL.Tests.IR;
 
+using DistIL.AsmIO;
 using DistIL.IR;
 using DistIL.Util;
 
@@ -76,7 +77,7 @@ public class ValueTests
         var value1 = new FakeTrackedValue(123);
         var value2 = new FakeTrackedValue(456);
         var block = new BasicBlock(null!);
-        var phi = new PhiInst((block, value1), (block, value1), (block, value1), (block, value2));
+        var phi = new PhiInst(PrimType.Int32, (block, value1), (block, value1), (block, value1), (block, value2));
         //                      0      1          2      3        4       5          6      7
         CheckUses(value1, (phi, 1), (phi, 3), (phi, 5));
         CheckUses(value2, (phi, 7));

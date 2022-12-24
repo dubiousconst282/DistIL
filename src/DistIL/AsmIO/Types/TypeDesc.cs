@@ -89,19 +89,59 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     public bool Inherits(TypeDesc baseType)
     {
         for (var parent = this; parent != null; parent = parent.BaseType) {
-            if (parent == baseType || (baseType.IsInterface && parent.Interfaces.Contains(baseType))) {
+            if (parent == baseType || (baseType.IsInterface && Implements(parent, (TypeDefOrSpec)baseType))) {
                 return true;
             }
         }
         return false;
     }
 
+    private static bool Implements(TypeDesc type, TypeDefOrSpec itf, bool isForAssignmentCheck = false)
+    {
+        if (type is PrimType prim) {
+            var resolver = itf.Module.Resolver;
+            type = prim.GetDefinition(resolver);
+        }
+        //Arrays actually implement lots of interfaces at runtime
+        //I.8.7.1 only mentions IList, but there are many others.
+        else if (type is ArrayType arr) {
+            return arr.Implements(itf);
+        }
+
+        if (itf.IsGeneric && itf.Definition.GenericParams.Any(g => g.IsCovariant)) {
+            return type.Interfaces.Any(m => CheckCovariant(m, itf)) || 
+                   (isForAssignmentCheck && CheckCovariant(type, itf));
+        }
+        return type.Interfaces.Contains(itf) || (isForAssignmentCheck && type == itf);
+
+        static bool CheckCovariant(TypeDesc impl, TypeDefOrSpec itf)
+        {
+            var itfDef = itf.Definition;
+            //Check for the generic def, TypeDefs instances are unique.
+            if (ReferenceEquals(impl, itfDef)) {
+                return true;
+            }
+            if (impl is not TypeSpec implSpec || implSpec.Definition != itfDef) {
+                return false;
+            }
+            int count = itf.GenericParams.Count;
+
+            for (int i = 0; i < count; i++) {
+                var typeA = implSpec.GenericParams[i];
+                var typeB = itf.GenericParams[i];
+
+                if (typeA.IsValueType || typeB.IsValueType ? typeA != typeB : !typeA.Inherits(typeB)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
     /// <summary> Checks whether this type can be assigned to a variable of the given type, based on stronger typing rules. </summary>
     /// <remarks> Note that support for ArrayType is not implemented. </remarks>
     public bool IsAssignableTo(TypeDesc assigneeType)
     {
-        Debug.Assert(this is not ArrayType && assigneeType is not ArrayType); //not impl, see comment on GetCommonAncestor()
-
         if (this == assigneeType) {
             return true;
         }
@@ -115,9 +155,12 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
             return Kind.BitSize() <= assigneeType.Kind.BitSize();
         }
         if (t1 == StackType.Object) {
-            return Inherits(assigneeType);
+            return IsInterface
+                ? assigneeType == PrimType.Object || 
+                    (assigneeType.IsInterface && Implements(this, (TypeDefOrSpec)assigneeType, isForAssignmentCheck: true))
+                : Inherits(assigneeType);
         }
-        return t1 != StackType.Struct;
+        return t1 != StackType.Struct; //structs of different types can't be assigned to each other
     }
 
     /// <summary> Checks whether this type can be assigned to a variable of the given type, assuming they are values on the evaluation stack. </summary>
@@ -145,56 +188,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
                (t2 is StackType.NInt && t1 is StackType.ByRef or StackType.Int);
     }
 
-    /// <summary>
-    /// Returns a type for a location in which two values of type `a` and `b` can be interchangeably assigned to, or null if they're not compatible. <br/>
-    /// - If they're int or float types, returns whichever is bigger, e.g. `GetCommonAssignableType(ushort, int) = int`. Result is normalized to signed if the two types are mixed. <br/>
-    /// - If they're object types, returns the common ancestor type. <br/>
-    /// - If they're pointer or byref types, returns a pointer of the common assignable element type, or `void*`/`void&amp;` if they're different element types. <br/>
-    /// - If they're object types, returns the lowest common ancestor, ending in Object. <br/>
-    /// - Otherwise, if they're not stack assignable to each other, returns null. <br/>
-    /// <br/>
-    /// This is loosely based on `I.8.7.3 General assignment compatibility`.
-    /// </summary>
-    public static TypeDesc? GetCommonAssignableType(TypeDesc? a, TypeDesc? b)
-    {
-        if (a == null || b == null) {
-            return a ?? b;
-        }
-        if (a == b) {
-            return a;
-        }
-        var stA = a.StackType;
-        var stB = b.StackType;
-
-        if (stA == stB && stA != StackType.Struct) {
-            if (stA is StackType.Int or StackType.Float) {
-                return b.Kind.BitSize() > a.Kind.BitSize() || (b.Kind.IsSigned() && !a.Kind.IsSigned()) ? b : a;
-            }
-            if (stA == StackType.Object) {
-                return GetCommonAncestor(a, b);
-            }
-            if (a is PointerType || b is PointerType) {
-                return GetCommonPtrElemType(a, b).CreatePointer();
-            }
-            return a;
-        }
-        if (stA == StackType.ByRef || stB == StackType.ByRef) {
-            return GetCommonPtrElemType(a, b).CreateByref();
-        }
-        if ((stA == StackType.Int && stB == StackType.NInt) || (stA == StackType.NInt && stB == StackType.Int)) {
-            return stA == StackType.NInt ? a : b;
-        }
-        return null;
-        
-        static TypeDesc GetCommonPtrElemType(TypeDesc a, TypeDesc b)
-        {
-            a = a.ElemType!;
-            b = b.ElemType!;
-            var res = GetCommonAssignableType(a, b);
-            return a == null || b == null || res == null ? PrimType.Void : res;
-        }
-    }
-
+    /// <summary> Returns the common base type of `a` and `b`, assuming they're both object types (not structs). </summary>
     public static TypeDesc GetCommonAncestor(TypeDesc a, TypeDesc b)
     {
         Ensure.That(!a.IsValueType && !b.IsValueType); //Not impl, will return ValueType as lowest CA
@@ -212,27 +206,9 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
             b = b.BaseType!;
         }
         //Check for intersecting ancestors
-        var tempSet = default(HashSet<TypeDesc>);
-
-        for (int i = depthA; i > 0; i--) {
+        for (int i = depthA; i >= 0; i--) {
             if (a == b) {
                 return a;
-            }
-            if (a.Interfaces.Count > 0 && b.Interfaces.Count > 0) {
-                //Try return the first intersection between a.Interfaces and b.Interfaces
-                //
-                //Note that this won't work for e.g. PrimType.Array, in the worst case this
-                //will just fallback to Object, which is fine as far as CIL is concerned.
-                (tempSet ??= new()).Clear();
-
-                foreach (var itf in a.Interfaces) {
-                    tempSet.Add(itf);
-                }
-                foreach (var itf in b.Interfaces) {
-                    if (tempSet.Contains(itf)) {
-                        return itf;
-                    }
-                }
             }
             a = a.BaseType!;
             b = b.BaseType!;

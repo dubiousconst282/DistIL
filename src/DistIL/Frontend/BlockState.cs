@@ -15,9 +15,7 @@ internal class BlockState
     public BasicBlock EntryBlock;
 
     readonly ArrayStack<Value> _stack;
-    //Variables that were left in the stack after the execution of a predecessor block.
-    private ArrayStack<PhiInst>? _entryStack;
-    readonly List<BlockState> _succStates = new();
+    readonly List<BlockState> _preds = new();
 
     private InstFlags _prefixFlags = InstFlags.None;
     private TypeDesc? _callConstraint;
@@ -67,54 +65,89 @@ internal class BlockState
     private BasicBlock AddSucc(int offset)
     {
         var succ = _importer.GetBlock(offset);
-        _succStates.Add(succ);
+        succ._preds.Add(this);
         return succ.EntryBlock;
     }
-    //Adds the last instruction in the block (a branch),
-    //and propagate variables left on the stack to successor blocks.
-    private void TerminateBlock(Instruction branch)
+    //Adds the last instruction in the block (a branch).
+    private void TerminateBlock(Instruction branch, bool clearStack = false)
     {
-        PropagateStack();
         Emit(branch);
-    }
-    private void PropagateStack()
-    {
-        var exitStack = _stack;
-        if (exitStack.Count == 0) return;
 
-        foreach (var succ in _succStates) {
-            Ensure.That(
-                succ.EntryBlock == succ.Block && succ.Block.First is not GuardInst, 
-                "Stack must be empty when entering a new region");
-
-            var entryStack = succ._entryStack;
-
-            if (entryStack == null) {
-                //Create dummy phis
-                succ._entryStack = entryStack = new ArrayStack<PhiInst>(exitStack.Count);
-                foreach (var value in exitStack) {
-                    var phi = new PhiInst(new PhiArg(Block, value));
-                    entryStack.Push(phi);
-                    succ.Push(phi);
-                }
-            } else {
-                //Update phis
-                for (int i = 0; i < exitStack.Count; i++) {
-                    var phi = entryStack[i];
-                    var value = exitStack[i];
-                    //Ensure types are compatible (FIXME: III.1.8.1.3)
-                    if (value.ResultType.StackType != phi.ResultType.StackType) {
-                        throw Error("Inconsistent evaluation stack between basic blocks.");
-                    }
-                    phi.AddArg(Block, value);
-                }
-            }
+        if (clearStack) {
+            _stack.Clear();
         }
+    }
+
+    private void MergePredStacks()
+    {
+        if (_preds.Count == 0) return;
+
+        //Phis are not necessary if there's only one pred
+        if (_preds.Count == 1) {
+            foreach (var value in _preds[0]._stack) {
+                _stack.Push(value);
+            }
+            return;
+        }
+        int maxDepth = _preds[0]._stack.Count;
+
+        //We don't make any guarantees for invalid IL, this is just for good measure.
+        Debug.Assert(_preds.All(b => b._stack.Count == maxDepth));
+
+        if (maxDepth == 0) return;
+
+        for (int depth = 0; depth < maxDepth; depth++) {
+            var args = new PhiArg[_preds.Count];
+            int argIdx = 0;
+            var type = default(TypeDesc);
+            bool allSameArg = true;
+
+            foreach (var pred in _preds) {
+                if (pred._stack.Count != maxDepth) throw Fail();
+
+                var value = pred._stack[depth];
+                args[argIdx++] = (pred.Block, value);
+
+                if (value is not ConstNull) {
+                    type = GetMergedStackType(type, value.ResultType) ?? throw Fail();
+                }
+                allSameArg &= argIdx < 2 || args[argIdx - 2].Value.Equals(value);
+            }
+            type ??= PrimType.Object; //all args were ConstNull`s
+
+            var result = allSameArg
+                ? args[0].Value
+                : EntryBlock.InsertPhi(new PhiInst(type, args));
+
+            _stack.Push(result);
+        }
+
+        Exception Fail() => throw Error("Inconsistent evaluation stack between basic blocks.");
+    }
+
+    private TypeDesc? GetMergedStackType(TypeDesc? currType, TypeDesc newType)
+    {
+        //III.1.8.1.3
+        if (currType == null) {
+            return newType;
+        }
+        if (newType.IsAssignableTo(currType)) {
+            return currType;
+        }
+        if (currType.IsAssignableTo(newType)) {
+            return newType;
+        }
+        if (currType.StackType is StackType.Object && newType.StackType is StackType.Object) {
+            return TypeDesc.GetCommonAncestor(currType, newType);
+        }
+        return null;
     }
 
     /// <summary> Translates the IL code into IR instructions. </summary>
     public void ImportCode(Span<ILInstruction> code)
     {
+        MergePredStacks();
+
         foreach (ref var inst in code) {
             var prefix = InstFlags.None;
             var opcode = inst.OpCode;
@@ -754,19 +787,18 @@ internal class BlockState
             chainBlock = nextBlock;
             currRegion = currRegion.Parent!;
         }
-        //We don't need to call AddSucc() because the eval stack should be discarded.
-        TerminateBlock(new LeaveInst(chainBlock));
+        TerminateBlock(new LeaveInst(chainBlock), clearStack: true);
     }
     private void ImportResume(bool isFromFilter)
     {
         var filterResult = isFromFilter ? Pop() : null;
-        TerminateBlock(new ResumeInst(filterResult));
+        TerminateBlock(new ResumeInst(filterResult), clearStack: true);
     }
 
     private void ImportThrow(bool isRethrow)
     {
         var exception = isRethrow ? null : Pop();
-        TerminateBlock(new ThrowInst(exception));
+        TerminateBlock(new ThrowInst(exception), clearStack: true);
     }
 
     private void ImportGenericUnaryIntrinsic(CilIntrinsic intrinsic, object? typeArg)

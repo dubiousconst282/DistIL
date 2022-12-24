@@ -95,7 +95,7 @@ public class BasicBlockTests
         block3.InsertLast(inst7);
         block3.InsertLast(inst8);
 
-        var inst9 = new PhiInst((block2, inst5), (block3, inst7));
+        var inst9 = new PhiInst(PrimType.Int32, (block2, inst5), (block3, inst7));
         var instA = new ReturnInst(inst4);
         block4.InsertLast(inst9);
         block4.InsertLast(instA);

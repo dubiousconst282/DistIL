@@ -27,8 +27,9 @@ internal class PeekFirstQuery : LinqQuery
         var op = SubjectCall.Method.Name;
 
         if (op.EndsWith("OrDefault")) {
-            var defaultValue = loopData.PreHeader.CreateDefaultOf(SubjectCall.ResultType);
-            var phi = exit.CreatePhi((builder.Block, currItem), (loopData.Header.Block, defaultValue));
+            var type = SubjectCall.ResultType;
+            var defaultValue = loopData.PreHeader.CreateDefaultOf(type);
+            var phi = exit.CreatePhi(type, (builder.Block, currItem), (loopData.Header.Block, defaultValue));
             SubjectCall.ReplaceUses(phi);
         } else {
             exit.Fork((builder, newBlock) => builder.Throw(typeof(InvalidOperationException)));

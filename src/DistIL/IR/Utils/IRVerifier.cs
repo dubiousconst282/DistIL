@@ -59,11 +59,21 @@ public class IRVerifier
                     "Phis must come before normal instructions");
 
                 var preds = new HashSet<BasicBlock>();
-                foreach (var arg in phi) {
-                    Check(preds.Add(arg.Block), phi, "Phi should not have duplicated block arguments");
+                bool argTypesMatch = true;
+
+                foreach (var (pred, val) in phi) {
+                    Check(preds.Add(pred), phi, "Phi should not have duplicated block arguments");
+
+                    var type = phi.ResultType;
+                    argTypesMatch &= val switch {
+                        ConstNull => type.StackType == StackType.Object,
+                        ConstInt ci when type.Kind.IsSmallInt() => ci.FitsInType(type),
+                        _ => val.ResultType.IsAssignableTo(type)
+                    };
                 }
                 preds.SymmetricExceptWith(phi.Block.Preds.AsEnumerable());
                 Check(preds.Count == 0, phi, "Phi must have one argument for each block predecessor");
+                Check(argTypesMatch, phi, "Phi arguments should be assignable to its result type", DiagnosticSeverity.Warn);
                 break;
             }
             case StoreVarInst { Var.ResultType: var dstType, Value.ResultType: var srcType, Value: var srcVal }: {

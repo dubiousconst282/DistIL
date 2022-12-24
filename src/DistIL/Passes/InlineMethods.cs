@@ -97,7 +97,7 @@ public class InlineMethods : MethodPass
 
         if (result != null) {
             //After inlining, `call` will be at the start of the continuation block.
-            return StoreInst.Coerce(call.ResultType, result, insertBefore: call);
+            return result;
         } else if (callee.ReturnType != PrimType.Void) {
             //This could happen if we inline a method that ends with ThrowInst, but it still returns something.
             //Code after `call` should be unreachable now, but we need to replace its uses with undef to avoid making the IR invalid.
@@ -115,7 +115,11 @@ public class InlineMethods : MethodPass
             block.MoveRange(call.Block, call.Prev, block.First, ret.Prev);
         }
         block.Remove();
-        return ret?.Value;
+        
+        if (ret.Value != null) {
+            return StoreInst.Coerce(call.ResultType, ret.Value, insertBefore: call);
+        }
+        return null;
     }
 
     private static Value? InlineManyBlocks(Instruction call, BasicBlock entryBlock, List<BasicBlock> returningBlocks)
@@ -123,21 +127,24 @@ public class InlineMethods : MethodPass
         var startBlock = call.Block;
         var endBlock = startBlock.Split(call, branchTo: entryBlock);
 
-        var returnedVals = new List<PhiArg>();
+        var resultType = call.ResultType;
+        var results = new PhiArg[returningBlocks.Count];
+        int resultIdx = 0;
 
         //Rewrite exit blocks to jump into endBlock
         foreach (var block in returningBlocks) {
-            if (block.Last is ReturnInst { HasValue: true, Value: var result }) {
-                returnedVals.Add((block, result));
+            if (block.Last is ReturnInst { HasValue: true } ret) {
+                var result = StoreInst.Coerce(resultType, ret.Value, insertBefore: ret);
+                results[resultIdx++] = (block, result);
             }
             block.SetBranch(endBlock);
         }
 
         //Return the generated value
-        if (returnedVals.Count >= 2) {
-            return endBlock.InsertPhi(new PhiInst(returnedVals.ToArray()));
+        if (resultIdx >= 2) {
+            return endBlock.InsertPhi(new PhiInst(resultType, results));
         }
-        return returnedVals.FirstOrDefault().Value;
+        return results.FirstOrDefault().Value;
     }
 
     public class Options

@@ -21,6 +21,9 @@ public class GenericParamType : TypeDesc
     public int Index { get; }
     public bool IsMethodParam { get; }
 
+    public bool IsCovariant => (Attribs & GenericParameterAttributes.Covariant) != 0;
+    public bool IsContravariant => (Attribs & GenericParameterAttributes.Contravariant) != 0;
+
     public GenericParamType(int index, bool isMethodParam, string? name = null, GenericParameterAttributes attribs = 0, ImmutableArray<TypeSig> constraints = default)
     {
         Index = index;

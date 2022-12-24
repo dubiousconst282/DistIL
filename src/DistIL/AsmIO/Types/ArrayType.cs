@@ -13,15 +13,38 @@ public class ArrayType : CompoundType
     protected override string Postfix => "[]";
 
     internal ArrayType(TypeDesc elemType)
-        : base(elemType)
+        : base(elemType) { }
+
+    internal bool Implements(TypeDefOrSpec itf)
     {
+        var coreLib = itf.Module.Resolver.CoreLib;
+
+        return itf.Module == coreLib && itf.Namespace switch {
+            "System"
+                => itf.Name == "ICloneable",
+            "System.Collections"
+                => Array.IndexOf(s_BoxedCollectionNames, itf.Name) >= 0,
+            "System.Collections.Generic"
+                => Array.IndexOf(s_GenCollectionNames, itf.Name) >= 0 && 
+                   ElemType.IsAssignableTo(itf.GenericParams[0]),
+            _ => false
+        };
     }
+
+    static readonly string[] s_GenCollectionNames = {
+        "IList`1", "ICollection`1", "IEnumerable`1",
+        "IReadOnlyList`1", "IReadOnlyCollection`1"
+    };
+    static readonly string[] s_BoxedCollectionNames = {
+        "IList", "ICollection", "IEnumerable",
+        "IStructuralComparable", "IStructuralEquatable"
+    };
 
     protected override CompoundType New(TypeDesc elemType)
         => new ArrayType(elemType);
 }
 
-/// <summary> Represents an over complicated multi-dimensional array type. </summary>
+/// <summary> Represents an overly complicated multi-dimensional array type. </summary>
 public class MDArrayType : CompoundType
 {
     public int Rank { get; }

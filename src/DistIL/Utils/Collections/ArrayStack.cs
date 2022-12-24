@@ -52,6 +52,16 @@ public class ArrayStack<T>
         _arr[^(++_head)] = value;
     }
 
+    public void Clear()
+    {
+        //Although Pop() doesn't clear refs, it might be worth doing it here
+        //since it probably means that this stack will be around for longer.
+        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>()) {
+            Array.Clear(_arr);
+        }
+        _head = 0;
+    }
+
     /// <summary>
     /// If the stack is not empty, copies the value on top of the stack to `value` and return true; 
     /// otherwise, leaves `value` uninitialized and return false. 

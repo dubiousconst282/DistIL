@@ -23,11 +23,11 @@ public class IRBuilder
     }
     public void SetPosition(Instruction inst) => SetPosition(inst.Block, inst);
 
-    public PhiInst CreatePhi(TypeDesc resultType) 
-        => _block.InsertPhi(resultType);
+    public PhiInst CreatePhi(TypeDesc type) 
+        => _block.InsertPhi(type);
 
-    public PhiInst CreatePhi(params PhiArg[] args)
-        => _block.InsertPhi(new PhiInst(args));
+    public PhiInst CreatePhi(TypeDesc type, params PhiArg[] args)
+        => _block.InsertPhi(new PhiInst(type, args));
 
     public void SetBranch(BasicBlock target) 
         => _block.SetBranch(target);

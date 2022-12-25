@@ -8,7 +8,7 @@ internal class AggregationQuery : LinqQuery
     public AggregationQuery(CallInst call)
         : base(call) { }
 
-    Value? _accumulator, _seed, _isEmpty;
+    Value? _accumulator, _seed, _hasData;
 
     public override void EmitHead(IRBuilder builder, Value? estimCount)
     {
@@ -16,8 +16,9 @@ internal class AggregationQuery : LinqQuery
     }
     public override void EmitTail(IRBuilder builder)
     {
-        if (_isEmpty != null) {
-            builder.Throw(typeof(InvalidOperationException), _isEmpty);
+        if (_hasData != null) {
+            //goto hasData ? Exit : ThrowHelper
+            builder.Throw(typeof(InvalidOperationException), builder.CreateEq(_hasData, ConstInt.CreateI(0)));
         }
         SubjectCall.ReplaceUses(MapResult(builder, _accumulator!));
     }
@@ -25,11 +26,33 @@ internal class AggregationQuery : LinqQuery
     public override void EmitBody(IRBuilder builder, Value currItem, in BodyLoopData loopData)
     {
         var skipBlock = loopData.SkipBlock;
-        _accumulator = loopData.CreateAccum(_seed!, emitUpdate: curr => Accumulate(builder, curr, currItem, skipBlock));
 
-        if (_seed is Undef) {
-            _isEmpty = loopData.CreateAccum(ConstInt.Create(PrimType.Bool, 1), emitUpdate: curr => ConstInt.Create(PrimType.Bool, 0));
+        if (_seed is not Undef) {
+            _accumulator = loopData.CreateAccum(_seed!, emitUpdate: curr => Accumulate(builder, curr, currItem, skipBlock));
+            return;
         }
+        Debug.Assert(SubjectCall.ResultType == currItem.ResultType);
+
+        var loopData_ = loopData;
+        _hasData = loopData_.CreateAccum(ConstInt.Create(PrimType.Bool, 0), emitUpdate: hasData => {
+            var gotData = default(Value);
+
+            _accumulator = loopData_.CreateAccum(_seed, emitUpdate: curr => {
+                //nextAccum = hasData ? Accum(currItem) : currItem
+                var emptyCheckBlock = builder.Block;
+                var mergeBlock = builder.Method.CreateBlock(insertAfter: emptyCheckBlock).SetName("LQ_MergeAccum");
+                builder.Fork(hasData, mergeBlock);
+
+                var accumulated = Accumulate(builder, curr, currItem, skipBlock);
+                var accumBlock = builder.Block;
+                builder.SetBranch(mergeBlock);
+
+                builder.SetPosition(mergeBlock);
+                gotData = builder.CreatePhi(PrimType.Bool, (emptyCheckBlock, ConstInt.CreateI(1)), (accumBlock, hasData));
+                return builder.CreatePhi(SubjectCall.ResultType, (emptyCheckBlock, currItem), (accumBlock, accumulated));
+            });
+            return gotData!;
+        }).SetName("lq_has_data");
     }
 
     protected virtual Value GetSeed(IRBuilder builder)

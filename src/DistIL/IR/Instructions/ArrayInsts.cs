@@ -31,7 +31,7 @@ public abstract class ArrayAccessInst : Instruction, AccessInst
         get => Operands[1];
         set => ReplaceOperand(1, value);
     }
-    public abstract TypeDesc ElemType { get; set; }
+    public abstract TypeDesc ElemType { get; }
     public ArrayAccessFlags Flags { get; set; }
 
     Value AccessInst.Location => Array;
@@ -46,16 +46,13 @@ public abstract class ArrayAccessInst : Instruction, AccessInst
 
 public class LoadArrayInst : ArrayAccessInst, LoadInst
 {
-    public override TypeDesc ElemType {
-        get => ResultType;
-        set => ResultType = value;
-    }
+    public override TypeDesc ElemType => ResultType;
     public override string InstName => "ldarr";
 
     public LoadArrayInst(Value array, Value index, TypeDesc elemType, ArrayAccessFlags flags = 0)
         : base(flags, array, index)
     {
-        ElemType = elemType;
+        ResultType = elemType;
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
@@ -66,7 +63,7 @@ public class StoreArrayInst : ArrayAccessInst, StoreInst
         get => Operands[2];
         set => ReplaceOperand(2, value);
     }
-    public override TypeDesc ElemType { get; set; }
+    public override TypeDesc ElemType { get; }
 
     public override string InstName => "starr";
     public override bool HasSideEffects => true;
@@ -79,21 +76,25 @@ public class StoreArrayInst : ArrayAccessInst, StoreInst
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
+    
+    protected override void PrintOperands(PrintContext ctx)
+    {
+        base.PrintOperands(ctx);
+        ctx.Print(" as ", PrintToner.InstName);
+        ElemType.Print(ctx);
+    }
 }
 public class ArrayAddrInst : ArrayAccessInst
 {
     /// <summary> Specifies the access type. For primitive arrays, it is used as the element stride (address = baseAddr + index * elemStride). </summary>
-    public override TypeDesc ElemType {
-        get => ResultType.ElemType!;
-        set => ResultType = value.CreateByref();
-    }
+    public override TypeDesc ElemType => ResultType.ElemType!;
 
     public override string InstName => "arraddr";
 
     public ArrayAddrInst(Value array, Value index, TypeDesc elemType, ArrayAccessFlags flags = 0)
         : base(flags, array, index)
     {
-        ElemType = elemType;
+        ResultType = elemType.CreateByref();
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);

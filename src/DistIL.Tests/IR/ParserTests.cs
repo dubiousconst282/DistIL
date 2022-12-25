@@ -4,6 +4,7 @@ using DistIL.AsmIO;
 using DistIL.IR;
 using DistIL.IR.Utils;
 using DistIL.IR.Utils.Parser;
+using DistIL.Util;
 
 [Collection("ModuleResolver")]
 public class ParserTests
@@ -18,7 +19,7 @@ public class ParserTests
     }
 
     [Fact]
-    internal void Test_ParseType()
+    internal void ParseType()
     {
         var t_List = _corelib.FindType("System.Collections.Generic", "List`1", throwIfNotFound: true);
 
@@ -36,109 +37,206 @@ public class ParserTests
 
         void Check(string str, TypeDesc expType)
         {
-            var parser = new AstParser(new ParserContext(str, _modResolver));
-            var actType = parser.ParseType();
+            var actType = CreateParser(str).ParseType();
             Assert.Equal(expType, actType);
         }
     }
 
     [Fact]
-    internal void Test_ParseInst()
+    internal void ParseFullProgram()
     {
-        var t_Math = _corelib.FindType("System", "Math", throwIfNotFound: true);
-        var t_DateTime = _corelib.FindType("System", "DateTime", throwIfNotFound: true);
-
         string code = @"
-int x = phi [A -> -1], [B -> 2]
-int y = mul x, 4
-int z = call Math::Max(int: y, int: 0)
-DateTime w = ldfld DateTime::UnixEpoch
-goto z ? BB_01 : BB_02";
+import @ from DistIL.Tests.TestAsm
 
-        var expAst = new List<InstNode>() {
-            new InstNode("phi", new() {
-                new IdNode("A"), new BoundNode(ConstInt.CreateI(-1)),
-                new IdNode("B"), new BoundNode(ConstInt.CreateI(2)),
-            }, PrimType.Int32, "x"),
-
-            new InstNode("mul", new() {
-                new IdNode("x"), new BoundNode(ConstInt.CreateI(4)),
-            }, PrimType.Int32, "y"),
-
-            new InstNode("call", new() {
-                new BoundNode(t_Math.FindMethod("Max", new MethodSig(PrimType.Int32, new TypeSig[] { PrimType.Int32, PrimType.Int32 }))!),
-                new IdNode("y"),
-                new BoundNode(ConstInt.CreateI(0))
-            }, PrimType.Int32, "z"),
-
-            new InstNode("ldfld", new() {
-                new BoundNode(t_DateTime.FindField("UnixEpoch")!)
-            }, t_DateTime, "w"),
-
-            new InstNode("goto", new() { new IdNode("z"), new IdNode("BB_01"), new IdNode("BB_02"), } )
-        };
-
-        var parser = new AstParser(new ParserContext(code, _modResolver));
-        foreach (var expInst in expAst) {
-            var actInst = parser.ParseInst();
-            Assert.Equal(expInst, actInst);
-        }
-    }
-
-    [Fact]
-    internal void Test_Materializer()
-    {
-        var body = Utils.CreateDummyMethodBody(PrimType.Int32, PrimType.Int32);
-        string code = @"
+static void ParserDummy::M1(int #arg1, int #arg2) {
 Block1:
-    int r1 = ldvar $x
-    int r2 = add r1, #0
-    stvar $x, r2
-    goto 1 ? Block2 : Block3
-Block2:
-    int res = phi [Block1 -> r2], [Block2 -> -1]
-    ret res
-Block3: goto Block3
-";
-        IRParser.Populate(body, new ParserContext(code, _modResolver));
+    int tmp = add.ovf #arg1, 4
+    bool cond = icmp.slt tmp, #arg2
+    goto cond ? Block2 : Block3
+Block2: goto Block3
+Block3:
+    int tmp2 = phi [Block1 -> tmp], [Block2 -> -123]
+    int tmp3 = call Math::Abs(int: tmp2)
+    ret tmp3
+}
 
-        Assert.Equal(3, body.NumBlocks);
-        var insts = body.Instructions().ToArray();
-        
-        var varX = ((LoadVarInst)insts[0]).Var;
-        Assert.True(insts[1] is BinaryInst { Op: BinaryOp.Add, Left: var addL, Right: Argument { Index: 0 } } && addL == insts[0]);
-        Assert.True(insts[2] is StoreVarInst st && st.Var == varX && st.Value == insts[1]);
-        Assert.True(insts[3] is BranchInst { Cond: ConstInt { Value: 1 } });
-        Assert.True(insts[4] is PhiInst phi && phi.GetBlock(0) == insts[3].Block && phi.GetValue(0) == insts[1] && phi.GetValue(1) is ConstInt { Value: -1 });
-        Assert.True(insts[5] is ReturnInst ret && ret.Value == insts[4]);
+static float ParserDummy::M2(float #x) {
+Entry:
+    //x^2*(3-2*x)
+    float xsq = fmul #x, #x
+    float t1 = fmul 2.0f, #x
+    float t2 = fsub 3.0f, t1
+    float t3 = fmul xsq, t2
+    ret t3
+}
+";
+        var parser = CreateParser(code);
+        parser.ParseUnit();
+
+        var decls = parser.Context.DeclaredMethods.ToDictionary(m => m.Definition.Name);
+        var body1 = decls["M1"];
+
+        Assert.Equal(3, body1.NumBlocks);
+        var insts = body1.Instructions().ToArray();
+
+        Assert.True(insts[0] is BinaryInst { Op: BinaryOp.AddOvf, Left: Argument { Index: 0 }, Right: ConstInt { Value: 4 } });
+        Assert.True(insts[1] is CompareInst { Op: CompareOp.Slt, Left: var cmpL, Right: Argument { Index: 1 } } && cmpL == insts[0]);
+        Assert.True(insts[2] is BranchInst br1 && br1.Cond == insts[1]);
+        Assert.True(insts[3] is BranchInst { IsJump: true });
+        Assert.True(insts[4] is PhiInst phi &&
+            phi.GetBlock(0) == insts[0].Block &&
+            phi.GetValue(0) == insts[0] &&
+            phi.GetBlock(1) == insts[3].Block &&
+            phi.GetValue(1) is ConstInt { Value: -123 }
+        );
+        Assert.True(insts[5] is CallInst { Method.Name: "Abs", Args: [var callArg0] } && callArg0 == insts[4]);
+        Assert.True(insts[6] is ReturnInst ret && ret.Value == insts[5]);
+
+        var body2 = decls["M2"];
+        Assert.Equal(1, body2.NumBlocks);
+
+        var expr = body2.EntryBlock.Last;
+        Assert.True(expr is ReturnInst {
+            Value: BinaryInst { 
+                Op: BinaryOp.FMul,
+                Left: BinaryInst {
+                    Op: BinaryOp.FMul, Left: Argument, Right: Argument
+                },
+                Right: BinaryInst {
+                    Op: BinaryOp.FSub,
+                    Left: ConstFloat { Value: 3.0f },
+                    Right: BinaryInst {
+                        Left: ConstFloat { Value: 2.0f },
+                        Right: Argument
+                    }
+                }
+            }
+        });
     }
 
     [Fact]
-    public void Test_MultiErrors()
+    public void ParseUnseenIdentifiers()
+    {
+        string code = @"
+import @ from DistIL.Tests.TestAsm
+
+static void ParserDummy::TestCase() {
+Entry:
+    goto Head
+Body:
+    int b = mul a, 1
+    bool c = icmp.slt b, 20
+    ret
+Head:
+    int a = add 1, 4
+    goto Body
+}
+";
+        var body = Parse(code);
+
+        var block = body.EntryBlock.Succs.First().Succs.First();
+        var insts = block.NonPhis().ToArray();
+
+        Assert.True(insts[0] is BinaryInst { Op: BinaryOp.Mul, Left: BinaryInst, Right: ConstInt });
+        Assert.True(insts[1] is CompareInst { Op: CompareOp.Slt, Left: var cmpL, Right: ConstInt } && cmpL == insts[0]);
+    }
+
+    [Fact]
+    public void ParseVarDecls()
+    {
+            string code = @"
+import @ from DistIL.Tests.TestAsm
+
+static void ParserDummy::TestCase(int[] arr) {
+$:
+    int a, b
+    String c
+    int[]^ pin
+Entry:
+    int& addr = varaddr $b
+    stvar $pin, #arr
+    stvar $a, 123
+    stvar $c, ""hello world""
+    ret
+}
+";
+        var body = Parse(code);
+        var insts = body.EntryBlock.NonPhis().ToArray();
+
+        Assert.True(insts[0] is VarAddrInst { Var: { Name: "b", IsExposed: true }});
+        Assert.True(insts[1] is StoreVarInst { Var: { Name: "pin", IsPinned: true } v1, Value: Argument } && v1.Sig == PrimType.Int32.CreateArray());
+    }
+
+    [Fact]
+    public void ParseConv()
+    {
+        string code = @"
+import @ from DistIL.Tests.TestAsm
+
+static void ParserDummy::TestCase(int x) {
+Entry:
+    byte a = conv #x
+    byte b = conv.ovf.un #x
+    float c = conv.un #x
+    ret
+}
+";
+        var body = Parse(code);
+        var insts = body.EntryBlock.NonPhis().ToArray();
+
+        Assert.True(insts[0] is ConvertInst { Value: Argument, CheckOverflow: false, SrcUnsigned: false } c1 && c1.ResultType == PrimType.Byte);
+        Assert.True(insts[1] is ConvertInst { Value: Argument, CheckOverflow: true, SrcUnsigned: true } c2 && c2.ResultType == PrimType.Byte);
+        Assert.True(insts[2] is ConvertInst { Value: Argument, CheckOverflow: false, SrcUnsigned: true } c3 && c3.ResultType == PrimType.Single);
+    }
+
+    [Fact]
+    public void ParsePointers()
+    {
+        string code = @"
+import @ from DistIL.Tests.TestAsm
+
+static void ParserDummy::TestCase(int* ptr) {
+Entry:
+    int a = ldptr #ptr
+    int b = ldptr.un.volatile #ptr
+    stptr #ptr, 123 as int
+    stptr.un.volatile #ptr, 123 as byte
+    ret
+}
+";
+        var body = Parse(code);
+        var insts = body.EntryBlock.NonPhis().ToArray();
+
+        const PointerFlags UnVol = PointerFlags.Unaligned | PointerFlags.Volatile;
+
+        Assert.True(insts[0] is LoadPtrInst { Flags: 0, Address: Argument } ld1 && ld1.ElemType == PrimType.Int32);
+        Assert.True(insts[1] is LoadPtrInst { Flags: UnVol, Address: Argument });
+
+        Assert.True(insts[2] is StorePtrInst { Flags: 0, Address: Argument } st1 && st1.ElemType == PrimType.Int32);
+        Assert.True(insts[3] is StorePtrInst { Flags: UnVol, Address: Argument } st2 && st2.ElemType == PrimType.Byte);
+    }
+
+    [Fact]
+    public void MultiErrors()
     {
         var code = @"
+import @ from DistIL.Tests.TestAsm
+
+static void ParserDummy::M() {
 Block1:
     ThisTypeDoesNotExist x = add 1, 1
     int y = call Int32::Parse(string: ""12"")
     ObviousSyntaxError
-    ";
-        var ctx = new ParserContext(code, _modResolver);
-        var program = new AstParser(ctx).ParseProgram();
+}";
+        var parser = CreateParser(code);
+        Assert.Throws<FormatException>(() => parser.ParseUnit());
 
-        var errors = ctx.Errors.Select(e => e.GetDetailedMessage()).ToArray();
-
+        var errors = parser.Context.Errors.Select(e => e.GetDetailedMessage()).ToArray();
         Assert.True(errors.Length >= 2);
-
-        var insts = program.Blocks[0].Code;
-        Assert.Equal("add", insts[0].Opcode);
-        Assert.Equal(PrimType.Void, insts[0].ResultType);
-
-        Assert.Equal("call", insts[1].Opcode);
-        Assert.Equal(PrimType.Int32, insts[1].ResultType);
     }
 
     [Fact]
-    public void Test_LexerScanning()
+    public void Lexing()
     {
         var code = """
     Identifier : ->
@@ -183,6 +281,34 @@ Block1:
             var token = lexer.Next();
             Assert.Equal(type, token.Type);
             Assert.Equal(value, token.Value);
+        }
+    }
+
+    private IRParser CreateParser(string code)
+    {
+        return new IRParser(new FakeParserContext(code, _modResolver));
+    }
+
+    private MethodBody Parse(string code)
+    {
+        var parser = CreateParser(code);
+        parser.ParseUnit();
+        return parser.Context.DeclaredMethods.First(m => m.Definition.Name == "TestCase");
+    }
+
+    class FakeParserContext : ParserContext
+    {
+        public FakeParserContext(string code, ModuleResolver modResolver)
+            : base(code, modResolver) { }
+
+        public override MethodBody DeclareMethod(
+            TypeDef parentType, string name,
+            TypeSig returnSig, ImmutableArray<ParamDef> paramSig,
+            ImmutableArray<GenericParamType> genParams, System.Reflection.MethodAttributes attribs)
+        {
+            var body = Utils.CreateDummyMethodBody(returnSig.Type, paramSig, attribs, name);
+            DeclaredMethods.Add(body);
+            return body;
         }
     }
 }

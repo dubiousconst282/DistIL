@@ -19,7 +19,7 @@ internal class Lexer
 
     /// <summary> Get/set an opaque handle of the current cursor position. </summary>
     public CursorHandle Cursor {
-        get => new() { Pos = _peeked != null ? _peekedLeadPos : _pos, Indent = _nextLevel };
+        get => new() { Pos = LastPos(), Indent = _nextLevel };
         set {
             _peekedLeadPos = _startPos = _pos = value.Pos;
             _nextLevel = value.Indent;
@@ -43,16 +43,15 @@ internal class Lexer
         }
         return false;
     }
-    public string? MatchId(string? value = null)
+    public bool MatchKeyword(string keyword)
     {
         var token = Peek();
-        if (token.Type == TokenType.Identifier && (value == null || token.StrValue == value)) {
+        if (token.Type == TokenType.Identifier && token.StrValue == keyword) {
             _peeked = null;
-            return token.StrValue;
+            return true;
         }
-        return null;
+        return false;
     }
-    public bool MatchKeyword(string keyword) => MatchId(keyword) != null;
 
     public bool IsNextOnNewLine()
     {
@@ -63,14 +62,13 @@ internal class Lexer
         return Peek().Type == type;
     }
 
-    public bool Expect(TokenType type)
+    public Token Expect(TokenType type)
     {
         var token = Next();
         if (token.Type != type) {
-            Error($"Expected '{type}', got '{token.Type}'");
-            return false;
+            ErrorUnexpected(token, type.ToString());
         }
-        return true;
+        return token;
     }
     public string ExpectId(string? value = null)
     {
@@ -78,11 +76,12 @@ internal class Lexer
         if (token.Type == TokenType.Identifier && (value == null || token.StrValue == value)) {
             return token.StrValue;
         }
-        Error($"Expected '{value ?? "Identifier"}', got '{token.Type}'");
-        return "<broken expectations>";
+        ErrorUnexpected(token, value ?? "Identifier");
+        return "<broken expectations>\r\n";
     }
 
     public int NextPos() => Peek().Position.Start;
+    public int LastPos() => _peeked != null ? _peekedLeadPos : _pos;
 
     public Token Peek()
     {
@@ -149,6 +148,7 @@ internal class Lexer
             ';' => TokenType.Semicolon,
             '?' => TokenType.QuestionMark,
             '!' => TokenType.ExlamationMark,
+            '^' => TokenType.Caret,
 
             '-' => ch2 == '>' ? TokenType.Arrow : 
                    ch2 is not (>= '0' and <= '9') ? TokenType.Minus : 
@@ -170,7 +170,7 @@ internal class Lexer
         if (IsIdentifierChar(ch)) {
             return Tok(TokenType.Identifier, ParseIdentifier());
         }
-        throw _ctx.Fatal("Unknown character", _startPos, _pos);
+        throw _ctx.Fatal("Unknown character", (_startPos, _pos));
 
         Token Tok(TokenType type, object? value = null) => new(type, _startPos, _pos, value);
     }
@@ -251,7 +251,7 @@ internal class Lexer
                     '\'' => '\'', // '
                     _ => Unk()
                 };
-                char Unk() { _ctx.Error("Unknown escaping sequence", _pos - 2, _pos); return '?'; }
+                char Unk() { _ctx.Error("Unknown escaping sequence", (_pos - 2, _pos)); return '?'; }
             }
             sb.Append(ch);
         }
@@ -280,7 +280,7 @@ internal class Lexer
             (>= 'a' and <= 'z') or
             (>= 'A' and <= 'Z') or
             (>= '0' and <= '9') or
-            '_' or '$' or '#' or '`';
+            '_' or '$' or '#' or '`' or '@';
     }
 
     private bool SkipComment()
@@ -304,7 +304,14 @@ internal class Lexer
         return true;
     }
 
-    public void Error(string msg, int start = -1) => _ctx.Error(msg, start < 0 ? _startPos : start, _pos);
+    public void ErrorUnexpected(Token actual, string expected)
+    {
+        Error($"Expected '{expected}', got '{actual.Type}'");
+    }
+    public void Error(string msg, int start = -1)
+    {
+        _ctx.Error(msg, (start < 0 ? _startPos : start, _pos));
+    }
 
     public struct CursorHandle
     {

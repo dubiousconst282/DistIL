@@ -12,15 +12,16 @@ public class BinaryInst : Instruction
         get => Operands[1];
         set => ReplaceOperand(1, value);
     }
-    public override string InstName => Op.ToString().ToLower();
+    public override string InstName => Op.ToString().ToLower().Replace("ovf", ".ovf");
 
     public override bool MayThrow =>
-        //(x / 0) or (x / -1, when x == INT_MIN) may overflow
+        //(x / 0) or (x / -1, when x == INT_MIN) may throw
         (Op is >= BinaryOp.SDiv and <= BinaryOp.URem && Right is not ConstInt { Value: not (0 or -1) }) ||
-        (Op is >= BinaryOp.FirstOvf_ and <= BinaryOp.LastOvf_);
+        ChecksOverflow;
 
     public bool IsCommutative => Op.IsCommutative();
     public bool IsAssociative => Op.IsAssociative();
+    public bool ChecksOverflow => Op is >= BinaryOp.AddOvf and <= BinaryOp.UMulOvf;
 
     public BinaryInst(BinaryOp op, Value left, Value right)
         : base(left, right)
@@ -90,10 +91,8 @@ public enum BinaryOp
 
     FAdd, FSub, FMul, FDiv, FRem,
 
-    FirstOvf_,
     AddOvf, SubOvf, MulOvf,
     UAddOvf, USubOvf, UMulOvf,
-    LastOvf_
 }
 public static class BinaryOps
 {

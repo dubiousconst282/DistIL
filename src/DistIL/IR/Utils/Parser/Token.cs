@@ -42,6 +42,7 @@ internal enum TokenType
     Colon,          // :
     QuestionMark,   // ?
     ExlamationMark, // !
+    Caret,          // ^
 
     _StartLen2,     // (tokens below are two char long)
     Arrow,          // ->

@@ -17,7 +17,7 @@ public class CustomAttribTests
     {
         var sys = _modResolver.SysTypes;
 
-        var type = _modResolver.Load("DistIL.Tests.TestAsm.dll").FindType(null, "CustomAttribs")!;
+        var type = _modResolver.Resolve("DistIL.Tests.TestAsm", throwIfNotFound: true).FindType(null, "CustomAttribs")!;
         var attrib = type.Methods.First(m => m.Name == "DecodeCase1").GetCustomAttribs().First();
 
         Assert.Equal(type, ((TypeDef)attrib.Constructor.DeclaringType).DeclaringType);

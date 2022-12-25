@@ -17,7 +17,8 @@ public class ConvertInst : Instruction
     public ConvertInst(Value srcValue, TypeDesc dstType, bool checkOverflow = false, bool srcUnsigned = false)
         : base(srcValue)
     {
-        Ensure.That(!dstType.Kind.IsFloat() || !checkOverflow);
+        Ensure.That(dstType.StackType is >= StackType.Int and <= StackType.Float, "Can only convert to a primitive type");
+        Ensure.That(!checkOverflow || dstType.StackType != StackType.Float, "Cannot check overflow for floating-point types");
 
         ResultType = dstType;
         CheckOverflow = checkOverflow;

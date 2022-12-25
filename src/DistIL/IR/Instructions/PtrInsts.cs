@@ -58,8 +58,16 @@ public class StorePtrInst : PtrAccessInst, StoreInst
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
+
+    protected override void PrintOperands(PrintContext ctx)
+    {
+        base.PrintOperands(ctx);
+        ctx.Print(" as ", PrintToner.InstName);
+        ElemType.Print(ctx);
+    }
 }
 
+[Flags]
 public enum PointerFlags
 {
     None = 0,

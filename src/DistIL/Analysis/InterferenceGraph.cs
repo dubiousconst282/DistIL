@@ -47,11 +47,7 @@ public class InterferenceGraph : IMethodAnalysis
         na.Adjacent.Add(nb.Id);
     }
 
-    public bool HasEdge(Instruction a, Instruction b) => CheckOrMerge(a, b, false);
-
-    public bool TryMerge(Instruction a, Instruction b) => CheckOrMerge(a, b, true);
-
-    private bool CheckOrMerge(Instruction a, Instruction b, bool merge)
+    public bool HasEdge(Instruction a, Instruction b)
     {
         if (!_defNodeIds.TryGetValue(a, out int ia) || !_defNodeIds.TryGetValue(b, out int ib)) {
             return false;
@@ -59,8 +55,17 @@ public class InterferenceGraph : IMethodAnalysis
         var na = GetNode(ia);
         var nb = GetNode(ib);
 
+        Debug.Assert(na.Adjacent.Contains(nb.Id) == nb.Adjacent.Contains(na.Id));
+        return na.Adjacent.Contains(nb.Id);
+    }
+
+    public bool TryMerge(Instruction a, Instruction b)
+    {
+        var na = GetOrCreateNode(a);
+        var nb = GetOrCreateNode(b);
+
         bool interferes = na.Adjacent.Contains(nb.Id);
-        return merge ? !interferes && MergeNodes(na, nb) : interferes;
+        return !interferes && MergeNodes(na, nb);
     }
 
     private bool MergeNodes(Node a, Node b)

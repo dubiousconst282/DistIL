@@ -34,7 +34,7 @@ public abstract class TrackedValue : Value
 
     internal override void AddUse(Instruction user, int operIdx)
     {
-        var node = new UseRef() { Owner = user, Index = operIdx };
+        var node = new UseRef(user, operIdx);
         Debug.Assert(!node.Prev.Exists && !node.Next.Exists);
 
         if (_firstUse.Exists) {
@@ -46,7 +46,7 @@ public abstract class TrackedValue : Value
     }
     internal override void RemoveUse(Instruction user, int operIdx)
     {
-        var node = new UseRef() { Owner = user, Index = operIdx };
+        var node = new UseRef(user, operIdx);
 
         if (node.Prev.Exists) {
             node.Prev.Next = node.Next;
@@ -78,7 +78,7 @@ public abstract class TrackedValue : Value
     {
         var lastNode = default(UseRef);
         for (var node = _firstUse; node.Exists; node = node.Next) {
-            node.Operand = dest;
+            node.OperandRef = dest;
             lastNode = node;
         }
         //Append the uselist from the newValue at the end of this one, and transfer ownership
@@ -95,8 +95,8 @@ public abstract class TrackedValue : Value
     {
         for (var node = _firstUse; node.Exists; ) {
             var next = node.Next;
-            node.Operand = dest;
-            node.Def = default; //erase node slot to avoid "ghost" links
+            node.OperandRef = dest;
+            node.Def = default; //erase node slot to prevent "ghost" links
             node = next;
         }
     }
@@ -117,22 +117,22 @@ public struct ValueUserIterator : Iterator<Instruction>
     public bool MoveNext()
     {
         if (_use.Exists) {
-            Current = _use.Owner;
+            Current = _use.Parent;
             _use = _use.Next;
             return true;
         }
         return false;
     }
 }
-public struct ValueUseIterator : Iterator<(Instruction Inst, int OperIdx)>
+public struct ValueUseIterator : Iterator<UseRef>
 {
     internal UseRef _use;
-    public (Instruction Inst, int OperIdx) Current { get; private set; }
+    public UseRef Current { get; private set; }
 
     public bool MoveNext()
     {
         if (_use.Exists) {
-            Current = (_use.Owner, _use.Index);
+            Current = _use;
             _use = _use.Next;
             return true;
         }
@@ -141,22 +141,32 @@ public struct ValueUseIterator : Iterator<(Instruction Inst, int OperIdx)>
 }
 
 /// <summary> Represents a reference to an instruction operand. </summary>
-public struct UseRef
+public readonly struct UseRef
 {
-    public Instruction Owner;
-    public int Index;
+    public Instruction Parent { get; }
+    public int OperIndex { get; }
 
-    public bool Exists => Owner != null;
+    internal UseRef(Instruction inst, int operIdx)
+        => (Parent, OperIndex) = (inst, operIdx);
+
+    public bool Exists => Parent != null;
 
     internal ref UseRef Prev => ref Def.Prev;
     internal ref UseRef Next => ref Def.Next;
 
-    internal ref UseDef Def => ref Owner._useDefs[Index];
+    internal ref UseDef Def => ref Parent._useDefs[OperIndex];
 
-    /// <remarks> Note: assigning to this ref may corrupt the value's use-chain. </remarks>
-    public ref Value Operand => ref Owner._operands[Index];
+    internal ref Value OperandRef => ref Parent._operands[OperIndex];
 
-    public override string ToString() => Owner == null ? "null" : $"<{Owner}> at {Index}";
+    public Value Operand {
+        get => Parent._operands[OperIndex];
+        set => Parent.ReplaceOperand(OperIndex, value);
+    }
+
+    public void Deconstruct(out Instruction inst, out int operIdx)
+        => (inst, operIdx) = (Parent, OperIndex);
+
+    public override string ToString() => Parent == null ? "null" : $"[{OperIndex}] at '{Parent}'";
 }
 internal struct UseDef
 {

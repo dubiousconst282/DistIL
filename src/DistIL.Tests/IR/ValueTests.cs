@@ -100,7 +100,7 @@ public class ValueTests
         userSet.SymmetricExceptWith(expUses.Select(u => u.Item1));
         Assert.Empty(userSet);
 
-        var useSet = value.Uses().AsEnumerable().ToHashSet();
+        var useSet = value.Uses().AsEnumerable().Select(u => (u.Parent, u.OperIndex)).ToHashSet();
         Assert.Equal(expUses.Length, useSet.Count);
         useSet.SymmetricExceptWith(expUses);
         Assert.Empty(useSet);

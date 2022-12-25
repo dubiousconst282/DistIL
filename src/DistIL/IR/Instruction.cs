@@ -87,8 +87,8 @@ public abstract class Instruction : TrackedValue
         _useDefs = null!;
     }
 
-    /// <summary> Replaces operands set to `oldValue` with `oldValue`. </summary>
-    public void ReplaceOperands(Value oldValue, Value newValue)
+    /// <summary> Replaces all operands set to `oldValue` with `oldValue`. </summary>
+    public void ReplaceOperand(Value oldValue, Value newValue)
     {
         for (int i = 0; i < _operands.Length; i++) {
             if (_operands[i] == oldValue) {
@@ -115,7 +115,7 @@ public abstract class Instruction : TrackedValue
     public UseRef GetOperandRef(int index)
     {
         Ensure.IndexValid(index, _operands.Length);
-        return new() { Owner = this, Index = index };
+        return new(this, index);
     }
 
     /// <summary> 

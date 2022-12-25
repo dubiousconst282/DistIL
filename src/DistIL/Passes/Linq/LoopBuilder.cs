@@ -51,7 +51,7 @@ public class LoopBuilder
         Body.SetBranch(Latch.Block);
 
         foreach (var (headPhi, next) in _pendingAccums) {
-            headPhi.ReplaceOperands(next, InsertAccumPhis(Latch.Block, next, headPhi));
+            headPhi.ReplaceOperand(next, InsertAccumPhis(Latch.Block, next, headPhi));
         }
         Latch.SetBranch(Header.Block);
     }

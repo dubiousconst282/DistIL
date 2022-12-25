@@ -182,7 +182,7 @@ public class BasicBlock : TrackedValue
         intermBlock.SetBranch(succ);
 
         //Redirect branches/phis to the intermediate block
-        Last.ReplaceOperands(succ, intermBlock);
+        Last.ReplaceOperand(succ, intermBlock);
         succ.RedirectPhis(this, intermBlock);
 
         return intermBlock;
@@ -202,7 +202,7 @@ public class BasicBlock : TrackedValue
     {
         foreach (var phi in Phis()) {
             if (newPred != null) {
-                phi.ReplaceOperands(oldPred, newPred);
+                phi.ReplaceOperand(oldPred, newPred);
             } else {
                 phi.RemoveArg(oldPred, removeTrivialPhis);
             }

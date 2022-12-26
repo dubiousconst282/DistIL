@@ -99,7 +99,7 @@ public class PhiInst : Instruction
         for (int i = 0; i < NumArgs; i++) {
             var (block, value) = GetArg(i);
             string opening = (i == 0) ? " [" : ", [";
-            ctx.Print($"{opening}{block} -> {value}]");
+            ctx.Print($"{opening}{block}: {value}]");
         }
     }
 

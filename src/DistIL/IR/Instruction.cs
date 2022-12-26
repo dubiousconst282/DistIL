@@ -167,17 +167,14 @@ public abstract class Instruction : TrackedValue
     }
     public override void Print(PrintContext ctx)
     {
-        PrintPrefix(ctx);
-        PrintWithoutPrefix(ctx);
-    }
-    /// <summary> Prints the result variable and instruction name: [resultType operandName = ] instName </summary>
-    internal void PrintPrefix(PrintContext ctx)
-    {
         if (HasResult) {
-            ctx.Print(ResultType);
-            ctx.Print(" ");
             PrintAsOperand(ctx);
             ctx.Print(" = ");
+            PrintWithoutPrefix(ctx);
+            ctx.Print(" -> ");
+            ctx.Print(ResultType);
+        } else {
+            PrintWithoutPrefix(ctx);
         }
     }
     internal void PrintWithoutPrefix(PrintContext ctx)

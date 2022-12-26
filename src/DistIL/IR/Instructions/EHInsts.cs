@@ -25,7 +25,7 @@ public class GuardInst : Instruction
     public TypeDesc? CatchType => ResultType;
     public GuardKind Kind { get; set; }
 
-    public override string InstName => "try " + Kind.ToString().ToLower();
+    public override string InstName => "try";
     public override bool SafeToRemove => false;
     public override bool IsHeader => true;
 
@@ -40,11 +40,10 @@ public class GuardInst : Instruction
 
     protected override void PrintOperands(PrintContext ctx)
     {
-        ctx.Print(" -> ");
-        HandlerBlock.Print(ctx);
+        ctx.Print($" {PrintToner.InstName}{Kind.ToString().ToLower()}({HandlerBlock})");
 
         if (HasFilter) {
-            ctx.Print($", {PrintToner.InstName}filter {PrintToner.Default}-> {FilterBlock}");
+            ctx.Print($" {PrintToner.InstName}filter{PrintToner.Default}({FilterBlock})");
         }
     }
 }

@@ -48,25 +48,25 @@ public class ParserTests
         string code = @"
 import @ from DistIL.Tests.TestAsm
 
-static void ParserDummy::M1(int #arg1, int #arg2) {
+static ParserDummy::M1(#arg1: int, #arg2: int) {
 Block1:
-    int tmp = add.ovf #arg1, 4
-    bool cond = icmp.slt tmp, #arg2
+    temp = add.ovf #arg1, 4 -> int
+    cond = icmp.slt temp, #arg2 -> bool
     goto cond ? Block2 : Block3
 Block2: goto Block3
 Block3:
-    int tmp2 = phi [Block1 -> tmp], [Block2 -> -123]
-    int tmp3 = call Math::Abs(int: tmp2)
-    ret tmp3
+    temp2 = phi [Block1: temp], [Block2: -123] -> int
+    temp3 = call Math::Abs(int: temp2) -> int
+    ret temp3
 }
 
-static float ParserDummy::M2(float #x) {
+static ParserDummy::M2(#x: float) -> float {
 Entry:
     //x^2*(3-2*x)
-    float xsq = fmul #x, #x
-    float t1 = fmul 2.0f, #x
-    float t2 = fsub 3.0f, t1
-    float t3 = fmul xsq, t2
+    xsq = fmul #x, #x -> float
+    t1 = fmul 2.0f, #x -> float
+    t2 = fsub 3.0f, t1 -> float
+    t3 = fmul xsq, t2 -> float
     ret t3
 }
 ";
@@ -120,15 +120,15 @@ Entry:
         string code = @"
 import @ from DistIL.Tests.TestAsm
 
-static void ParserDummy::TestCase() {
+static ParserDummy::TestCase() {
 Entry:
     goto Head
 Body:
-    int b = mul a, 1
-    bool c = icmp.slt b, 20
+    b = mul a, 1 -> int
+    c = icmp.slt b, 20 -> bool
     ret
 Head:
-    int a = add 1, 4
+    a = add 1, 4 -> int
     goto Body
 }
 ";
@@ -147,13 +147,13 @@ Head:
             string code = @"
 import @ from DistIL.Tests.TestAsm
 
-static void ParserDummy::TestCase(int[] arr) {
+static ParserDummy::TestCase(#arr: int[]) {
 $:
-    int a, b
-    String c
-    int[]^ pin
+    a, b: int
+    c: String
+    pin: int[]^
 Entry:
-    int& addr = varaddr $b
+    addr = varaddr $b -> int&
     stvar $pin, #arr
     stvar $a, 123
     stvar $c, ""hello world""
@@ -161,7 +161,7 @@ Entry:
 }
 ";
         var body = Parse(code);
-        var insts = body.EntryBlock.NonPhis().ToArray();
+        var insts = body.Instructions().ToArray();
 
         Assert.True(insts[0] is VarAddrInst { Var: { Name: "b", IsExposed: true }});
         Assert.True(insts[1] is StoreVarInst { Var: { Name: "pin", IsPinned: true } v1, Value: Argument } && v1.Sig == PrimType.Int32.CreateArray());
@@ -173,16 +173,16 @@ Entry:
         string code = @"
 import @ from DistIL.Tests.TestAsm
 
-static void ParserDummy::TestCase(int x) {
+static ParserDummy::TestCase(#x: int) {
 Entry:
-    byte a = conv #x
-    byte b = conv.ovf.un #x
-    float c = conv.un #x
+    a = conv #x -> byte
+    b = conv.ovf.un #x -> byte
+    c = conv.un #x -> float
     ret
 }
 ";
         var body = Parse(code);
-        var insts = body.EntryBlock.NonPhis().ToArray();
+        var insts = body.Instructions().ToArray();
 
         Assert.True(insts[0] is ConvertInst { Value: Argument, CheckOverflow: false, SrcUnsigned: false } c1 && c1.ResultType == PrimType.Byte);
         Assert.True(insts[1] is ConvertInst { Value: Argument, CheckOverflow: true, SrcUnsigned: true } c2 && c2.ResultType == PrimType.Byte);
@@ -195,17 +195,17 @@ Entry:
         string code = @"
 import @ from DistIL.Tests.TestAsm
 
-static void ParserDummy::TestCase(int* ptr) {
+static ParserDummy::TestCase(#ptr: int*) {
 Entry:
-    int a = ldptr #ptr
-    int b = ldptr.un.volatile #ptr
+    a = ldptr #ptr -> int
+    b = ldptr.un.volatile #ptr -> int
     stptr #ptr, 123 as int
     stptr.un.volatile #ptr, 123 as byte
     ret
 }
 ";
         var body = Parse(code);
-        var insts = body.EntryBlock.NonPhis().ToArray();
+        var insts = body.Instructions().ToArray();
 
         const PointerFlags UnVol = PointerFlags.Unaligned | PointerFlags.Volatile;
 
@@ -217,15 +217,39 @@ Entry:
     }
 
     [Fact]
+    public void ParseFields()
+    {
+        string code = @"
+import @ from DistIL.Tests.TestAsm
+
+public ParserDummy::TestCase() {
+Entry:
+    a = ldfld ParserDummy::_foo, #this -> int
+    b = ldfld ParserDummy::s_Bar -> int
+    stfld ParserDummy::_foo, #this, b
+    stfld ParserDummy::s_Bar, a
+    ret
+}
+";
+        var body = Parse(code);
+        var insts = body.Instructions().ToArray();
+
+        Assert.True(insts[0] is LoadFieldInst { Field.Name: "_foo", Obj: Argument });
+        Assert.True(insts[1] is LoadFieldInst { Field.Name: "s_Bar", Obj: null });
+        Assert.True(insts[2] is StoreFieldInst { Field.Name: "_foo", Obj: Argument } st1 && st1.Value == insts[1]);
+        Assert.True(insts[3] is StoreFieldInst { Field.Name: "s_Bar", Obj: null } st2 && st2.Value == insts[0]);
+    }
+
+    [Fact]
     public void MultiErrors()
     {
         var code = @"
 import @ from DistIL.Tests.TestAsm
 
-static void ParserDummy::M() {
+static ParserDummy::M() {
 Block1:
-    ThisTypeDoesNotExist x = add 1, 1
-    int y = call Int32::Parse(string: ""12"")
+    x = add 1, 1 -> ThisTypeDoesNotExist
+    y = call Int32::Parse(string: ""12"") -> int
     ObviousSyntaxError
 }";
         var parser = CreateParser(code);

@@ -6,23 +6,24 @@ using MethodAttribs = System.Reflection.MethodAttributes;
 
 //Unit      := Import*  Method*
 //Import    := "import" Seq{Id} "from" Id
-//Method    := MethodAcc Type  Type "::" Identifier {"(", ")", Param} "{"  VarDeclBlock?  Block*  "}"
+//Method    := MethodAcc  Type "::" Identifier "(" Seq{Param} ")" [ResultType] "{"  VarDeclBlock?  Block*  "}"
 //MethodAcc := ("public" | "internal"| "protected" | "private")? "static"? "special"?
-//Param     := "this" | (Type  #Id)
+//Param     := "this" | (#Id: Type)
 //VarDeclBlock := "$"  ":" (Indent VarDecl+ Dedent) | VarDecl+
-//VarDecl  := Type  "^"?  Seq{Id}
+//VarDecl   := Seq{Id} ":" Type "^"?
 //Block     := Id  ":"  (Indent  Inst+  Dedent) | Inst
 //Type      := Id  ("+"  Id)*  ("["  Seq{Type}  "]")?  ("[]" | "*" | "&")*
-//Inst      := (Type  Id  "=")?  InstBody
+//Inst      := (Id  "=")?  InstBody
 //InstBody  := 
 //    "goto"  (Label | (Value "?" Label ":" Label))
-//  | "phi"  Seq{"["  Label  "->"  Value  "]"}
-//  | ("call" | "callvirt" | "newobj")  Method  "(" Seq{CallArg} ")"
-//  | ("ldfld" | "fldaddr")  Field  Value? Value
-//  | "stfld"  Field Value? Value
+//  | "phi"  Seq{"["  Label  ":"  Value  "]"}  ResultType
+//  | ("call" | "callvirt" | "newobj")  Method  "(" Seq{CallArg} ")"  ResultType
+//  | ("ldfld" | "fldaddr")  Field  Value?  ResultType
+//  | "stfld"  Field Value ["," Value]
 //  | Opcode  Operands
-//  | Type  Id  "="  Opcode  Operands
+//  | Id  "="  Opcode  Operands  ResultType
 //Operands  := Seq{Value}
+//ResultType:= "->" Type
 //Method    := Type  "::"  Id ("<" Seq{Type} ">")?
 //CallArg   := ("this" | Type)  ":"  Value
 //Field     := Type  "::"  Id
@@ -39,6 +40,7 @@ public partial class IRParser
     readonly HashSet<PendingInst> _pendingInsts = new();
 
     MethodBody? _method;
+    TypeDesc? _parsedResultType;
 
     public ParserContext Context => _ctx;
 
@@ -89,11 +91,10 @@ public partial class IRParser
 
     public MethodBody ParseMethod()
     {
-        //Method    := MethodAcc Type  Type "::" Identifier "("  Seq{Type #Id}  ")"  "{"  Block*  "}"
+        //Method    := MethodAcc Type  Type "::" Identifier "("  Seq{Param}  ")"  "{"  Block*  "}"
         //MethodAcc := ("public" | "internal"| "protected" | "private")? "static"? "special"?
 
         var access = ParseMethodAcc();
-        var returnType = ParseType();
 
         var parentType = (TypeDef)ParseType();
         _lexer.Expect(TokenType.DoubleColon);
@@ -104,11 +105,15 @@ public partial class IRParser
         if ((access & MethodAttribs.Static) == 0) {
             paramSig.Add(new ParamDef(parentType, "this"));
         }
+        //Param := "#" Id ":" Type
         ParseDelimSeq(TokenType.LParen, TokenType.RParen, () => {
-            var type = ParseType();
             string name = _lexer.ExpectId().TrimStart('#');
+            _lexer.Expect(TokenType.Colon);
+            var type = ParseType();
             paramSig.Add(new ParamDef(type, name));
         });
+        var returnType = _lexer.Match(TokenType.Arrow) ? ParseType() : PrimType.Void;
+
         var body = _ctx.DeclareMethod(parentType, name, returnType, paramSig.ToImmutable(), default, access);
 
         SetCurrentMethod(body);
@@ -142,33 +147,6 @@ public partial class IRParser
         _method = method;
     }
 
-    private MethodAttribs ParseMethodAcc()
-    {
-        var attribs = default(MethodAttribs);
-
-        if (_lexer.MatchKeyword("public")) {
-            attribs |= MethodAttribs.Public;
-        }//
-        else if (_lexer.MatchKeyword("internal")) {
-            attribs |= MethodAttribs.Assembly;
-        }//
-        else if (_lexer.MatchKeyword("protected")) {
-            attribs |= MethodAttribs.Family;
-        }//
-        else {
-            _lexer.MatchKeyword("private");
-            attribs |= MethodAttribs.Private;
-        }
-
-        if (_lexer.MatchKeyword("static")) {
-            attribs |= MethodAttribs.Static;
-        }
-        if (_lexer.MatchKeyword("special")) {
-            attribs |= MethodAttribs.SpecialName;
-        }
-        return attribs;
-    }
-
     //Block := Id  ":"  (Indent  Inst+  Dedent) | Inst
     public BasicBlock ParseBlock()
     {
@@ -183,15 +161,23 @@ public partial class IRParser
         if (!_lexer.MatchKeyword("$")) return;
 
         _lexer.Expect(TokenType.Colon);
+
         ParseIndentedBlock(() => {
+            //VarDecl  :=  Seq{Id} ":" Type "^"?
+            var tokens = new List<Token>();
+            do {
+                tokens.Add(_lexer.Expect(TokenType.Identifier));
+            } while (_lexer.Match(TokenType.Comma));
+
+            _lexer.Expect(TokenType.Colon);
+
             var type = ParseType();
             bool pinned = _lexer.Match(TokenType.Caret);
 
-            do {
-                var token = _lexer.Expect(TokenType.Identifier);
+            foreach (var token in tokens) {
                 var slot = new Variable(type, token.StrValue, pinned);
                 AssignId(token, slot, "$" + token.StrValue);
-            } while (_lexer.Match(TokenType.Comma));
+            }
         });
     }
 
@@ -273,63 +259,277 @@ public partial class IRParser
 
     public Instruction ParseInst()
     {
-        Token slotToken = default;
-        TypeDesc slotType = PrimType.Void;
-        var (op, mods) = MatchOpcode(required: false);
+        _parsedResultType = null;
+        var opToken = _lexer.Expect(TokenType.Identifier);
+        var slotToken = default(Token);
 
-        if (op == Opcode.Unknown) {
-            slotType = ParseType();
-            slotToken = _lexer.Expect(TokenType.Identifier);
-            _lexer.Expect(TokenType.Equal);
-            (op, mods) = MatchOpcode(required: true);
+        if (_lexer.Match(TokenType.Equal)) {
+            slotToken = opToken;
+            opToken = _lexer.Expect(TokenType.Identifier);
         }
-        
+        var (op, mods) = Opcodes.TryParse(opToken.StrValue);
+
         var inst = op switch {
             Opcode.Goto => ParseGoto(),
             Opcode.Ret => ParseRet(),
-            Opcode.Phi => ParsePhi(slotType),
-            Opcode.Call or Opcode.CallVirt or Opcode.NewObj => ParseCallInst(op, slotType),
+            Opcode.Phi => ParsePhi(),
+            Opcode.Call or Opcode.CallVirt or Opcode.NewObj => ParseCallInst(op),
             Opcode.LdFld or Opcode.StFld or Opcode.FldAddr => ParseFieldInst(op),
             Opcode.LdVar or Opcode.StVar or Opcode.VarAddr => ParseVarInst(op),
-            Opcode.LdArr or Opcode.StArr or Opcode.ArrAddr => ParseArrayInst(op, slotType),
-            Opcode.LdPtr or Opcode.StPtr => ParsePtrInst(op, mods, slotType),
-            Opcode.Conv => ParseConv(op, mods, slotType),
-            _ => ParseMultiOpInst(op, mods, slotType, slotToken.Position),
+            Opcode.LdArr or Opcode.StArr or Opcode.ArrAddr => ParseArrayInst(op),
+            Opcode.LdPtr or Opcode.StPtr => ParsePtrInst(op, mods),
+            Opcode.Conv => ParseConv(op, mods),
+            _ => ParseMultiOpInst(op, mods, slotToken.Position),
         };
         if (slotToken.Type == TokenType.Identifier) {
             AssignId(slotToken, inst);
         }
-        if (slotType != inst.ResultType) {
-            _ctx.Error("Declared slot type does not match instruction result type", slotToken.Position);
+
+        if (_parsedResultType == null && inst.ResultType != PrimType.Void) {
+            ParseResultType();
+        }
+        if (inst.ResultType != (_parsedResultType ?? PrimType.Void)) {
+            _lexer.Error("Declared slot type does not match instruction result type");
         }
         return inst;
     }
 
-    private (Opcode, OpcodeModifiers) MatchOpcode(bool required)
+    private TypeDesc ParseResultType()
     {
-        var token = _lexer.Peek();
-        if (token.Type == TokenType.Identifier && Opcodes.TryParse(token.StrValue) is { Op: not 0 } info) {
-            _lexer.Next();
-            return info;
-        }
-        if (required) {
-            _lexer.ErrorUnexpected(token, "Opcode");
-        }
-        return default;
+        _lexer.Expect(TokenType.Arrow);
+        return _parsedResultType = ParseType();
     }
 
-    //DelimSeq{T} := Start  Seq{T}?  End
-    //Seq{T}      := T  (","  T)*
-    private void ParseDelimSeq(TokenType start, TokenType end, Action parseElem)
+    private Instruction ParseMultiOpInst(Opcode op, OpcodeModifiers mods, AbsRange pos)
     {
-        _lexer.Expect(start);
-
-        if (!_lexer.Match(end)) {
-            do {
-                parseElem();
-            } while (_lexer.Match(TokenType.Comma));
-            _lexer.Expect(end);
+        if (op is > Opcode._Bin_First and < Opcode._Bin_Last) {
+            return Schedule(PendingInst.Kind.Binary, op - (Opcode._Bin_First + 1));
         }
+        if (op is > Opcode._Cmp_First and < Opcode._Cmp_Last) {
+            return Schedule(PendingInst.Kind.Compare, op - (Opcode._Cmp_First + 1));
+        }
+        throw _ctx.Fatal("Unknown instruction", pos);
+
+        //Some insts have dynamic result types and depend on the real value type,
+        //once they're found, we'll materialize them.
+        Instruction Schedule(PendingInst.Kind kind, int op)
+        {
+            var left = ParseValue();
+            _lexer.Expect(TokenType.Comma);
+            var right = ParseValue();
+            var type = ParseResultType();
+
+            if (PendingInst.Resolve(kind, op, left, right) is { } resolved) {
+                return resolved;
+            }
+            var inst = new PendingInst(kind, op, left, right, type);
+            _pendingInsts.Add(inst);
+            return inst;
+        }
+    }
+
+    //Goto := Label | (Value "?" Label ":" Label)
+    private BranchInst ParseGoto()
+    {
+        if (LookaheadValue(TokenType.QuestionMark, out var cond)) {
+            var thenBlock = ParseLabel();
+            _lexer.Expect(TokenType.Colon);
+            var elseBlock = ParseLabel();
+            return new BranchInst(cond, thenBlock, elseBlock);
+        }
+        return new BranchInst(ParseLabel());
+    }
+
+    //Ret := Value?
+    private ReturnInst ParseRet()
+    {
+        var value = _lexer.IsNextOnNewLine() ? null : ParseValue();
+        return new ReturnInst(value);
+    }
+
+    //Phi := Seq{"["  Label  ":"  Value  "]"} ResultType
+    //e.g. "[Label -> Value], ..."
+    private PhiInst ParsePhi()
+    {
+        var args = new List<Value>();
+        do {
+            _lexer.Expect(TokenType.LBracket);
+
+            args.Add(ParseLabel());
+            _lexer.Expect(TokenType.Colon);
+
+            args.Add(ParseValue());
+            _lexer.Expect(TokenType.RBracket);
+        } while (_lexer.Match(TokenType.Comma));
+
+        var type = ParseResultType();
+
+        return new PhiInst(type, args.ToArray());
+    }
+
+    private Instruction ParseCallInst(Opcode op)
+    {
+        //Method := Type  "::"  Id  GenArgs  Call  ResultType
+        int start = _lexer.Peek().Position.Start;
+        var ownerType = ParseType();
+        _lexer.Expect(TokenType.DoubleColon);
+        var name = _lexer.ExpectId();
+
+        //GenArgs := ("<" Seq{Type} ">")?
+        var genPars = new List<TypeDesc>();
+        if (_lexer.IsNext(TokenType.LAngle)) {
+            ParseDelimSeq(TokenType.LAngle, TokenType.RAngle, () => {
+                genPars.Add(ParseType());
+            });
+        }
+        //Call    := "(" Seq{CallArg}? ")"
+        //CallArg := ("this" | Type)  ":"  Value
+        var pars = new List<TypeSig>();
+        var opers = new List<Value>();
+        bool isInstance = false;
+
+        ParseDelimSeq(TokenType.LParen, TokenType.RParen, () => {
+            if (_lexer.MatchKeyword("this")) {
+                isInstance = true;
+            } else {
+                pars.Add(ParseType());
+            }
+            _lexer.Expect(TokenType.Colon);
+            opers.Add(ParseValue());
+        });
+        var retType = ParseResultType();
+
+        var sig = new MethodSig(retType, pars, isInstance, genPars.Count);
+        var method = ownerType.FindMethod(name, sig, throwIfNotFound: false)
+                ?? throw _ctx.Fatal("Method could not be found", (start, _lexer.LastPos()));
+
+        if (genPars.Count > 0) {
+            method = method.GetSpec(new GenericContext(methodArgs: genPars));
+        }
+
+        if (op == Opcode.NewObj) {
+            return new NewObjInst(method, opers.ToArray());
+        }
+        return new CallInst(method, opers.ToArray(), op == Opcode.CallVirt);
+    }
+
+    private Instruction ParseFieldInst(Opcode op)
+    {
+        int start = _lexer.NextPos();
+        var declType = ParseType();
+        _lexer.Expect(TokenType.DoubleColon);
+        string name = _lexer.ExpectId();
+
+        var field = declType.FindField(name)
+                ?? throw _ctx.Fatal("Field could not be found", (start, _lexer.LastPos()));
+
+        var obj = _lexer.Match(TokenType.Comma) ? ParseValue() : null;
+
+        switch (op) {
+            case Opcode.FldAddr: {
+                return new FieldAddrInst(field, obj);
+            }
+            case Opcode.LdFld: {
+                return new LoadFieldInst(field, obj);
+            }
+            case Opcode.StFld when _lexer.Match(TokenType.Comma): {
+                var value = ParseValue();
+                return new StoreFieldInst(field, obj, value);
+            }
+            case Opcode.StFld: {
+                return new StoreFieldInst(field, null, obj);
+            }
+            default: throw new UnreachableException();
+        }
+    }
+
+    private Instruction ParseVarInst(Opcode op)
+    {
+        int start = _lexer.NextPos();
+        var slot = ParseValue() as Variable 
+                ?? throw _ctx.Fatal("Undeclared variable", (start, _lexer.LastPos()));
+
+        switch (op) {
+            case Opcode.LdVar: {
+                return new LoadVarInst(slot);
+            }
+            case Opcode.StVar: {
+                _lexer.Expect(TokenType.Comma);
+                var value = ParseValue();
+                return new StoreVarInst(slot, value);
+            }
+            case Opcode.VarAddr: {
+                slot.IsExposed = true;
+                return new VarAddrInst(slot);
+            }
+            default: throw new UnreachableException();
+        }
+    }
+
+    private Instruction ParseConv(Opcode op, OpcodeModifiers mods)
+    {
+        var srcValue = ParseValue();
+        bool checkOvf = (mods & OpcodeModifiers.Ovf) != 0;
+        bool unsigned = (mods & OpcodeModifiers.Un) != 0;
+        var type = ParseResultType();
+
+        return new ConvertInst(srcValue, type, checkOvf, unsigned);
+    }
+
+    private Instruction ParsePtrInst(Opcode op, OpcodeModifiers mods)
+    {
+        var address = ParseValue();
+        var flags = PointerFlags.None;
+        flags |= (mods & OpcodeModifiers.Volatile) != 0 ? PointerFlags.Volatile : 0;
+        flags |= (mods & OpcodeModifiers.Un) != 0 ? PointerFlags.Unaligned : 0;
+
+        switch (op) {
+            case Opcode.LdPtr: {
+                var type = ParseResultType();
+                return new LoadPtrInst(address, type, flags);
+            }
+            case Opcode.StPtr: {
+                _lexer.Expect(TokenType.Comma);
+                var value = ParseValue();
+                _lexer.ExpectId("as");
+                var type = ParseType();
+                return new StorePtrInst(address, value, type, flags);
+            }
+            default: throw new UnreachableException();
+        }
+    }
+
+    private Instruction ParseArrayInst(Opcode op)
+    {
+        var array = ParseValue();
+        _lexer.Expect(TokenType.Comma);
+        var index = ParseValue();
+
+        switch (op) {
+            case Opcode.LdArr: {
+                var type = ParseResultType();
+                return new LoadArrayInst(array, index, type);
+            }
+            case Opcode.StArr: {
+                _lexer.Expect(TokenType.Comma);
+                var value = ParseValue();
+
+                _lexer.ExpectId("as");
+                var type = ParseType();
+                return new StoreArrayInst(array, index, value, type);
+            }
+            case Opcode.ArrAddr: {
+                var type = ParseResultType();
+                return new ArrayAddrInst(array, index, ((ByrefType)type).ElemType);
+            }
+            default: throw new UnreachableException();
+        }
+    }
+
+    private BasicBlock ParseLabel()
+    {
+        var token = _lexer.Expect(TokenType.Identifier);
+        return AllocId(token, () => _method!.CreateBlock());
     }
 
     private Value ParseValue()
@@ -349,8 +549,11 @@ public partial class IRParser
                     string name = token.StrValue;
 
                     if (name.StartsWith("#")) {
+                        if (name == "#this" && _method!.Definition.IsInstance) {
+                            return _method.Args[0];
+                        }
                         return _method!.Args.FirstOrDefault(a => a.Name == name[1..])
-                            ?? throw _ctx.Fatal("Unknown argument '{name}'", token.Position);
+                            ?? throw _ctx.Fatal($"Unknown argument '{name}'", token.Position);
                     }
                     return new PendingValue() { Position = token.Position };
                 });
@@ -382,18 +585,12 @@ public partial class IRParser
         return false;
     }
 
-    private BasicBlock ParseLabel()
-    {
-        var token = _lexer.Expect(TokenType.Identifier);
-        return AllocId(token, () => _method!.CreateBlock());
-    }
-
     private V AllocId<V>(Token token, Func<V> createNew) where V : Value
     {
         ref var slot = ref _identifiers.GetOrAddRef(token.StrValue);
 
         slot ??= createNew().SetName(token.StrValue);
-        
+
         return slot as V
             ?? throw _ctx.Fatal($"Cannot reserve identifier '{token.StrValue}' to a '{typeof(V).Name}' because it is already assigned to a '{slot.GetType().Name}'", token.Position);
     }
@@ -415,222 +612,47 @@ public partial class IRParser
         slot = value;
     }
 
-    private Instruction ParseMultiOpInst(Opcode op, OpcodeModifiers mods, TypeDesc slotType, AbsRange pos)
+    //DelimSeq{T} := Start  Seq{T}?  End
+    //Seq{T}      := T  (","  T)*
+    private void ParseDelimSeq(TokenType start, TokenType end, Action parseElem)
     {
-        if (op is > Opcode._Bin_First and < Opcode._Bin_Last) {
-            return Schedule(PendingInst.Kind.Binary, op - (Opcode._Bin_First + 1));
-        }
-        if (op is > Opcode._Cmp_First and < Opcode._Cmp_Last) {
-            return Schedule(PendingInst.Kind.Compare, op - (Opcode._Cmp_First + 1));
-        }
-        throw _ctx.Fatal("Unknown instruction", pos);
+        _lexer.Expect(start);
 
-        //Some insts have dynamic result types and depend on the real value type,
-        //once they're found, we'll materialize them.
-        Instruction Schedule(PendingInst.Kind kind, int op)
-        {
-            var left = ParseValue();
-            _lexer.Expect(TokenType.Comma);
-            var right = ParseValue();
-
-            if (PendingInst.Resolve(kind, op, left, right) is { } resolved) {
-                return resolved;
-            }
-            var inst = new PendingInst(kind, op, left, right, slotType);
-            _pendingInsts.Add(inst);
-            return inst;
+        if (!_lexer.Match(end)) {
+            do {
+                parseElem();
+            } while (_lexer.Match(TokenType.Comma));
+            _lexer.Expect(end);
         }
     }
 
-    //Goto := Label | (Value "?" Label ":" Label)
-    private BranchInst ParseGoto()
+    private MethodAttribs ParseMethodAcc()
     {
-        if (LookaheadValue(TokenType.QuestionMark, out var cond)) {
-            var thenBlock = ParseLabel();
-            _lexer.Expect(TokenType.Colon);
-            var elseBlock = ParseLabel();
-            return new BranchInst(cond, thenBlock, elseBlock);
-        }
-        return new BranchInst(ParseLabel());
-    }
+        var attribs = default(MethodAttribs);
 
-    //Ret := Value?
-    private ReturnInst ParseRet()
-    {
-        var value = _lexer.IsNextOnNewLine() ? null : ParseValue();
-        return new ReturnInst(value);
-    }
-
-    //Phi := Seq{"["  Label  "->"  Value  "]"}
-    //e.g. "[Label -> Value], ..."
-    private PhiInst ParsePhi(TypeDesc type)
-    {
-        var args = new List<Value>();
-        do {
-            _lexer.Expect(TokenType.LBracket);
-
-            args.Add(ParseLabel());
-            _lexer.Expect(TokenType.Arrow);
-
-            args.Add(ParseValue());
-            _lexer.Expect(TokenType.RBracket);
-        } while (_lexer.Match(TokenType.Comma));
-
-        return new PhiInst(type, args.ToArray());
-    }
-
-    private Instruction ParseCallInst(Opcode op, TypeDesc retType)
-    {
-        //Method := Type  "::"  Id  GenArgs  Call
-        int start = _lexer.Peek().Position.Start;
-        var ownerType = ParseType();
-        _lexer.Expect(TokenType.DoubleColon);
-        var name = _lexer.ExpectId();
-
-        //GenArgs := ("<" Seq{Type} ">")?
-        var genPars = new List<TypeDesc>();
-        if (_lexer.IsNext(TokenType.LAngle)) {
-            ParseDelimSeq(TokenType.LAngle, TokenType.RAngle, () => {
-                genPars.Add(ParseType());
-            });
-        }
-        //Call    := "(" Seq{CallArg}? ")"
-        //CallArg := ("this" | Type)  ":"  Value
-        var pars = new List<TypeSig>();
-        var opers = new List<Value>();
-        bool isInstance = false;
-
-        ParseDelimSeq(TokenType.LParen, TokenType.RParen, () => {
-            if (_lexer.MatchKeyword("this")) {
-                isInstance = true;
-            } else {
-                pars.Add(ParseType());
-            }
-            _lexer.Expect(TokenType.Colon);
-            opers.Add(ParseValue());
-        });
-
-        var sig = new MethodSig(retType, pars, isInstance, genPars.Count);
-        var method = ownerType.FindMethod(name, sig, throwIfNotFound: false)
-                ?? throw _ctx.Fatal("Method could not be found", (start, _lexer.LastPos()));
-
-        if (genPars.Count > 0) {
-            method = method.GetSpec(new GenericContext(methodArgs: genPars));
+        if (_lexer.MatchKeyword("public")) {
+            attribs |= MethodAttribs.Public;
+        }//
+        else if (_lexer.MatchKeyword("internal")) {
+            attribs |= MethodAttribs.Assembly;
+        }//
+        else if (_lexer.MatchKeyword("protected")) {
+            attribs |= MethodAttribs.Family;
+        }//
+        else {
+            _lexer.MatchKeyword("private");
+            attribs |= MethodAttribs.Private;
         }
 
-        if (op == Opcode.NewObj) {
-            return new NewObjInst(method, opers.ToArray());
+        if (_lexer.MatchKeyword("static")) {
+            attribs |= MethodAttribs.Static;
         }
-        return new CallInst(method, opers.ToArray(), op == Opcode.CallVirt);
-    }
-
-    private Instruction ParseFieldInst(Opcode op)
-    {
-        int start = _lexer.NextPos();
-        var declType = ParseType();
-        _lexer.Expect(TokenType.DoubleColon);
-        string name = _lexer.ExpectId();
-
-        var field = declType.FindField(name)
-                ?? throw _ctx.Fatal("Field could not be found", (start, _lexer.LastPos()));
-
-        var oper1 = _lexer.Match(TokenType.Comma) ? ParseValue() : null;
-        
-        switch (op) {
-            case Opcode.FldAddr: {
-                return new FieldAddrInst(field, oper1);
-            }
-            case Opcode.LdFld: {
-                return new LoadFieldInst(field, oper1);
-            }
-            case Opcode.StFld when _lexer.Match(TokenType.Comma): {
-                return new StoreFieldInst(field, oper1, ParseValue());
-            }
-            case Opcode.StFld: {
-                return new StoreFieldInst(field, null, oper1!);
-            }
-            default: throw new UnreachableException();
+        if (_lexer.MatchKeyword("special")) {
+            attribs |= MethodAttribs.SpecialName;
         }
+        return attribs;
     }
 
-    private Instruction ParseVarInst(Opcode op)
-    {
-        int start = _lexer.NextPos();
-        var slot = ParseValue() as Variable 
-                ?? throw _ctx.Fatal("Undeclared variable", (start, _lexer.LastPos()));
-
-        switch (op) {
-            case Opcode.LdVar: {
-                return new LoadVarInst(slot);
-            }
-            case Opcode.StVar: {
-                _lexer.Expect(TokenType.Comma);
-                var value = ParseValue();
-                return new StoreVarInst(slot, value);
-            }
-            case Opcode.VarAddr: {
-                slot.IsExposed = true;
-                return new VarAddrInst(slot);
-            }
-            default: throw new UnreachableException();
-        }
-    }
-
-    private Instruction ParseConv(Opcode op, OpcodeModifiers mods, TypeDesc type)
-    {
-        var srcValue = ParseValue();
-        bool checkOvf = (mods & OpcodeModifiers.Ovf) != 0;
-        bool unsigned = (mods & OpcodeModifiers.Un) != 0;
-
-        return new ConvertInst(srcValue, type, checkOvf, unsigned);
-    }
-
-    private Instruction ParsePtrInst(Opcode op, OpcodeModifiers mods, TypeDesc type)
-    {
-        var address = ParseValue();
-        var flags = PointerFlags.None;
-        flags |= (mods & OpcodeModifiers.Volatile) != 0 ? PointerFlags.Volatile : 0;
-        flags |= (mods & OpcodeModifiers.Un) != 0 ? PointerFlags.Unaligned : 0;
-
-        switch (op) {
-            case Opcode.LdPtr: {
-                return new LoadPtrInst(address, type, flags);
-            }
-            case Opcode.StPtr: {
-                _lexer.Expect(TokenType.Comma);
-                var value = ParseValue();
-                _lexer.ExpectId("as");
-                type = ParseType();
-                return new StorePtrInst(address, value, type, flags);
-            }
-            default: throw new UnreachableException();
-        }
-    }
-
-    private Instruction ParseArrayInst(Opcode op, TypeDesc type)
-    {
-        var array = ParseValue();
-        _lexer.Expect(TokenType.Comma);
-        var index = ParseValue();
-
-        switch (op) {
-            case Opcode.LdArr: {
-                return new LoadArrayInst(array, index, type);
-            }
-            case Opcode.StArr: {
-                _lexer.Expect(TokenType.Comma);
-                var value = ParseValue();
-
-                _lexer.ExpectId("as");
-                type = ParseType();
-                return new StoreArrayInst(array, index, value, type);
-            }
-            case Opcode.ArrAddr: {
-                return new ArrayAddrInst(array, index, ((ByrefType)type).ElemType);
-            }
-            default: throw new UnreachableException();
-        }
-    }
 
     sealed class PendingValue : TrackedValue
     {

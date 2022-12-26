@@ -248,7 +248,7 @@ public class ValueNumbering : MethodPass
 
         private static FuncKind GetKind(MethodDesc fn)
         {
-            if (fn.DeclaringType is TypeDefOrSpec type && type.Module == type.Module.Resolver.CoreLib) {
+            if (fn.DeclaringType is TypeDefOrSpec type && type.IsCorelibType()) {
                 if (IsPure(type.Namespace, type.Name, fn)) {
                     return FuncKind.Pure;
                 }

@@ -72,7 +72,7 @@ public class PrimType : TypeDesc
         => IsSystemType(def) ? _fromName.GetValueOrDefault((def.Name, false)) : null;
 
     private static bool IsSystemType(TypeDef type)
-        => type.Namespace == "System" && type.Module == type.Module.Resolver.CoreLib;
+        => type.Namespace == "System" && type.IsCorelibType();
 
     internal static TypeDesc GetFromSrmCode(PrimitiveTypeCode typeCode)
     {

@@ -94,15 +94,6 @@ public class ScalarReplacement : MethodPass
     private static bool IsObjectCtorCall(Instruction inst)
     {
         return inst is CallInst { Method.Name: ".ctor", Method.DeclaringType: var declType } &&
-            IsSystemType(declType, typeof(object));
-    }
-
-    //TODO: make this a public extension method
-    private static bool IsSystemType(TypeDesc desc, Type rtType)
-    {
-        return desc is TypeDefOrSpec def && 
-               def.Module == def.Module.Resolver.CoreLib && 
-               def.Name == rtType.Name &&
-               def.Namespace == rtType.Namespace;
+            declType.IsCorelibType(typeof(object));
     }
 }

@@ -272,7 +272,7 @@ public class ConstFolding
     private static bool IsCoreLibMethod(MethodDesc method, out MethodDef def)
     {
         def = (method as MethodDefOrSpec)?.Definition!;
-        return def != null && def.DeclaringType.Module == def.Module.Resolver.CoreLib;
+        return def != null && def.DeclaringType.IsCorelibType();
     }
     private static bool AllConsts(ReadOnlySpan<Value> args)
     {

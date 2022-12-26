@@ -17,9 +17,7 @@ public class ArrayType : CompoundType
 
     internal bool Implements(TypeDefOrSpec itf)
     {
-        var coreLib = itf.Module.Resolver.CoreLib;
-
-        return itf.Module == coreLib && itf.Namespace switch {
+        return itf.IsCorelibType() && itf.Namespace switch {
             "System"
                 => itf.Name == "ICloneable",
             "System.Collections"

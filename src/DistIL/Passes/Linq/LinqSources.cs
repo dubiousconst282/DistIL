@@ -32,6 +32,8 @@ internal class ListSource : LinqSourceNode
     public ListSource(UseRef list, LinqStageNode sink)
         : base(sink, list) { }
 
+    Value? _items, _count;
+
     protected override Value EmitMoveNext(IRBuilder builder, Value currIndex)
     {
         //lq_index < list.Count
@@ -40,13 +42,26 @@ internal class ListSource : LinqSourceNode
     protected override Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock)
     {
         //list[lq_index]
+        if (_items != null) {
+            return builder.CreateArrayLoad(_items, currIndex);
+        }
         var listType = List.ResultType;
         var getter = listType.FindMethod("get_Item", new MethodSig(listType.GenericParams[0], new TypeSig[] { PrimType.Int32 }));
         return builder.CreateCallVirt(getter, List, currIndex);
     }
     protected override Value EmitSourceCount(IRBuilder builder)
     {
-        return builder.CreateCallVirt("get_Count", List);
+        return _count ?? builder.CreateCallVirt("get_Count", List);
+    }
+
+    protected override void EmitHead(IRBuilder builder)
+    {
+        var type = List.ResultType;
+
+        if (type.IsCorelibType(typeof(List<>))) {
+            _items = builder.CreateFieldLoad(type.FindField("_items"), List);
+            _count = builder.CreateFieldLoad(type.FindField("_size"), List);
+        }
     }
 }
 internal class EnumeratorSource : LinqSourceNode

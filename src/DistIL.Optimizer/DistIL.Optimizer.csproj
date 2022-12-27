@@ -1,10 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <PackageId>DistIL.Core</PackageId>
+    <PackageId>DistIL.Optimizer</PackageId>
     <Version>0.2.0-alpha</Version>
     <Product>DistIL</Product>
-    <Description>Optimizer and intermediate representation for .NET CIL.</Description>
+    <Description>Optimizer for .NET programs.</Description>
     <PackageProjectUrl>https://github.com/dubiousconst282/DistIL</PackageProjectUrl>
     <Authors>dubiousconst282</Authors>
   </PropertyGroup>
+  
+  <ItemGroup>
+    <ProjectReference Include="../DistIL/DistIL.csproj" />
+  </ItemGroup>
 </Project>

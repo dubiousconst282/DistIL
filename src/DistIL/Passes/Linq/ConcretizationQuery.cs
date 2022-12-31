@@ -13,7 +13,7 @@ internal class ConcretizationQuery : LinqQuery
     {
         _container = AllocContainer(builder, estimCount);
     }
-    public override void EmitBody(IRBuilder builder, Value currItem, in BodyLoopData loopData)
+    public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
         AppendItem(builder, _container!, currItem);
     }

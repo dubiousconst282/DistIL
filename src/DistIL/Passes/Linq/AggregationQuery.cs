@@ -23,7 +23,7 @@ internal class AggregationQuery : LinqQuery
         SubjectCall.ReplaceUses(MapResult(builder, _accumulator!));
     }
 
-    public override void EmitBody(IRBuilder builder, Value currItem, in BodyLoopData loopData)
+    public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
         var skipBlock = loopData.SkipBlock;
 
@@ -33,11 +33,10 @@ internal class AggregationQuery : LinqQuery
         }
         Debug.Assert(SubjectCall.ResultType == currItem.ResultType);
 
-        var loopData_ = loopData;
-        _hasData = loopData_.CreateAccum(ConstInt.Create(PrimType.Bool, 0), emitUpdate: hasData => {
+        _hasData = loopData.CreateAccum(ConstInt.Create(PrimType.Bool, 0), emitUpdate: hasData => {
             var gotData = default(Value);
 
-            _accumulator = loopData_.CreateAccum(_seed, emitUpdate: curr => {
+            _accumulator = loopData.CreateAccum(_seed, emitUpdate: curr => {
                 //nextAccum = hasData ? Accum(currItem) : currItem
                 var emptyCheckBlock = builder.Block;
                 var mergeBlock = builder.Method.CreateBlock(insertAfter: emptyCheckBlock).SetName("LQ_MergeAccum");

@@ -21,7 +21,7 @@ internal class PeekFirstQuery : LinqQuery
     public PeekFirstQuery(CallInst call)
         : base(call) { }
 
-    public override void EmitBody(IRBuilder builder, Value currItem, in BodyLoopData loopData)
+    public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
         var exit = loopData.Exit;
         var op = SubjectCall.Method.Name;

@@ -94,17 +94,14 @@ internal abstract class LinqSourceNode : LinqStageNode
     {
         var query = GetQuery();
         var loop = new LoopBuilder(query.SubjectCall.Block);
-        EmitHead(loop.PreHeader);
 
-        var maxCount = EmitSourceCount(loop.PreHeader);
-        Sink.EmitHead(loop.PreHeader, maxCount);
-
-        var index = loop.CreateInductor().SetName("lq_index");
+        EmitHead(loop, out var count);
+        Sink.EmitHead(loop.PreHeader, count);
         
         loop.Build(
-            emitCond: header => EmitMoveNext(header, index),
+            emitCond: EmitMoveNext,
             emitBody: body => {
-                var currItem = EmitCurrent(body, index, loop.Latch.Block);
+                var currItem = EmitCurrent(body);
                 Sink.EmitBody(body, currItem, new BodyLoopData(loop));
             }
         );
@@ -112,11 +109,9 @@ internal abstract class LinqSourceNode : LinqStageNode
         loop.InsertBefore(query.SubjectCall);
     }
 
-    protected abstract Value EmitMoveNext(IRBuilder builder, Value currIndex);
-    protected abstract Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock);
-
-    protected virtual void EmitHead(IRBuilder builder) { }
-    protected virtual Value? EmitSourceCount(IRBuilder builder) => null;
+    protected abstract void EmitHead(LoopBuilder loop, out Value? count);
+    protected abstract Value EmitMoveNext(IRBuilder builder);
+    protected abstract Value EmitCurrent(IRBuilder builder);
 }
 
 internal delegate Value LoopAccumVarFactory(Value seed, Func<Value, Value> emitUpdate);

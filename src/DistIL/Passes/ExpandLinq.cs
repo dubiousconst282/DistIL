@@ -4,12 +4,11 @@ using DistIL.Passes.Linq;
 
 public class ExpandLinq : MethodPass
 {
-    readonly TypeDefOrSpec t_Enumerable, t_IListOfT0, t_IEnumerableOfT0;
+    readonly TypeDefOrSpec t_Enumerable, t_IEnumerableOfT0;
 
     public ExpandLinq(ModuleDef mod)
     {
         t_Enumerable = mod.Resolver.Import(typeof(Enumerable));
-        t_IListOfT0 = mod.Resolver.Import(typeof(IList<>)).GetSpec(default);
         t_IEnumerableOfT0 = mod.Resolver.Import(typeof(IEnumerable<>)).GetSpec(default);
     }
 
@@ -92,11 +91,10 @@ public class ExpandLinq : MethodPass
                 return CreatePipe(call.GetOperandRef(0), node);
             }
         }
-        if (source.ResultType is ArrayType) {
+        var type = source.ResultType;
+
+        if (type is ArrayType || type.IsCorelibType(typeof(List<>))) {
             return new ArraySource(sourceRef, sink);
-        }
-        if (source.ResultType is TypeSpec spec && spec.Definition.Inherits(t_IListOfT0)) {
-            return new ListSource(sourceRef, sink);
         }
         return new EnumeratorSource(sourceRef, sink);
     }

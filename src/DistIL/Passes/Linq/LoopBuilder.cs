@@ -94,9 +94,9 @@ public class LoopBuilder
     public Value CreateInductor()
     {
         return CreateAccum(
-            seed: ConstInt.CreateI(0), 
+            seed: ConstInt.CreateI(0),
             emitUpdate: curr => Latch.CreateAdd(curr, ConstInt.CreateI(1))
-        );
+        ).SetName("lq_index");
     }
 
     public void InsertBefore(Instruction inst)

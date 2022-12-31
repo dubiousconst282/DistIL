@@ -5,90 +5,65 @@ using DistIL.IR.Utils;
 
 internal class ArraySource : LinqSourceNode
 {
-    public Value Array => PhysicalSource.Operand;
-
     public ArraySource(UseRef array, LinqStageNode sink)
         : base(sink, array) { }
 
-    protected override Value EmitMoveNext(IRBuilder builder, Value currIndex)
-    {
-        //lq_index < array.Length
-        return builder.CreateSlt(currIndex, EmitSourceCount(builder));
-    }
-    protected override Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock)
-    {
-        //array[lq_index]
-        return builder.CreateArrayLoad(Array, currIndex);
-    }
-    protected override Value EmitSourceCount(IRBuilder builder)
-    {
-        return builder.CreateConvert(builder.CreateArrayLen(Array), PrimType.Int32);
-    }
-}
-internal class ListSource : LinqSourceNode
-{
-    public Value List => PhysicalSource.Operand;
+    Value? _currPtr, _endPtr;
 
-    public ListSource(UseRef list, LinqStageNode sink)
-        : base(sink, list) { }
+    protected override void EmitHead(LoopBuilder loop, out Value? count)
+    {
+        var source = PhysicalSource.Operand;
+        var method = PhysicalSource.Parent.Block.Method;
+        var resolver = method.Definition.Module.Resolver;
 
-    Value? _items, _count;
+        var builder = loop.PreHeader;
 
-    protected override Value EmitMoveNext(IRBuilder builder, Value currIndex)
-    {
-        //lq_index < list.Count
-        return builder.CreateSlt(currIndex, EmitSourceCount(builder));
-    }
-    protected override Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock)
-    {
-        //list[lq_index]
-        if (_items != null) {
-            return builder.CreateArrayLoad(_items, currIndex);
-        }
-        var listType = List.ResultType;
-        var getter = listType.FindMethod("get_Item", new MethodSig(listType.GenericParams[0], new TypeSig[] { PrimType.Int32 }));
-        return builder.CreateCallVirt(getter, List, currIndex);
-    }
-    protected override Value EmitSourceCount(IRBuilder builder)
-    {
-        return _count ?? builder.CreateCallVirt("get_Count", List);
+        var (elemType, array, _) = source.ResultType switch {
+            ArrayType t => (
+                t.ElemType,
+                source,
+                count = builder.CreateConvert(builder.CreateArrayLen(source), PrimType.Int32)
+            ),
+            TypeSpec { Name: "List`1" } t => (
+                t.GenericParams[0],
+                builder.CreateFieldLoad(t.FindField("_items"), source),
+                count = builder.CreateFieldLoad(t.FindField("_size"), source)
+            )
+        };
+        var T0 = new GenericParamType(0, isMethodParam: true);
+        var m_GetArrayDataRef = resolver
+            .Import(typeof(System.Runtime.InteropServices.MemoryMarshal))
+            .FindMethod("GetArrayDataReference", new MethodSig(T0.CreateByref(), new TypeSig[] { T0.CreateArray() }, numGenPars: 1))
+            .GetSpec(new GenericContext(methodArgs: new TypeDesc[] { elemType }));
+
+        var startPtr = builder.CreateCall(m_GetArrayDataRef, array).SetName("lq_startPtr");
+        //T& endPtr = startPtr + (nuint)count * sizeof(T)
+        _endPtr = builder.CreatePtrOffset(startPtr, count, signed: false).SetName("lq_endPtr");
+        //T& currPtr = phi [PH: startPtr], [Latch: {currPtr + sizeof(T)}]
+        _currPtr = loop.CreateAccum(startPtr, currPtr => loop.Latch.CreatePtrIncrement(currPtr)).SetName("lq_currPtr");
     }
 
-    protected override void EmitHead(IRBuilder builder)
-    {
-        var type = List.ResultType;
+    protected override Value EmitMoveNext(IRBuilder builder)
+        => builder.CreateCmp(CompareOp.Ult, _currPtr!, _endPtr!); //ptr < endPtr
 
-        if (type.IsCorelibType(typeof(List<>))) {
-            _items = builder.CreateFieldLoad(type.FindField("_items"), List);
-            _count = builder.CreateFieldLoad(type.FindField("_size"), List);
-        }
-    }
+    protected override Value EmitCurrent(IRBuilder builder)
+        => builder.CreatePtrLoad(_currPtr!); //*ptr
 }
 internal class EnumeratorSource : LinqSourceNode
 {
-    private Value? _enumerator;
-    private TypeDesc? _enumeratorType;
-
     public EnumeratorSource(UseRef enumerable, LinqStageNode sink)
         : base(sink, enumerable) { }
 
-    protected override Value EmitMoveNext(IRBuilder builder, Value currIndex)
+    Value? _enumerator;
+    TypeDesc? _enumeratorType;
+
+    protected override void EmitHead(LoopBuilder loop, out Value? count)
     {
-        var method = _enumeratorType!.FindMethod("MoveNext", searchBaseAndItfs: true);
-        return builder.CreateCallVirt(method, _enumerator);
-    }
-    protected override Value EmitCurrent(IRBuilder builder, Value currIndex, BasicBlock skipBlock)
-    {
-        var method = _enumeratorType!.FindMethod("get_Current", searchBaseAndItfs: true);
-        return builder.CreateCallVirt(method, _enumerator);
-    }
-    protected override void EmitHead(IRBuilder builder)
-    {
+        var builder = loop.PreHeader;
         var source = PhysicalSource.Operand;
         var sourceType = source.ResultType;
 
-        //This can still potentially change behavior (if the box is used somewhere else and GetEnumerator() mutates),
-        //but we don't really care about poorly written implementations.
+        //TODO: This can still potentially change behavior (if the box is used somewhere else and GetEnumerator() mutates)
         if (source.Is(CilIntrinsicId.Box, out var boxed)) {
             sourceType = (TypeDesc)boxed.Args[0];
             source = builder.CreateIntrinsic(CilIntrinsic.UnboxRef, sourceType, boxed);
@@ -103,5 +78,16 @@ internal class EnumeratorSource : LinqSourceNode
             builder.CreateVarStore(slot, _enumerator);
             _enumerator = builder.CreateVarAddr(slot);
         }
+        count = null;
+    }
+    protected override Value EmitMoveNext(IRBuilder builder)
+    {
+        var method = _enumeratorType!.FindMethod("MoveNext", searchBaseAndItfs: true);
+        return builder.CreateCallVirt(method, _enumerator);
+    }
+    protected override Value EmitCurrent(IRBuilder builder)
+    {
+        var method = _enumeratorType!.FindMethod("get_Current", searchBaseAndItfs: true);
+        return builder.CreateCallVirt(method, _enumerator);
     }
 }

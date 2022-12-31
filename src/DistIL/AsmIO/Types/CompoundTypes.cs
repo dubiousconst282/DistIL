@@ -43,16 +43,14 @@ public class PointerType : CompoundType
     protected override string Postfix => "*";
 
     internal PointerType(TypeDesc elemType)
-        : base(elemType)
-    {
-    }
+        : base(elemType) { }
 
     protected override CompoundType New(TypeDesc specElemType)
         => new PointerType(specElemType);
 }
 
 /// <summary> Represents a managed reference/pointer type. </summary>
-public class ByrefType : CompoundType
+public class ByrefType : PointerType
 {
     public override TypeKind Kind => TypeKind.ByRef;
     public override StackType StackType => StackType.ByRef;
@@ -60,9 +58,7 @@ public class ByrefType : CompoundType
     protected override string Postfix => "&";
 
     internal ByrefType(TypeDesc elemType)
-        : base(elemType)
-    {
-    }
+        : base(elemType) { }
 
     protected override CompoundType New(TypeDesc specElemType)
         => new ByrefType(specElemType);

@@ -29,13 +29,13 @@ partial class ModuleWriter
                 shapeEnc.Shape(t.Rank, t.Sizes, t.LowerBounds);
                 break;
             }
-            case PointerType t: {
-                EncodeType(enc.Pointer(), t.ElemType);
-                break;
-            }
             case ByrefType t: {
                 enc.Builder.WriteByte((byte)SignatureTypeCode.ByReference);
                 EncodeType(enc, t.ElemType);
+                break;
+            }
+            case PointerType t: {
+                EncodeType(enc.Pointer(), t.ElemType);
                 break;
             }
             case TypeDef t: {

@@ -696,8 +696,7 @@ internal class BlockState
         var addr = Pop();
 
         if (type == null) {
-            Ensure.That(addr.ResultType is PointerType or ByrefType);
-            type = addr.ResultType.ElemType!; //ldind_ref
+            type = ((PointerType)addr.ResultType).ElemType; //ldind_ref
         }
         Push(new LoadPtrInst(addr, type, PopPointerFlags()));
     }
@@ -707,8 +706,7 @@ internal class BlockState
         var addr = Pop();
 
         if (type == null) {
-            Ensure.That(addr.ResultType is PointerType or ByrefType);
-            type = addr.ResultType.ElemType!; //stind_ref
+            type = ((PointerType)addr.ResultType).ElemType; //stind_ref
         }
         Emit(new StorePtrInst(addr, value, type, PopPointerFlags()));
     }

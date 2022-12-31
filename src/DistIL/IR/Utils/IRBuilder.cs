@@ -136,13 +136,40 @@ public class IRBuilder
         => Add(new ArrayLenInst(array));
 
     public LoadArrayInst CreateArrayLoad(Value array, Value index, TypeDesc? elemType = null, ArrayAccessFlags flags = default)
-        => Add(new LoadArrayInst(array, index, elemType ?? (array.ResultType as ArrayType)!.ElemType, flags));
+        => Add(new LoadArrayInst(array, index, elemType ?? ((ArrayType)array.ResultType).ElemType, flags));
 
     public StoreArrayInst CreateArrayStore(Value array, Value index, Value value, TypeDesc? elemType = null, ArrayAccessFlags flags = default)
-        => Add(new StoreArrayInst(array, index, value, elemType ?? (array.ResultType as ArrayType)!.ElemType, flags));
+        => Add(new StoreArrayInst(array, index, value, elemType ?? ((ArrayType)array.ResultType).ElemType, flags));
 
     public ArrayAddrInst CreateArrayAddr(Value array, Value index, TypeDesc? elemType = null, ArrayAccessFlags flags = default)
-        => Add(new ArrayAddrInst(array, index, elemType ?? (array.ResultType as ArrayType)!.ElemType, flags));
+        => Add(new ArrayAddrInst(array, index, elemType ?? ((ArrayType)array.ResultType).ElemType, flags));
+
+
+    public LoadPtrInst CreatePtrLoad(Value addr, TypeDesc? elemType = null, PointerFlags flags = default)
+        => Add(new LoadPtrInst(addr, elemType ?? ((PointerType)addr.ResultType).ElemType, flags));
+
+    public StorePtrInst CreatePtrStore(Value addr, Value value, TypeDesc? elemType = null, PointerFlags flags = default)
+        => Add(new StorePtrInst(addr, value, elemType ?? ((PointerType)addr.ResultType).ElemType, flags));
+
+    /// <summary> Creates the sequence `addr + (nuint)elemOffset * sizeof(elemType)`. </summary>
+    public Value CreatePtrOffset(Value addr, Value elemOffset, TypeDesc? elemType = null, bool signed = true)
+    {
+        if (elemOffset.ResultType.StackType != StackType.NInt) {
+            elemOffset = CreateConvert(elemOffset, signed ? PrimType.IntPtr : PrimType.UIntPtr);
+        }
+        elemType ??= ((PointerType)addr.ResultType).ElemType;
+        var stride = CreateIntrinsic(CilIntrinsic.SizeOf, elemType) as Value;
+
+        return CreateAdd(addr, CreateMul(elemOffset, stride));
+    }
+    /// <summary> Creates the sequence `addr + sizeof(elemType)`, i.e. offset to the next element. </summary>
+    public Value CreatePtrIncrement(Value addr, TypeDesc? elemType = null)
+    {
+        elemType ??= ((PointerType)addr.ResultType).ElemType;
+        var stride = CreateIntrinsic(CilIntrinsic.SizeOf, elemType) as Value;
+
+        return CreateAdd(addr, stride);
+    }
 
 
     public IntrinsicInst CreateNewArray(TypeDesc elemType, Value length)

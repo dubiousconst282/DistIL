@@ -21,7 +21,11 @@ var result = parser
         .WithParsed(RunOptimizer);
 
 if (result.Tag == ParserResultType.NotParsed) {
-    Console.WriteLine(HelpText.AutoBuild(result));
+    var help = HelpText.AutoBuild(result, h => {
+        h.AddEnumValuesToHelpText = true;
+        return h;
+    });
+    Console.WriteLine(help);
 }
 
 static void RunOptimizer(OptimizerOptions options)
@@ -113,22 +117,22 @@ static void AddIgnoreAccessAttrib(ModuleDef module, IEnumerable<string> assembly
     }
 }
 
-[Verb("opt", isDefault: true, HelpText = "Optimizes a module")]
+[Verb("opt", isDefault: true, HelpText = "Optimizes a module.")]
 class OptimizerOptions
 {
-    [Option('i', Required = true, HelpText = "Input module file path")]
+    [Option('i', Required = true, HelpText = "Input module file path.")]
     public string InputPath { get; set; } = null!;
 
-    [Option('o', HelpText = "Output module file path")]
+    [Option('o', HelpText = "Output module file path. If unspecified, the input module will be overwritten.")]
     public string? OutputPath { get; set; } = null;
 
-    [Option('r', HelpText = "Module resolver search paths")]
+    [Option('r', HelpText = "Module resolver search paths.")]
     public IEnumerable<string> ResolverPaths { get; set; } = null!;
 
-    [Option("dump-dir", HelpText = "Output directory for IR dumps")]
+    [Option("dump-dir", HelpText = "Output directory for IR dumps.")]
     public string? DumpDir { get; set; } = null;
 
-    [Option("dump-fmts", HelpText = "IR dump formats")]
+    [Option("dump-fmts", HelpText = "Comma-separated list of IR dump formats.")]
     public DumpFormats DumpFmts { get; set; } = DumpFormats.Graphviz;
 
     [Option("purge-dumps", HelpText = "Delete all files in `dump-dir`.")]

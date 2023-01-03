@@ -34,7 +34,7 @@ public class ConsoleLogger : ICompilationLogger
         while (minDepth > 0 && _scopeStack[minDepth].SyncId > _lastScopeSyncId) {
             minDepth--;
         }
-        for (int i = minDepth; i < _scopeStack.Count; i++) {
+        for (int i = minDepth; i >= 0 && i < _scopeStack.Count; i++) {
             ref var scope = ref _scopeStack[i];
 
             Indent(i);

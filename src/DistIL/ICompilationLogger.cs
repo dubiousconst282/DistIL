@@ -65,8 +65,8 @@ public interface ICompilationLogger
         : this(literalLength, formattedCount, logger, LogLevel.Info, out shouldAppend) { }
 
         public void AppendLiteral(string value) => _sb!.Append(value);
-        public void AppendFormatted(string value) => _sb!.Append(value);
         public void AppendFormatted(Value value) => _sb!.Append(value.ToString());
+        public void AppendFormatted<T>(T value) => _sb!.Append(value);
         
         public void AppendFormatted<T>(T value, string? format = null) where T : IFormattable
         {

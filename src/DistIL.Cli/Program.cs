@@ -26,25 +26,42 @@ if (result.Tag == ParserResultType.NotParsed) {
 
 static void RunOptimizer(OptimizerOptions options)
 {
-    var resolver = new ModuleResolver();
-    resolver.AddSearchPaths(new[] { Path.GetDirectoryName(options.InputPath)! });
+    var logger = new ConsoleLogger() { MinLevel = LogLevel.Debug };
+
+    var resolver = new ModuleResolver(logger);
     resolver.AddSearchPaths(options.ResolverPaths);
+    resolver.AddSearchPaths(new[] { Path.GetDirectoryName(options.InputPath)!, Environment.CurrentDirectory });
     resolver.AddTrustedSearchPaths();
 
     var module = resolver.Load(options.InputPath);
 
+    var comp = new Compilation(module, logger, new CompilationSettings());
+    RunPasses(options, comp);
+
+    AddIgnoreAccessAttrib(module, new[] { module.AsmName.Name!, "System.Private.CoreLib" });
+
+    string? outputPath = options.OutputPath;
+
+    if (outputPath == null) {
+        File.Move(options.InputPath, Path.ChangeExtension(options.InputPath, ".bak"), overwrite: false);
+        outputPath = options.InputPath;
+    }
+    module.Save(outputPath);
+}
+static void RunPasses(OptimizerOptions options, Compilation comp)
+{
     var mp1 = new MethodPassManager();
     mp1.Add(new SimplifyCFG());
     mp1.Add(new SsaTransform());
-    mp1.Add(new ExpandLinq(module));
-    mp1.Add(new SimplifyInsts(module)); //lambdas and devirtualization
+    mp1.Add(new ExpandLinq(comp.Module));
+    mp1.Add(new SimplifyInsts(comp.Module)); //lambdas and devirtualization
 
     //TODO: check if we actually need separate pipelines now that passes are
     //      applied in topological call graph order
     var mp2 = new MethodPassManager();
     mp2.Add(new InlineMethods());
     mp2.Add(new ScalarReplacement());
-    mp2.Add(new SimplifyInsts(module));
+    mp2.Add(new SimplifyInsts(comp.Module));
     //mp2.Add(new LoopInvariantCodeMotion());
     mp2.Add(new ValueNumbering());
     mp2.Add(new DeadCodeElim());
@@ -72,18 +89,7 @@ static void RunOptimizer(OptimizerOptions options)
     pm.Add(mp2);
     pm.Add(new ExportPass());
 
-    var comp = new Compilation(module, new ConsoleLogger() { MinLevel = LogLevel.Debug }, new CompilationSettings());
     pm.Run(comp);
-
-    AddIgnoreAccessAttrib(module, new[] { module.AsmName.Name!, "System.Private.CoreLib" });
-
-    string? outputPath = options.OutputPath;
-
-    if (outputPath == null) {
-        File.Move(options.InputPath, Path.ChangeExtension(options.InputPath, ".bak"), overwrite: false);
-        outputPath = options.InputPath;
-    }
-    module.Save(outputPath);
 }
 static void AddIgnoreAccessAttrib(ModuleDef module, IEnumerable<string> assemblyNames)
 {
@@ -215,11 +221,6 @@ class DumpPass : MethodPass
                 IRPrinter.ExportForest(ctx.Method, $"{BaseDir}/{name}_forest.txt");
             }
         }
-
-        var diags = IRVerifier.Diagnose(ctx.Method);
-        if (diags.Count > 0) {
-            Console.WriteLine($"BadIR in {ctx.Method}:\n  {string.Join("\n  ", diags)}");
-        }
     }
 }
 [Flags]
@@ -244,7 +245,7 @@ class ImportPass : ModulePass
         if (BisectFilter != null) {
             bisectRange = GetBisectRange(ctx.DefinedMethods.Count, BisectFilter);
             File.Delete("bisect_log.txt");
-            Console.WriteLine($"Bisecting methods [{bisectRange}], ~{(int)Math.Log2(bisectRange.Length):0} steps left.");
+            ctx.Logger.Info($"Bisecting methods [{bisectRange}], ~{(int)Math.Log2(bisectRange.Length)} steps left.");
         }
 
         foreach (var method in ctx.DefinedMethods) {
@@ -261,7 +262,7 @@ class ImportPass : ModulePass
             try {
                 method.Body = ILImporter.ImportCode(method);
             } catch (Exception ex) {
-                Console.WriteLine($"FailImp: {method} {ex.Message}");
+                ctx.Logger.Error($"Failed to import '{method}'", ex);
             }
         }
     }
@@ -290,9 +291,16 @@ class ExportPass : ModulePass
             if (method.Body == null) continue;
 
             try {
+                if (ctx.Logger.IsEnabled(LogLevel.Debug) && IRVerifier.Diagnose(method.Body) is [_, ..] diags) {
+                    using var scope = ctx.Logger.Push(new LoggerScopeInfo("DistIL.IR.Verification"), $"Bad IR in '{method}'");
+
+                    foreach (var diag in diags) {
+                        ctx.Logger.Warn(diag.ToString());
+                    }
+                }
                 method.ILBody = ILGenerator.Generate(method.Body);
             } catch (Exception ex) {
-                Console.WriteLine($"FailEmit: {method} {ex.Message}");
+                ctx.Logger.Error($"Failed to emit '{method}'", ex);
             }
         }
     }

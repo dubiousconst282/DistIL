@@ -8,6 +8,8 @@ public class ModuleResolver
 {
     //FIXME: Do we need to care about FullName (public keys and versions)?
     protected readonly Dictionary<string, ModuleDef> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private string[] _searchPaths = { };
+    private readonly ICompilationLogger? _logger;
 
     /// <summary> A reference to the `System.Private.CoreLib` assembly. </summary>
     public ModuleDef CoreLib => _coreLib ??= Resolve("System.Private.CoreLib", throwIfNotFound: true);
@@ -16,7 +18,10 @@ public class ModuleResolver
     public SystemTypes SysTypes => _sysTypes ??= new(CoreLib);
     private SystemTypes? _sysTypes;
 
-    private string[] _searchPaths = { Environment.CurrentDirectory };
+    public ModuleResolver(ICompilationLogger? logger = null)
+    {
+        _logger = logger;
+    }
 
     public void AddSearchPaths(IEnumerable<string> paths)
     {
@@ -103,12 +108,19 @@ public class ModuleResolver
 
     public ModuleDef Load(string path)
     {
-        Console.WriteLine("LoadModule: " + path);
-        using var pe = new PEReader(File.OpenRead(path), PEStreamOptions.PrefetchEntireImage);
+        using var reader = new PEReader(File.OpenRead(path), PEStreamOptions.PrefetchEntireImage);
+        return Load(reader);
+    }
+    public ModuleDef Load(PEReader reader)
+    {
         var module = new ModuleDef() { Resolver = this };
-        var loader = new ModuleLoader(pe, this, module);
+        var loader = new ModuleLoader(reader, this, module);
+
         _cache.Add(module.AsmName.Name!, module); //AsmName is loaded by ModuleLoader ctor
+        _logger?.Debug($"Loading module '{module.AsmName.Name}, v{module.AsmName.Version}'");
+
         loader.Load();
+
         return module;
     }
 }

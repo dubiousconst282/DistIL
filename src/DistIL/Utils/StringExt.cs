@@ -1,6 +1,6 @@
 namespace DistIL.Util;
 
-public static class StringEx
+public static class StringExt
 {
     public static bool EqualsIgnoreCase(this string str, string other)
     {

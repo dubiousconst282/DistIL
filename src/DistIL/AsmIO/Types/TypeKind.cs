@@ -90,7 +90,7 @@ public static class TypeKinds
     /// <summary> Checks whether the type is one of { bool, [s]byte, char, [u]short }. </summary>
     public static bool IsSmallInt(this TypeKind type) => type is >= TypeKind.Bool and <= TypeKind.UInt16;
 
-    /// <summary> Maps this type into: `bool => byte, char => ushort, string|array => object` and optionally normalizes the result to signed.  </summary>
+    /// <summary> Maps this type into: <c>bool => byte, char => ushort, string|array => object</c>; and optionally normalizes the result to signed.  </summary>
     public static TypeKind GetStorageType(this TypeKind type, bool normalizeToSigned = true)
     {
         type = type switch {

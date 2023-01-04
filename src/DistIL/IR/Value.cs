@@ -25,8 +25,8 @@ public abstract class Value
 /// <summary> The base class for a value that tracks it uses. </summary>
 public abstract class TrackedValue : Value
 {
-    //The value use chain is represented by a doubly-linked list, pointers are represented
-    //as (Inst Owner, int Index), which index `Instruction._useDefs`.
+    //The value use chain is represented by a doubly-linked list, node pointers are represented
+    //as (Inst Owner, int Index), and next/prev links are keept in `Instruction._useDefs`.
     UseRef _firstUse;
 
     /// <summary> The number of (operand) uses this value have. </summary>
@@ -60,7 +60,7 @@ public abstract class TrackedValue : Value
         NumUses--;
     }
 
-    /// <summary> Replace all uses of this value with `newValue`. </summary>
+    /// <summary> Replace all uses of this value with <paramref name="newValue"/>. </summary>
     public void ReplaceUses(Value newValue)
     {
         if (newValue == this || !_firstUse.Exists) return;
@@ -101,9 +101,9 @@ public abstract class TrackedValue : Value
         }
     }
 
-    /// <summary> Returns an enumerator of instructions using this value. Neither order nor uniqueness is guaranteed. </summary>
+    /// <summary> Returns an iterator of instructions using this value. Neither order nor uniqueness is guaranteed. </summary>
     public ValueUserIterator Users() => new() { _use = _firstUse };
-    /// <summary> Returns an enumerator of operands using this value. </summary>
+    /// <summary> Returns an iterator of operands using this value. </summary>
     public ValueUseIterator Uses() => new() { _use = _firstUse };
 
     public virtual SymbolTable? GetSymbolTable() => null;

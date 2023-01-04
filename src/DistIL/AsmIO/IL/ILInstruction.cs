@@ -4,10 +4,8 @@ public struct ILInstruction
 {
     public ILCode OpCode { get; set; }
     public int Offset { get; set; }
-    /// <summary> Operand value, one of `null, int, long, float, double, EntityDef, or int[]`. </summary>
+    /// <summary> Operand value. One of: <c>null, int, long, float, double, EntityDesc, or int[]</c>. </summary>
     public object? Operand { get; set; }
-    //We could probably use an extra long field to store primitive operands and avoid allocs, 
-    //but the extra complexity may not be worth it.
 
     public ILOperandType OperandType => OpCode.GetOperandType();
     public ILFlowControl FlowControl => OpCode.GetFlowControl();

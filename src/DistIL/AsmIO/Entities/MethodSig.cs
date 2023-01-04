@@ -21,7 +21,7 @@ public readonly struct MethodSig
 
     public bool IsNull => ReturnType == null!;
 
-    /// <remarks> Note that <paramref name="paramTypes"/> should not include the instance type (`this` parameter). </remarks>
+    /// <remarks> Note that <paramref name="paramTypes"/> should not include the instance type (<see langword="true"/> parameter). </remarks>
     public MethodSig(TypeSig retType, IReadOnlyList<TypeSig> paramTypes, bool? isInstance = null, int numGenPars = 0)
     {
         ReturnType = retType;
@@ -34,7 +34,7 @@ public readonly struct MethodSig
         _header = new(SignatureKind.Method, default, attrs);
     }
 
-    /// <remarks> Note that <paramref name="paramTypes"/> should not include the instance type (`this` parameter). </remarks>
+    /// <remarks> Note that <paramref name="paramTypes"/> should not include the instance type (<see langword="this"/> parameter). </remarks>
     public MethodSig(TypeSig retType, IReadOnlyList<TypeSig> paramTypes, SignatureHeader header, int numGenPars = 0)
     {
         ReturnType = retType;

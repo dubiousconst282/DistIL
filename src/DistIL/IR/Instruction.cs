@@ -42,21 +42,24 @@ public abstract class Instruction : TrackedValue
         }
     }
 
-    /// <summary> Inserts this instruction before `inst`. </summary>
+    /// <summary> Inserts this instruction before <paramref name="inst"/>. </summary>
     public void InsertBefore(Instruction inst) => inst.Block.InsertBefore(inst, this);
 
-    /// <summary> Inserts this instruction after `inst`. </summary>
+    /// <summary> Inserts this instruction after <paramref name="inst"/>. </summary>
     public void InsertAfter(Instruction inst) => inst.Block.InsertAfter(inst, this);
 
-    /// <summary> Moves this instruction before `inst`. </summary>
+    /// <summary> Moves this instruction before <paramref name="inst"/>. </summary>
     public void MoveBefore(Instruction inst) => Block.MoveRange(inst.Block, inst.Prev, this, this);
 
     /// <summary> 
-    /// Removes this instruction from the parent block and replaces its uses with the specified value. 
-    /// If `newValue` is an instruction with no parent block and `insertIfInst == true`, it will be added 
-    /// in the same place as this instruction. 
-    /// Operands of this instruction are keept unmodified, but uses are removed. 
+    /// Removes this instruction from the parent block and replaces its uses with the specified value. <br/>
+    /// If <paramref name="newValue"/> is an instruction with no parent block and <c>insertIfInst == true</c>, it will be added 
+    /// in the same place as this instruction.
     /// </summary>
+    /// <remarks> 
+    /// Once this method returns, this instruction should be considered invalid and should not be added in a block again.
+    /// The <see cref="Operands"/> array is left unmodified, but uses are removed.
+    /// </remarks>
     public void ReplaceWith(Value newValue, bool insertIfInst = false)
     {
         if (insertIfInst && newValue is Instruction newInst && newInst.Block == null) {
@@ -68,8 +71,8 @@ public abstract class Instruction : TrackedValue
 
     /// <summary> Removes this instruction from the parent basic block. </summary>
     /// <remarks> 
-    /// This method will remove uses from operands, while keeping the references (Operands array) intact.
-    /// It should not be added in a block again after calling this.
+    /// Once this method returns, this instruction should be considered invalid and should not be added in a block again.
+    /// The <see cref="Operands"/> array is left unmodified, but uses are removed.
     /// </remarks>
     public void Remove()
     {
@@ -87,7 +90,7 @@ public abstract class Instruction : TrackedValue
         _useDefs = null!;
     }
 
-    /// <summary> Replaces all operands set to `oldValue` with `oldValue`. </summary>
+    /// <summary> Replaces all operands set to <paramref name="oldValue"/> with <paramref name="newValue"/>. </summary>
     public void ReplaceOperand(Value oldValue, Value newValue)
     {
         for (int i = 0; i < _operands.Length; i++) {
@@ -99,7 +102,7 @@ public abstract class Instruction : TrackedValue
             }
         }
     }
-    /// <summary> Replaces the operand at `operIndex` with `newValue`. </summary>
+    /// <summary> Replaces the operand at <paramref name="operIndex"/> with <paramref name="newValue"/>. </summary>
     public void ReplaceOperand(int operIndex, Value newValue)
     {
         var prevValue = _operands[operIndex];
@@ -111,7 +114,7 @@ public abstract class Instruction : TrackedValue
         }
     }
 
-    /// <summary> Returns a reference wrapper to the `index`-th operand. </summary>
+    /// <summary> Returns a reference wrapper to the operand at <paramref name="index"/>. </summary>
     public UseRef GetOperandRef(int index)
     {
         Ensure.IndexValid(index, _operands.Length);
@@ -119,9 +122,8 @@ public abstract class Instruction : TrackedValue
     }
 
     /// <summary> 
-    /// Extends the operand array by `amount` and returns the index of the first new element. 
-    /// Newly allocated elements are set to null, they should be initialized immediately after calling this,
-    /// using ReplaceOperand(). 
+    /// Extends the operand array by <paramref name="amount"/> and returns the index of the first new element. <br/>
+    /// Newly allocated elements are set to null, they should be initialized immediately using <see cref="ReplaceOperand(int, Value)"/>.
     /// </summary>
     protected int GrowOperands(int amount)
     {
@@ -182,7 +184,6 @@ public abstract class Instruction : TrackedValue
         ctx.Print(InstName, PrintToner.InstName);
         PrintOperands(ctx);
     }
-    /// <summary> Prints the instruction operands. </summary>
     protected virtual void PrintOperands(PrintContext ctx)
     {
         for (int i = 0; i < _operands.Length; i++) {

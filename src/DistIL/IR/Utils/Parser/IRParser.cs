@@ -129,7 +129,7 @@ public partial class IRParser
         return body;
     }
 
-    /// <summary> Sets the method in which blocks are being parsed for. Must be called once before ParseBlock(), and finally with `null` after all blocks have been parsed. </summary>
+    /// <summary> Sets the method in which blocks are being parsed for. Must be called once before ParseBlock(), and finally with <see langword="null"/> after all blocks have been parsed. </summary>
     public void SetCurrentMethod(MethodBody? method)
     {
         Ensure.That(_method != method);

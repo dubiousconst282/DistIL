@@ -21,13 +21,13 @@ public class DominatorTree : IMethodAnalysis
     static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
         => new DominatorTree(mgr.Method);
 
-    /// <summary> Returns the immediate dominator of `block`, or itself if it's the entry block. </summary>
+    /// <summary> Returns the immediate dominator of <paramref name="block"/>, or itself if it's the entry block. </summary>
     public BasicBlock IDom(BasicBlock block)
     {
         return GetNode(block).IDom.Block;
     }
 
-    /// <summary> Checks if `parent` dominates `child`, i.e. if all paths from the entry block must go through `parent` before entering `child`. </summary>
+    /// <summary> Checks if all paths from the entry block must go through <paramref name="parent"/> before entering <paramref name="child"/>. </summary>
     public bool Dominates(BasicBlock parent, BasicBlock child)
     {
         if (!_hasDfsIndices) {
@@ -40,7 +40,7 @@ public class DominatorTree : IMethodAnalysis
                childNode.PostIndex <= parentNode.PostIndex;
     }
 
-    /// <summary> Same as <see cref="Dominates(BasicBlock, BasicBlock)"/>, but returns false if `parent` and `child` are the same block. </summary>
+    /// <summary> Same as <see cref="Dominates(BasicBlock, BasicBlock)"/>, but returns false if <paramref name="parent"/> and <paramref name="child"/> are the same block. </summary>
     public bool StrictlyDominates(BasicBlock parent, BasicBlock child)
     {
         return parent != child && Dominates(parent, child);
@@ -55,7 +55,7 @@ public class DominatorTree : IMethodAnalysis
         );
     }
 
-    /// <summary> Enumerates all blocks immediately dominated by `block`. </summary>
+    /// <summary> Enumerates all blocks immediately dominated by <paramref name="block"/>. </summary>
     public IEnumerable<BasicBlock> GetChildren(BasicBlock block)
     {
         var node = GetNode(block).FirstChild;
@@ -77,7 +77,7 @@ public class DominatorTree : IMethodAnalysis
         return _block2node[block];
     }
 
-    /// <summary> Creates the tree nodes and returns a list with them in DFS post order. </summary>
+    /// <summary> Creates the tree nodes and returns an array with them in DFS post order. </summary>
     private Node[] CreateNodes()
     {
         Debug.Assert(Method.EntryBlock.NumPreds == 0);

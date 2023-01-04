@@ -11,9 +11,10 @@ public class IRBuilder
     public BasicBlock Block => _block!;
     public MethodBody Method => _block!.Method;
 
-    /// <summary> Initializes a builder that inserts instructions before `inst`. </summary>
+    /// <summary> Initializes a builder that inserts instructions before <paramref name="inst"/>. </summary>
     public IRBuilder(Instruction inst) => SetPosition(inst);
-    /// <summary> Initializes a builder that inserts instructions before `inst`, if non null; othewise it appends new instructions before the terminator of `block`. </summary>
+
+    /// <summary> Initializes a builder that inserts instructions before <paramref name="inst"/>, if non null; othewise it appends new instructions before the terminator of <paramref name="block"/>. </summary>
     public IRBuilder(BasicBlock block, Instruction? inst = null) => SetPosition(block, inst);
 
     public virtual void SetPosition(BasicBlock block, Instruction? inst = null)
@@ -36,8 +37,8 @@ public class IRBuilder
         => _block.SetBranch(new BranchInst(cond, then, else_));
 
     /// <summary>
-    /// Terminates the current block with a new branch `goto cond ? newBlock : elseBlock`.
-    /// This builder continues at the start of `newBlock`.
+    /// Terminates the current block with a new branch <c>goto cond ? newBlock : elseBlock</c>,
+    /// and sets the builder position to the start of the new block.
     /// </summary>
     public void Fork(Value cond, BasicBlock elseBlock)
     {
@@ -97,7 +98,7 @@ public class IRBuilder
     public CallInst CreateCallVirt(MethodDesc method, params Value[] args)
         => Add(new CallInst(method, args, true));
 
-    /// <summary> Searches for `methodName` in the instance object type (first argument), and creates a callvirt instruction for it. </summary>
+    /// <summary> Searches for <paramref name="methodName"/> in the instance object type (first argument), and creates a callvirt instruction for it. </summary>
     public CallInst CreateCallVirt(string methodName, params Value[] args)
     {
         var instanceType = args[0].ResultType;
@@ -151,7 +152,7 @@ public class IRBuilder
     public StorePtrInst CreatePtrStore(Value addr, Value value, TypeDesc? elemType = null, PointerFlags flags = default)
         => Add(new StorePtrInst(addr, value, elemType ?? ((PointerType)addr.ResultType).ElemType, flags));
 
-    /// <summary> Creates the sequence `addr + (nuint)elemOffset * sizeof(elemType)`. </summary>
+    /// <summary> Creates the sequence <c>addr + (nuint)elemOffset * sizeof(elemType)</c>. </summary>
     public Value CreatePtrOffset(Value addr, Value elemOffset, TypeDesc? elemType = null, bool signed = true)
     {
         if (elemOffset.ResultType.StackType != StackType.NInt) {
@@ -162,7 +163,7 @@ public class IRBuilder
 
         return CreateAdd(addr, CreateMul(elemOffset, stride));
     }
-    /// <summary> Creates the sequence `addr + sizeof(elemType)`, i.e. offset to the next element. </summary>
+    /// <summary> Creates the sequence <c>addr + sizeof(elemType)</c>, i.e. offset to the next element. </summary>
     public Value CreatePtrIncrement(Value addr, TypeDesc? elemType = null)
     {
         elemType ??= ((PointerType)addr.ResultType).ElemType;
@@ -179,7 +180,7 @@ public class IRBuilder
     public void CreateMarker(string text)
         => Add(new IntrinsicInst(IRIntrinsic.Marker, ConstString.Create(text)));
 
-    /// <summary> Creates the `default` value. </summary>
+    /// <summary> Creates the <see langword="default"/> value for the given type. </summary>
     public Value CreateDefaultOf(TypeDesc type)
     {
         if (type.Kind == TypeKind.Struct) {

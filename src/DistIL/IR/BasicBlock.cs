@@ -8,7 +8,7 @@ public class BasicBlock : TrackedValue
     public SuccIterator Succs => new(this);
 
     public Instruction First { get; private set; } = null!;
-    /// <remarks> May be one of: 
+    /// <remarks> Must be one of: 
     /// <see cref="ReturnInst"/>, <see cref="BranchInst"/>, <see cref="SwitchInst"/>,
     /// <see cref="ThrowInst"/>, <see cref="LeaveInst"/>, or <see cref="ResumeInst"/>. </remarks>
     public Instruction Last { get; private set; } = null!;
@@ -64,21 +64,23 @@ public class BasicBlock : TrackedValue
         Method = method;
     }
 
-    /// <summary> Inserts `newInst` before the first instruction in this block. </summary>
+    /// <summary> Inserts <paramref name="newInst"/> before the first instruction in this block. </summary>
     public void InsertFirst(Instruction newInst) => InsertRange(null, newInst, newInst);
-    /// <summary> Inserts `newInst` after the last instruction in this block. </summary>
+
+    /// <summary> Inserts <paramref name="newInst"/> after the last instruction in this block. </summary>
     public void InsertLast(Instruction newInst) => InsertRange(Last, newInst, newInst);
-    /// <summary> Inserts `newInst` before `inst`. If `inst` is null, `newInst` will be inserted at the block start. </summary>
+
+    /// <summary> Inserts <paramref name="newInst"/> before <paramref name="inst"/>. If <paramref name="inst"/> is null, <paramref name="newInst"/> will be inserted at the block start. </summary>
     public void InsertBefore(Instruction? inst, Instruction newInst) => InsertRange(inst?.Prev, newInst, newInst);
-    /// <summary> Inserts `newInst` after `inst`. If `inst` is null, `newInst` will be inserted at the block start. </summary>
+
+    /// <summary> Inserts <paramref name="newInst"/> after <paramref name="inst"/>. If <paramref name="inst"/> is null, <paramref name="newInst"/> will be inserted at the block start. </summary>
     public void InsertAfter(Instruction? inst, Instruction newInst) => InsertRange(inst, newInst, newInst);
-    /// <summary> Inserts `newInst` before the block terminator, if one exists. </summary>
+
+    /// <summary> Inserts <paramref name="newInst"/> before the block terminator, if one exists. </summary>
     public void InsertAnteLast(Instruction newInst)
         => InsertRange(Last is { IsBranch: true } ? Last.Prev : Last, newInst, newInst);
 
-    /// <summary> Inserts a range of instructions into this block after `pos` (null means before the first instruction). </summary>
-    /// <param name="rangeFirst">The first instruction in the range.</param>
-    /// <param name="rangeLast">The last instruction in the range, or `rangeFirst` if only one instruction is to be added.</param>
+    //Inserts a range of instructions into this block after `pos` (null means before the first instruction).
     internal void InsertRange(Instruction? pos, Instruction rangeFirst, Instruction rangeLast, bool transfering = false)
     {
         //Set parent block for range
@@ -110,7 +112,7 @@ public class BasicBlock : TrackedValue
         }
     }
 
-    /// <summary> Moves a range of instructions from this block to `newParent`, after `newParentPos` (null means before the first instruction in `newParent`). </summary>
+    /// <summary> Moves a range of instructions from this block to <paramref name="newParent"/>, after <paramref name="newParentPos"/> (null means before the first instruction in <paramref name="newParent"/>). </summary>
     public void MoveRange(BasicBlock newParent, Instruction? newParentPos, Instruction first, Instruction last)
     {
         Ensure.That(newParentPos == null || newParentPos?.Block == newParent);
@@ -120,7 +122,8 @@ public class BasicBlock : TrackedValue
         newParent.InsertRange(newParentPos, first, last, transfering: true);
     }
 
-    public void Remove(Instruction inst)
+    /// <summary> Detaches <paramref name="inst"/> from this block. </summary>
+    internal void Remove(Instruction inst)
     {
         Ensure.That(inst.Block == this);
         inst.Block = null!; //prevent inst from being removed again
@@ -154,10 +157,10 @@ public class BasicBlock : TrackedValue
     public PhiInst InsertPhi(TypeDesc resultType) => InsertPhi(new PhiInst(resultType));
 
     /// <summary>
-    /// Splits this block, moving instructions starting from `pos` to the new block,
-    /// and adds a unconditional branch to the <paramref name="branchTo"/> or to new block.
-    /// Note that `pos` cannot be a PhiInst/GuardInst and it must be in this block.
+    /// Splits this block, moving instructions starting from <paramref name="pos"/> (inclusive) to the new block,
+    /// and adds a unconditional branch to the new block (or <paramref name="branchTo"/> if specified).
     /// </summary>
+    /// <remarks> Note that <paramref name="pos"/> cannot be a PhiInst/GuardInst and it must be in this block. </remarks>
     public BasicBlock Split(Instruction pos, BasicBlock? branchTo = null)
     {
         Ensure.That(pos.Block == this && !pos.IsHeader);
@@ -170,8 +173,8 @@ public class BasicBlock : TrackedValue
     }
 
     /// <summary> 
-    /// Inserts an intermediate block between the edge (this -> succ), if it is critical.
-    /// Returns the new intermediate edge block, or `this` if the edge is not critical.
+    /// Inserts an intermediate block between the edge (<see langword="this"/> -> <paramref name="succ"/>), if it is critical.
+    /// Returns the new intermediate block, or this if the edge is not critical.
     /// </summary>
     public BasicBlock SplitCriticalEdge(BasicBlock succ)
     {
@@ -188,7 +191,7 @@ public class BasicBlock : TrackedValue
         return intermBlock;
     }
 
-    /// <summary> Replaces the incomming block of all phis in successor blocks from this block to `newPred`. </summary>
+    /// <summary> Replaces the incomming block of all phis in successor blocks from this block to <paramref name="newPred"/>. </summary>
     public void RedirectSuccPhis(BasicBlock? newPred, bool removeTrivialPhis = true)
     {
         foreach (var succ in Succs) {
@@ -196,7 +199,10 @@ public class BasicBlock : TrackedValue
         }
     }
 
-    /// <summary> Replaces the incomming block of all phis in this block from `oldPred` to `newPred`. If `newPred` is null, `oldPred` is removed from the phi arguments. </summary>
+    /// <summary>
+    /// Replaces the incomming block of all phis in this block from <paramref name="oldPred"/> to <paramref name="newPred"/>. 
+    /// If <paramref name="newPred"/> is null, <paramref name="oldPred"/> is removed from the phi arguments.
+    /// </summary>
     /// <param name="removeTrivialPhis">Remove phis with a single argument.</param>
     public void RedirectPhis(BasicBlock oldPred, BasicBlock? newPred, bool removeTrivialPhis = true)
     {
@@ -209,7 +215,7 @@ public class BasicBlock : TrackedValue
         }
     }
 
-    /// <summary> Replaces the block terminator with `newBranch`. </summary>
+    /// <summary> Replaces the block terminator with <paramref name="newBranch"/>. </summary>
     public void SetBranch(Instruction newBranch)
     {
         Ensure.That(newBranch.IsBranch);
@@ -219,15 +225,13 @@ public class BasicBlock : TrackedValue
         }
         InsertLast(newBranch);
     }
-    /// <summary> Replaces the block terminator with a unconditional branch to `target`. </summary>
+    /// <summary> Replaces the block terminator with a unconditional branch to <paramref name="target"/>. </summary>
     public void SetBranch(BasicBlock target)
     {
         SetBranch(new BranchInst(target));
     }
 
-    /// <summary> 
-    /// Removes this block from the parent method, clear edges, and uses from child instruction operands.
-    /// </summary>
+    /// <summary> Removes this block from the parent method, and clear uses from child instruction operands. </summary>
     public void Remove()
     {
         foreach (var inst in this) {
@@ -264,7 +268,7 @@ public class BasicBlock : TrackedValue
             yield return phi;
         }
     }
-    /// <summary> Enumerates all <see cref="GuardInst"/> in this block. </summary>
+    /// <summary> Enumerates all <see cref="GuardInst"/>s in this block. </summary>
     /// <remarks> Blocks can have both guards and phis, but guards must always come first. </remarks>
     public IEnumerable<GuardInst> Guards()
     {

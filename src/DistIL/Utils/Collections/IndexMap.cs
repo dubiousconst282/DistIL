@@ -19,7 +19,7 @@ public class IndexMap<T> where T : notnull
         return id;
     }
 
-    /// <summary> Gets the index for the given value, or `-1` if it does not exist. </summary>
+    /// <summary> Gets the index for the given value, or <c>-1</c> if it does not exist. </summary>
     public int IndexOf(T value) => _ids.GetValueOrDefault(value, -1);
 
     /// <summary> Gets the value at the given index. </summary>

@@ -1,7 +1,7 @@
 namespace DistIL.IR;
 
 /// <summary>
-/// Represents a constant value of type `Int, Long, Double, String or null`.
+/// Represents a constant primitive value (Int, Long, Double, String or null).
 /// </summary>
 public abstract class Const : Value, IEquatable<Const>
 {

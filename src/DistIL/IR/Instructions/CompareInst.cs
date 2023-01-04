@@ -46,20 +46,22 @@ public class CompareInst : Instruction
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }
 /// <summary>
-/// Specifies comparison operators for CompareInst.
-/// 
-/// Prefixes:
-///   Eq|Ne    -> integers, objects, refs/pointers
-///   S[pred]  -> Signed integer
-///   U[pred]  -> Unsigned integer
-///   FO[pred] -> Float ordered (result is `true` if neither operand is NaN and [pred] is `true`)
-///   FU[pred] -> Float unordered (result is `true` if either operand is NaN or [pred] is `true`)
+/// Specifies comparison operators for <see cref="CompareInst"/>.
+/// <code>
+/// Target types:
+///   'Eq|Ne'    -> Integers, objects, pointers
+///   'S(pred)'  -> Signed integer
+///   'U(pred)'  -> Unsigned integer, pointers
+///   'FO(pred)' -> Float ordered (result is true if neither operand is NaN and (pred) is true)
+///   'FU(pred)' -> Float unordered (result is true if either operand is NaN or (pred) is true)
 /// Predicates:
-///   Eq -> Equal
-///   Ne -> Not equal
-///   Lt / Gt -> Less than / Greater than
-///   Le / Ge -> Less than / Greater than; or equal
-///   
+///   'Eq' -> Equal
+///   'Ne' -> Not equal
+///   'Lt' -> Less than
+///   'Gt' -> Greater than
+///   'Le' -> Less than or equal
+///   'Ge' -> Greater than or equal
+/// </code>
 /// See also https://llvm.org/docs/LangRef.html#fcmp-instruction
 /// </summary>
 public enum CompareOp

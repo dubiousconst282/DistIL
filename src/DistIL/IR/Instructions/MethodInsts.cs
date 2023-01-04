@@ -63,7 +63,7 @@ public class CallInst : Instruction
 
 public class NewObjInst : Instruction
 {
-    /// <summary> The `.ctor` method. Note that the first argument (`this`) is ignored. </summary>
+    /// <summary> The <c>.ctor</c> method used to initialize the object. </summary>
     public MethodDesc Constructor { get; set; }
     public ReadOnlySpan<Value> Args => _operands;
 

@@ -55,11 +55,12 @@ public class MethodDef : MethodDefOrSpec
     public override IReadOnlyList<TypeSig> ParamSig => _paramSig ??= new() { Method = this };
     public override IReadOnlyList<GenericParamType> GenericParams { get; }
 
-    /// <summary> Represents a placeholder for the return value, which may contain custom attributes. </summary>
+    /// <summary> Placeholder for the <c>return</c> parameter, this contains the signature and custom attributes. </summary>
     public ParamDef ReturnParam { get; }
 
-    //TODO: expose `IROList<TypeSig> ParamSig` instead of `ImmutArray<ParamDef> Params`
     public ImmutableArray<ParamDef> Params { get; }
+
+    /// <summary> Returns a view over <see cref="Params"/>, excluding the instance parameter if this is not a static method. </summary>
     public ReadOnlySpan<ParamDef> StaticParams => Params.AsSpan(IsStatic ? 0 : 1);
 
     private ParamSigProxyList? _paramSig;
@@ -191,7 +192,7 @@ public class MethodSpec : MethodDefOrSpec
     public override IReadOnlyList<TypeSig> ParamSig { get; }
     public override IReadOnlyList<TypeDesc> GenericParams { get; }
 
-    /// <summary> Returns whether this meth generic parameters from this spec are different from its definition. </summary>
+    /// <summary> Returns whether the generic parameters from this spec are different from its definition. </summary>
     public bool IsBoundGeneric => IsGeneric && GenericParams != Definition.GenericParams;
 
     internal MethodSpec(TypeDefOrSpec declaringType, MethodDef def, ImmutableArray<TypeDesc> genArgs = default)
@@ -260,13 +261,12 @@ public class ParamDef
 
 public class ILMethodBody
 {
-    public required ArraySegment<ILInstruction> Instructions { get; set; }
+    public ArraySegment<ILInstruction> Instructions { get; set; }
     public Variable[] Locals { get; set; } = Array.Empty<Variable>();
     public ExceptionRegion[] ExceptionRegions { get; set; } = Array.Empty<ExceptionRegion>();
     public int MaxStack { get; set; }
     public bool InitLocals { get; set; }
 
-    [SetsRequiredMembers]
     internal ILMethodBody(ModuleLoader loader, int rva)
     {
         var block = loader._pe.GetMethodBody(rva);
@@ -277,9 +277,7 @@ public class ILMethodBody
         InitLocals = block.LocalVariablesInitialized;
     }
 
-    public ILMethodBody()
-    {
-    }
+    public ILMethodBody() { }
 
     private static ILInstruction[] DecodeInsts(ModuleLoader loader, BlobReader reader)
     {
@@ -409,7 +407,7 @@ public class ExceptionRegion
 
     /// <summary> Gets the starting IL offset of the filter region, or -1 if the region is not a filter. </summary>
     public int FilterStart { get; set; } = -1;
-    /// <summary> Gets the ending IL offset of the filter region. This is an alias for `HandlerStart`. </summary>
+    /// <summary> Gets the ending IL offset of the filter region. This is an alias for <see cref="HandlerStart"/>. </summary>
     public int FilterEnd => HandlerStart;
 
     public override string ToString()

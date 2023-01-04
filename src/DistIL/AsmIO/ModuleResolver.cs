@@ -11,7 +11,7 @@ public class ModuleResolver
     private string[] _searchPaths = { };
     private readonly ICompilationLogger? _logger;
 
-    /// <summary> A reference to the `System.Private.CoreLib` assembly. </summary>
+    /// <summary> A reference to the <c>System.Private.CoreLib</c> assembly. </summary>
     public ModuleDef CoreLib => _coreLib ??= Resolve("System.Private.CoreLib", throwIfNotFound: true);
     private ModuleDef? _coreLib;
 

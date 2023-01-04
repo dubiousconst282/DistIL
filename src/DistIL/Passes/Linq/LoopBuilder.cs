@@ -90,7 +90,7 @@ public class LoopBuilder
         return phi;
     }
 
-    /// <summary> Creates an `int32` index var which increments on every iteration. </summary>
+    /// <summary> Creates an <see cref="int"/> index var which increments on every iteration. </summary>
     public Value CreateInductor()
     {
         return CreateAccum(

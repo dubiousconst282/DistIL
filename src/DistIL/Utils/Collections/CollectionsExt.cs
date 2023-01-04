@@ -4,7 +4,7 @@ using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-public static class CollectionsEx
+public static class CollectionsExt
 {
     public static ImmutableArray<T> EmptyIfDefault<T>(this ImmutableArray<T> array)
         => array.IsDefault ? ImmutableArray<T>.Empty : array;

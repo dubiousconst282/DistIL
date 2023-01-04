@@ -14,7 +14,7 @@ public unsafe class MemUtils
         return Unsafe.ReadUnaligned<T>(ref Unsafe.AddByteOffset(ref MemoryMarshal.GetReference(buf), (IntPtr)pos));
     }
 
-    /// <summary> Reverse bytes of a primitive value. `T` must be a blittable type of size `1, 2, 4, or 8`. </summary>
+    /// <summary> Reverse bytes of a primitive value. <typeparamref name="T"/> must be a blittable type of size 1, 2, 4, or 8. </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static T BSwap<T>(T value) where T : unmanaged
     {
@@ -29,7 +29,7 @@ public unsafe class MemUtils
         throw new NotSupportedException();
     }
 
-    /// <summary> Writes an object to the specified array without covariance checks. `array[index] = value` </summary>
+    /// <summary> Writes an object to the specified array without covariance checks. Equivalent to <c>array[index] = value</c>. </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WriteInvariant<T>(T?[] array, int index, T? value) where T : class
     {

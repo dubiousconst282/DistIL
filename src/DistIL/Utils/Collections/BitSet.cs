@@ -123,7 +123,7 @@ public class BitSet : IEquatable<BitSet>
         return changed != 0;
     }
 
-    /// <summary> Adds the differences between `a` and `b` (a ∩ b') to this set, and returns whether any change occurred. </summary>
+    /// <summary> Adds the differences between <paramref name="a"/> and <paramref name="b"/> (a ∩ b') to this set, and returns whether any change occurred. </summary>
     public bool UnionDiffs(BitSet a, BitSet b)
     {
         var dst = _data;

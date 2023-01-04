@@ -84,6 +84,7 @@ public class SwitchInst : Instruction
         TargetMappings = targetMappings;
     }
 
+    //Branch instructions are required by the successor edge iterator to have no duplicate block uses.
     private static Value[] CreateOperands(Value targetIndex, BasicBlock defaultTarget, BasicBlock[] targets, out int[] mappings)
     {
         var blockMappings = new Dictionary<BasicBlock, int>(targets.Length + 1);
@@ -103,7 +104,7 @@ public class SwitchInst : Instruction
         return operIdx == opers.Length ? opers : opers[0..operIdx]; //slicing always creates a copy
     }
 
-    /// <summary> Returns the target block for case `index`. The default target is represented as `-1`. </summary>
+    /// <summary> Returns the target block for the case at <paramref name="index"/>. The default case is represented as <c>-1</c>. </summary>
     public BasicBlock GetTarget(int index)
     {
         return (BasicBlock)_operands[TargetMappings[index + 1]];

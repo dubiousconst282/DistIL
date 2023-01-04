@@ -55,7 +55,7 @@ public class ProtectedRegionAnalysis : IMethodAnalysis
 public class ProtectedRegion
 {
     public RefSet<BasicBlock> Blocks { get; } = new();
-    /// <remarks> Guaranteed to be ordered as: [protectedRegion, filterRegion?, handlerRegion] pairs/triples for each guard in `StartBlock`. </remarks>
+    /// <remarks> Guaranteed to be ordered as: [protectedRegion, filterRegion?, handlerRegion] pairs/triples for each guard in <see cref="StartBlock"/>. </remarks>
     public List<ProtectedRegion> Children { get; } = new();
     public ProtectedRegion? Parent { get; private set; }
 

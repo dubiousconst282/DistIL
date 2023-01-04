@@ -6,9 +6,6 @@ public class MethodBody
     private SymbolTable? _symTable = null;
 
     public ImmutableArray<Argument> Args { get; }
-    /// <summary> Gets a view over `Args` excluding the first argument (`this`) if this is an instance method. </summary>
-    public ReadOnlySpan<Argument> StaticArgs => Args.AsSpan(Definition.IsStatic ? 0 : 1);
-
     public TypeDesc ReturnType => Definition.ReturnType;
 
     /// <summary> The entry block of this method. Should not have predecessors. </summary>

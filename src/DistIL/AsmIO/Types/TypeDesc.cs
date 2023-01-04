@@ -44,7 +44,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     public virtual ByrefType CreateByref() => new(this);
 
     /// <summary> Searches for a method with the specified signature. </summary>
-    /// <param name="sig">The method signature to search for, or `default` to match any signature. Should not include the `this` parameter type. </param>
+    /// <param name="sig">The method signature to search for, or <see langword="default"/> to match any signature. Should not include the instance parameter type. </param>
     /// <param name="spec">A generic context used to specialize methods before matching with the signature.</param>
     public virtual MethodDesc? FindMethod(
         string name, in MethodSig sig = default, in GenericContext spec = default,
@@ -85,7 +85,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
         return null;
     }
 
-    /// <summary> Checks if this type is, inherits, or implements `baseType`. </summary>
+    /// <summary> Checks if this type is, inherits, or implements <paramref name="baseType"/>. </summary>
     public bool Inherits(TypeDesc baseType)
     {
         for (var parent = this; parent != null; parent = parent.BaseType) {
@@ -167,7 +167,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     /// <remarks>
     /// - If both types are objects, true is always returned. <br/>
     /// - If both types are structs, returns whether they're equal. <br/>
-    /// - Implies that an integer value stored on another location might be truncated, e.g. `int32.IsStackAssignableTo(int16) = true`. <br/>
+    /// - Implies that an integer value stored on another location might be truncated, e.g. <c>int32.IsStackAssignableTo(int16) = true</c>. <br/>
     /// </remarks>
     public bool IsStackAssignableTo(TypeDesc assigneeType)
     {
@@ -188,7 +188,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
                (t2 is StackType.NInt && t1 is StackType.ByRef or StackType.Int);
     }
 
-    /// <summary> Returns the common base type of `a` and `b`, assuming they're both object types (not structs). </summary>
+    /// <summary> Returns the common base type of <paramref name="a"/> and <paramref name="b"/>, assuming they're both object types (not structs). </summary>
     public static TypeDesc GetCommonAncestor(TypeDesc a, TypeDesc b)
     {
         Ensure.That(!a.IsValueType && !b.IsValueType); //Not impl, will return ValueType as lowest CA

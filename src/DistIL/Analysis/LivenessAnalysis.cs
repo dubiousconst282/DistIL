@@ -64,19 +64,19 @@ public class LivenessAnalysis : IMethodAnalysis, IPrintDecorator
 
     static readonly VarSet s_EmptySet = new(0);
 
-    /// <summary> Returns the set of variables live when `block` exists. </summary>
+    /// <summary> Returns the set of variables live when <paramref name="block"/> exits. </summary>
     /// <remarks> The returned set may be an empty singleton and it _should not_ be modified. </remarks>
     public VarSet GetLiveOut(BasicBlock block) => _liveSets.GetValueOrDefault(block).Out ?? s_EmptySet;
 
-    /// <summary> Checks if `inst` is live at the start of `block`. </summary>
+    /// <summary> Checks if <paramref name="inst"/> is live at the start of <paramref name="block"/>. </summary>
     public bool IsLiveIn(BasicBlock block, Instruction inst)
         => _liveSets.GetValueOrDefault(block).In?.Contains(inst) ?? false;
 
-    /// <summary> Checks if `inst` is live when `block` exits. </summary>
+    /// <summary> Checks if <paramref name="inst"/> is live when <paramref name="block"/> exits. </summary>
     public bool IsLiveOut(BasicBlock block, Instruction inst)
         => _liveSets.GetValueOrDefault(block).Out?.Contains(inst) ?? false;
 
-    /// <summary> Checks if `inst` is live after `pos` executes. </summary>
+    /// <summary> Checks if <paramref name="inst"/> is live after <paramref name="pos"/> executes. </summary>
     public bool IsLiveAfter(Instruction inst, Instruction pos)
     {
         if (IsLiveOut(pos.Block, inst)) {

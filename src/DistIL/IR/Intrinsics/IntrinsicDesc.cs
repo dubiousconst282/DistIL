@@ -73,7 +73,7 @@ public static class IntrinsicExt
     public static bool Is(this Value inst, IRIntrinsicId id)
         => inst is IntrinsicInst { Intrinsic: IRIntrinsic c } && c.Id == id;
 
-    /// <summary> If `value` is a <see cref="CilIntrinsic.Box"/> instruction, returns the boxed value type; otherwise, returns the value result type. </summary>
+    /// <summary> If <paramref name="value"/> is a <see cref="CilIntrinsic.Box"/> instruction, returns the boxed value type; otherwise, returns the value result type. </summary>
     public static TypeDesc GetUnboxedType(this Value value)
         => value is IntrinsicInst {
             Intrinsic: CilIntrinsic { Id: CilIntrinsicId.Box },

@@ -78,12 +78,12 @@ public class RegisterAllocator : IPrintDecorator
             ??= new(type, name: "reg" + _registers.Count);
     }
 
-    /// <summary> Returns the register assigned to `def`. </summary>
+    /// <summary> Returns the register assigned to <paramref name="def"/>. </summary>
     public Variable GetRegister(Instruction def)
         => _interfs.GetNode(def)?.Register 
             ?? PickRegister(def.ResultType, -1); //defs with no nodes don't interfere with anything, just give them a dummy register
 
-    /// <summary> Returns a list of phi-associated parallel copies that must execute at the end of `block`. </summary>
+    /// <summary> Returns a list of phi-associated parallel copies that must execute at the end of <paramref name="block"/>. </summary>
     public IReadOnlyList<(PhiInst Dest, Value Value)>? GetPhiCopies(BasicBlock block)
         => _phiCopies.GetValueOrDefault(block);
 

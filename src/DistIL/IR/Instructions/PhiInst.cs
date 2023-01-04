@@ -39,7 +39,7 @@ public class PhiInst : Instruction
     public void SetValue(BasicBlock block, Value newValue) => SetValue(FindArgIndex(block), newValue);
     public void SetValue(int index, Value newValue) => ReplaceOperand(index * 2 + 1, newValue);
 
-    /// <summary> Returns the first block which maps to `value`. If it doesn't exist, an exception is thrown. </summary>
+    /// <summary> Returns the first block mapping to <paramref name="value"/>. If it doesn't exist, an exception is thrown. </summary>
     public BasicBlock GetBlock(Value value) => GetBlock(FindArgIndex(value, true));
     public BasicBlock GetBlock(int index) => (BasicBlock)_operands[index * 2 + 0];
 

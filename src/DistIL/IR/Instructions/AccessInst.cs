@@ -18,8 +18,7 @@ public interface StoreInst : AccessInst
 
     /// <summary>
     /// Creates a sequence of instructions that truncates or rounds the value to what it would have been after
-    /// a store/load roundtrip to a location of type `destType`, or returns `val` itself if no truncation would occur.
-    /// See <see cref="IsCoerced(TypeDesc, TypeDesc)"/>.
+    /// a store/load roundtrip to a location of type <paramref name="destType"/>, or returns <paramref name="val"/> itself if no truncation would occur.
     /// </summary>
     public static Value Coerce(TypeDesc destType, Value val, Instruction insertBefore)
     {

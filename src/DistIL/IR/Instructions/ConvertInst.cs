@@ -8,7 +8,7 @@ public class ConvertInst : Instruction
         set => ReplaceOperand(0, value);
     }
     public bool CheckOverflow { get; set; }
-    /// <summary> Treat the source value as unsigned. Only relevant if target type is float or `CheckOverflow == true`. </summary>
+    /// <summary> Treat the source value as unsigned. Only relevant if target type is float or <c>CheckOverflow == true</c>. </summary>
     public bool SrcUnsigned { get; set; }
 
     public override bool MayThrow => CheckOverflow;

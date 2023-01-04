@@ -63,8 +63,8 @@ public class ArrayStack<T>
     }
 
     /// <summary>
-    /// If the stack is not empty, copies the value on top of the stack to `value` and return true; 
-    /// otherwise, leaves `value` uninitialized and return false. 
+    /// If the stack is not empty, copies the value on top of the stack to <paramref name="value"/> and return true; 
+    /// otherwise, leaves <paramref name="value"/> uninitialized and return false. 
     /// </summary>
     public bool TryPop(out T value)
     {

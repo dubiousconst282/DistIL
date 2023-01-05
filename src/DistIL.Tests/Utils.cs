@@ -2,6 +2,7 @@ namespace DistIL.Tests;
 
 using DistIL.AsmIO;
 using DistIL.IR;
+using DistIL.IR.Utils.Parser;
 
 class Utils
 {
@@ -33,4 +34,20 @@ class FakeTrackedValue : TrackedValue
         ResultType = PrimType.Int32;
     }
     public override void Print(PrintContext ctx) => ctx.Print(Id.ToString());
+}
+
+class FakeParserContext : ParserContext
+{
+    public FakeParserContext(string code, ModuleResolver modResolver)
+        : base(code, modResolver) { }
+
+    public override MethodBody DeclareMethod(
+        TypeDef parentType, string name,
+        TypeSig returnSig, ImmutableArray<ParamDef> paramSig,
+        ImmutableArray<GenericParamType> genParams, System.Reflection.MethodAttributes attribs)
+    {
+        var body = Utils.CreateDummyMethodBody(returnSig.Type, paramSig, attribs, name);
+        DeclaredMethods.Add(body);
+        return body;
+    }
 }

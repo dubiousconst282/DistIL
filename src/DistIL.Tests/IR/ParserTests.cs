@@ -319,20 +319,4 @@ Block1:
         parser.ParseUnit();
         return parser.Context.DeclaredMethods.First(m => m.Definition.Name == "TestCase");
     }
-
-    class FakeParserContext : ParserContext
-    {
-        public FakeParserContext(string code, ModuleResolver modResolver)
-            : base(code, modResolver) { }
-
-        public override MethodBody DeclareMethod(
-            TypeDef parentType, string name,
-            TypeSig returnSig, ImmutableArray<ParamDef> paramSig,
-            ImmutableArray<GenericParamType> genParams, System.Reflection.MethodAttributes attribs)
-        {
-            var body = Utils.CreateDummyMethodBody(returnSig.Type, paramSig, attribs, name);
-            DeclaredMethods.Add(body);
-            return body;
-        }
-    }
 }

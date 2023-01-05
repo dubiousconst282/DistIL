@@ -1,0 +1,73 @@
+import TestAsm.Passes.Simplify from DistIL.Tests.TestAsm
+
+public SimplifyInsts::CanocalizeCmpSwapOpers(#x: int, #y: int, #z: bool) -> int {
+BB_01:
+    t1 = cmp.eq 0, #x -> bool
+    t2 = icmp.slt #x, #y -> bool
+    t3 = cmp.ne #z, t2 -> bool
+    ret
+}
+public SimplifyInsts::CanocalizeCmpSwapOpers.expected(#x: int, #y: int, #z: bool) -> int {
+BB_01:
+    t1 = cmp.eq #x, 0 -> bool
+    t2 = icmp.slt #x, #y -> bool
+    t3 = cmp.ne t2, #z -> bool
+    ret
+}
+
+public SimplifyInsts::CombineNestedCmpEq(#x: int, #y: int) -> int {
+BB_01:
+    t1 = icmp.slt #x, #y -> bool
+    t2 = cmp.eq t1, 0 -> bool
+    call SimplifyInsts::Use(int: t2)
+    
+    t3 = icmp.slt #x, #y -> bool
+    t4 = cmp.ne t3, 0 -> bool
+    call SimplifyInsts::Use(int: t4)
+    
+    t5 = icmp.slt #x, #y -> bool
+    t6 = cmp.eq t5, 1 -> bool
+    call SimplifyInsts::Use(int: t6)
+    
+    t7 = icmp.slt #x, #y -> bool
+    t8 = cmp.ne t7, 1 -> bool
+    call SimplifyInsts::Use(int: t8)
+    
+    t9  = icmp.slt #x, #y -> bool
+    t10 = cmp.eq t9, 42 -> bool
+    call SimplifyInsts::Use(int: t10)
+    
+    t11  = icmp.slt #x, #y -> bool
+    t12 = cmp.ne t11, 42 -> bool
+    call SimplifyInsts::Use(int: t12)
+    
+    ret
+}
+public SimplifyInsts::CombineNestedCmpEq.expected(#x: int, #y: int) -> int {
+BB_01:
+    t1 = icmp.sge #x, #y -> bool
+    //t2 = cmp.eq t1, 0 -> bool
+    call SimplifyInsts::Use(int: t1)
+    
+    t3 = icmp.slt #x, #y -> bool
+    //t4 = cmp.ne t3, 0 -> bool
+    call SimplifyInsts::Use(int: t3)
+    
+    t5 = icmp.slt #x, #y -> bool
+    //t6 = cmp.eq t5, 1 -> bool
+    call SimplifyInsts::Use(int: t5)
+    
+    t7 = icmp.sge #x, #y -> bool
+    //t8 = cmp.ne t7, 1 -> bool
+    call SimplifyInsts::Use(int: t7)
+    
+    t9  = icmp.slt #x, #y -> bool
+    //t10 = cmp.eq t9, 42 -> bool
+    call SimplifyInsts::Use(int: 0)
+    
+    t11  = icmp.slt #x, #y -> bool
+    //t12 = cmp.ne t11, 42 -> bool
+    call SimplifyInsts::Use(int: 1)
+    
+    ret
+}

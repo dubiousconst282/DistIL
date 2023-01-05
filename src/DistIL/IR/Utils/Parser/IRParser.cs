@@ -397,7 +397,7 @@ public partial class IRParser
             _lexer.Expect(TokenType.Colon);
             opers.Add(ParseValue());
         });
-        var retType = ParseResultType();
+        var retType = _lexer.IsNext(TokenType.Arrow) ? ParseResultType() : PrimType.Void;
 
         var sig = new MethodSig(retType, pars, isInstance, genPars.Count);
         var method = ownerType.FindMethod(name, sig, throwIfNotFound: false)

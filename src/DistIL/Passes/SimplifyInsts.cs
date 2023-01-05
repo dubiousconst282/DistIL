@@ -14,7 +14,7 @@ public partial class SimplifyInsts : MethodPass
     public SimplifyInsts(ModuleDef mod)
     {
 #pragma warning disable format
-        AddCallOpt(typeof(Delegate),        "Invoke",           DirectizeLambda);
+        AddCallOpt(typeof(Delegate),        "Invoke",           DevirtualizeLambda);
         AddCallOpt(typeof(Dictionary<,>),   "ContainsKey",      SimplifyDictLookup);
 #pragma warning restore format
 

@@ -1,29 +1,31 @@
 namespace DistIL.Passes;
 
+using System.Runtime.CompilerServices;
+
 partial class SimplifyInsts : MethodPass
 {
     //Directize delegate invokes if target is known:
     //
     //Func = Func`2[int, bool]
     //  BB_Header:
-    //    Func r2 = ldfld Data::LambdaCache1
-    //    int r3 = cmp.ne r2, null
+    //    r2 = ldfld Data::LambdaCache1 -> Func
+    //    r3 = cmp.ne r2, null -> bool
     //    goto r3 ? BB_Result : BB_CacheLoad
     //  BB_CacheLoad:
-    //    Data r5 = ldfld Data::Instance
-    //    delegate* r6 = funcaddr bool Data::Lambda1(Data, int)
-    //    Func r7 = newobj Func::.ctor(object: r5, nint: r6)
+    //    r5 = ldfld Data::Instance -> Data
+    //    r6 = funcaddr bool Data::Lambda1(Data, int) -> void*
+    //    r7 = newobj Func::.ctor(object: r5, nint: r6) -> Func
     //    stfld Data::LambdaCache1, r7
     //    goto BB_Result
     //  BB_Result:
-    //    Func r9 = phi [BB_Header -> r2], [BB_CacheLoad -> r7]
+    //    r9 = phi [BB_Header: r2], [BB_CacheLoad: r7] -> Func
     //    ...
-    //    bool r25 = callvirt Func::Invoke(this: r9, int: r24)
+    //    r25 = callvirt Func::Invoke(this: r9, int: r24) -> bool
     //->
     //  BB_Result:
-    //    Func r2 = ldfld Data::LambdaCache1
-    //    bool r25 = call Data::Lambda1(r2, r24)
-    private bool DirectizeLambda(MethodTransformContext ctx, CallInst call)
+    //    r5 = ldfld Data::Instance -> Data
+    //    r25 = call Data::Lambda1(Data: r5, int: r24) -> bool
+    private bool DevirtualizeLambda(MethodTransformContext ctx, CallInst call)
     {
         if (call is not { Method.Name: "Invoke", IsStatic: false, Args: [var lambdaInstance, ..] }) return false;
 
@@ -33,7 +35,7 @@ partial class SimplifyInsts : MethodPass
             var allocInst = (phiArg1 as NewObjInst) ?? (phiArg2 as NewObjInst);
             var cacheLoad = (phiArg1 as LoadFieldInst) ?? (phiArg2 as LoadFieldInst);
 
-            if (allocInst == null || cacheLoad == null || !DirectizeWithCtorArgs(call, allocInst)) return false;
+            if (allocInst == null || cacheLoad == null || !DevirtWithCtorArgs(call, allocInst)) return false;
 
             //Last lambda to be inlined is responsible for cleanup
             if (phi.NumUses == 0) {
@@ -41,7 +43,7 @@ partial class SimplifyInsts : MethodPass
             }
             return true;
         } else if (lambdaInstance is NewObjInst immAlloc) {
-            if (!DirectizeWithCtorArgs(call, immAlloc)) return false;
+            if (!DevirtWithCtorArgs(call, immAlloc)) return false;
             
             if (immAlloc.NumUses == 0) {
                 immAlloc.Remove();
@@ -50,18 +52,26 @@ partial class SimplifyInsts : MethodPass
         }
         return false;
 
-        static bool DirectizeWithCtorArgs(CallInst call, NewObjInst alloc)
+        static bool DevirtWithCtorArgs(CallInst call, NewObjInst alloc)
         {
-            if (alloc is not { Args: [var ownerObj, FuncAddrInst { Method: var method }] }) return false;
+            if (alloc is not { Args: [var instanceObj, FuncAddrInst { Method: var method }] }) return false;
             if (call.NumArgs - (method.IsStatic ? 1 : 0) != method.ParamSig.Count) return false;
 
-            if (method.IsInstance) {
-                call.Method = method;
-                call.SetArg(0, ownerObj);
-            } else {
+            if (instanceObj is ConstNull) {
                 call.ReplaceWith(new CallInst(method, call.Args[1..].ToArray()), insertIfInst: true);
+                return true;
+            } else if (method.IsInstance) {
+                call.Method = method;
+                //Create a new load before call to assert dominance
+                if (instanceObj is LoadFieldInst { IsStatic: true, Field: var field }) {
+                    var newLoad = new LoadFieldInst(field);
+                    newLoad.InsertBefore(call);
+                    instanceObj = newLoad;
+                }
+                call.SetArg(0, instanceObj);
+                return true;
             }
-            return true;
+            return false;
         }
         static bool DeleteCache(PhiInst phi, NewObjInst allocInst, LoadFieldInst cacheLoad)
         {
@@ -77,11 +87,14 @@ partial class SimplifyInsts : MethodPass
                 //BB_CacheLoad must store to the cache field
                 allocInst.NumUses == 2 && //phi and next store
                 allocInst.Next is StoreFieldInst cacheStore &&
-                cacheStore.Field == cacheLoad.Field
+                cacheStore.Field == cacheLoad.Field &&
+                cacheStore.Field.DeclaringType is TypeDefOrSpec declType && 
+                declType.Definition.GetCustomAttribs().Has(typeof(CompilerGeneratedAttribute))
             )) return false;
 
             br.Cond = ConstInt.CreateI(0); //We can't change the CFG, leave this for DCE.
             phi.Remove();
+            cacheLoad.Remove();
             cacheStore.Remove();
             allocInst.Remove();
             return true;

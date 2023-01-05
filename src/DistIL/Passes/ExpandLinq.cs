@@ -44,8 +44,8 @@ public class ExpandLinq : MethodPass
 
     private static bool IsProfitableToExpand(LinqSourceNode source, LinqQuery query)
     {
-        //Unfiltered Count() is definitely not profitable
-        if (query.SubjectCall is { NumArgs: 1, Method.Name: "Count" }) {
+        //Unfiltered Count()/Any() is definitely not profitable
+        if (query.SubjectCall is { NumArgs: 1, Method.Name: "Count" or "Any" }) {
             return false;
         }
         //Concretizing enumerator sources may not be profitable
@@ -67,6 +67,7 @@ public class ExpandLinq : MethodPass
                 "Aggregate"                 => new AggregationQuery(call),
                 "Count"                     => new CountQuery(call),
                 "First" or "FirstOrDefault" => new FindFirstQuery(call),
+                "Any" or "All"              => new ContainsQuery(call),
                 _ => null
             };
 #pragma warning restore format

@@ -95,23 +95,30 @@ public partial class SimplifyInsts : MethodPass
     private Value? SimplifyCompare(CompareInst inst)
     {
         //(const op x)  ->  (x swapped_op const)
-        if (inst is { Left: Const, Right: not Const }) {
+        //(x op cmp)    ->  (cmp op x)
+        if (inst is { Left: Const, Right: not Const } or { Left: not CompareInst, Right: CompareInst }) {
             inst.Op = inst.Op.GetSwapped();
             (inst.Left, inst.Right) = (inst.Right, inst.Left);
         }
         //((x op y) == 0)  ->  (x !op y)
         //((x op y) != 0)  ->  (x op y)
+        //((x op y) == 1)  ->  (x op y)
+        //((x op y) != 1)  ->  (x !op y)
         if (inst is {
             Op: Cmp.Eq or Cmp.Ne,
-            Left: CompareInst { NumUses: 1 },
-            Right: ConstInt { Value: 0 } or ConstNull
+            Left: CompareInst { NumUses: 1 } lhs,
+            Right: (ConstInt or ConstNull) and var rhs
         }) {
-            bool neg = inst.Op == Cmp.Eq;
-            var innerCmp = (CompareInst)inst.Left;
+            bool predNe = inst.Op == Cmp.Ne;
+            bool isRhsOne = rhs is ConstInt { Value: not 0 };
 
-            if (neg) innerCmp.Op = innerCmp.Op.GetNegated();
-
-            return innerCmp;
+            if (rhs is ConstInt { Value: not (0 or 1) } ) {
+                return ConstInt.CreateI(predNe ? 1 : 0);
+            }
+            if (predNe == isRhsOne) {
+                lhs.Op = lhs.Op.GetNegated();
+            }
+            return lhs;
         }
         return ConstFolding.FoldCompare(inst.Op, inst.Left, inst.Right);
     }

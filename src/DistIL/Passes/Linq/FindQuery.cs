@@ -43,3 +43,30 @@ internal class FindFirstQuery : LinqQuery
         builder.Fork(ConstInt.CreateI(0), exit.Block);
     }
 }
+
+//Any(pred), All(pred)
+internal class ContainsQuery : LinqQuery
+{
+    public ContainsQuery(CallInst call)
+        : base(call) { }
+
+    public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
+    {
+        //Any():
+        //  Body: goto !pred(currItem) ? Latch : Exit
+        //  Exit: var result = phi [Body: true], [Header: false]
+        //All():
+        //  Body: goto pred(currItem) ? Latch : Exit
+        //  Exit: var result = phi [Body: false], [Header: true]
+        var exit = loopData.Exit;
+        int normRes = SubjectCall.Method.Name == "Any" ? 0 : 1;
+
+        var phi = exit.CreatePhi(PrimType.Bool,
+            (builder.Block, ConstInt.CreateI(1 - normRes)),
+            (loopData.Header.Block, ConstInt.CreateI(normRes)));
+        SubjectCall.ReplaceUses(phi);
+
+        var cond = builder.CreateLambdaInvoke(SubjectCall.Args[1], currItem);
+        builder.Fork(builder.CreateEq(cond, ConstInt.CreateI(normRes)), exit.Block);
+    }
+}

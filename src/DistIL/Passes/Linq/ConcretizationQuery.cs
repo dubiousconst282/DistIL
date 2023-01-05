@@ -61,10 +61,8 @@ internal class ArrayConcretizationQuery : ConcretizationQuery
 
     protected override Value AllocContainer(IRBuilder builder, Value? count)
     {
-        var resolver = Method.Definition.Module.Resolver;
-
         var arrayType = (ArrayType)SubjectCall.ResultType;
-        var listType = (TypeDef)resolver.Import(typeof(List<>));
+        var listType = (TypeDef)builder.Resolver.Import(typeof(List<>));
         var type = listType.GetSpec(ImmutableArray.Create(arrayType.ElemType));
 
         return base.AllocContainer(builder, count, type);

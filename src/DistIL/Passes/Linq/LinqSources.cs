@@ -3,44 +3,51 @@ namespace DistIL.Passes.Linq;
 using DistIL.IR.Intrinsics;
 using DistIL.IR.Utils;
 
-internal class ArraySource : LinqSourceNode
+/// <summary> Source based a sequential memory location: Array, List&lt;T>, or string. </summary>
+internal class MemorySource : LinqSourceNode
 {
-    public ArraySource(UseRef array, LinqStageNode sink)
-        : base(sink, array) { }
+    public MemorySource(UseRef source, LinqStageNode sink)
+        : base(sink, source) { }
 
     Value? _currPtr, _endPtr;
 
     protected override void EmitHead(LoopBuilder loop, out Value? count)
     {
         var source = PhysicalSource.Operand;
-        var method = PhysicalSource.Parent.Block.Method;
-        var resolver = method.Definition.Module.Resolver;
-
         var builder = loop.PreHeader;
 
-        var (elemType, array, _) = source.ResultType switch {
+        var (startPtr, _) = source.ResultType switch {
             ArrayType t => (
-                t.ElemType,
-                source,
+                CreateGetArrayDataRef(builder, source),
                 count = builder.CreateConvert(builder.CreateArrayLen(source), PrimType.Int32)
             ),
             TypeSpec { Name: "List`1" } t => (
-                t.GenericParams[0],
-                builder.CreateFieldLoad(t.FindField("_items"), source),
+                CreateGetArrayDataRef(builder, builder.CreateFieldLoad(t.FindField("_items"), source)),
                 count = builder.CreateFieldLoad(t.FindField("_size"), source)
+            ),
+            TypeDesc { Kind: TypeKind.String } => (
+                builder.CreateCallVirt("GetPinnableReference", source),
+                count = builder.CreateCallVirt("get_Length", source)
             )
         };
-        var T0 = new GenericParamType(0, isMethodParam: true);
-        var m_GetArrayDataRef = resolver
-            .Import(typeof(System.Runtime.InteropServices.MemoryMarshal))
-            .FindMethod("GetArrayDataReference", new MethodSig(T0.CreateByref(), new TypeSig[] { T0.CreateArray() }, numGenPars: 1))
-            .GetSpec(new GenericContext(methodArgs: new TypeDesc[] { elemType }));
-
-        var startPtr = builder.CreateCall(m_GetArrayDataRef, array).SetName("lq_startPtr");
+        startPtr.SetName("lq_startPtr");
         //T& endPtr = startPtr + (nuint)count * sizeof(T)
         _endPtr = builder.CreatePtrOffset(startPtr, count, signed: false).SetName("lq_endPtr");
-        //T& currPtr = phi [PH: startPtr], [Latch: {currPtr + sizeof(T)}]
+        //T& currPtr = phi [PreHeader: startPtr], [Latch: {currPtr + sizeof(T)}]
         _currPtr = loop.CreateAccum(startPtr, currPtr => loop.Latch.CreatePtrIncrement(currPtr)).SetName("lq_currPtr");
+    }
+    
+    private static Value CreateGetArrayDataRef(IRBuilder builder, Value array)
+    {
+        var elemType = ((ArrayType)array.ResultType).ElemType;
+        var T0 = new GenericParamType(0, isMethodParam: true);
+
+        var m_GetArrayDataRef = builder.Resolver
+            .Import(typeof(System.Runtime.InteropServices.MemoryMarshal))
+            .FindMethod("GetArrayDataReference", new MethodSig(T0.CreateByref(), new TypeSig[] { T0.CreateArray() }, numGenPars: 1))
+            .GetSpec(new GenericContext(methodArgs: new[] { elemType }));
+
+        return builder.CreateCall(m_GetArrayDataRef, array);
     }
 
     protected override Value EmitMoveNext(IRBuilder builder)
@@ -55,7 +62,6 @@ internal class EnumeratorSource : LinqSourceNode
         : base(sink, enumerable) { }
 
     Value? _enumerator;
-    TypeDesc? _enumeratorType;
 
     protected override void EmitHead(LoopBuilder loop, out Value? count)
     {
@@ -70,24 +76,18 @@ internal class EnumeratorSource : LinqSourceNode
         }
         var method = sourceType.FindMethod("GetEnumerator", searchBaseAndItfs: true);
         _enumerator = builder.CreateCallVirt(method, source);
-        _enumeratorType = _enumerator.ResultType;
 
         //If the enumerator itself is a struct, we need to copy it to a new variable and use its address instead
-        if (_enumeratorType.IsValueType) {
-            var slot = new Variable(_enumeratorType, "lq_EnumerSrcTmp", exposed: true);
+        if (_enumerator.ResultType.IsValueType) {
+            var slot = new Variable(_enumerator.ResultType, "lq_EnumerSrcTmp", exposed: true);
             builder.CreateVarStore(slot, _enumerator);
             _enumerator = builder.CreateVarAddr(slot);
         }
         count = null;
     }
     protected override Value EmitMoveNext(IRBuilder builder)
-    {
-        var method = _enumeratorType!.FindMethod("MoveNext", searchBaseAndItfs: true);
-        return builder.CreateCallVirt(method, _enumerator);
-    }
+        => builder.CreateCallVirt("MoveNext", _enumerator!);
+
     protected override Value EmitCurrent(IRBuilder builder)
-    {
-        var method = _enumeratorType!.FindMethod("get_Current", searchBaseAndItfs: true);
-        return builder.CreateCallVirt(method, _enumerator);
-    }
+        => builder.CreateCallVirt("get_Current", _enumerator!);
 }

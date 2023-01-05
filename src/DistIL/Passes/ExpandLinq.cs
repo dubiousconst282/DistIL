@@ -106,8 +106,8 @@ public class ExpandLinq : MethodPass
         }
         var type = source.ResultType;
 
-        if (type is ArrayType || type.IsCorelibType(typeof(List<>))) {
-            return new ArraySource(sourceRef, sink);
+        if (type is ArrayType || type.IsCorelibType(typeof(List<>)) || type.Kind == TypeKind.String) {
+            return new MemorySource(sourceRef, sink);
         }
         return new EnumeratorSource(sourceRef, sink);
     }

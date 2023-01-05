@@ -10,6 +10,7 @@ public class IRBuilder
 
     public BasicBlock Block => _block!;
     public MethodBody Method => _block!.Method;
+    public ModuleResolver Resolver => Method.Definition.Module.Resolver;
 
     /// <summary> Initializes a builder that inserts instructions before <paramref name="inst"/>. </summary>
     public IRBuilder(Instruction inst) => SetPosition(inst);
@@ -102,6 +103,14 @@ public class IRBuilder
     public CallInst CreateCallVirt(string methodName, params Value[] args)
     {
         var instanceType = args[0].ResultType;
+
+        if (instanceType is ByrefType refType) {
+            instanceType = refType.ElemType;
+            Ensure.That(instanceType.IsValueType);
+        }
+        if (instanceType is PrimType prim) {
+            instanceType = prim.GetDefinition(Resolver);
+        }
         var method = instanceType.FindMethod(methodName, searchBaseAndItfs: true);
         return CreateCallVirt(method, args);
     }

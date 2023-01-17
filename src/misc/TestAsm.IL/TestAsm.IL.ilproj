@@ -1,0 +1,8 @@
+<Project>
+  <Sdk Name="Microsoft.NET.Sdk.IL" Version="7.0.0" />
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+</Project>

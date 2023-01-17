@@ -1,0 +1,12 @@
+import @ from TestAsm.IL
+
+public static ImporterCases::PinnedVar1.expected(#x: int&) -> void {
+$Locals:
+    loc1: int&^
+BB_01:
+    stvar $loc1, #x
+    t1 = ldvar $loc1 -> int&
+    call ImporterCases::MutPtr(int*: t1)
+    stvar $loc1, 0
+    ret
+}

@@ -498,7 +498,6 @@ internal class BlockState
     private void ImportDup()
     {
         var val = Pop();
-        //Push directly into Stack to avoid duplicating the code
         _stack.Push(val);
         _stack.Push(val);
     }
@@ -510,22 +509,24 @@ internal class BlockState
 
     private void ImportVarInst(ref ILInstruction inst)
     {
-        var (slot, flags, instOp) = _importer.GetVar(ref inst);
+        var (op, index) = ILImporter.GetVarInstOp(inst.OpCode, inst.Operand);
+        var (slot, flags) = _importer.GetVarSlot(op, index);
 
         //Arguments that are only ever loaded don't need variables
         if (slot is Argument) {
-            Debug.Assert((flags | instOp) == (VarFlags.IsArg | VarFlags.Loaded));
+            Debug.Assert((flags | op) == (VarFlags.IsArg | VarFlags.Loaded));
             Push(slot);
             return;
         }
-        //Promote block local vars to SSA
-        bool isBlockLocal = flags == ((VarFlags.IsLocal | VarFlags.Loaded | VarFlags.Stored) & ~VarFlags.CrossesBlock);
+        //Variables used only within a single block can be promoted to SSA
         var slotVar = (Variable)slot;
+        var blockLocalFlags = (VarFlags.IsLocal | VarFlags.Loaded | VarFlags.Stored) & ~VarFlags.CrossesBlock;
+        bool isBlockLocal = flags == blockLocalFlags && !slotVar.IsPinned;
 
-        switch (instOp & VarFlags.OpMask) {
+        switch (op & VarFlags.OpMask) {
             case VarFlags.Loaded: {
                 if (isBlockLocal) {
-                    PushNoEmit(_importer.GetBlockLocalVarSlot(slotVar)!);
+                    PushNoEmit(_importer.GetBlockLocalVarState(index, op) ?? new Undef(slotVar.Sig.Type));
                 } else if (Block.Last is LoadVarInst prevLoad && prevLoad.Var == slotVar) {
                     PushNoEmit(prevLoad);
                 } else {
@@ -535,18 +536,18 @@ internal class BlockState
             }
             case VarFlags.Stored: {
                 if (isBlockLocal) {
-                    _importer.GetBlockLocalVarSlot(slotVar) = Pop();
+                    _importer.GetBlockLocalVarState(index, op) = Pop();
                 } else {
                     Emit(new StoreVarInst(slotVar, Pop()));
                 }
                 break;
             }
             case VarFlags.AddrTaken: {
-                ref var dataSlot = ref _importer.GetBlockLocalVarSlot(slotVar);
-                if (dataSlot == null || ((VarAddrInst)dataSlot).Block != Block) {
-                    Push(dataSlot = new VarAddrInst(slotVar));
+                ref var state = ref _importer.GetBlockLocalVarState(index, op);
+                if (state == null || ((VarAddrInst)state).Block != Block) {
+                    Push(state = new VarAddrInst(slotVar));
                 } else {
-                    PushNoEmit(dataSlot);
+                    PushNoEmit(state);
                 }
                 break;
             }
@@ -570,21 +571,11 @@ internal class BlockState
         var value = Pop();
         var type = value.ResultType.StackType;
 
-        if (code == ILCode.Not) {
-            //Emit `x ^ ~0` for int/long
-            if (type is StackType.Int or StackType.Long) {
-                Push(new BinaryInst(BinaryOp.Xor, value, ConstInt.Create(value.ResultType, ~0L)));
-            } else {
-                Push(new UnaryInst(UnaryOp.Not, value));
-            }
-        } else {
-            //Emit `0 - x` for int/long
-            if (type is StackType.Int or StackType.Long) {
-                Push(new BinaryInst(BinaryOp.Sub, ConstInt.Create(value.ResultType, 0), value));
-            } else {
-                Push(new UnaryInst(type is StackType.Float ? UnaryOp.FNeg : UnaryOp.Neg, value));
-            }
-        }
+        var op = code switch {
+            ILCode.Not => UnaryOp.Not,
+            ILCode.Neg => type == StackType.Float ? UnaryOp.FNeg : UnaryOp.Neg
+        };
+        Push(new UnaryInst(op, value));
     }
 
     private void ImportConv(TypeDesc dstType, bool checkOverflow = false, bool srcUnsigned = false)

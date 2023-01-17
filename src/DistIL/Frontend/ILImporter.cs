@@ -10,7 +10,7 @@ public class ILImporter
 
     internal Variable?[] _argSlots;
     internal VarFlags[] _varFlags;
-    internal Dictionary<Variable, Value>? _blockLocalVarStates;
+    internal Value?[]? _blockLocalVarStates;
 
     readonly Dictionary<int, BlockState> _blocks = new();
 
@@ -286,26 +286,26 @@ public class ILImporter
         throw new InvalidProgramException("Invalid instruction offset");
     }
 
-    /// <summary> Gets or creates a block for the specified instruction offset. </summary>
+    /// <summary> Gets the block for the leader instruction at the specified offset. </summary>
     internal BlockState GetBlock(int offset) => _blocks[offset];
 
-    internal (Value VarOrArg, VarFlags CombinedFlags, VarFlags InstOp) GetVar(ref ILInstruction inst)
+    internal (Value Slot, VarFlags CombinedFlags) GetVarSlot(VarFlags op, int index)
     {
-        var (op, index) = GetVarInstOp(inst.OpCode, inst.Operand);
         Debug.Assert(op != VarFlags.None);
 
         return Has(op, VarFlags.IsArg)
-            ? (_argSlots[index] ?? _body.Args[index] as Value, _varFlags[index], op)
-            : (_method.ILBody!.Locals[index], _varFlags[index + _body.Args.Length], op);
+            ? (_argSlots[index] ?? _body.Args[index] as Value, _varFlags[index])
+            : (_method.ILBody!.Locals[index], _varFlags[index + _body.Args.Length]);
     }
 
-    internal ref Value? GetBlockLocalVarSlot(Variable var)
+    internal ref Value? GetBlockLocalVarState(int varIndex, VarFlags type)
     {
-        _blockLocalVarStates ??= new();
-        return ref _blockLocalVarStates.GetOrAddRef(var);
+        _blockLocalVarStates ??= new Value[_varFlags.Length];
+        varIndex += Has(type, VarFlags.IsLocal) ? _body.Args.Length : 0;
+        return ref _blockLocalVarStates[varIndex];
     }
 
-    private static (VarFlags Op, int Index) GetVarInstOp(ILCode code, object? operand)
+    internal static (VarFlags Op, int Index) GetVarInstOp(ILCode code, object? operand)
     {
         var op = code switch {
             >= ILCode.Ldarg_0 and <= ILCode.Ldarg_3 => VarFlags.Loaded | VarFlags.IsArg,

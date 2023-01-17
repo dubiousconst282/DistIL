@@ -8,11 +8,11 @@ public class ModuleResolver
 {
     //FIXME: Do we need to care about FullName (public keys and versions)?
     protected readonly Dictionary<string, ModuleDef> _cache = new(StringComparer.OrdinalIgnoreCase);
-    private string[] _searchPaths = { };
+    private string[] _searchPaths = Array.Empty<string>();
     private readonly ICompilationLogger? _logger;
 
     /// <summary> A reference to the <c>System.Private.CoreLib</c> assembly. </summary>
-    public ModuleDef CoreLib => _coreLib ??= Resolve("System.Private.CoreLib", throwIfNotFound: true);
+    public ModuleDef CoreLib => _coreLib ??= Resolve("System.Private.CoreLib");
     private ModuleDef? _coreLib;
 
     public SystemTypes SysTypes => _sysTypes ??= new(CoreLib);
@@ -75,12 +75,12 @@ public class ModuleResolver
         return resolved;
     }
 
-    public ModuleDef? Resolve(AssemblyName name, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
+    public ModuleDef? Resolve(AssemblyName name, [DoesNotReturnIf(true)] bool throwIfNotFound = true)
     {
         return Resolve(name.Name ?? throw new InvalidOperationException(), throwIfNotFound);
     }
 
-    public ModuleDef? Resolve(string name, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
+    public ModuleDef? Resolve(string name, [DoesNotReturnIf(true)] bool throwIfNotFound = true)
     {
         if (_cache.TryGetValue(name, out var module)) {
             return module;

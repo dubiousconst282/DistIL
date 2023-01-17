@@ -2,6 +2,7 @@ namespace DistIL.Tests;
 
 using DistIL.AsmIO;
 using DistIL.IR;
+using DistIL.IR.Utils;
 using DistIL.IR.Utils.Parser;
 
 class Utils
@@ -17,11 +18,20 @@ class Utils
     public static MethodBody CreateDummyMethodBody(
         TypeDesc retType, ImmutableArray<ParamDef> paramSig, 
         System.Reflection.MethodAttributes attribs = default,
-        string? name = null)
+        string? name = null, string? typeName = null)
     {
-        var type = new TypeDef(null!, null, "DummyClass");
+        var type = new TypeDef(null!, null, typeName + "DummyClass");
         var method = new MethodDef(type, retType, paramSig, name ?? "DummyMethod", attribs);
         return new MethodBody(method);
+    }
+
+    public static Dictionary<string, MethodBody> ParseMethodDecls(string filename, ModuleResolver resolver)
+    {
+        var source = File.ReadAllText(filename);
+        var ctx = new FakeParserContext(source, resolver);
+        new IRParser(ctx).ParseUnit();
+
+        return ctx.DeclaredMethods.ToDictionary(e => e.Definition.Name);
     }
 }
 
@@ -46,7 +56,7 @@ class FakeParserContext : ParserContext
         TypeSig returnSig, ImmutableArray<ParamDef> paramSig,
         ImmutableArray<GenericParamType> genParams, System.Reflection.MethodAttributes attribs)
     {
-        var body = Utils.CreateDummyMethodBody(returnSig.Type, paramSig, attribs, name);
+        var body = Utils.CreateDummyMethodBody(returnSig.Type, paramSig, attribs, name, parentType.Name);
         DeclaredMethods.Add(body);
         return body;
     }

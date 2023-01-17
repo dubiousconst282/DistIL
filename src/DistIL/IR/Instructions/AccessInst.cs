@@ -44,8 +44,8 @@ public interface StoreInst : AccessInst
         //  https://github.com/dotnet/runtime/issues/34501#issuecomment-608548207
         //It's probably for the best if we don't support it.
         return
-            (destType.Kind.IsSmallInt() && !srcType.Kind.IsSmallInt() && srcType.StackType is StackType.Int or StackType.NInt) ||
-            (destType.StackType == StackType.NInt && srcType.StackType == StackType.Int) ||
-            (destType.Kind == TypeKind.Double && srcType.Kind == TypeKind.Single);
+            (destType.Kind.IsSmallInt() && !srcType.Kind.IsSmallInt()) ||
+            (destType.StackType == StackType.Int && srcType.StackType == StackType.NInt) ||
+            (destType.Kind == TypeKind.Single && srcType.Kind == TypeKind.Double);
     }
 }

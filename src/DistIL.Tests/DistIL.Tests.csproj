@@ -19,7 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DistIL\DistIL.csproj" />
-    <ProjectReference Include="..\misc\TestAsm\TestAsm.csproj">
+    <ProjectReference Include="..\misc\TestAsm\TestAsm.csproj; ..\misc\TestAsm.IL\TestAsm.IL.ilproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <OutputItemType>Content</OutputItemType>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>

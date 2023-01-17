@@ -74,8 +74,9 @@ public class SymbolTable
         void AddNext(TrackedValue value)
         {
             if (!HasCustomName(value)) {
-                _tags.AddOrUpdate(value, currId++);
+                _tags.AddOrUpdate(value, currId);
             }
+            currId++;
         }
     }
 }

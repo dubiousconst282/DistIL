@@ -1,9 +1,10 @@
 namespace DistIL.IR.Utils;
 
-using System.IO;
 using System.Text.RegularExpressions;
 
 using DistIL.Analysis;
+
+using MethodAttribs = System.Reflection.MethodAttributes;
 
 public class IRPrinter
 {
@@ -118,6 +119,22 @@ public class IRPrinter
             ? new VTAnsiPrintContext(tw, method.GetSymbolTable()) 
             : new PrintContext(tw, method.GetSymbolTable());
 
+        var def = method.Definition;
+
+        pc.Print($"{PrintToner.Keyword}{StringifyMethodAttribs(def.Attribs)} {def.DeclaringType.Name}::{def.Name}");
+        pc.PrintSequence("(", ")", method.Args.Skip(def.IsInstance ? 1 : 0), arg => pc.Print($"{arg}: {arg.ResultType}"));
+        pc.Print($" -> {def.ReturnType} {{\n");
+
+        var declaredVars = method.Instructions().OfType<VarAccessInst>().Select(a => a.Var).Distinct();
+
+        if (declaredVars.Any()) {
+            pc.Print("$Locals:\n");
+            foreach (var group in declaredVars.GroupBy(v => (v.Sig.Type, v.IsPinned))) {
+                pc.PrintSequence("  ", "", group, v => pc.Print(v.ToString()[1..], PrintToner.VarName));
+                pc.Print($": {group.Key.Type}{(group.Key.IsPinned ? "^" : "")}\n");
+            }
+        }
+
         foreach (var block in method) {
             pc.Print($"{block}:");
             if (block.NumPreds > 0) {
@@ -132,6 +149,7 @@ public class IRPrinter
             }
             pc.Pop();
         }
+        pc.Print("}");
     }
 
     public static void ExportForest(MethodBody method, string filename)
@@ -153,6 +171,35 @@ public class IRPrinter
             }
             pc.Pop();
         }
+    }
+
+    private static string StringifyMethodAttribs(MethodAttribs attribs)
+    {
+        var acc = attribs & MethodAttribs.MemberAccessMask;
+        string str = acc switch {
+            MethodAttribs.Private       => "private",
+            MethodAttribs.FamANDAssem   => "private protected",
+            MethodAttribs.Assembly      => "internal",
+            MethodAttribs.Family        => "protected",
+            MethodAttribs.FamORAssem    => "protected internal",
+            MethodAttribs.Public        => "public"
+        };
+
+        if (attribs.HasFlag(MethodAttribs.Static)) {
+            str += " static";
+        }
+        if (attribs.HasFlag(MethodAttribs.SpecialName)) {
+            str += " special";
+        }
+        if (attribs.HasFlag(MethodAttribs.Final)) {
+            str += " sealed";
+        }
+        if (attribs.HasFlag(MethodAttribs.Abstract)) {
+            str += " abstract";
+        } else if (attribs.HasFlag(MethodAttribs.Virtual)) {
+            str += " virtual";
+        }
+        return str;
     }
 
     class GraphvizPrintContext : PrintContext

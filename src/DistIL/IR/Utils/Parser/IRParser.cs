@@ -9,7 +9,7 @@ using MethodAttribs = System.Reflection.MethodAttributes;
 //Method    := MethodAcc  Type "::" Identifier "(" Seq{Param} ")" [ResultType] "{"  VarDeclBlock?  Block*  "}"
 //MethodAcc := ("public" | "internal"| "protected" | "private")? "static"? "special"?
 //Param     := "this" | (#Id: Type)
-//VarDeclBlock := "$"  ":" (Indent VarDecl+ Dedent) | VarDecl+
+//VarDeclBlock := "$Locals"  ":" (Indent VarDecl+ Dedent) | VarDecl+
 //VarDecl   := Seq{Id} ":" Type "^"?
 //Block     := Id  ":"  (Indent  Inst+  Dedent) | Inst
 //Type      := Id  ("+"  Id)*  ("["  Seq{Type}  "]")?  ("[]" | "*" | "&")*
@@ -158,7 +158,7 @@ public partial class IRParser
 
     private void ParseVarDecls()
     {
-        if (!_lexer.MatchKeyword("$")) return;
+        if (!_lexer.MatchKeyword("$Locals")) return;
 
         _lexer.Expect(TokenType.Colon);
 

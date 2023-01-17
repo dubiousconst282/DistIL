@@ -148,7 +148,7 @@ Head:
 import @ from DistIL.Tests.TestAsm
 
 static ParserDummy::TestCase(#arr: int[]) {
-$:
+$Locals:
     a, b: int
     c: String
     pin: int[]^

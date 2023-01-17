@@ -13,11 +13,11 @@ public class CustomAttribTests
     }
 
     [Fact]
-    public void Test_BlobDecoding()
+    public void DecodeCase1()
     {
         var sys = _modResolver.SysTypes;
 
-        var type = _modResolver.Resolve("DistIL.Tests.TestAsm", throwIfNotFound: true).FindType(null, "CustomAttribs")!;
+        var type = _modResolver.Resolve("TestAsm").FindType(null, "CustomAttribs")!;
         var attrib = type.Methods.First(m => m.Name == "DecodeCase1").GetCustomAttribs().First();
 
         Assert.Equal(type, ((TypeDef)attrib.Constructor.DeclaringType).DeclaringType);
@@ -44,7 +44,7 @@ public class CustomAttribTests
 
         void CheckNamed(string name, TypeDesc type, object? value)
         {
-            var prop = attrib.GetNamedArg(name)!;
+            var prop = attrib!.GetNamedArg(name)!;
             Assert.Equal(name, prop.Name);
             Assert.Equal(type, prop.Type);
             Assert.Equal(value, prop.Value);

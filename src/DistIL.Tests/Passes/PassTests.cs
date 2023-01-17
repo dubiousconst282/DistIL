@@ -14,7 +14,7 @@ public class PassTests
     public PassTests(ModuleResolverFixture mrf)
     {
         _modResolver = mrf.Resolver;
-        _testAsm = _modResolver.Resolve("DistIL.Tests.TestAsm", throwIfNotFound: true);
+        _testAsm = _modResolver.Resolve("TestAsm");
     }
 
     [Fact]

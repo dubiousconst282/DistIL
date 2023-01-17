@@ -46,7 +46,7 @@ public class ParserTests
     internal void ParseFullProgram()
     {
         string code = @"
-import @ from DistIL.Tests.TestAsm
+import @ from TestAsm
 
 static ParserDummy::M1(#arg1: int, #arg2: int) {
 Block1:
@@ -118,7 +118,7 @@ Entry:
     public void ParseUnseenIdentifiers()
     {
         string code = @"
-import @ from DistIL.Tests.TestAsm
+import @ from TestAsm
 
 static ParserDummy::TestCase() {
 Entry:
@@ -144,8 +144,8 @@ Head:
     [Fact]
     public void ParseVarDecls()
     {
-            string code = @"
-import @ from DistIL.Tests.TestAsm
+        string code = @"
+import @ from TestAsm
 
 static ParserDummy::TestCase(#arr: int[]) {
 $Locals:
@@ -171,7 +171,7 @@ Entry:
     public void ParseConv()
     {
         string code = @"
-import @ from DistIL.Tests.TestAsm
+import @ from TestAsm
 
 static ParserDummy::TestCase(#x: int) {
 Entry:
@@ -193,7 +193,7 @@ Entry:
     public void ParsePointers()
     {
         string code = @"
-import @ from DistIL.Tests.TestAsm
+import @ from TestAsm
 
 static ParserDummy::TestCase(#ptr: int*) {
 Entry:
@@ -220,7 +220,7 @@ Entry:
     public void ParseFields()
     {
         string code = @"
-import @ from DistIL.Tests.TestAsm
+import @ from TestAsm
 
 public ParserDummy::TestCase() {
 Entry:
@@ -244,7 +244,7 @@ Entry:
     public void MultiErrors()
     {
         var code = @"
-import @ from DistIL.Tests.TestAsm
+import @ from TestAsm
 
 static ParserDummy::M() {
 Block1:

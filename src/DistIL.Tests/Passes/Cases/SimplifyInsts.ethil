@@ -1,4 +1,4 @@
-import TestAsm.Passes.Simplify from DistIL.Tests.TestAsm
+import @ from TestAsm
 
 public SimplifyInsts::CanocalizeCmpSwapOpers(#x: int, #y: int, #z: bool) -> int {
 BB_01:

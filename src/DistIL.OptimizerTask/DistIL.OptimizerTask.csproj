@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>DistIL.OptimizerTask</PackageId>
+    <Description>Optimization task for MSBuild.</Description>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.4.0" PrivateAssets="all" ExcludeAssets="Runtime"/>
+    <ProjectReference Include="../DistIL/DistIL.csproj" />
+  </ItemGroup>
+</Project>

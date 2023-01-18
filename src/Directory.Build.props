@@ -11,5 +11,12 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
   </PropertyGroup>
-  
+
+  <PropertyGroup>
+    <Version>0.3.0-alpha</Version>
+    <Product>DistIL</Product>
+    <PackageProjectUrl>https://github.com/dubiousconst282/DistIL</PackageProjectUrl>
+    <Authors>dubiousconst282</Authors>
+  </PropertyGroup>
+
 </Project>

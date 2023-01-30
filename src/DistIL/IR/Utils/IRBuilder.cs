@@ -132,6 +132,10 @@ public class IRBuilder
         => Add(new FieldAddrInst(field, obj));
 
 
+    public LoadFieldInst CreateFieldLoad(string fieldName, Value obj)
+        => Add(new LoadFieldInst(obj.ResultType.FindField(fieldName), obj));
+
+
     public LoadVarInst CreateVarLoad(Variable var)
         => Add(new LoadVarInst(var));
 
@@ -164,11 +168,15 @@ public class IRBuilder
     /// <summary> Creates the sequence <c>addr + (nuint)elemOffset * sizeof(elemType)</c>. </summary>
     public Value CreatePtrOffset(Value addr, Value elemOffset, TypeDesc? elemType = null, bool signed = true)
     {
+        if (elemOffset is ConstInt { Value: 0 or 1 } c) {
+            return c.Value == 0 ? addr : CreatePtrIncrement(addr, elemType);
+        }
         if (elemOffset.ResultType.StackType != StackType.NInt) {
             elemOffset = CreateConvert(elemOffset, signed ? PrimType.IntPtr : PrimType.UIntPtr);
         }
         elemType ??= ((PointerType)addr.ResultType).ElemType;
-        var stride = CreateIntrinsic(CilIntrinsic.SizeOf, elemType) as Value;
+        int size = elemType.Kind.Size();
+        var stride = size != 0 ? ConstInt.CreateI(size) : CreateIntrinsic(CilIntrinsic.SizeOf, elemType) as Value;
 
         return CreateAdd(addr, CreateMul(elemOffset, stride));
     }

@@ -31,7 +31,7 @@ public class LoadPtrInst : PtrAccessInst, LoadInst
     }
     public override string InstName => "ldptr" + (Unaligned ? ".un" : "") + (Volatile ? ".volatile" : "");
 
-    public LoadPtrInst(Value addr, TypeDesc elemType, PointerFlags flags = PointerFlags.None)
+    public LoadPtrInst(Value addr, TypeDesc elemType, PointerFlags flags = 0)
         : base(flags, addr)
     {
         ElemType = elemType;
@@ -51,7 +51,7 @@ public class StorePtrInst : PtrAccessInst, StoreInst
     public override bool HasSideEffects => true;
     public override bool MayWriteToMemory => true;
 
-    public StorePtrInst(Value addr, Value value, TypeDesc elemType, PointerFlags flags = PointerFlags.Volatile)
+    public StorePtrInst(Value addr, Value value, TypeDesc elemType, PointerFlags flags = 0)
         : base(flags, addr, value)
     {
         ElemType = elemType;

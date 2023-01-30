@@ -66,8 +66,10 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
     mp2.Add(new InlineMethods());
     mp2.Add(new ScalarReplacement());
     mp2.Add(new SimplifyInsts(comp.Module));
-    //mp2.Add(new LoopInvariantCodeMotion());
     mp2.Add(new ValueNumbering());
+    mp2.Add(new DeadCodeElim()); //remove dead blocks, as dom-tree doesn't currently support them
+    //mp2.Add(new LoopInvariantCodeMotion());
+    mp2.Add(new LoopStrengthReduction());
     mp2.Add(new DeadCodeElim());
     mp2.Add(new SimplifyCFG());
 

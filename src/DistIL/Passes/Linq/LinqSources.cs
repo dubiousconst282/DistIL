@@ -3,7 +3,7 @@ namespace DistIL.Passes.Linq;
 using DistIL.IR.Intrinsics;
 using DistIL.IR.Utils;
 
-/// <summary> Source based a sequential memory location: Array, List&lt;T>, or string. </summary>
+/// <summary> Source based on a continuous memory location: Array, List&lt;T>, or string. </summary>
 internal class MemorySource : LinqSourceNode
 {
     public MemorySource(UseRef source, LinqStageNode sink)
@@ -13,41 +13,12 @@ internal class MemorySource : LinqSourceNode
 
     protected override void EmitHead(LoopBuilder loop, out Value? count)
     {
-        var source = PhysicalSource.Operand;
-        var builder = loop.PreHeader;
+        //T& startPtr = call MemoryMarshal.GetArrayDataReference<T>(T[]: source)  //or akin.
+        //T& endPtr = startPtr + (nint)count * sizeof(T)
+        (_currPtr, _endPtr, count) = LoopStrengthReduction.CreateGetDataPtrRange(loop.PreHeader, PhysicalSource.Operand);
 
-        var (startPtr, _) = source.ResultType switch {
-            ArrayType t => (
-                CreateGetArrayDataRef(builder, source),
-                count = builder.CreateConvert(builder.CreateArrayLen(source), PrimType.Int32)
-            ),
-            TypeSpec { Name: "List`1" } t => (
-                CreateGetArrayDataRef(builder, builder.CreateFieldLoad(t.FindField("_items"), source)),
-                count = builder.CreateFieldLoad(t.FindField("_size"), source)
-            ),
-            TypeDesc { Kind: TypeKind.String } => (
-                builder.CreateCallVirt("GetPinnableReference", source),
-                count = builder.CreateCallVirt("get_Length", source)
-            )
-        };
-        startPtr.SetName("lq_startPtr");
-        //T& endPtr = startPtr + (nuint)count * sizeof(T)
-        _endPtr = builder.CreatePtrOffset(startPtr, count, signed: false).SetName("lq_endPtr");
         //T& currPtr = phi [PreHeader: startPtr], [Latch: {currPtr + sizeof(T)}]
-        _currPtr = loop.CreateAccum(startPtr, currPtr => loop.Latch.CreatePtrIncrement(currPtr)).SetName("lq_currPtr");
-    }
-    
-    private static Value CreateGetArrayDataRef(IRBuilder builder, Value array)
-    {
-        var elemType = ((ArrayType)array.ResultType).ElemType;
-        var T0 = new GenericParamType(0, isMethodParam: true);
-
-        var m_GetArrayDataRef = builder.Resolver
-            .Import(typeof(System.Runtime.InteropServices.MemoryMarshal))
-            .FindMethod("GetArrayDataReference", new MethodSig(T0.CreateByref(), new TypeSig[] { T0.CreateArray() }, numGenPars: 1))
-            .GetSpec(new GenericContext(methodArgs: new[] { elemType }));
-
-        return builder.CreateCall(m_GetArrayDataRef, array);
+        _currPtr = loop.CreateAccum(_currPtr, currPtr => loop.Latch.CreatePtrIncrement(currPtr)).SetName("lq_currPtr");
     }
 
     protected override Value EmitMoveNext(IRBuilder builder)

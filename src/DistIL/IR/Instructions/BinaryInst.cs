@@ -44,7 +44,7 @@ public class BinaryInst : Instruction
                 StackType.Float
                     => a == PrimType.Double ? a : b, //pick double over float
                 StackType.NInt
-                    => a == b ? a : PrimType.IntPtr, //pick pointer over nint
+                    => a is PointerType ? a : PrimType.IntPtr, //pick pointer over nint
                 StackType.ByRef when op == BinaryOp.Sub
                     => PrimType.IntPtr,
                 _ => null

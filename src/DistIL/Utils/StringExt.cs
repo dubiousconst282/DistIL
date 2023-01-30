@@ -20,12 +20,21 @@ public static class StringExt
         return str.Contains(other, StringComparison.OrdinalIgnoreCase);
     }
 
-    public static void AppendSequence<T>(this StringBuilder sb, string prefix, string postfix, IReadOnlyList<T> elems, Action<T> printElem)
+    public static void AppendSequence<T>(
+        this StringBuilder sb, IEnumerable<T> elems,
+        Action<T>? printElem = null,
+        string prefix = "[", string postfix = "]", string separator = ", ")
     {
         sb.Append(prefix);
-        for (int i = 0; i < elems.Count; i++) {
-            if (i > 0) sb.Append(", ");
-            printElem(elems[i]);
+        int i = 0;
+        foreach (var elem in elems) {
+            if (i++ > 0) sb.Append(separator);
+
+            if (printElem != null) {
+                printElem.Invoke(elem);
+            } else {
+                sb.Append(elem);
+            }
         }
         sb.Append(postfix);
     }

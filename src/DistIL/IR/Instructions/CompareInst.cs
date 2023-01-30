@@ -157,4 +157,12 @@ public static class CompareOps
     /// <summary> Returns whether the operator interprets operands as unsigned integers. </summary>
     public static bool IsUnsigned(this CompareOp op)
         => op is >= CompareOp.Ult and <= CompareOp.Uge;
+
+    /// <summary> Returns the unsigned version of the current operator, if it is signed; otherwise returns it unchanged. </summary>
+    public static CompareOp GetUnsigned(this CompareOp op)
+        => op.IsSigned() ? op + (CompareOp.Ult - CompareOp.Slt) : op;
+
+    /// <summary> Returns the signed version of the current operator, if it is unsigned; otherwise returns it unchanged. </summary>
+    public static CompareOp GetSigned(this CompareOp op)
+        => op.IsUnsigned() ? op + (CompareOp.Slt - CompareOp.Ult) : op;
 }

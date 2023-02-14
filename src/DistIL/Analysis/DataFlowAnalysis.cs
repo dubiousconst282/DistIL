@@ -15,7 +15,7 @@ public abstract class DataFlowAnalysis
         //The initial propagation order has an influence over how quickly the computation will converge.
         //In forward problems, a RPO traversal will be quicker because most predecessor blocks are filled first.
         //Conversely for backward problems, a PO traversal visits all successors blocks first.
-        GraphTraversal.DepthFirst(method.EntryBlock, postVisit: (block) => {
+        method.TraverseDepthFirst(postVisit: (block) => {
             ref var state = ref _states.GetOrAddRef(block);
             Initialize(block, out state);
 

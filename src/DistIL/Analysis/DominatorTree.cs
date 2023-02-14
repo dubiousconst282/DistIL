@@ -85,7 +85,7 @@ public class DominatorTree : IMethodAnalysis
         var nodes = new Node[Method.NumBlocks];
         int index = 0;
 
-        GraphTraversal.DepthFirst(Method.EntryBlock, postVisit: block => {
+        Method.TraverseDepthFirst(postVisit: block => {
             var node = new Node() {
                 Block = block,
                 PostIndex = index

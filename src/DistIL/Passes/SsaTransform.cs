@@ -16,8 +16,8 @@ public class SsaTransform : MethodPass
 
         InsertPhis(domFrontier);
         RenameDefs(domTree);
-        PrunePhis();
 
+        _method = null!;
         _phiDefs.Clear();
     }
 
@@ -29,7 +29,7 @@ public class SsaTransform : MethodPass
         //Find variable definitions
         foreach (var block in _method) {
             foreach (var inst in block) {
-                if (inst is StoreVarInst store && CanEnreg(store)) {
+                if (inst is StoreVarInst store && CanPromote(store)) {
                     var worklist = varDefs.GetOrAddRef(store.Var).Wl ??= new();
                     //Add parent block to the worklist, avoiding dupes
                     if (worklist.Count == 0 || worklist.Top != block) {
@@ -38,7 +38,7 @@ public class SsaTransform : MethodPass
                     killedVars.Add(store.Var);
                 }
                 //If we are loading a variable that has not yet been assigned in this block, mark it as global
-                else if (inst is LoadVarInst load && CanEnreg(load) && !killedVars.Contains(load.Var)) {
+                else if (inst is LoadVarInst load && CanPromote(load) && !killedVars.Contains(load.Var)) {
                     varDefs.GetOrAddRef(load.Var).Global = true;
                 }
             }
@@ -97,13 +97,13 @@ public class SsaTransform : MethodPass
             }
             foreach (var inst in block.NonPhis()) {
                 //Update latest def
-                if (inst is StoreVarInst store && CanEnreg(store)) {
+                if (inst is StoreVarInst store && CanPromote(store)) {
                     var value = StoreInst.Coerce(store.Var.ResultType, store.Value, insertBefore: store);
                     PushDef(block, store.Var, value);
                     store.Remove();
                 }
                 //Replace load with latest def
-                else if (inst is LoadVarInst load && CanEnreg(load)) {
+                else if (inst is LoadVarInst load && CanPromote(load)) {
                     var currDef = ReadDef(load.Var);
                     load.ReplaceWith(currDef);
                 }
@@ -143,80 +143,9 @@ public class SsaTransform : MethodPass
         }
     }
 
-    private static bool CanEnreg(VarAccessInst inst)
+    private static bool CanPromote(VarAccessInst inst)
     {
         //We don't have a way to represent metadata in the IR currently, so don't enreg pinned variables.
         return inst.Var is { IsExposed: false, IsPinned: false };
-    }
-
-    private void PrunePhis()
-    {
-        //Algorithm from the SSABook
-        var usefulPhis = new RefSet<PhiInst>();
-        var propagationStack = new ArrayStack<PhiInst>();
-        var pruneablePhis = new List<PhiInst>();
-        //Initial marking phase
-        foreach (var block in _method) {
-            foreach (var phi in block.Phis()) {
-                var peeledPhi = PeelTrivialPhi(phi);
-                //Enqueue phis with dependencies from non-phi instructions
-                if (HasStrongDependencies(peeledPhi)) {
-                    if (usefulPhis.Add(peeledPhi)) {
-                        propagationStack.Push(peeledPhi);
-                    }
-                }
-                //This phi is not considered useful yet, enqueue for possible removal
-                else {
-                    pruneablePhis.Add(peeledPhi);
-                }
-            }
-        }
-        //Propagate usefulness
-        while (propagationStack.TryPop(out var phi)) {
-            for (int i = 0; i < phi.NumArgs; i++) {
-                if (phi.GetValue(i) is PhiInst otherPhi && usefulPhis.Add(otherPhi)) {
-                    propagationStack.Push(otherPhi);
-                }
-            }
-        }
-        //Prune useless phis
-        foreach (var phi in pruneablePhis) {
-            if (!usefulPhis.Contains(phi)) {
-                phi.Remove();
-            }
-        }
-        
-        static bool HasStrongDependencies(PhiInst phi)
-        {
-            foreach (var user in phi.Users()) {
-                if (user is not PhiInst) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        static PhiInst PeelTrivialPhi(PhiInst phi)
-        {
-            while (IsTrivialPhi(phi)) {
-                var value = phi.GetValue(0);
-                phi.ReplaceWith(value);
-
-                if (value is PhiInst nextPhi) {
-                    phi = nextPhi;
-                } else break;
-            }
-            return phi;
-        }
-        static bool IsTrivialPhi(PhiInst phi)
-        {
-            var value = phi.GetValue(0);
-            for (int i = 1; i < phi.NumArgs; i++) {
-                if (phi.GetValue(i) != value) {
-                    return false;
-                }
-            }
-            return true;
-        }
     }
 }

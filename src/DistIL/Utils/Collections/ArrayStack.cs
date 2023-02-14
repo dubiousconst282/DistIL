@@ -2,7 +2,7 @@ namespace DistIL.Util;
 
 using System.Runtime.CompilerServices;
 
-/// <summary> Stack backed by array that allows byref accesses. (Also unsafer) </summary>
+/// <summary> Lightweight array-based stack (last-in, first-out). </summary>
 public class ArrayStack<T>
 {
     T[] _arr;
@@ -31,7 +31,7 @@ public class ArrayStack<T>
     /// which will remain valid until the stack is modified again. 
     /// An exception is thrown if the stack is empty. 
     /// </summary>
-    public ref T Pop() => ref _arr[--_head];
+    public T Pop() => _arr[--_head];
     public void Push(T value) => PushRef() = value;
 
     /// <summary>

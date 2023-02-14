@@ -59,8 +59,7 @@ public class StoreFieldInst : FieldAccessInst, StoreInst
         get => _operands[IsStatic ? 0 : 1];
         set => ReplaceOperand(IsStatic ? 0 : 1, value);
     }
-
-    public override bool SafeToRemove => false;
+    
     public override bool MayWriteToMemory => true;
     public override string InstName => "stfld";
 

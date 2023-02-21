@@ -1,5 +1,7 @@
 namespace DistIL.Passes;
 
+using DistIL.IR.Utils;
+
 /// <summary> Inline object/structs into local variables. aka "Scalar Replacement of Aggregates" </summary>
 public class ScalarReplacement : IMethodPass
 {
@@ -26,7 +28,14 @@ public class ScalarReplacement : IMethodPass
     {
         //FieldSpecs don't have proper equality comparisons and may have multiple 
         //instances for the same spec, we must use the definition as key instead.
-        var fieldSlots = new Dictionary<FieldDef, (Variable Var, int NumStores)>();
+        var fieldSlots = new Dictionary<FieldDef, Variable>();
+
+        //Zero-init fields
+        var builder = new IRBuilder(alloc, InsertionDir.Before);
+
+        foreach (var field in alloc.ResultType.Fields) {
+            builder.CreateVarStore(GetSlot(field), builder.CreateDefaultOf(field.Type));
+        }
 
         //At this point we know that the constructor doesn't let the instance escape,
         //inlining it here will add the accessed fields to the use chain of `alloc`.
@@ -49,7 +58,7 @@ public class ScalarReplacement : IMethodPass
                     break;
                 }
                 case StoreFieldInst store: {
-                    var slot = GetSlot(store.Field, incStores: true);
+                    var slot = GetSlot(store.Field);
                     store.ReplaceWith(new StoreVarInst(slot, store.Value), insertIfInst: true);
                     break;
                 }
@@ -62,31 +71,14 @@ public class ScalarReplacement : IMethodPass
                 }
             }
         }
+
         //Remove redundant allocation
         alloc.Remove();
 
-        //Promote slots with a single store
-        foreach (var (slot, numStores) in fieldSlots.Values) {
-            if (numStores == 1 && !slot.IsExposed) {
-                var store = slot.Users().OfType<StoreVarInst>().First();
-                store.Remove();
-
-                foreach (var acc in slot.Users()) {
-                    Debug.Assert(acc is LoadVarInst);
-                    acc.ReplaceWith(store.Value);
-                }
-            }
-        }
-
-        Variable GetSlot(FieldDesc field, bool incStores = false)
+        Variable GetSlot(FieldDesc field)
         {
             var def = ((FieldDefOrSpec)field).Definition;
-            ref var slot = ref fieldSlots.GetOrAddRef(def);
-
-            if (incStores) {
-                slot.NumStores++;
-            }
-            return slot.Var ??= new Variable(field.Sig, "sroa." + field.Name);
+            return fieldSlots.GetOrAddRef(def) ??= new Variable(field.Sig, "sroa." + field.Name);
         }
     }
 

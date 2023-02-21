@@ -7,23 +7,51 @@ public class IRBuilder
 {
     Instruction? _last;
     BasicBlock _block = null!;
+    InsertionDir _initialDir = InsertionDir._Invalid;
 
     public BasicBlock Block => _block!;
     public MethodBody Method => _block!.Method;
     public ModuleResolver Resolver => Method.Definition.Module.Resolver;
 
-    /// <summary> Initializes a builder that inserts instructions before <paramref name="inst"/>. </summary>
-    public IRBuilder(Instruction inst) => SetPosition(inst);
+    /// <summary> Initializes a builder that inserts instructions relative to <paramref name="inst"/>. </summary>
+    public IRBuilder(Instruction inst, InsertionDir dir) => SetPosition(inst, dir);
 
-    /// <summary> Initializes a builder that inserts instructions before <paramref name="inst"/>, if non null; othewise it appends new instructions before the terminator of <paramref name="block"/>. </summary>
-    public IRBuilder(BasicBlock block, Instruction? inst = null) => SetPosition(block, inst);
+    /// <summary> Initializes a builder that inserts instructions relative to <paramref name="block"/>. </summary>
+    public IRBuilder(BasicBlock block, InsertionDir dir = InsertionDir.BeforeLast) => SetPosition(block, dir);
 
-    public virtual void SetPosition(BasicBlock block, Instruction? inst = null)
+    public void SetPosition(BasicBlock block, InsertionDir dir = InsertionDir.BeforeLast)
     {
         _block = block;
-        _last = inst;
+        _last = null;
+        _initialDir = InsertionDir._Invalid;
+
+        if (dir == InsertionDir.Before) {
+            _last = block.FirstNonHeader.Prev;
+        } else if (dir == InsertionDir.BeforeLast && block.Last != null) {
+            Ensure.That(block.Last.IsBranch, "Malformed block");
+            SetInitialPosBefore(block.Last);
+        } else {
+            //Block is either empty, or dir == After
+            _initialDir = InsertionDir.After;
+        }
     }
-    public void SetPosition(Instruction inst) => SetPosition(inst.Block, inst);
+    public void SetPosition(Instruction inst, InsertionDir dir)
+    {
+        _block = inst.Block;
+        _initialDir = InsertionDir._Invalid;
+
+        if (dir == InsertionDir.Before) {
+            SetInitialPosBefore(inst);
+        } else {
+            Ensure.That(dir == InsertionDir.After, "Invalid direction");
+            _last = inst;
+        }
+    }
+    private void SetInitialPosBefore(Instruction inst)
+    {
+        _last = inst.Prev;
+        _initialDir = _last == null ? InsertionDir.Before : InsertionDir._Invalid;
+    }
 
     public PhiInst CreatePhi(TypeDesc type) 
         => _block.InsertPhi(type);
@@ -220,8 +248,38 @@ public class IRBuilder
         if (_last != null) {
             inst.InsertAfter(_last);
         } else {
-            _block!.InsertAnteLast(inst);
+            AppendInitial(inst);
         }
         _last = inst;
     }
+
+    private void AppendInitial(Instruction inst)
+    {
+        switch (_initialDir) {
+            case InsertionDir.Before:   _block.InsertFirst(inst); break;
+            case InsertionDir.After:    _block.InsertLast(inst); break;
+            default: throw new UnreachableException();
+        }
+        _initialDir = InsertionDir._Invalid;
+    }
+}
+public enum InsertionDir
+{
+    /// <summary> Sentinel. For internal use only. </summary>
+    _Invalid,
+
+    /// <summary>
+    /// Inserts new instructions before the one specified in SetPosition().
+    /// If relative to a block, inserts new instructions at the start, after phi and guard instructions.
+    /// </summary>
+    Before,
+
+    /// <summary>
+    /// Inserts new instructions after the one specified in SetPosition().
+    /// If relative to a block, inserts new instructions at the end, after the terminator branch.
+    /// </summary>
+    After,
+
+    /// <summary> Inserts new instructions before the block terminator branch. </summary>
+    BeforeLast
 }

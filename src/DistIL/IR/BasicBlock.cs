@@ -147,10 +147,10 @@ public class BasicBlock : TrackedValue
 
     public PhiInst InsertPhi(PhiInst phi)
     {
-        if (First != null) {
-            InsertBefore(FirstNonHeader, phi);
+        if (FirstNonHeader is { } pos) { //ensure insertion order is respected
+            InsertBefore(pos, phi);
         } else {
-            InsertFirst(phi);
+            InsertLast(phi);
         }
         return phi;
     }

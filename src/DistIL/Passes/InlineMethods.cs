@@ -5,16 +5,19 @@ using DistIL.IR.Utils;
 using ImplAttribs = System.Reflection.MethodImplAttributes;
 using MethodAttribs = System.Reflection.MethodAttributes;
 
-public class InlineMethods : MethodPass
+public class InlineMethods : IMethodPass
 {
     readonly Options _opts;
 
     public InlineMethods(Options? opts = null)
     {
-        _opts = (opts ?? new());
+        _opts = opts ?? new();
     }
 
-    public override void Run(MethodTransformContext ctx)
+    static IMethodPass IMethodPass.Create<TSelf>(Compilation comp)
+        => new InlineMethods();
+
+    public MethodPassResult Run(MethodTransformContext ctx)
     {
         var inlineableCalls = new List<CallInst>();
         var method = ctx.Method;
@@ -28,6 +31,8 @@ public class InlineMethods : MethodPass
         foreach (var call in inlineableCalls) {
             Inline(call);
         }
+
+        return inlineableCalls.Count > 0 ? MethodInvalidations.Everything : 0;
     }
 
     private bool CanBeInlined(MethodDef caller, CallInst callInst)

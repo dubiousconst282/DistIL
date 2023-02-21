@@ -1,19 +1,22 @@
 namespace DistIL.Passes;
 
-using System.Numerics;
-
-public class SimplifyCFG : MethodPass
+public class SimplifyCFG : IMethodPass
 {
-    public override void Run(MethodTransformContext ctx)
+    public MethodPassResult Run(MethodTransformContext ctx)
     {
         bool changed = true;
+        bool everChanged = false;
+
         while (changed) {
             changed = false;
 
             foreach (var block in ctx.Method) {
                 changed |= TransformBlock(block);
             }
+            everChanged |= changed;
         }
+        
+        return everChanged ? MethodInvalidations.ControlFlow : 0;
     }
 
     private bool TransformBlock(BasicBlock block)

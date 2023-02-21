@@ -58,7 +58,7 @@ public class ModuleDef : ModuleEntity
         return type;
     }
 
-    public IEnumerable<MethodDef> AllMethods()
+    public IEnumerable<MethodDef> MethodDefs()
         => TypeDefs.SelectMany(t => t.Methods);
 
     public List<CustomAttrib> GetCustomAttribs(bool forAssembly)

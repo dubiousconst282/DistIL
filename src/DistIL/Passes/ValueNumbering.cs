@@ -1,8 +1,8 @@
 namespace DistIL.Passes;
 
-public class ValueNumbering : MethodPass
+public class ValueNumbering : IMethodPass
 {
-    public override void Run(MethodTransformContext ctx)
+    public MethodPassResult Run(MethodTransformContext ctx)
     {
         foreach (var block in ctx.Method) {
             var map = new VNMap();
@@ -13,6 +13,7 @@ public class ValueNumbering : MethodPass
                 }
             }
         }
+        return MethodInvalidations.DataFlow;
     }
 
     class VNMap

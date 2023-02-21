@@ -7,8 +7,6 @@ using CommandLine.Text;
 
 using DistIL;
 using DistIL.AsmIO;
-using DistIL.CodeGen.Cil;
-using DistIL.Frontend;
 using DistIL.IR.Utils;
 using DistIL.Passes;
 using DistIL.Util;
@@ -30,7 +28,7 @@ if (result.Tag == ParserResultType.NotParsed) {
 
 static void RunOptimizer(OptimizerOptions options)
 {
-    var logger = new ConsoleLogger() { MinLevel = LogLevel.Debug };
+    var logger = new ConsoleLogger() { MinLevel = options.Verbosity };
 
     var resolver = new ModuleResolver(logger);
     resolver.AddSearchPaths(options.ResolverPaths);
@@ -47,61 +45,68 @@ static void RunOptimizer(OptimizerOptions options)
     string? outputPath = options.OutputPath;
 
     if (outputPath == null) {
-        File.Move(options.InputPath, Path.ChangeExtension(options.InputPath, ".bak"), overwrite: false);
+        File.Move(options.InputPath, Path.ChangeExtension(options.InputPath, ".dll.bak"), overwrite: true);
         outputPath = options.InputPath;
     }
     module.Save(outputPath);
 }
 static void RunPasses(OptimizerOptions options, Compilation comp)
 {
-    var mp1 = new MethodPassManager();
-    mp1.Add(new SimplifyCFG());
-    mp1.Add(new SsaTransform());
-    mp1.Add(new ExpandLinq(comp.Module));
-    mp1.Add(new SimplifyInsts(comp.Module)); //lambdas and devirtualization
+    var manager = new PassManager() {
+        Compilation = comp,
+        TrackAndLogStats = true,
+        PassCandidateFilter = options.FilterPassCandidates
+    };
 
-    //TODO: check if we actually need separate pipelines now that passes are
-    //      applied in topological call graph order
-    var mp2 = new MethodPassManager();
-    mp2.Add(new InlineMethods());
-    mp2.Add(new ScalarReplacement());
-    mp2.Add(new SimplifyInsts(comp.Module));
-    mp2.Add(new ValueNumbering());
-    mp2.Add(new DeadCodeElim()); //remove dead blocks, as dom-tree doesn't currently support them
-    //mp2.Add(new LoopInvariantCodeMotion());
-    mp2.Add(new LoopStrengthReduction());
-    mp2.Add(new DeadCodeElim());
-    mp2.Add(new SimplifyCFG());
+    manager.AddPasses()
+        .Apply<SimplifyCFG>()
+        .Apply<SsaPromotion>()
+        .Apply<ExpandLinq>()
+        .Apply<SimplifyInsts>(); //lambdas and devirtualization
+
+    manager.AddPasses(applyIndependently: true) //this is so that e.g. all callees are in SSA before inlining.
+        .Apply<InlineMethods>()
+        .IfChanged(c => c.Apply<SimplifyInsts>());
+
+    manager.AddPasses()
+        .Apply<ScalarReplacement>()
+        .IfChanged(c => c.Apply<SsaPromotion>());
+
+    manager.AddPasses()
+        .Apply<SimplifyInsts>()
+        .Apply<SimplifyCFG>()
+        .Apply<DeadCodeElim>()
+        .RepeatUntilFixedPoint(maxIters: 3);
+    
+    manager.AddPasses()
+        .Apply<ValueNumbering>()
+        .Apply<LoopStrengthReduction>()
+        .IfChanged(c => c.Apply<DeadCodeElim>());
+
+    if (comp.Logger.IsEnabled(LogLevel.Debug)) {
+        manager.AddPasses().Apply<VerificationPass>();
+    }
 
     if (options.DumpDir != null) {
         if (options.PurgeDumps && Directory.Exists(options.DumpDir)) {
-            Directory.Delete(options.DumpDir, true);
+            Directory.Delete(options.DumpDir, recursive: true);
         }
         Directory.CreateDirectory(options.DumpDir);
 
-        mp2.Add(new DumpPass() {
+        manager.AddPasses().Apply(new DumpPass() {
             BaseDir = options.DumpDir,
             Formats = options.DumpFmts,
-            Filter = options.GetCompiledFilter()
+            Filter = options.GetMethodFilter()
         });
     }
 
-    var pm = new ModulePassManager();
-    pm.Add(new ImportPass() {
-        Filter = options.GetCompiledFilter(true),
-        BisectFilter = options.BisectFilter
-    });
-    pm.Add(mp1);
-    pm.Add(mp2);
-    pm.Add(new ExportPass());
-
-    pm.Run(comp);
+    manager.Run();
 }
 static void AddIgnoreAccessAttrib(ModuleDef module, IEnumerable<string> assemblyNames)
 {
     var attribType = module.CreateType(
         "System.Runtime.CompilerServices", "IgnoresAccessChecksToAttribute",
-        TypeAttributes.BeforeFieldInit | TypeAttributes.Class,
+        TypeAttributes.BeforeFieldInit,
         module.Resolver.CoreLib.FindType("System", "Attribute")
     );
     var attribCtor = attribType.CreateMethod(
@@ -134,7 +139,7 @@ class OptimizerOptions
     [Option("dump-dir", HelpText = "Output directory for IR dumps.")]
     public string? DumpDir { get; set; } = null;
 
-    [Option("dump-fmts", HelpText = "Comma-separated list of IR dump formats.")]
+    [Option("dump-fmts", HelpText = "Comma-separated list of IR dump formats.\n")]
     public DumpFormats DumpFmts { get; set; } = DumpFormats.Graphviz;
 
     [Option("purge-dumps", HelpText = "Delete all files in `dump-dir`.")]
@@ -143,8 +148,11 @@ class OptimizerOptions
     [Option("filter", HelpText = kFilterHelp)]
     public string? MethodFilter { get; set; }
 
-    [Option("bisect", HelpText = "Binary searches for methods with bad codegen using a string composed by `g`ood and `b`ad characters.")]
+    [Option("bisect", HelpText = "Limits passes to methods within a log2 range based on a string composed by `g`ood and `b`ad characters. Used to find methods with bad codegen, similarly to `git bisect`.")]
     public string? BisectFilter { get; set; }
+
+    [Option("verbosity", HelpText = "Specifies logging verbosity.\n")]
+    public LogLevel Verbosity { get; set; } = LogLevel.Info;
 
     const string kFilterHelp = """
         Filters methods to optimize or dump using a wildcard pattern: 
@@ -155,16 +163,35 @@ class OptimizerOptions
 
     Predicate<MethodDef>? _cachedFilter;
 
-    public Predicate<MethodDef>? GetCompiledFilter(bool isForImport = false)
+    public void FilterPassCandidates(List<MethodDef> candidates)
+    {
+        if (BisectFilter != null) {
+            var bisectRange = GetBisectRange(candidates.Count, BisectFilter);
+            Console.WriteLine($"Bisecting method range [{bisectRange}], ~{(int)Math.Log2(bisectRange.Length)} steps left.");
+
+            File.WriteAllLines("bisect_log.txt", 
+                candidates
+                    .Select((m, i) => (m, i))
+                    .Where(e => bisectRange.Contains(e.i))
+                    .Select(e => e.i + ":" + e.m.ToString()));
+
+            candidates.RemoveRange(bisectRange.End, candidates.Count - bisectRange.End);
+            candidates.RemoveRange(0, bisectRange.Start);
+        }
+        if (MethodFilter != null && MethodFilter.StartsWith("!")) {
+            var pred = GetMethodFilter()!;
+            candidates.RemoveAll(m => !pred.Invoke(m));
+        }
+    }
+
+    public Predicate<MethodDef>? GetMethodFilter()
     {
         if (MethodFilter == null) {
             return null;
         }
-        bool appliesToImport = MethodFilter.StartsWith("!");
-        var str = MethodFilter.Substring(appliesToImport ? 1 : 0);
-        _cachedFilter ??= CompileFilter(str);
-
-        return !isForImport || appliesToImport ? _cachedFilter : null;
+        bool appliesToTransform = MethodFilter.StartsWith('!');
+        var str = MethodFilter.Substring(appliesToTransform ? 1 : 0);
+        return _cachedFilter ??= CompileFilter(str);
     }
 
     private static Predicate<MethodDef> CompileFilter(string pattern)
@@ -200,15 +227,30 @@ class OptimizerOptions
             return value.Replace("\\?", ".").Replace("\\*", ".*");
         }
     }
+    private static AbsRange GetBisectRange(int count, string filter)
+    {
+        int start = 0, end = count;
+
+        for (int i = 0; i <= filter.Length; i++) {
+            int mid = (start + end) >>> 1;
+
+            if (i == filter.Length || char.ToUpper(filter[i]) == 'B') {
+                end = mid;
+            } else {
+                start = mid;
+            }
+        }
+        return (start, end);
+    }
 }
 
-class DumpPass : MethodPass
+class DumpPass : IMethodPass
 {
     public string BaseDir { get; init; } = null!;
     public Predicate<MethodDef>? Filter { get; init; }
     public DumpFormats Formats { get; init; }
 
-    public override void Run(MethodTransformContext ctx)
+    public MethodPassResult Run(MethodTransformContext ctx)
     {
         if (Filter == null || Filter.Invoke(ctx.Method.Definition)) {
             var def = ctx.Method.Definition;
@@ -227,6 +269,7 @@ class DumpPass : MethodPass
                 IRPrinter.ExportForest(ctx.Method, $"{BaseDir}/{name}_forest.txt");
             }
         }
+        return MethodInvalidations.None;
     }
 }
 [Flags]
@@ -238,76 +281,19 @@ enum DumpFormats
     Forest      = 1 << 2
 }
 
-class ImportPass : ModulePass
+class VerificationPass : IMethodPass
 {
-    public Predicate<MethodDef>? Filter { get; init; }
-    public string? BisectFilter { get; init; }
-
-    public override void Run(ModuleTransformContext ctx)
+    public MethodPassResult Run(MethodTransformContext ctx)
     {
-        int index = 0;
-        var bisectRange = default(AbsRange);
+        var diags = IRVerifier.Diagnose(ctx.Method);
 
-        if (BisectFilter != null) {
-            bisectRange = GetBisectRange(ctx.DefinedMethods.Count, BisectFilter);
-            File.Delete("bisect_log.txt");
-            ctx.Logger.Info($"Bisecting methods [{bisectRange}], ~{(int)Math.Log2(bisectRange.Length)} steps left.");
-        }
+        if (diags.Count > 0) {
+            using var scope = ctx.Logger.Push(new LoggerScopeInfo("DistIL.IR.Verification"), $"Bad IR in '{ctx.Method}'");
 
-        foreach (var method in ctx.DefinedMethods) {
-            index++;
-
-            if (Filter != null && !Filter.Invoke(method)) continue;
-
-            if (!bisectRange.IsEmpty) {
-                if (!bisectRange.Contains(index)) continue;
-
-                File.AppendAllText("bisect_log.txt", $"{index} {method}\n");
-            }
-
-            try {
-                method.Body = ILImporter.ImportCode(method);
-            } catch (Exception ex) {
-                ctx.Logger.Error($"Failed to import '{method}'", ex);
+            foreach (var diag in diags) {
+                ctx.Logger.Warn(diag.ToString());
             }
         }
-    }
-
-    private static AbsRange GetBisectRange(int count, string filter)
-    {
-        int start = 0, end = count;
-
-        for (int i = 0; i <= filter.Length; i++) {
-            int mid = (start + end) >>> 1;
-
-            if (i == filter.Length || char.ToUpper(filter[i]) == 'B') {
-                end = mid;
-            } else {
-                start = mid;
-            }
-        }
-        return (start, end);
-    }
-}
-class ExportPass : ModulePass
-{
-    public override void Run(ModuleTransformContext ctx)
-    {
-        foreach (var method in ctx.DefinedMethods) {
-            if (method.Body == null) continue;
-
-            try {
-                if (ctx.Logger.IsEnabled(LogLevel.Debug) && IRVerifier.Diagnose(method.Body) is [_, ..] diags) {
-                    using var scope = ctx.Logger.Push(new LoggerScopeInfo("DistIL.IR.Verification"), $"Bad IR in '{method}'");
-
-                    foreach (var diag in diags) {
-                        ctx.Logger.Warn(diag.ToString());
-                    }
-                }
-                method.ILBody = ILGenerator.Generate(method.Body);
-            } catch (Exception ex) {
-                ctx.Logger.Error($"Failed to emit '{method}'", ex);
-            }
-        }
+        return MethodInvalidations.None;
     }
 }

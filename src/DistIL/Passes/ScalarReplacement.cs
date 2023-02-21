@@ -1,9 +1,9 @@
 namespace DistIL.Passes;
 
 /// <summary> Inline object/structs into local variables. aka "Scalar Replacement of Aggregates" </summary>
-public class ScalarReplacement : MethodPass
+public class ScalarReplacement : IMethodPass
 {
-    public override void Run(MethodTransformContext ctx)
+    public MethodPassResult Run(MethodTransformContext ctx)
     {
         var allocs = new List<NewObjInst>();
         
@@ -18,9 +18,8 @@ public class ScalarReplacement : MethodPass
         foreach (var obj in allocs) {
             InlineAlloc(obj);
         }
-        if (allocs.Count > 0) {
-            ctx.Logger.Info($"Scalarized {allocs.Count} allocations");
-        }
+
+        return allocs.Count > 0 ? MethodInvalidations.ControlFlow : 0; //ctors are inlined and may add new blocks.
     }
 
     private static void InlineAlloc(NewObjInst alloc)

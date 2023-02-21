@@ -2,13 +2,13 @@ namespace DistIL.Passes;
 
 using DistIL.Analysis;
 
-//SSA transform implementation based on the standard dominance frontier algorithm.
-public class SsaTransform : MethodPass
+/// <summary> Promotes non-exposed local variables to SSA. </summary>
+public class SsaPromotion : IMethodPass
 {
     MethodBody _method = null!;
     Dictionary<PhiInst, Variable> _phiDefs = new(); //phi -> variable
 
-    public override void Run(MethodTransformContext ctx)
+    public MethodPassResult Run(MethodTransformContext ctx)
     {
         _method = ctx.Method;
         var domTree = ctx.GetAnalysis<DominatorTree>(preserve: true);
@@ -19,6 +19,8 @@ public class SsaTransform : MethodPass
 
         _method = null!;
         _phiDefs.Clear();
+
+        return MethodInvalidations.DataFlow;
     }
 
     private void InsertPhis(DominanceFrontier domFrontier)

@@ -38,7 +38,7 @@ public class LoopAnalysis : IMethodAnalysis
     }
 
     static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
-        => new LoopAnalysis(mgr.Method, mgr.GetAnalysis<DominatorTree>(preserve: true));
+        => new LoopAnalysis(mgr.Method, mgr.GetAnalysis<DominatorTree>());
 }
 
 /// <summary>
@@ -143,14 +143,14 @@ public class LoopInfo
             bool isPrehdr = block.NumSuccs == 1 && block.Succs.First() == Header && !Contains(block);
 
             if (isPrehdr) {
-                sb.Append("^");
+                sb.Append('^');
                 return;
             }
             bool isLatch = block.Succs.Contains(Header);
             bool isExiting = block.Succs.Any(b => !Contains(b));
 
-            if (isLatch) sb.Append("↲");
-            if (isExiting) sb.Append("*");
+            if (isLatch) sb.Append('↲');
+            if (isExiting) sb.Append('*');
         }
     }
 }

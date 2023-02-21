@@ -30,11 +30,11 @@ public class ConsoleLogger : ICompilationLogger
 
     private void SyncScopes()
     {
-        int minDepth = _scopeStack.Count - 1;
-        while (minDepth > 0 && _scopeStack[minDepth].SyncId > _lastScopeSyncId) {
+        int minDepth = _scopeStack.Count;
+        while (minDepth > 0 && _lastScopeSyncId < _scopeStack[minDepth - 1].SyncId) {
             minDepth--;
         }
-        for (int i = minDepth; i >= 0 && i < _scopeStack.Count; i++) {
+        for (int i = minDepth; i < _scopeStack.Count; i++) {
             ref var scope = ref _scopeStack[i];
 
             Indent(i);

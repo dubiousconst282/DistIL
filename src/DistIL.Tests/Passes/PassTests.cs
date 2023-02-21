@@ -24,7 +24,7 @@ public class PassTests
 
     [Fact]
     public void Test_SimplifyInsts()
-        => RunTests("SimplifyInsts.ethil", new SimplifyInsts(_testAsm));
+        => RunTests("SimplifyInsts.ethil", new SimplifyInsts(_modResolver));
 
     [Fact]
     public void Test_Importer()
@@ -36,13 +36,13 @@ public class PassTests
             Debug.Assert(name.EndsWith(".expected"));
 
             var actualDef = (MethodDef)actualType.FindMethod(name[0..^".expected".Length]);
-            var actualBody = ILImporter.ImportCode(actualDef);
+            var actualBody = ILImporter.ParseCode(actualDef);
 
             Assert.True(CompareBodies(expectedBody, actualBody), $"Case '{name}' doesn't match expected body");
         }
     }
 
-    private void RunTests(string filename, MethodPass pass)
+    private void RunTests(string filename, IMethodPass pass)
     {
         var decls = Utils.ParseMethodDecls("Passes/Cases/" + filename, _modResolver);
         var comp = new Compilation(_testAsm, new VoidLogger(), new CompilationSettings());

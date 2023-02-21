@@ -2,7 +2,7 @@ namespace DistIL.Passes;
 
 using System.Runtime.CompilerServices;
 
-partial class SimplifyInsts : MethodPass
+partial class SimplifyInsts
 {
     //Directize delegate invokes if target is known:
     //
@@ -25,7 +25,7 @@ partial class SimplifyInsts : MethodPass
     //  BB_Result:
     //    r5 = ldfld Data::Instance -> Data
     //    r25 = call Data::Lambda1(Data: r5, int: r24) -> bool
-    private bool DevirtualizeLambda(MethodTransformContext ctx, CallInst call)
+    private static bool DevirtualizeLambda(CallInst call)
     {
         if (call is not { Method.Name: "Invoke", IsStatic: false, Args: [var lambdaInstance, ..] }) return false;
 

@@ -1,20 +1,20 @@
 namespace DistIL.Passes;
 
-public class DeadCodeElim : MethodPass
+public class DeadCodeElim : IMethodPass
 {
-    public override void Run(MethodTransformContext ctx)
+    public MethodPassResult Run(MethodTransformContext ctx)
     {
-        bool changed = false;
-        changed |= RemoveUnreachableBlocks(ctx.Method);
-        changed |= RemoveUselessCode(ctx.Method);
+        var changes = MethodInvalidations.None;
 
-        if (changed) {
-            ctx.InvalidateAll();
-        }
+        changes |= RemoveUnreachableBlocks(ctx.Method) ? MethodInvalidations.ControlFlow : 0;
+        changes |= RemoveUselessCode(ctx.Method) ? MethodInvalidations.DataFlow : 0;
+
+        return changes;
     }
 
     public static bool RemoveUnreachableBlocks(MethodBody method)
     {
+        bool changed = false;
         var worklist = new DiscreteStack<BasicBlock>();
 
         //Mark reachable blocks with a depth first search
@@ -27,6 +27,7 @@ public class DeadCodeElim : MethodPass
 
                 blockF.RedirectPhis(block, newPred: null);
                 block.SetBranch(blockT);
+                changed = true;
             }
             
             foreach (var succ in block.Succs) {
@@ -35,8 +36,6 @@ public class DeadCodeElim : MethodPass
         }
 
         //Sweep unreachable blocks
-        bool changed = false;
-
         foreach (var block in method) {
             if (worklist.WasPushed(block)) continue;
 

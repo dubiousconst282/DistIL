@@ -11,7 +11,7 @@ public interface IMethodAnalysisManager
 {
     MethodBody Method { get; }
 
-    A GetAnalysis<A>(bool preserve = false) where A : IMethodAnalysis;
+    A GetAnalysis<A>(bool preserve = true) where A : IMethodAnalysis;
     
     /// <summary> Invalidates all currently cached analyses. </summary>
     void InvalidateAll();

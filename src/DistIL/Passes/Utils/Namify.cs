@@ -1,11 +1,12 @@
 namespace DistIL.Passes.Utils;
 
 /// <summary> Generate names for anonymous (unnamed) blocks and instructions to allow easy diffing. </summary>
-public class NamifyIR : MethodPass
+public class NamifyIR : IMethodPass
 {
-    public override void Run(MethodTransformContext ctx)
+    public MethodPassResult Run(MethodTransformContext ctx)
     {
         Run(ctx.Method);
+        return MethodInvalidations.None;
     }
 
     public static void Run(MethodBody body)

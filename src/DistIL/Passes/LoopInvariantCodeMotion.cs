@@ -2,13 +2,14 @@ namespace DistIL.Passes;
 
 using DistIL.Analysis;
 
-public class LoopInvariantCodeMotion : MethodPass
+public class LoopInvariantCodeMotion : IMethodPass
 {
-    public override void Run(MethodTransformContext ctx)
+    public MethodPassResult Run(MethodTransformContext ctx)
     {
         //https://www.cs.cornell.edu/courses/cs6120/2020fa/lesson/5
         var loopAnalysis = ctx.GetAnalysis<LoopAnalysis>(preserve: true);
         var invariantInsts = new HashSet<Instruction>(); //can't use RefSet here, because order matters
+        bool changed = false;
 
         foreach (var loop in loopAnalysis.Loops) {
             var preheader = loop.GetPreheader();
@@ -26,8 +27,12 @@ public class LoopInvariantCodeMotion : MethodPass
             foreach (var inst in invariantInsts) {
                 inst.MoveBefore(preheader.Last);
             }
+
             //Cleanup for next itr
-            invariantInsts.Clear();
+            if (invariantInsts.Count > 0) {
+                invariantInsts.Clear();
+                changed = true;
+            }
 
             bool CanBeHoisted(Instruction inst)
             {
@@ -40,5 +45,7 @@ public class LoopInvariantCodeMotion : MethodPass
                 return true;
             }
         }
+
+        return changed ? MethodInvalidations.Loops : 0;
     }
 }

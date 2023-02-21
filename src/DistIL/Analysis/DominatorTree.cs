@@ -226,7 +226,7 @@ public class DominanceFrontier : IMethodAnalysis
     }
 
     static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
-        => new DominanceFrontier(mgr.GetAnalysis<DominatorTree>(preserve: true));
+        => new DominanceFrontier(mgr.GetAnalysis<DominatorTree>());
 
     public RefSet<BasicBlock> Of(BasicBlock block)
         => _df.GetValueOrDefault(block, _emptySet);

@@ -3,32 +3,23 @@ namespace DistIL.Passes;
 using DistIL.IR.Utils;
 
 using Bin = IR.BinaryOp;
-using CallOptEntry = ValueTuple<TypeDesc?, Func<MethodTransformContext, CallInst, bool>>;
 using Cmp = IR.CompareOp;
 
 /// <summary> Implements peepholes/combining/scalar transforms that don't affect control flow. </summary>
-public partial class SimplifyInsts : MethodPass
+public partial class SimplifyInsts : IMethodPass
 {
-    readonly Dictionary<string, CallOptEntry[]> _callOpts = new();
+    readonly TypeDefOrSpec t_Delegate, t_DictionaryOfTT;
 
-    public SimplifyInsts(ModuleDef mod)
+    public SimplifyInsts(ModuleResolver resolver)
     {
-#pragma warning disable format
-        AddCallOpt(typeof(Delegate),        "Invoke",           DevirtualizeLambda);
-        AddCallOpt(typeof(Dictionary<,>),   "ContainsKey",      SimplifyDictLookup);
-#pragma warning restore format
-
-        void AddCallOpt(Type declType, string methodName, Func<MethodTransformContext, CallInst, bool> run)
-        {
-            if (mod.Resolver.Import(declType, throwIfNotFound: false) is { } declTypeDesc) {
-                ref var entries = ref _callOpts.GetOrAddRef(methodName);
-                entries = new CallOptEntry[(entries?.Length ?? 0) + 1];
-                entries[^1] = (declTypeDesc, run);
-            }
-        }
+        t_Delegate = resolver.Import(typeof(Delegate));
+        t_DictionaryOfTT = resolver.Import(typeof(Dictionary<,>), throwIfNotFound: false);
     }
 
-    public override void Run(MethodTransformContext ctx)
+    static IMethodPass IMethodPass.Create<TSelf>(Compilation comp)
+        => new SimplifyInsts(comp.Module.Resolver);
+
+    public MethodPassResult Run(MethodTransformContext ctx)
     {
         foreach (var inst in ctx.Method.Instructions()) {
             var newValue = inst switch {
@@ -44,26 +35,26 @@ public partial class SimplifyInsts : MethodPass
                 inst.ReplaceWith(newValue);
             }
         }
+        //TODO: track invalidations precisely
+        return MethodInvalidations.DataFlow;
     }
 
     private Value? SimplifyCall(MethodTransformContext ctx, CallInst call)
     {
         var method = call.Method;
+        var declType = method.DeclaringType;
 
-        if (_callOpts.TryGetValue(method.Name, out var entries)) {
-            foreach (var (reqType, run) in entries) {
-                var declType = method.DeclaringType;
-                if (declType is TypeSpec spec && reqType is TypeDef) {
-                    declType = spec.Definition;
-                }
-                if (reqType != null && !declType.Inherits(reqType)) continue;
+        bool changed = method.Name switch {
+            "Invoke" when declType.Inherits(t_Delegate)
+                => DevirtualizeLambda(call),
 
-                if (run(ctx, call)) {
-                    return null;
-                }
-            }
-        }
-        return ConstFolding.FoldCall(call.Method, call.Args);
+            "ContainsKey" when declType is TypeDefOrSpec s && s.Definition == t_DictionaryOfTT
+                => SimplifyDictLookup(call),
+
+            _ => false
+        };
+
+        return changed ? null : ConstFolding.FoldCall(call.Method, call.Args);
     }
 
     private Value? SimplifyIntrinsic(IntrinsicInst c)

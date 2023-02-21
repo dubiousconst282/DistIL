@@ -1,6 +1,6 @@
 namespace DistIL.Passes;
 
-partial class SimplifyInsts : MethodPass
+partial class SimplifyInsts
 {
     //Optimize double dictionary lookups:
     //
@@ -24,29 +24,28 @@ partial class SimplifyInsts : MethodPass
     //  BB_05: //preds: BB_01
     //    long r6 = ldvar $loc1
     //    ret r6
-    private bool SimplifyDictLookup(MethodTransformContext ctx, CallInst call)
+    private static bool SimplifyDictLookup(CallInst call)
     {
         Debug.Assert(call.Method.Name == "ContainsKey");
 
-        var branch = call.Users().OfType<BranchInst>().FirstOrDefault(); //implies branch.Cond == call
-        if (branch == null || call.Args is not [TrackedValue instance, var key]) return false;
+        if (!(call.Next is BranchInst br && br.Cond == call && call.Args is [TrackedValue instance, var key])) return false;
 
         var declType = (TypeSpec)call.Method.DeclaringType;
         //Only check for the get_Item() call once, because guaranteeing that the dictionary
         //won't change in between calls is tricky. (VN may handle this in the future.)
-        if (branch.Then.First is not CallInst { Method.Name: "get_Item" } getCall ||
+        if (br.Then.First is not CallInst { Method.Name: "get_Item" } getCall ||
             getCall.Method.DeclaringType != declType ||
             getCall.Args[0] != instance || getCall.Args[1] != key) return false;
 
-        var resultVar = new Variable(declType.GenericParams[1]);
-        var resultAddr = new VarAddrInst(resultVar);
-        var resultLoad = new LoadVarInst(resultVar);
+        var tempVar = new Variable(declType.GenericParams[1], exposed: true);
+        var tempAddr = new VarAddrInst(tempVar);
+        var resultLoad = new LoadVarInst(tempVar);
         var tryGetCall = new CallInst(
             declType.FindMethod("TryGetValue", 
-                new MethodSig(PrimType.Bool, new TypeSig[] { key.ResultType, resultVar.ResultType.CreateByref() })),
-            new[] { instance, key, resultAddr }, isVirtual: true);
+                new MethodSig(PrimType.Bool, new TypeSig[] { key.ResultType, tempAddr.ResultType })),
+            new[] { instance, key, tempAddr }, isVirtual: true);
 
-        resultAddr.InsertBefore(call);
+        tempAddr.InsertBefore(call);
         call.ReplaceWith(tryGetCall, insertIfInst: true);
         resultLoad.InsertBefore(getCall);
         getCall.ReplaceWith(resultLoad);

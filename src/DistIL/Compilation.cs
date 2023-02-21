@@ -9,10 +9,9 @@ public class Compilation
     public ICompilationLogger Logger { get; }
     public CompilationSettings Settings { get; }
 
-    private TypeDef? _auxType;
+    public ModuleResolver Resolver => Module.Resolver;
 
-    /// <summary> Returns the compiler's auxiliary type in the module. </summary>
-    public TypeDef AuxType => _auxType ??= CreateAuxType();
+    private TypeDef? _auxType;
 
     public Compilation(ModuleDef module, ICompilationLogger logger, CompilationSettings settings)
     {
@@ -21,19 +20,23 @@ public class Compilation
         Settings = settings;
     }
 
-    private TypeDef CreateAuxType()
+    /// <summary> Returns the compiler's auxiliary type for the module. </summary>
+    public TypeDef GetAuxType()
     {
-        const string kName = "<EthilAux>";
-        var type = Module.FindType(null, kName);
+        if (_auxType != null) {
+            return _auxType;
+        }
+        const string name = "<EthilAux>";
+        _auxType = Module.FindType(null, name);
 
-        if (type == null) {
-            type = Module.CreateType(null, kName, TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
+        if (_auxType == null) {
+            _auxType = Module.CreateType(null, name, TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 
             var attribCtor = Module.Resolver.Import(typeof(CompilerGeneratedAttribute)).FindMethod(".ctor");
-            var typeAttribs = type.GetCustomAttribs(readOnly: false);
+            var typeAttribs = _auxType.GetCustomAttribs(readOnly: false);
             typeAttribs.Add(new CustomAttrib(attribCtor));
         }
-        return type;
+        return _auxType;
     }
 }
 

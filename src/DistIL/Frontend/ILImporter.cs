@@ -26,7 +26,7 @@ public class ILImporter
         _varFlags = new VarFlags[_body.Args.Length + method.ILBody!.Locals.Length];
     }
 
-    public static MethodBody ImportCode(MethodDef method)
+    public static MethodBody ParseCode(MethodDef method)
     {
         return new ILImporter(method).ImportCode();
     }

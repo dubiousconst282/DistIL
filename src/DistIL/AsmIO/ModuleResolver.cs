@@ -82,6 +82,11 @@ public class ModuleResolver
 
     public ModuleDef? Resolve(string name, [DoesNotReturnIf(true)] bool throwIfNotFound = true)
     {
+        //FIXME: This is not ideal, but it should work fine the module is not saved.
+        if (name == "mscorlib") {
+            name = "netstandard";
+        }
+
         if (_cache.TryGetValue(name, out var module)) {
             return module;
         }

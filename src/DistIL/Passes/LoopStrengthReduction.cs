@@ -6,26 +6,20 @@ using DistIL.IR.Utils;
 //Key is either an Instruction or a (Value Array, Value Index)
 using InductionVarMap = Dictionary<object, LoopStrengthReduction.InductionVar>;
 
-public class LoopStrengthReduction : MethodPass
+public class LoopStrengthReduction : IMethodPass
 {
-    readonly Options _opts;
+    bool _removeAllBoundChecks = false;
 
-    public LoopStrengthReduction(Options? opts = null)
-    {
-        _opts = opts ?? new();
-    }
-
-    public override void Run(MethodTransformContext ctx)
+    public MethodPassResult Run(MethodTransformContext ctx)
     {
         var loopAnalysis = ctx.GetAnalysis<LoopAnalysis>(preserve: true);
+        int numChanges = 0;
 
         foreach (var loop in loopAnalysis.Loops) {
-            int numReduced = ReduceLoop(loop);
-
-            if (numReduced > 0) {
-                ctx.Logger.Info($"Strength-reduced {numReduced} variables");
-            }
+            numChanges += ReduceLoop(loop);
         }
+
+        return numChanges > 0 ? MethodInvalidations.DataFlow : 0;
     }
 
     private int ReduceLoop(LoopInfo loop)
@@ -85,14 +79,14 @@ public class LoopStrengthReduction : MethodPass
                 }
                 case (TrackedValue { ResultType: ArrayType } array, Value index): {
                     //Ensure the index is bounded by the array length.
-                    if ((cond.Source != array || cond.Index != index) && !_opts.RemoveBoundChecks) break;
+                    if ((cond.Source != array || cond.Index != index) && !_removeAllBoundChecks) break;
 
                     //Strength-reducing array indexes in backward loops is not trivial, as the GC does not
                     //update refs pointing before the start of an object when compacting the heap.
                     //Details: https://github.com/dotnet/runtime/pull/75857#discussion_r974661744
                     if (iv.Offset is ConstInt { Value: < 0 } || iv.Scale is ConstInt { Value: < 0 }) break;
 
-                    bool mayReplaceCond = (cond.Source == array || _opts.RemoveBoundChecks) && iv.Scale is ConstInt { Value: 1 };
+                    bool mayReplaceCond = (cond.Source == array || _removeAllBoundChecks) && iv.Scale is ConstInt { Value: 1 };
                     bool shouldReplaceCond = mayReplaceCond && cond.Cmp?.Block != null;
 
                     //Reduction may only be beneficial if all uses inside the loop can be replaced
@@ -292,11 +286,5 @@ public class LoopStrengthReduction : MethodPass
         public Value Base, Offset, Scale;
 
         public override string ToString() => $"({Base}) * {Scale} + {Offset}";
-    }
-
-    public class Options
-    {
-        /// <summary> Assume that array/location accesses are always within bounds. </summary>
-        public bool RemoveBoundChecks { get; init; } = false;
     }
 }

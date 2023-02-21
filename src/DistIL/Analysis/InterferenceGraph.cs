@@ -36,7 +36,7 @@ public class InterferenceGraph : IMethodAnalysis
     }
 
     static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
-        => new InterferenceGraph(mgr.Method, mgr.GetAnalysis<LivenessAnalysis>(preserve: true));
+        => new InterferenceGraph(mgr.Method, mgr.GetAnalysis<LivenessAnalysis>());
 
     public void AddEdge(Instruction a, Instruction b)
     {

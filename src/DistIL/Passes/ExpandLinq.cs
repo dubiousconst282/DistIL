@@ -2,7 +2,7 @@ namespace DistIL.Passes;
 
 using DistIL.Passes.Linq;
 
-public class ExpandLinq : MethodPass
+public class ExpandLinq : IMethodPass
 {
     readonly TypeDefOrSpec t_Enumerable, t_IEnumerableOfT0;
 
@@ -12,12 +12,15 @@ public class ExpandLinq : MethodPass
         t_IEnumerableOfT0 = mod.Resolver.Import(typeof(IEnumerable<>)).GetSpec(default);
     }
 
-    public override void Run(MethodTransformContext ctx)
+    static IMethodPass IMethodPass.Create<TSelf>(Compilation comp)
+        => new ExpandLinq(comp.Module);
+
+    public MethodPassResult Run(MethodTransformContext ctx)
     {
         var queries = new List<LinqSourceNode>();
 
-        foreach (var inst in ctx.Method.Instructions().OfType<CallInst>()) {
-            if (CreatePipe(inst) is { } pipe) {
+        foreach (var inst in ctx.Method.Instructions()) {
+            if (inst is CallInst call && CreatePipe(call) is { } pipe) {
                 queries.Add(pipe);
             }
         }
@@ -26,10 +29,7 @@ public class ExpandLinq : MethodPass
             query.Emit();
             query.DeleteSubject();
         }
-        if (queries.Count > 0) {
-            ctx.Logger.Info($"Expanded {queries.Count} queries");
-            ctx.InvalidateAll();
-        }
+        return queries.Count > 0 ? MethodInvalidations.Loops : 0;
     }
 
     private LinqSourceNode? CreatePipe(CallInst call)
@@ -44,11 +44,12 @@ public class ExpandLinq : MethodPass
 
     private static bool IsProfitableToExpand(LinqSourceNode source, LinqQuery query)
     {
-        //Unfiltered Count()/Any() is definitely not profitable
+        //Unfiltered Count()/Any() is not profitable because we scan the entire source.
         if (query.SubjectCall is { NumArgs: 1, Method.Name: "Count" or "Any" }) {
             return false;
         }
-        //Concretizing enumerator sources may not be profitable
+        //Concretizing enumerator sources may not be profitable because 
+        //LINQ can special case source types and defer to e.g. Array.Copy().
         if (source is EnumeratorSource && source.Sink == query) {
             return query is not ConcretizationQuery;
         }

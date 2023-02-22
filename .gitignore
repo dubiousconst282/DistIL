@@ -1,6 +1,12 @@
-.vs
+# Build
 obj/
 bin/
-logs/
+
+# Visual Studio
+.vs/
 *.suo
 *.user
+
+# Misc
+logs/
+BenchmarkDotNet.Artifacts/

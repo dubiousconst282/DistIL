@@ -165,22 +165,18 @@ class OptimizerOptions
 
     public void FilterPassCandidates(List<MethodDef> candidates)
     {
+        if (MethodFilter != null && MethodFilter.StartsWith('!')) {
+            var pred = GetMethodFilter()!;
+            candidates.RemoveAll(m => !pred.Invoke(m));
+        }
         if (BisectFilter != null) {
             var bisectRange = GetBisectRange(candidates.Count, BisectFilter);
             Console.WriteLine($"Bisecting method range [{bisectRange}], ~{(int)Math.Log2(bisectRange.Length)} steps left.");
 
-            File.WriteAllLines("bisect_log.txt", 
-                candidates
-                    .Select((m, i) => (m, i))
-                    .Where(e => bisectRange.Contains(e.i))
-                    .Select(e => e.i + ":" + e.m.ToString()));
-
             candidates.RemoveRange(bisectRange.End, candidates.Count - bisectRange.End);
             candidates.RemoveRange(0, bisectRange.Start);
-        }
-        if (MethodFilter != null && MethodFilter.StartsWith("!")) {
-            var pred = GetMethodFilter()!;
-            candidates.RemoveAll(m => !pred.Invoke(m));
+
+            File.WriteAllLines("bisect_log.txt", candidates.Select((m, i) => $"{bisectRange.Start + i}: {RenderMethodSig(m)}"));
         }
     }
 
@@ -189,13 +185,13 @@ class OptimizerOptions
         if (MethodFilter == null) {
             return null;
         }
-        bool appliesToTransform = MethodFilter.StartsWith('!');
-        var str = MethodFilter.Substring(appliesToTransform ? 1 : 0);
-        return _cachedFilter ??= CompileFilter(str);
+        return _cachedFilter ??= CompileFilter(MethodFilter);
     }
 
     private static Predicate<MethodDef> CompileFilter(string pattern)
     {
+        pattern = pattern.TrimStart('!');
+        
         //Pattern :=  (ClassName  "::")? MethodName ( "(" Seq{TypeName} ")" )?  ("|" Pattern)?
         pattern = string.Join("|", pattern.Split('|').Select(part => {
             var tokens = Regex.Match(part, @"^(?:(.+)::)?(.+?)(?:\((.+)\))?$");
@@ -208,11 +204,7 @@ class OptimizerOptions
         }));
         var regex = new Regex("^" + pattern + "$", RegexOptions.CultureInvariant);
 
-        return (m) => {
-            var pars = m.ParamSig.Skip(m.IsInstance ? 1 : 0);
-            var name = $"{m.DeclaringType.Name}::{m.Name}({string.Join(',', pars.Select(p => p.Type.Name))})";
-            return regex.IsMatch(name);
-        };
+        return (m) => regex.IsMatch(RenderMethodSig(m));
 
         static string WildcardToRegex(string value, bool normalizeSeq = false)
         {
@@ -227,14 +219,19 @@ class OptimizerOptions
             return value.Replace("\\?", ".").Replace("\\*", ".*");
         }
     }
+    private static string RenderMethodSig(MethodDef def)
+    {
+        var pars = def.ParamSig.Skip(def.IsInstance ? 1 : 0);
+        return $"{def.DeclaringType.Name}::{def.Name}({string.Join(',', pars.Select(p => p.Type.Name))})";
+    }
     private static AbsRange GetBisectRange(int count, string filter)
     {
         int start = 0, end = count;
 
-        for (int i = 0; i <= filter.Length; i++) {
+        for (int i = 0; i < filter.Length; i++) {
             int mid = (start + end) >>> 1;
 
-            if (i == filter.Length || char.ToUpper(filter[i]) == 'B') {
+            if (char.ToUpper(filter[i]) == 'B') {
                 end = mid;
             } else {
                 start = mid;

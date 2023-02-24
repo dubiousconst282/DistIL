@@ -2,9 +2,9 @@ namespace DistIL.Passes.Linq;
 
 using DistIL.IR.Utils;
 
-internal class ConcretizationQuery : LinqQuery
+internal class ConcretizationSink : LinqSink
 {
-    public ConcretizationQuery(CallInst call)
+    public ConcretizationSink(CallInst call)
         : base(call) { }
 
     Value? _container;
@@ -54,9 +54,9 @@ internal class ConcretizationQuery : LinqQuery
         return builder.CreateNewObj(ctor, args.ToArray());
     }
 }
-internal class ArrayConcretizationQuery : ConcretizationQuery
+internal class ArraySink : ConcretizationSink
 {
-    public ArrayConcretizationQuery(CallInst call)
+    public ArraySink(CallInst call)
         : base(call) { }
 
     protected override Value AllocContainer(IRBuilder builder, Value? count)
@@ -72,9 +72,9 @@ internal class ArrayConcretizationQuery : ConcretizationQuery
         return builder.CreateCallVirt("ToArray", container);
     }
 }
-internal class DictionaryConcretizationQuery : ConcretizationQuery
+internal class DictionarySink : ConcretizationSink
 {
-    public DictionaryConcretizationQuery(CallInst call)
+    public DictionarySink(CallInst call)
         : base(call) { }
 
     protected override void AppendItem(IRBuilder builder, Value container, Value currItem)

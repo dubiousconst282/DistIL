@@ -6,8 +6,8 @@ using DistIL.IR.Utils;
 /// <summary> Source based on a continuous memory location: Array, List&lt;T>, or string. </summary>
 internal class MemorySource : LinqSourceNode
 {
-    public MemorySource(UseRef source, LinqStageNode sink)
-        : base(sink, source) { }
+    public MemorySource(UseRef source, LinqStageNode drain)
+        : base(drain, source) { }
 
     Value? _currPtr, _endPtr;
 
@@ -29,8 +29,8 @@ internal class MemorySource : LinqSourceNode
 }
 internal class EnumeratorSource : LinqSourceNode
 {
-    public EnumeratorSource(UseRef enumerable, LinqStageNode sink)
-        : base(sink, enumerable) { }
+    public EnumeratorSource(UseRef enumerable, LinqStageNode drain)
+        : base(drain, enumerable) { }
 
     Value? _enumerator;
 

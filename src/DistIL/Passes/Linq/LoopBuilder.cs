@@ -6,7 +6,9 @@ public class LoopBuilder
 {
     public readonly IRBuilder PreHeader, Header, Latch, Exit;
     public readonly IRBuilder Body;
-    private List<(PhiInst HeadPhi, Instruction Next)> _pendingAccums = new();
+
+    readonly BasicBlock _entryBlock; //PreHeader may be forked and so we need to keep track of the actual entry block
+    readonly List<(PhiInst HeadPhi, Instruction Next)> _pendingAccums = new();
 
     //PreHeader:
     //  ...
@@ -30,6 +32,8 @@ public class LoopBuilder
         Body = CreateBlock("Body");
         Latch = CreateBlock("Latch");
         Exit = CreateBlock("Exit");
+
+        _entryBlock = PreHeader.Block;
 
         IRBuilder CreateBlock(string name)
         {
@@ -101,7 +105,7 @@ public class LoopBuilder
 
     public void InsertBefore(Instruction inst)
     {
-        var newBlock = inst.Block.Split(inst, branchTo: PreHeader.Block);
+        var newBlock = inst.Block.Split(inst, branchTo: _entryBlock);
         Exit.SetBranch(newBlock);
     }
 }

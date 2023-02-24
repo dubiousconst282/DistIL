@@ -34,7 +34,7 @@ public class ExpandLinq : IMethodPass
 
     private LinqSourceNode? CreatePipe(CallInst call)
     {
-        var sink = CreateQuery(call);
+        var sink = CreateSink(call);
         if (sink == null) {
             return null;
         }
@@ -42,33 +42,33 @@ public class ExpandLinq : IMethodPass
         return IsProfitableToExpand(source, sink) ? source : null;
     }
 
-    private static bool IsProfitableToExpand(LinqSourceNode source, LinqQuery query)
+    private static bool IsProfitableToExpand(LinqSourceNode source, LinqSink sink)
     {
         //Unfiltered Count()/Any() is not profitable because we scan the entire source.
-        if (query.SubjectCall is { NumArgs: 1, Method.Name: "Count" or "Any" }) {
+        if (sink.SubjectCall is { NumArgs: 1, Method.Name: "Count" or "Any" }) {
             return false;
         }
         //Concretizing enumerator sources may not be profitable because 
         //LINQ can special case source types and defer to e.g. Array.Copy().
-        if (source is EnumeratorSource && source.Sink == query) {
-            return query is not ConcretizationQuery;
+        if (source is EnumeratorSource && source.Drain == sink) {
+            return sink is not ConcretizationSink;
         }
         return true;
     }
 
-    private LinqQuery? CreateQuery(CallInst call)
+    private LinqSink? CreateSink(CallInst call)
     {
         var method = call.Method;
         if (method.DeclaringType == t_Enumerable) {
 #pragma warning disable format
             return method.Name switch {
-                "ToList" or "ToHashSet"     => new ConcretizationQuery(call),
-                "ToArray"                   => new ArrayConcretizationQuery(call),
-                "ToDictionary"              => new DictionaryConcretizationQuery(call),
-                "Aggregate"                 => new AggregationQuery(call),
-                "Count"                     => new CountQuery(call),
-                "First" or "FirstOrDefault" => new FindFirstQuery(call),
-                "Any" or "All"              => new ContainsQuery(call),
+                "ToList" or "ToHashSet"     => new ConcretizationSink(call),
+                "ToArray"                   => new ArraySink(call),
+                "ToDictionary"              => new DictionarySink(call),
+                "Aggregate"                 => new AggregationSink(call),
+                "Count"                     => new CountSink(call),
+                "First" or "FirstOrDefault" => new FindSink(call),
+                "Any" or "All"              => new SatisfySink(call),
                 _ => null
             };
 #pragma warning restore format
@@ -85,19 +85,19 @@ public class ExpandLinq : IMethodPass
     }
 
     //UseRefs allows for overlapping queries to be expanded with no specific order.
-    private LinqSourceNode CreateStage(UseRef sourceRef, LinqStageNode sink)
+    private LinqSourceNode CreateStage(UseRef sourceRef, LinqStageNode drain)
     {
         var source = sourceRef.Operand;
 
         if (source is CallInst call && call.Method.DeclaringType == t_Enumerable) {
 #pragma warning disable format
             var node = call.Method.Name switch {
-                "Select"        => new SelectStage(call, sink),
-                "Where"         => new WhereStage(call, sink),
-                "OfType"        => new OfTypeStage(call, sink),
-                "Cast"          => new CastStage(call, sink),
-                "Skip"          => new SkipStage(call, sink),
-                "SelectMany"    => new FlattenStage(call, sink),
+                "Select"        => new SelectStage(call, drain),
+                "Where"         => new WhereStage(call, drain),
+                "OfType"        => new OfTypeStage(call, drain),
+                "Cast"          => new CastStage(call, drain),
+                "Skip"          => new SkipStage(call, drain),
+                "SelectMany"    => new FlattenStage(call, drain),
                 _ => default(LinqStageNode)
             };
 #pragma warning restore format
@@ -108,8 +108,8 @@ public class ExpandLinq : IMethodPass
         var type = source.ResultType;
 
         if (type is ArrayType || type.IsCorelibType(typeof(List<>)) || type.Kind == TypeKind.String) {
-            return new MemorySource(sourceRef, sink);
+            return new MemorySource(sourceRef, drain);
         }
-        return new EnumeratorSource(sourceRef, sink);
+        return new EnumeratorSource(sourceRef, drain);
     }
 }

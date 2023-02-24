@@ -2,11 +2,11 @@ namespace DistIL.Passes.Linq;
 
 using DistIL.IR.Utils;
 
-internal abstract class LinqQuery : LinqStageNode
+internal abstract class LinqSink : LinqStageNode
 {
     public MethodBody Method { get; }
 
-    public LinqQuery(CallInst call)
+    public LinqSink(CallInst call)
         : base(call, null!)
     {
         Method = call.Block.Method;
@@ -20,16 +20,16 @@ internal abstract class LinqQuery : LinqStageNode
 internal abstract class LinqStageNode
 {
     public CallInst SubjectCall { get; }
-    public LinqStageNode Sink { get; }
+    public LinqStageNode Drain { get; }
 
-    protected LinqStageNode(CallInst call, LinqStageNode sink)
-        => (SubjectCall, Sink) = (call, sink);
+    protected LinqStageNode(CallInst call, LinqStageNode drain)
+        => (SubjectCall, Drain) = (call, drain);
 
-    //Queries are expanded from top to bottom, for example:
-    //  Source()                //Top
-    //    .Select(MapFn)        //Sink #1
-    //    .Where(FilterFn)      //Sink #2
-    //    .ToArray();           //Bottom (completed query)
+    //Queries are expanded from front-to-back, for example:
+    //  Source()                //Front
+    //    .Select(MapFn)        //Drain #1
+    //    .Where(FilterFn)      //Drain #2
+    //    .ToArray();           //Sink
     //
     //Will be rewritten in this way:
     //  Head();
@@ -42,26 +42,28 @@ internal abstract class LinqStageNode
     //Exit:
     //  Tail();
     public virtual void EmitHead(IRBuilder builder, Value? estimCount)
-        => Sink.EmitHead(builder, estimCount);
+        => Drain.EmitHead(builder, estimCount);
 
     public virtual void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
-        => Sink.EmitBody(builder, currItem, loopData);
+        => Drain.EmitBody(builder, currItem, loopData);
 
     public virtual void EmitTail(IRBuilder builder)
-        => Sink.EmitTail(builder);
+        => Drain.EmitTail(builder);
 
     public virtual void DeleteSubject()
     {
-        SubjectCall?.Remove();
-        Sink?.DeleteSubject();
-    }
-    public LinqQuery GetQuery()
-    {
-        var node = Sink;
-        while (node is not LinqQuery) {
-            node = node.Sink;
+        if (SubjectCall is { NumUses: < 2 }) {
+            SubjectCall.Remove();
         }
-        return (LinqQuery)node;
+        Drain?.DeleteSubject();
+    }
+    public LinqSink GetSink()
+    {
+        var node = Drain;
+        while (node is not LinqSink) {
+            node = node.Drain;
+        }
+        return (LinqSink)node;
     }
 
     public record BodyLoopData
@@ -84,29 +86,29 @@ internal abstract class LinqSourceNode : LinqStageNode
 {
     public UseRef PhysicalSource { get; }
 
-    protected LinqSourceNode(LinqStageNode sink, UseRef physicalSource, CallInst? subjectCall = null)
-        : base(subjectCall!, sink)
+    protected LinqSourceNode(LinqStageNode drain, UseRef physicalSource, CallInst? subjectCall = null)
+        : base(subjectCall!, drain)
     {
         PhysicalSource = physicalSource;
     }
 
     public virtual void Emit()
     {
-        var query = GetQuery();
-        var loop = new LoopBuilder(query.SubjectCall.Block);
+        var sink = GetSink();
+        var loop = new LoopBuilder(sink.SubjectCall.Block);
 
         EmitHead(loop, out var count);
-        Sink.EmitHead(loop.PreHeader, count);
+        Drain.EmitHead(loop.PreHeader, count);
         
         loop.Build(
             emitCond: EmitMoveNext,
             emitBody: body => {
                 var currItem = EmitCurrent(body);
-                Sink.EmitBody(body, currItem, new BodyLoopData(loop));
+                Drain.EmitBody(body, currItem, new BodyLoopData(loop));
             }
         );
-        Sink.EmitTail(loop.Exit);
-        loop.InsertBefore(query.SubjectCall);
+        Drain.EmitTail(loop.Exit);
+        loop.InsertBefore(sink.SubjectCall);
     }
 
     protected abstract void EmitHead(LoopBuilder loop, out Value? count);

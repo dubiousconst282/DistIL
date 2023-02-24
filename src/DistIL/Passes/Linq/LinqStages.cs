@@ -5,20 +5,20 @@ using DistIL.IR.Utils;
 
 internal class SelectStage : LinqStageNode
 {
-    public SelectStage(CallInst call, LinqStageNode sink)
-        : base(call, sink) { }
+    public SelectStage(CallInst call, LinqStageNode drain)
+        : base(call, drain) { }
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
         var mapLambda = SubjectCall!.Args[1];
         var mappedItem = builder.CreateLambdaInvoke_ItemAndIndex(mapLambda, currItem, loopData.CreateAccum);
-        Sink.EmitBody(builder, mappedItem, loopData);
+        Drain.EmitBody(builder, mappedItem, loopData);
     }
 }
 internal class WhereStage : LinqStageNode
 {
-    public WhereStage(CallInst call, LinqStageNode sink)
-        : base(call, sink) { }
+    public WhereStage(CallInst call, LinqStageNode drain)
+        : base(call, drain) { }
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
@@ -26,13 +26,13 @@ internal class WhereStage : LinqStageNode
         var cond = builder.CreateLambdaInvoke_ItemAndIndex(filterLambda, currItem, loopData.CreateAccum);
         //if (!cond) goto SkipBlock;
         builder.Fork(cond, loopData.SkipBlock);
-        Sink.EmitBody(builder, currItem, loopData);
+        Drain.EmitBody(builder, currItem, loopData);
     }
 }
 internal class OfTypeStage : LinqStageNode
 {
-    public OfTypeStage(CallInst call, LinqStageNode sink)
-        : base(call, sink) { }
+    public OfTypeStage(CallInst call, LinqStageNode drain)
+        : base(call, drain) { }
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
@@ -47,13 +47,13 @@ internal class OfTypeStage : LinqStageNode
         if (destType.IsValueType) {
             currItem = builder.CreateIntrinsic(CilIntrinsic.UnboxObj, destType, currItem);
         }
-        Sink.EmitBody(builder, currItem, loopData);
+        Drain.EmitBody(builder, currItem, loopData);
     }
 }
 internal class CastStage : LinqStageNode
 {
-    public CastStage(CallInst call, LinqStageNode sink)
-        : base(call, sink) { }
+    public CastStage(CallInst call, LinqStageNode drain)
+        : base(call, drain) { }
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
@@ -64,13 +64,13 @@ internal class CastStage : LinqStageNode
         }
         currItem = builder.CreateIntrinsic(CilIntrinsic.CastClass, destType, currItem);
 
-        Sink.EmitBody(builder, currItem, loopData);
+        Drain.EmitBody(builder, currItem, loopData);
     }
 }
 internal class SkipStage : LinqStageNode
 {
-    public SkipStage(CallInst call, LinqStageNode sink)
-        : base(call, sink) { }
+    public SkipStage(CallInst call, LinqStageNode drain)
+        : base(call, drain) { }
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
@@ -79,15 +79,15 @@ internal class SkipStage : LinqStageNode
             var next = builder.CreateAdd(curr, ConstInt.CreateI(1));
             builder.Fork(builder.CreateSgt(next, SubjectCall.Args[1]), loopData.SkipBlock);
 
-            Sink.EmitBody(builder, currItem, loopData);
+            Drain.EmitBody(builder, currItem, loopData);
             return next;
         });
     }
 }
 internal class FlattenStage : LinqStageNode
 {
-    public FlattenStage(CallInst call, LinqStageNode sink)
-        : base(call, sink) { }
+    public FlattenStage(CallInst call, LinqStageNode drain)
+        : base(call, drain) { }
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
@@ -106,7 +106,7 @@ internal class FlattenStage : LinqStageNode
             emitCond: header => header.CreateCallVirt("MoveNext", enumerator),
             emitBody: body => {
                 var innerItem = body.CreateCallVirt("get_Current", enumerator);
-                Sink.EmitBody(body, innerItem, innerLoopData);
+                Drain.EmitBody(body, innerItem, innerLoopData);
             }
         );
         builder.SetBranch(innerLoop.PreHeader.Block);

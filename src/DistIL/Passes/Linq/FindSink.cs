@@ -4,9 +4,9 @@ using DistIL.IR;
 using DistIL.IR.Utils;
 
 //First{OrDefault}(pred?)
-internal class FindFirstQuery : LinqQuery
+internal class FindSink : LinqSink
 {
-    public FindFirstQuery(CallInst call)
+    public FindSink(CallInst call)
         : base(call) { }
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
@@ -45,9 +45,9 @@ internal class FindFirstQuery : LinqQuery
 }
 
 //Any(pred), All(pred)
-internal class ContainsQuery : LinqQuery
+internal class SatisfySink : LinqSink
 {
-    public ContainsQuery(CallInst call)
+    public SatisfySink(CallInst call)
         : base(call) { }
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)

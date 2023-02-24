@@ -3,9 +3,9 @@ namespace DistIL.Passes.Linq;
 using DistIL.IR;
 using DistIL.IR.Utils;
 
-internal class AggregationQuery : LinqQuery
+internal class AggregationSink : LinqSink
 {
-    public AggregationQuery(CallInst call)
+    public AggregationSink(CallInst call)
         : base(call) { }
 
     Value? _accumulator, _seed, _hasData;
@@ -74,9 +74,9 @@ internal class AggregationQuery : LinqQuery
         return accum;
     }
 }
-internal class CountQuery : AggregationQuery
+internal class CountSink : AggregationSink
 {
-    public CountQuery(CallInst call)
+    public CountSink(CallInst call)
         : base(call) { }
 
     protected override Value GetSeed(IRBuilder builder)

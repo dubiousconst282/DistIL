@@ -94,7 +94,6 @@ partial class SimplifyInsts
 
             br.Cond = ConstInt.CreateI(0); //We can't change the CFG, leave this for DCE.
             phi.Remove();
-            cacheLoad.Remove();
             cacheStore.Remove();
             allocInst.Remove();
             return true;

@@ -62,3 +62,39 @@ internal class EnumeratorSource : LinqSourceNode
     protected override Value EmitCurrent(IRBuilder builder)
         => builder.CreateCallVirt("get_Current", _enumerator!);
 }
+internal class IntRangeSource : LinqSourceNode
+{
+    public IntRangeSource(CallInst subjectCall, LinqStageNode drain)
+        : base(drain, default, subjectCall) { }
+
+    Value? _index, _end;
+
+    protected override void EmitHead(LoopBuilder loop, out Value? count)
+    {
+        var start = SubjectCall.Args[0];
+        count = SubjectCall.Args[1];
+
+        var builder = loop.PreHeader;
+
+        //if (count < 0 | (sext(start) + sext(count)) > int.MaxValue) throw;
+        builder.Throw(
+            typeof(ArgumentOutOfRangeException),
+            builder.CreateOr(
+                builder.CreateCmp(CompareOp.Slt, count, ConstInt.CreateI(0)),
+                builder.CreateCmp(CompareOp.Ugt,
+                    builder.CreateAdd(
+                        builder.CreateConvert(start, PrimType.Int64),
+                        builder.CreateConvert(count, PrimType.Int64)),
+                    ConstInt.CreateL(int.MaxValue))));
+
+        //int index = phi [PreHeader: start], [Latch: {index + 1}]
+        _index = loop.CreateAccum(start, curr => loop.Latch.CreateAdd(curr, ConstInt.CreateI(1))).SetName("lq_rangeidx");
+        _end = builder.CreateAdd(start, count);
+    }
+
+    protected override Value EmitMoveNext(IRBuilder builder)
+        => builder.CreateCmp(CompareOp.Slt, _index!, _end!);
+
+    protected override Value EmitCurrent(IRBuilder builder)
+        => _index!;
+}

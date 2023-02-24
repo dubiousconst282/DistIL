@@ -90,6 +90,9 @@ public class ExpandLinq : IMethodPass
         var source = sourceRef.Operand;
 
         if (source is CallInst call && call.Method.DeclaringType == t_Enumerable) {
+            if (call.Method.Name == "Range") {
+                return new IntRangeSource(call, drain);
+            }
 #pragma warning disable format
             var node = call.Method.Name switch {
                 "Select"        => new SelectStage(call, drain),

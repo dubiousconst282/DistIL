@@ -1,5 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <IsPackable>true</IsPackable>
     <PackageId>DistIL.Core</PackageId>
     <Description>Optimizer and intermediate representation for .NET IL.</Description>
   </PropertyGroup>

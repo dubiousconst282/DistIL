@@ -1,22 +1,12 @@
 <Project>
-
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
-    <InvariantGlobalization>true</InvariantGlobalization>
-    <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
-  </PropertyGroup>
-
-  <PropertyGroup>
-    <Version>0.3.0-alpha</Version>
+    <Version>0.0.0-dev</Version>
     <Product>DistIL</Product>
     <PackageProjectUrl>https://github.com/dubiousconst282/DistIL</PackageProjectUrl>
     <Authors>dubiousconst282</Authors>
+
+    <PackageOutputPath>$(SolutionDir)build</PackageOutputPath>
   </PropertyGroup>
 
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 </Project>

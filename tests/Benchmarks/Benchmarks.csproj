@@ -14,7 +14,7 @@
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" Version="0.13.4" />
 
-    <ProjectReference Include="../../DistIL.Cli/DistIL.Cli.csproj" />
+    <ProjectReference Include="../../src/DistIL.Cli/DistIL.Cli.csproj" />
   </ItemGroup>
 
 </Project>

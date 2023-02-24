@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <RunDistil Condition="'$(Configuration)|$(RunDistil)' == 'Release|'">true</RunDistil>
+  </PropertyGroup>
+
+  <Target Name="_DoRunDistil" AfterTargets="Build" Condition="'$(RunDistil)' == 'true'">
+    <Exec
+      WorkingDirectory="$(TargetDir)"
+      Command='dotnet "$(MSBuildThisFileDirectory)../tools/net7.0/DistIL.Cli.dll" -i "$(AssemblyName).dll"'
+    />
+  </Target>
+</Project>

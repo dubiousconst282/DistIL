@@ -1,6 +1,7 @@
 # Build
 obj/
 bin/
+artifacts/
 
 # Visual Studio
 .vs/

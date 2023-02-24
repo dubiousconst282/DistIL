@@ -5,7 +5,7 @@
     <PackageProjectUrl>https://github.com/dubiousconst282/DistIL</PackageProjectUrl>
     <Authors>dubiousconst282</Authors>
 
-    <PackageOutputPath>$(SolutionDir)build</PackageOutputPath>
+    <PackageOutputPath>$(SolutionDir)artifacts</PackageOutputPath>
   </PropertyGroup>
 
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />

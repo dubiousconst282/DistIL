@@ -1,11 +1,42 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <IsPackable>true</IsPackable>
     <PackageId>DistIL.OptimizerTask</PackageId>
-    <Description>Optimization task for MSBuild.</Description>
+    <Description>MSBuild tasks for post-build IL optimization.</Description>
+
+    <!-- Based on
+      https://learn.microsoft.com/en-us/visualstudio/msbuild/tutorial-custom-task-code-generation 
+      https://github.com/dotnet/runtime/blob/671196dee3edccbdfc8ab11e7ce440dad98ce56f/eng/packaging.targets#L270
+      https://natemcmaster.com/blog/2017/11/11/msbuild-task-with-dependencies/
+    -->
+
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);AddBuildOutputToToolsPackage</TargetsForTfmSpecificContentInPackage>    <BuildOutputTargetFolder>tools</BuildOutputTargetFolder>
+
+    <!-- 
+      NuGet does validation that libraries in a package are exposed as dependencies, but we _explicitly_ do not 
+      want that behavior for MSBuild tasks. They are isolated by design. Therefore we ignore this specific warning. -->
+    <NoWarn>NU5100;NU5128</NoWarn>
   </PropertyGroup>
-  
+
   <ItemGroup>
-    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.4.0" PrivateAssets="all" ExcludeAssets="Runtime"/>
-    <ProjectReference Include="../DistIL/DistIL.csproj" />
+    <ProjectReference Include="../DistIL.Cli/DistIL.Cli.csproj" PrivateAssets="all"/>
+    
+ 	  <Content Include="$(ProjectName).targets" PackagePath="build/" />
   </ItemGroup>
+
+  <!--  Manual invoked target that can be used by toolset packages by adding it to the `TargetsForTfmSpecificContentInPackage` property. -->
+  <Target Name="AddBuildOutputToToolsPackage">
+    <ItemGroup>
+      <!-- Include build outputs in the package under tools directory. -->
+      <TfmSpecificPackageFile Include="$(OutputPath)**"
+                              Exclude="$(OutputPath)publish\**;
+                                       $(OutputPath)"
+                              PackagePath="tools/$(TargetFramework)/%(RecursiveDir)%(FileName)%(Extension)" />
+      <!-- Remove symbols from the non symbol package. -->
+      <TfmSpecificPackageFile Remove="@(TfmSpecificPackageFile->WithMetadataValue('Extension', '.pdb'))" />
+      
+    </ItemGroup>
+  </Target>
 </Project>

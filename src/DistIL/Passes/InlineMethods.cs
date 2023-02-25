@@ -157,10 +157,10 @@ public class InlineMethods : IMethodPass
         /// <summary> Ignore callees whose number of IL instructions is greater than this. </summary>
         public int MaxCalleeSize { get; init; } = 32;
 
-        /// <summary> If true, allows calls to methods from different assemblies to be inlined. </summary>
+        // <summary> If true, allows calls to methods from different assemblies to be inlined. </summary>
         //public bool InlineCrossAssemblyCalls { get; init; } = false;
 
-        /// <summary> If true, private members accessed by callee will be exposed as public (if they are on the same assembly). </summary>
+        // <summary> If true, private members accessed by callee will be exposed as public (if they are on the same assembly). </summary>
         //public bool ExposePrivateCalleeMembers { get; init; } = true;
 
         //Note that IACA is undocumented: https://github.com/dotnet/runtime/issues/37875

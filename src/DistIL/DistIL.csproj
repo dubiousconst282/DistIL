@@ -3,5 +3,19 @@
     <IsPackable>true</IsPackable>
     <PackageId>DistIL.Core</PackageId>
     <Description>Optimizer and intermediate representation for .NET IL.</Description>
+
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Don't warn about missing xmldocs for public entities. -->
+    <NoWarn>CS1591;CS1573</NoWarn>
+
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All"/>
+  </ItemGroup>
 </Project>

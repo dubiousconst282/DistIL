@@ -23,8 +23,8 @@
   <ItemGroup>
     <ProjectReference Include="../DistIL.Cli/DistIL.Cli.csproj" PrivateAssets="all"/>
     
- 	  <Content Include="$(ProjectName).targets" PackagePath="build/" />
-    <Content Include="*.cs" PackagePath="contentFiles/cs/any/$(PackageId)/%(RecursiveDir)" BuildAction="Compile"/>
+    <Content Include="$(ProjectName).targets" PackagePath="build/" />
+    <Content Include="*.cs" PackagePath="contentFiles/cs/any/$(PackageId)/%(RecursiveDir)" BuildAction="Compile" />
   </ItemGroup>
 
   <!--  Manual invoked target that can be used by toolset packages by adding it to the `TargetsForTfmSpecificContentInPackage` property. -->

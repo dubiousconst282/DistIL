@@ -1,0 +1,39 @@
+name: NuGet Release
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      run_push:
+        description: "Push to NuGet"
+        type: boolean
+        default: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 7.0.x
+
+    - name: Build Solution
+      run: |
+        if [ $GITHUB_REF_TYPE == 'tag' ]; then
+          VERSION_TAG=${GITHUB_REF#refs/tags/v}
+        else
+          VERSION_TAG="0.0.0+${GITHUB_SHA::8}"
+        fi
+        
+        dotnet pack -c Release -p:Version=$VERSION_TAG -p:CommitHash=$GITHUB_SHA
+
+    - name: Push Packages
+      if: ${{ github.ref_type == 'tag' && (github.event_name == 'release' || inputs.run_push) }}
+      run: dotnet nuget push artifacts/*.nupkg -s https://api.nuget.org/v3/index.json -k ${{secrets.NUGET_API_KEY}}
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: Packages
+        path: artifacts/*.nupkg

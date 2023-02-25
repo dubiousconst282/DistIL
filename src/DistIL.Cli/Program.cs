@@ -136,6 +136,9 @@ class OptimizerOptions
     [Option('r', HelpText = "Module resolver search paths.")]
     public IEnumerable<string> ResolverPaths { get; set; } = null!;
 
+    [Option("filter-unmarked", HelpText = "Only transform methods and classes marked with `OptimizeAttribute`.")]
+    public bool FilterUnmarked { get; set; } = false;
+
     [Option("dump-dir", HelpText = "Output directory for IR dumps.")]
     public string? DumpDir { get; set; } = null;
 
@@ -165,6 +168,19 @@ class OptimizerOptions
 
     public void FilterPassCandidates(List<MethodDef> candidates)
     {
+        if (FilterUnmarked) {
+            candidates.RemoveAll(m => (GetOptimizeAttr(m) ?? GetOptimizeAttr(m.DeclaringType)) is not true);
+
+            static bool? GetOptimizeAttr(ModuleEntity entity)
+            {
+                foreach (var attr in entity.GetCustomAttribs()) {
+                    if (attr.Type.Namespace != "DistIL.Attributes") continue;
+                    if (attr.Type.Name == "OptimizeAttribute") return true;
+                    if (attr.Type.Name == "DoNotOptimizeAttribute") return false;
+                }
+                return null;
+            }
+        }
         if (MethodFilter != null && MethodFilter.StartsWith('!')) {
             var pred = GetMethodFilter()!;
             candidates.RemoveAll(m => !pred.Invoke(m));

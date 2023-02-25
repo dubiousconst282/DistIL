@@ -1,12 +1,21 @@
 <Project>
   <PropertyGroup>
     <RunDistil Condition="'$(Configuration)|$(RunDistil)' == 'Release|'">true</RunDistil>
+
+    <!-- If set to false, only methods and classes annotated with `DistIL.Attributes.OptimizeAttribute` will be transformed. -->
+    <DistilAllMethods>false</DistilAllMethods>
+    
+    <DistilExtraArgs></DistilExtraArgs>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <DistilExtraArgs Condition="'$(DistilAllMethods)' == 'false'">$(DistilExtraArgs) --filter-unmarked</DistilExtraArgs>
   </PropertyGroup>
 
   <Target Name="_DoRunDistil" AfterTargets="Build" Condition="'$(RunDistil)' == 'true'">
     <Exec
       WorkingDirectory="$(TargetDir)"
-      Command='dotnet "$(MSBuildThisFileDirectory)../tools/net7.0/DistIL.Cli.dll" -i "$(AssemblyName).dll"'
+      Command='dotnet "$(MSBuildThisFileDirectory)../tools/net7.0/DistIL.Cli.dll" -i "$(AssemblyName).dll" $(DistilExtraArgs)'
     />
   </Target>
 </Project>

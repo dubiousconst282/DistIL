@@ -89,7 +89,7 @@ partial class SimplifyInsts
                 allocInst.Next is StoreFieldInst cacheStore &&
                 cacheStore.Field == cacheLoad.Field &&
                 cacheStore.Field.DeclaringType is TypeDefOrSpec declType && 
-                declType.Definition.GetCustomAttribs().Has(typeof(CompilerGeneratedAttribute))
+                declType.Definition.HasCustomAttrib(typeof(CompilerGeneratedAttribute))
             )) return false;
 
             br.Cond = ConstInt.CreateI(0); //We can't change the CFG, leave this for DCE.

@@ -25,6 +25,9 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
     public override bool IsInterface => (Attribs & TypeAttributes.Interface) != 0;
 
     public override abstract TypeDefOrSpec GetSpec(GenericContext context);
+
+    public virtual IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
+        => Definition.GetCustomAttribs(readOnly);
     
     public override int GetHashCode() => HashCode.Combine(Module, Name);
 }
@@ -132,12 +135,16 @@ public class TypeDef : TypeDefOrSpec
         return method;
     }
 
-    public IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
+    public override IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
         => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
 
+    /// <summary> Returns the list of custom attributes applied to an interface implementation, <paramref name="interface_"/>. </summary>
     public IList<CustomAttrib> GetCustomAttribs(TypeDesc interface_, bool readOnly = true)
         => GetItfCustomAttribs((interface_, null), readOnly);
 
+    /// <summary> Returns the list of custom attributes applied to an interface method implementation. </summary>
+    /// <param name="impl">The method declared in this class for which to override <paramref name="decl"/>. </param>
+    /// <param name="decl">The interface method declaration.</param>
     public IList<CustomAttrib> GetCustomAttribs(MethodDef impl, MethodDesc decl, bool readOnly = true)
     {
         Ensure.That(impl.DeclaringType == this);

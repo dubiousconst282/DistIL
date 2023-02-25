@@ -7,6 +7,10 @@ public interface Entity
 public interface ModuleEntity : Entity
 {
     ModuleDef Module { get; }
+
+    /// <summary> Returns the list of custom attributes applied to this entity. </summary>
+    /// <param name="readOnly">When true, the returned list may be read-only. If you intend to add or remove attributes, set this to false. </param>
+    IList<CustomAttrib> GetCustomAttribs(bool readOnly = true);
 }
 /// <summary> Represents an entity referenced or defined in a module. </summary>
 public abstract class EntityDesc : Value, Entity

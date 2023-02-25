@@ -47,8 +47,8 @@ public class InlineMethods : IMethodPass
             (callee.Attribs & blockedAttribs) == 0 &&
             (callee.Attribs & staticVirt) != staticVirt &&
             (callee.ImplAttribs & ImplAttribs.NoInlining) == 0 &&
-            callee.GetCustomAttribs().Find("System.Runtime.CompilerServices", "IntrinsicAttribute") == null &&
-            callee.GetCustomAttribs().Find("System.Runtime.CompilerServices", "AsyncStateMachine") == null;
+            !callee.HasCustomAttrib("System.Runtime.CompilerServices", "IntrinsicAttribute") &&
+            !callee.HasCustomAttrib("System.Runtime.CompilerServices", "AsyncStateMachine");
     }
 
     public static bool Inline(CallInst call)

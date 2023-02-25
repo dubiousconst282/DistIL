@@ -20,7 +20,7 @@ public class CustomAttribTests
         var type = _modResolver.Resolve("TestAsm").FindType(null, "CustomAttribs")!;
         var attrib = type.Methods.First(m => m.Name == "DecodeCase1").GetCustomAttribs().First();
 
-        Assert.Equal(type, ((TypeDef)attrib.Constructor.DeclaringType).DeclaringType);
+        Assert.Equal(type, ((TypeDef)attrib.Type).DeclaringType);
         Assert.Equal(5, attrib.FixedArgs.Length);
         Assert.Equal(9, attrib.NamedArgs.Length);
 

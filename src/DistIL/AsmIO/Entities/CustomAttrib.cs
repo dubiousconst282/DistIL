@@ -25,6 +25,7 @@ public partial class CustomAttrib
             return _namedArgs;
         }
     }
+    public TypeDesc Type => Constructor.DeclaringType;
 
     public CustomAttrib(MethodDesc ctor, byte[] encodedBlob, ModuleDef parentModule)
     {
@@ -93,6 +94,9 @@ public static class CustomAttribExt
     public static CustomAttrib? Find(this IList<CustomAttrib> list, Type attribType)
         => list.Find(attribType.Namespace, attribType.Name);
 
-    public static bool Has(this IList<CustomAttrib> list, Type attribType)
-        => list.Find(attribType) != null;
+    public static bool HasCustomAttrib(this ModuleEntity entity, Type attribType)
+        => entity.GetCustomAttribs().Find(attribType) != null;
+
+    public static bool HasCustomAttrib(this ModuleEntity entity, string? ns, string className)
+        => entity.GetCustomAttribs().Find(ns, className) != null;
 }

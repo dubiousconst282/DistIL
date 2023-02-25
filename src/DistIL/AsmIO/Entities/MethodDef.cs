@@ -41,6 +41,9 @@ public abstract class MethodDefOrSpec : MethodDesc, ModuleEntity
     public ModuleDef Module => Definition.DeclaringType.Module;
 
     public abstract override TypeDefOrSpec DeclaringType { get; }
+
+    public virtual IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
+        => Definition.GetCustomAttribs(readOnly);
 }
 public class MethodDef : MethodDefOrSpec
 {
@@ -95,7 +98,7 @@ public class MethodDef : MethodDefOrSpec
             : this;
     }
 
-    public IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
+    public override IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
         => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
 
     internal static MethodDef Decode(ModuleLoader loader, MethodDefinition info)

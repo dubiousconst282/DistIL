@@ -5,7 +5,7 @@ using System.IO;
 using System.Reflection;
 using System.Reflection.Metadata;
 
-public class ModuleDef : ModuleEntity
+public class ModuleDef : Entity
 {
     public string ModName { get; set; } = null!;
     public AssemblyName AsmName { get; set; } = null!;
@@ -20,8 +20,6 @@ public class ModuleDef : ModuleEntity
     public IReadOnlyCollection<TypeDef> ExportedTypes => _exportedTypes;
 
     public ModuleResolver Resolver { get; init; } = null!;
-
-    ModuleDef ModuleEntity.Module => this;
 
     internal TypeList _typeDefs = new(), _exportedTypes = new();
 

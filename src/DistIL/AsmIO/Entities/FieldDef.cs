@@ -42,6 +42,9 @@ public abstract class FieldDefOrSpec : FieldDesc, ModuleEntity
             ? new FieldSpec((TypeSpec)newDeclType, Definition)
             : this;
     }
+    
+    public virtual IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
+        => Definition.GetCustomAttribs(readOnly);
 }
 
 public class FieldDef : FieldDefOrSpec
@@ -79,7 +82,7 @@ public class FieldDef : FieldDefOrSpec
         MappedData = mappedData;
     }
 
-    public IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
+    public override IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
         => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
 
     internal static FieldDef Decode(ModuleLoader loader, FieldDefinition info)

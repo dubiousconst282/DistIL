@@ -19,7 +19,7 @@ public partial class ILGenerator : InstVisitor
         _forest = new ForestAnalysis(method);
     }
 
-    public static ILMethodBody Generate(MethodBody method)
+    public static ILMethodBody GenerateCode(MethodBody method)
     {
         return new ILGenerator(method).Generate();
     }

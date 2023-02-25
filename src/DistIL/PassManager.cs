@@ -56,7 +56,7 @@ public class PassManager
                     method.Body = ILImporter.ParseCode(method);
                     IncrementStat(typeof(ILImporter), startTs, true);
                 } else {
-                    method.ILBody = ILGenerator.Generate(method.Body!);
+                    method.ILBody = ILGenerator.GenerateCode(method.Body!);
                     IncrementStat(typeof(ILGenerator), startTs, true);
                 }
             } catch (Exception ex) {

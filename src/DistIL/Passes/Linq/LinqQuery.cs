@@ -108,7 +108,12 @@ internal abstract class LinqSourceNode : LinqStageNode
             }
         );
         Drain.EmitTail(loop.Exit);
-        loop.InsertBefore(sink.SubjectCall);
+
+        if (sink is LoopSink ls) {
+            ls.RewireLoop(loop);
+        } else {
+            loop.InsertBefore(sink.SubjectCall);
+        }
     }
 
     protected abstract void EmitHead(LoopBuilder loop, out Value? count);

@@ -49,9 +49,10 @@ public class ExpandLinq : IMethodPass
             return false;
         }
         //Concretizing enumerator sources may not be profitable because 
-        //LINQ can special case source types and defer to e.g. Array.Copy().
+        //Linq can special-case source types and defer to e.g. Array.Copy().
+        //Similarly, expanding an enumerator source to a loop sink is an expansive no-op.
         if (source is EnumeratorSource && source.Drain == sink) {
-            return sink is not ConcretizationSink;
+            return sink is not ConcretizationSink or LoopSink;
         }
         return true;
     }
@@ -73,12 +74,11 @@ public class ExpandLinq : IMethodPass
             };
 #pragma warning restore format
         }
-        //Uses: itr.MoveNext(), itr.get_Current(), [itr?.Dispose()]
-        if (method.Name == "GetEnumerator" && call.NumUses is 2 or 4) {
+        if (method.Name == "GetEnumerator") {
             var declType = (method.DeclaringType as TypeSpec)?.Definition ?? method.DeclaringType;
 
             if (declType == t_IEnumerableOfT0.Definition || declType.Inherits(t_IEnumerableOfT0)) {
-                //return new ConsumedQuery(call, pipe);
+                return LoopSink.TryCreate(call);
             }
         }
         return null;

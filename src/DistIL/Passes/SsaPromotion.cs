@@ -128,6 +128,13 @@ public class SsaPromotion : IMethodPass
                 defStacks[defDeltas.Top.V].Pop();
                 defDeltas.Pop();
             }
+
+            //Remove trivially useless phis
+            foreach (var phi in block.Phis()) {
+                if (!phi.Users().Any(u => u != phi)) {
+                    phi.Remove();
+                }
+            }
         }
         //Helpers for R/W the def stack
         void PushDef(BasicBlock block, Variable var, Value def)

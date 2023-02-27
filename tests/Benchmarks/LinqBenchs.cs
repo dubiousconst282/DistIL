@@ -2,7 +2,7 @@ using BenchmarkDotNet.Attributes;
 
 public class LinqBenchs
 {
-    [Params(4, 128, 1024)]
+    [Params(4096)]
     public int ElemCount {
         set {
             var rng = new Random(value - 1);
@@ -18,6 +18,7 @@ public class LinqBenchs
                         Data = RandStr(512)
                     }
                 }).ToList();
+            _elemCount = value;
 
             string RandStr(int length)
             {
@@ -32,6 +33,7 @@ public class LinqBenchs
 
     List<Item> _sourceItems = null!;
     string _sourceText = null!;
+    int _elemCount;
 
     [Benchmark]
     public List<ItemPayload> FilterObjects()
@@ -55,6 +57,28 @@ public class LinqBenchs
     public int CountLetters()
     {
         return _sourceText.Count(ch => ch is >= 'A' and <= 'Z');
+    }
+
+    [Benchmark]
+    public byte[] RayTracer()
+    {
+        int width = (int)Math.Sqrt(_elemCount);
+        int height = width;
+
+        //Render into a netpbm file
+        var header = System.Text.Encoding.UTF8.GetBytes($"P6\n{width} {height}\n255\n");
+        var data = new byte[width * height * 3 + header.Length];
+        header.CopyTo(data, 0);
+
+        var tracer = new LinqRayTracer.RayTracer(width, height, (x, y, color) => {
+            int offset = (x + y * width) * 3 + header.Length;
+            data[offset + 0] = color.R;
+            data[offset + 1] = color.G;
+            data[offset + 2] = color.B;
+        });
+        tracer.Render(tracer.DefaultScene);
+
+        return data;
     }
 
     public class Item

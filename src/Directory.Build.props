@@ -3,6 +3,7 @@
     <Version>0.0.0-dev</Version>
     <Product>DistIL</Product>
     <PackageProjectUrl>https://github.com/dubiousconst282/DistIL</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Authors>dubiousconst282</Authors>
 
     <PackageOutputPath>$(SolutionDir)artifacts</PackageOutputPath>

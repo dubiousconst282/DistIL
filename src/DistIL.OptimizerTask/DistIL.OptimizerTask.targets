@@ -3,19 +3,25 @@
     <RunDistil Condition="'$(Configuration)|$(RunDistil)' == 'Release|'">true</RunDistil>
 
     <!-- If set to false, only methods and classes annotated with `DistIL.Attributes.OptimizeAttribute` will be transformed. -->
-    <DistilAllMethods>false</DistilAllMethods>
-    
-    <DistilExtraArgs></DistilExtraArgs>
-  </PropertyGroup>
-
-  <PropertyGroup>
-    <DistilExtraArgs Condition="'$(DistilAllMethods)' == 'false'">$(DistilExtraArgs) --filter-unmarked</DistilExtraArgs>
+    <DistilAllMethods Condition="'$(DistilAllMethods)' == ''">false</DistilAllMethods>
   </PropertyGroup>
 
   <Target Name="_DoRunDistil" AfterTargets="Build" Condition="'$(RunDistil)' == 'true'">
+    <RemoveDuplicates Inputs="@(ReferencePath -> '%(RootDir)%(Directory)')">
+      <Output TaskParameter="Filtered" ItemName="AsmRefPaths"/>
+    </RemoveDuplicates>
+
+    <PropertyGroup>
+      <!-- Trailing slashes are removed to prevent issues with argument splitting. -->
+      <JoinedAsmRefPaths>@(AsmRefPaths -> '"%(Identity)"', ' ')</JoinedAsmRefPaths>
+      <ResolverPathsArg>-r $(JoinedAsmRefPaths.Replace('\"', '"'))</ResolverPathsArg>
+
+      <FilterUnmarkedArg Condition="'$(DistilAllMethods)' != 'true'">--filter-unmarked</FilterUnmarkedArg>
+    </PropertyGroup>
+
     <Exec
       WorkingDirectory="$(TargetDir)"
-      Command='dotnet "$(MSBuildThisFileDirectory)../tools/net7.0/DistIL.Cli.dll" -i "$(AssemblyName).dll" $(DistilExtraArgs)'
+      Command='dotnet "$(MSBuildThisFileDirectory)../tools/net7.0/DistIL.Cli.dll" -i "$(AssemblyName).dll" $(ResolverPathsArg) $(FilterUnmarkedArg) $(DistilExtraArgs)'
     />
   </Target>
 </Project>

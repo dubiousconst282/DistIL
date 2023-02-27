@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <IsPackable>true</IsPackable>
+    <DevelopmentDependency>true</DevelopmentDependency>
     <PackageId>DistIL.OptimizerTask</PackageId>
     <Description>MSBuild tasks for post-build IL optimization.</Description>
 

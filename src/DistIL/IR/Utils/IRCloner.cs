@@ -6,13 +6,13 @@ public class IRCloner
     readonly Dictionary<Value, Value> _mappings = new();
     //Values that must be remapped and replaced last (they depend on defs in an unprocessed block).
     readonly RefSet<TrackedValue> _pendingValues = new();
-    readonly InstCloner _instCloner;
     readonly List<BasicBlock> _srcBlocks = new();
     readonly GenericContext _genericContext;
+    Func<Value, Value?>? _fallbackRemapper;
+    bool _createNewVars = true;
 
     public IRCloner(GenericContext genericContext = default)
     {
-        _instCloner = new(this);
         _genericContext = genericContext;
     }
 
@@ -27,21 +27,32 @@ public class IRCloner
         _mappings.Add(srcBlock, destBlock);
         _srcBlocks.Add(srcBlock);
     }
-
-    public BasicBlock GetMapping(BasicBlock srcBlock)
+    public void SetFallbackRemapper(Func<Value, Value?> getMapping, bool createNewVars)
     {
-        return (BasicBlock)_mappings[srcBlock];
+        _fallbackRemapper = getMapping;
+        _createNewVars = createNewVars;
+    }
+
+    public V GetMapping<V>(V srcValue) where V : Value => (V)_mappings[srcValue];
+
+    public void Clear()
+    {
+        _mappings.Clear();
+        _pendingValues.Clear();
+        _srcBlocks.Clear();
     }
 
     /// <summary> Clones all scheduled blocks. </summary>
     public void Run()
     {
+        var instCloner = new InstCloner(this);
+
         foreach (var block in _srcBlocks) {
             var destBlock = (BasicBlock)_mappings[block];
 
             //Clone instructions
             foreach (var inst in block) {
-                var newVal = _instCloner.Clone(inst);
+                var newVal = instCloner.Clone(inst);
                 //Clone() may fold constants: `add r10, 0` -> `r10`,
                 //so we can only insert a inst if it isn't already in a block.
                 if (newVal is Instruction { Block: null } newInst) {
@@ -54,7 +65,8 @@ public class IRCloner
         }
         //Remap pending values
         foreach (var value in _pendingValues) {
-            var newValue = Remap(value) ??
+            var newValue = Remap(value) ?? 
+                _fallbackRemapper?.Invoke(value) ??
                 throw new InvalidOperationException("No mapping for value " + value);
             
             foreach (var (user, operIdx) in value.Uses()) {
@@ -72,7 +84,7 @@ public class IRCloner
         if (_mappings.TryGetValue(value, out var newValue)) {
             return newValue;
         }
-        if (value is Variable var) {
+        if (_createNewVars && value is Variable var) {
             var newType = Remap(var.ResultType) as TypeDesc ?? throw new InvalidOperationException();
             newValue = new Variable(new TypeSig(newType, var.Sig.CustomMods), pinned: var.IsPinned, exposed: var.IsExposed);
             _mappings.Add(value, newValue);

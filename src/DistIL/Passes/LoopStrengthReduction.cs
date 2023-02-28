@@ -220,7 +220,7 @@ public class LoopStrengthReduction : IMethodPass
     //  while (i < source.Length) { ... }
     private static (CompareInst? Cmp, Value? Source, Value Index) GetCanonicalForeachLoopCond(LoopInfo loop)
     {
-        var cond = loop.GetCanonicalExitCond();
+        var cond = loop.GetExitCondition();
 
         //Match cond is {icmp.slt i, (conv.i32 (arrlen array))}
         if (cond?.Op == CompareOp.Slt && 

@@ -84,6 +84,7 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
     manager.AddPasses()
         .Apply<ValueNumbering>()
         .Apply<LoopStrengthReduction>()
+        .Apply<SlpVectorizer>()
         .IfChanged(c => c.Apply<DeadCodeElim>());
 
     if (comp.Logger.IsEnabled(LogLevel.Debug)) {

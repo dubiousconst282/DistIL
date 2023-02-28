@@ -30,4 +30,12 @@ public class IndexMap<T> where T : notnull
         }
         return _items[id];
     }
+
+    public bool Contains(T value) => _ids.ContainsKey(value);
+
+    public void Clear()
+    {
+        _ids.Clear();
+        _items = null;
+    }
 }

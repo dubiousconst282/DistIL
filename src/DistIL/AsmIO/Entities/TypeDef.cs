@@ -109,6 +109,10 @@ public class TypeDef : TypeDefOrSpec
         Ensure.That(IsGeneric && genArgs.Length == GenericParams.Count);
         return GetCachedSpec(genArgs, default);
     }
+    public TypeSpec GetSpec(TypeDesc genArg1)
+    {
+        return GetSpec(ImmutableArray.Create(genArg1));
+    }
 
     internal TypeSpec GetCachedSpec(IReadOnlyList<TypeDesc> pars, GenericContext ctx)
     {

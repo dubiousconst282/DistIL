@@ -1,6 +1,5 @@
 namespace DistIL.AsmIO;
 
-using System;
 using System.Reflection.Metadata;
 
 using DistIL.IR;
@@ -51,9 +50,9 @@ internal struct SignatureDecoder
                 return new FuncPtrType(sig);
             }
             case SignatureTypeCode.GenericTypeInstance: {
-                var typeDef = DecodeType();
+                var typeDef = (TypeDef)DecodeType();
                 var typeArgs = DecodeGenArgs();
-                return typeDef.GetSpec(new GenericContext(typeArgs));
+                return typeDef.GetSpec(typeArgs);
             }
             case SignatureTypeCode.GenericTypeParameter:
             case SignatureTypeCode.GenericMethodParameter: {

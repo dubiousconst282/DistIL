@@ -117,16 +117,6 @@ public class SwitchInst : Instruction
             yield return (BasicBlock)_operands[i];
         }
     }
-    
-    /// <summary> Returns a new array containing the target block for each case. </summary>
-    public BasicBlock[] GetIndexedTargets()
-    {
-        var targets = new BasicBlock[NumTargets];
-        for (int i = 0; i < targets.Length; i++) {
-            targets[i] = GetTarget(i);
-        }
-        return targets;
-    }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 

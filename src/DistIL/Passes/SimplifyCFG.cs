@@ -4,54 +4,45 @@ public class SimplifyCFG : IMethodPass
 {
     public MethodPassResult Run(MethodTransformContext ctx)
     {
-        bool changed = true;
         bool everChanged = false;
 
-        while (changed) {
-            changed = false;
+        //If-conversion can be made more effective by traversing blocks in post order,
+        //since it will transform most deeply nested blocks first.
+        ctx.Method.TraverseDepthFirst(postVisit: block => {
+            bool changed = true;
 
-            foreach (var block in ctx.Method) {
-                changed |= TransformBlock(block);
+            while (changed) {
+                changed = false;
+                changed |= ConvertToBranchless(block);
+                changed |= MergeWithSucc(block);
+                changed |= InvertCond(block);
+                everChanged |= changed;
             }
-            everChanged |= changed;
-        }
-        
+        });
+
         return everChanged ? MethodInvalidations.ControlFlow : 0;
     }
 
-    private bool TransformBlock(BasicBlock block)
+    private static bool MergeWithSucc(BasicBlock block)
     {
-        bool changed = false;
+        if (block.Last is not BranchInst { IsJump: true } br) return false;
 
-        if (block.Last is BranchInst { IsConditional: true } br) {
-            changed |= InvertCond(block, br);
-            //changed |= ConvertToBranchless(block, br);
-        }
-        if (block.Last is BranchInst { IsJump: true } jmp) {
-            changed |= MergeWithSucc(block, jmp);
-        }
-        return changed;
-    }
-
-    private bool MergeWithSucc(BasicBlock block, BranchInst jmp)
-    {
         //succ can't start with a phi/guard, nor loop on itself, and we must be its only predecessor
-        if (!(jmp.Then is { HasHeader: false, NumPreds: 1 } succ && succ != block)) return false;
+        if (br.Then is not { HasHeader: false, NumPreds: 1 } succ || succ == block) return false;
 
-        //Move code
-        succ.RedirectSuccPhis(block);
-        succ.MoveRange(block, block.Last, succ.First, succ.Last);
-        jmp.Remove();
-        succ.Remove();
+        succ.MergeInto(block, replaceBranch: true);
         return true;
     }
 
     //goto x == 0 ? T : F  ->  goto x ? F : T
     //goto x != 0 ? T : F  ->  goto x ? T : F
-    private bool InvertCond(BasicBlock block, BranchInst br)
+    private static bool InvertCond(BasicBlock block)
     {
+        if (block.Last is not BranchInst { IsConditional: true } br) return false;
+
         if (br.Cond is CompareInst { Op: CompareOp.Eq or CompareOp.Ne, Right: ConstInt { Value: 0 } } cond) {
             br.Cond = cond.Left;
+            
             if (cond.Op == CompareOp.Eq) {
                 (br.Then, br.Else) = (br.Else!, br.Then);
             }
@@ -63,91 +54,93 @@ public class SimplifyCFG : IMethodPass
         return false;
     }
 
-    //TODO: check if it's worth introducing a `SelectInst`
-    /*
-    //  BB_01: ... goto cond ? BB_03 : BB_04
-    //  BB_04: goto BB_05
-    //  BB_03: goto BB_05
-    //  BB_05: int v6 = phi [BB_03 -> x], [BB_04 -> y]
+    //Note that this currently only works with perfect diamond sub-graphs, 
+    //and will fail to fully convert conditions like:
+    //  (x >= 10 && x <= 20) || (x >= 50 && x <= 75)
+    //This could be tackled with "path duplication" as described in chapter 16 of the SSA book.
+    //
+    //  Block: ...; goto cond ? Then : Else
+    //  Then:  ...; goto Target
+    //  Else:  ...; goto Target
+    //  Target: int res = phi [Then -> x], [Else -> y]; ...
     // -->
-    // | int v6 = select(cond, x, y)
-    // | int v6 = cond * (y - x) + x    for constants
-    private bool ConvertToBranchless(BasicBlock condBlock, BranchInst br)
+    //  Block: ...; goto Target
+    //  Target: int res = select cond ? x : y; ...
+    private static bool ConvertToBranchless(BasicBlock block)
     {
-        var b1 = br.Then;
-        var b2 = br.Else!;
+        if (block.Last is not BranchInst { IsConditional: true } br) return false;
+        
+        //Match diamond branch
+        if (br.Then is not { Last: BranchInst { IsJump: true, Then: var target } }) return false;
+        if (br.Else is not { Last: BranchInst { IsJump: true, Then: var elseTarget } }) return false;
 
-        //both branches must be empty
-        if (!(b1.First is BranchInst && b2.First is BranchInst)) return false;
-        //both branches must jump to the same block
-        if (!(b1.NumSuccs == 1 && b2.NumSuccs == 1 && b1.Succs.First() == b2.Succs.First())) return false;
+        //Limit to a single select per branch to avoid suboptimal codegen
+        if (target != elseTarget || target.Phis().Count() is not 1) return false;
+        if (!CanFlattenBranch(br.Then) || !CanFlattenBranch(br.Else)) return false;
 
-        var finalBlock = b1.Succs.First(); //post dom of condBlock
-        //Check if final block is only reachable from b1 or b2
-        if (!(finalBlock.NumPreds == 2)) return false;
+        //Flatten branches
+        br.Then.MergeInto(block, redirectSuccPhis: false);
+        br.Else.MergeInto(block, redirectSuccPhis: false);
+        block.SetBranch(target);
 
-        //If the final block starts with a phi, try convert it to a select
-        if (finalBlock.First is PhiInst && !CreateSelects(finalBlock, br.Cond!, b1, b2)) return false;
+        //Rewrite phis with selects
+        foreach (var phi in target.Phis()) {
+            var select = CreateSelect(br, phi);
+            select.InsertBefore(block.Last);
 
-        //Remove b1 and b2, they are redundant now
-        condBlock.SetBranch(finalBlock);
-        b1.Remove();
-        b2.Remove();
-
-        return true;
-    }
-
-    private bool CreateSelects(BasicBlock block, Value cond, BasicBlock trueBlock, BasicBlock falseBlock)
-    {
-        //Check if all phis can be converted
-        var repls = new List<Value>();
-        var ib = new IRBuilder(delayed: true);
-
-        foreach (var phi in block.Phis()) {
-            var trueVal = phi.GetValue(trueBlock);
-            var falseVal = phi.GetValue(falseBlock);
-            Value? val =
-                SelectConstInt(ib, cond, trueVal, falseVal);
-
-            if (val == null) return false;
-            repls.Add(val);
-        }
-        //Commit changes
-        foreach (var (repl, phi) in repls.Zip(block.Phis())) {
-            phi.ReplaceWith(repl);
-        }
-        ib.PrependInto(block);
-        return true;
-    }
-
-    private Value? SelectConstInt(IRBuilder ib, Value cond, Value t, Value f)
-    {
-        if (!(t is ConstInt ct && f is ConstInt cf)) return null;
-        if (!(ct.IsInt && cf.IsInt)) return null; //TODO: support for long
-
-        long vt = ct.Value;
-        long vf = cf.Value;
-        long delta = Math.Abs(vt - vf);
-
-        //cond ? (o + k) : o -> cond * k + o (where k = 0 or pow2)
-        //cond ? 1 : 0 -> cond
-        if (cond is CompareInst cmp && BitOperations.IsPow2(delta)) {
-            int scale = BitOperations.Log2((ulong)delta);
-            if (scale != 0) {
-                cond = ib.CreateShl(cond, ConstInt.CreateI(scale));
+            if (phi.NumArgs <= 2) {
+                phi.ReplaceWith(select);
+            } else {
+                phi.RemoveArg(br.Then, removeTrivialPhi: false);
+                phi.RemoveArg(br.Else, removeTrivialPhi: false);
+                phi.AddArg(block, select);
             }
-            if (vf == 0) {
-                return cond;
-            }
-            bool inv = vf > vt;
-            var offs = ConstInt.Create(ct.ResultType, vf);
-            return ib.CreateBin(
-                inv ? BinaryOp.Sub : BinaryOp.Add,
-                inv ? offs : cond,
-                inv ? cond : offs
-            );
         }
-        return null;
+        return true;
+
+        static bool CanFlattenBranch(BasicBlock block)
+        {
+            if (block.NumPreds >= 2 || block.HasHeader) return false;
+
+            int cost = 0;
+
+            foreach (var inst in block) {
+                if (inst == block.Last) break;
+
+                if (inst.HasSideEffects || ++cost > 2) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        static Instruction CreateSelect(BranchInst br, PhiInst phi)
+        {
+            var valT = phi.GetValue(br.Then);
+            var valF = phi.GetValue(br.Else!);
+
+            if (br.Cond is CompareInst cond) {
+                //select x ? 0 : y  ->  !x & y
+                //select x ? 1 : y  ->   x | y
+                //select x ? y : 0  ->   x & y
+                //select x ? y : 1  ->  !x | y
+                var (x, y) = (valT, valF) switch {
+                    (ConstInt c, _) => (c, valF),
+                    (_, ConstInt c) => (c, valT),
+                    _ => default
+                };
+                if (x?.Value is 0 or 1 && (y.ResultType == PrimType.Bool || y is ConstInt { Value: 0 or 1 })) {
+                    bool negCond = (x.Value == 0 && x == valT) || (x.Value != 0 && x == valF);
+
+                    if (!negCond || cond.NumUses < 2) {
+                        if (negCond) {
+                            cond.Op = cond.Op.GetNegated();
+                        }
+                        var op = x.Value != 0 ? BinaryOp.Or : BinaryOp.And;
+                        return new BinaryInst(op, cond, y);
+                    }
+                }
+            }
+            return new SelectInst(br.Cond!, valT, valF, phi.ResultType);
+        }
     }
-    */
 }

@@ -22,6 +22,7 @@ public interface InstVisitor
     void Visit(NewObjInst inst);
     void Visit(FuncAddrInst inst);
     void Visit(IntrinsicInst inst);
+    void Visit(SelectInst inst);
 
     void Visit(ReturnInst inst);
     void Visit(BranchInst inst);

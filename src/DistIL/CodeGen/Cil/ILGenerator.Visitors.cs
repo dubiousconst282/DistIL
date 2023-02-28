@@ -212,6 +212,33 @@ partial class ILGenerator
             default: throw new NotSupportedException($"Intrinsic {intrinsic}");
         }
     }
+    public void Visit(SelectInst inst)
+    {
+        //TODO: Consider merging adjacent selects into a single branch
+        //Note however that the if-conversion pass in RyuJIT .NET 8 only supports a single 
+        //assignment on each branch, but it'd be probably best to avoid these kinds of assumptions.
+
+        //Emit an equivalent of this:
+        //  push(ifTrue);
+        //  if (!cond) { pop(); push(ifFalse); }
+
+        Push(inst.IfTrue);
+        var valF = inst.IfFalse;
+
+        //Force unconditional execution for leafs with side effects
+        if (valF is Instruction valFI && _forest.IsLeafWithSideEffects(valFI)) {
+            var reg = _regAlloc.GetRegister(valFI);
+            valFI.Accept(this);
+            _asm.EmitStore(reg);
+            valF = reg;
+        }
+        
+        var labelEnd = _asm.DefineLabel();
+        _asm.Emit(GetBranchCodeAndPushCond(inst.Cond, negate: false), labelEnd);
+        _asm.Emit(ILCode.Pop);
+        Push(valF);
+        _asm.MarkLabel(labelEnd);
+    }
 
     public void Visit(BranchInst inst)
     {
@@ -219,38 +246,44 @@ partial class ILGenerator
             EmitFallthrough(ILCode.Br, inst.Then);
             return;
         }
-        //Invert condition if we can fallthrough the true branch
-        bool invert = _nextBlock == inst.Then; 
-        var code = ILCode.Nop;
+        //Negate condition if we can fallthrough the true branch
+        bool negate = _nextBlock == inst.Then;
+        var (thenBlock, elseBlock) = negate ? (inst.Else, inst.Then) : (inst.Then, inst.Else);
+        var brCode = GetBranchCodeAndPushCond(inst.Cond, negate);
+        EmitBranchAndFallthrough(brCode, (ILLabel)thenBlock, elseBlock);
+    }
 
+    private ILCode GetBranchCodeAndPushCond(Value cond, bool negate)
+    {
         //`br cmp.op(x, y), @then;`  ->  `br.op x, y, @then;`
-        if (inst.Cond is CompareInst cmp && _forest.IsLeaf(cmp)) {
-            var op = invert ? cmp.Op.GetNegated() : cmp.Op;
+        if (cond is CompareInst cmp && _forest.IsLeaf(cmp)) {
+            var op = negate ? cmp.Op.GetNegated() : cmp.Op;
 
             //`x eq|ne [0|null]`  ->  `brfalse/brtrue`
             if (op is CompareOp.Eq or CompareOp.Ne && cmp.Right is ConstInt { Value: 0 } or ConstNull) {
-                code = (op == CompareOp.Eq) ? ILCode.Brfalse : ILCode.Brtrue;
                 Push(cmp.Left);
-            } else {
-                code = ILTables.GetBranchCode(op);
-
-                if (code != ILCode.Nop) {
-                    Push(cmp.Left);
-                    Push(cmp.Right);
-                }
+                return (op == CompareOp.Eq) ? ILCode.Brfalse : ILCode.Brtrue;
+            }
+            //Use macro for branch with compare
+            if (ILTables.GetBranchCode(op) is var code && code != ILCode.Nop) {
+                Push(cmp.Left);
+                Push(cmp.Right);
+                return code;
             }
         }
-        if (code == ILCode.Nop) {
-            Push(inst.Cond);
-            code = invert ? ILCode.Brfalse : ILCode.Brtrue;
-        }
-        var (thenBlock, elseBlock) = invert ? (inst.Else, inst.Then) : (inst.Then, inst.Else);
-        EmitBranchAndFallthrough(code, thenBlock, elseBlock);
+        Push(cond);
+        return negate ? ILCode.Brfalse : ILCode.Brtrue;
     }
+
     public void Visit(SwitchInst inst)
     {
         Push(inst.TargetIndex);
-        EmitBranchAndFallthrough(ILCode.Switch, inst.GetIndexedTargets(), inst.DefaultTarget);
+
+        var targets = new ILLabel[inst.NumTargets];
+        for (int i = 0; i < targets.Length; i++) {
+            targets[i] = inst.GetTarget(i);
+        }
+        EmitBranchAndFallthrough(ILCode.Switch, targets, inst.DefaultTarget);
     }
     public void Visit(ReturnInst inst)
     {
@@ -291,7 +324,7 @@ partial class ILGenerator
 
     public void Visit(PhiInst inst)
     {
-        //Note that copying of phi arguments is done before the block terminator is emitted
+        //Copying of phi arguments is done before the block terminator is emitted.
         throw new UnreachableException();
     }
 }

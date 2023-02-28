@@ -153,8 +153,9 @@ public class ConstFolding
                 };
                 break;
             }
-            //x != 0 -> x  (if x type is int)
-            case (_, ConstInt { IsInt: true, Value: 0 }, CompareOp.Ne): {
+            //(x != 0) -> x  where x: bool
+            //This is not valid according to ECMA, but we'll assume that all bools are 0/1. 
+            case ({ ResultType.Kind: TypeKind.Bool }, ConstInt { Value: 0 }, CompareOp.Ne): {
                 return left;
             }
         }

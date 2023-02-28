@@ -55,6 +55,8 @@ public class BasicBlock : TrackedValue
             return inst;
         }
     }
+    /// <summary> Returns the last instruction that doesn't terminate the block (not a branch). </summary>
+    public Instruction? LastNonBranch => Last is { IsBranch: true } ? Last.Prev : Last;
 
     /// <summary> Whether the block starts with a <see cref="PhiInst"/> or <see cref="GuardInst"/>. </summary>
     public bool HasHeader => First != null && First.IsHeader;
@@ -78,7 +80,7 @@ public class BasicBlock : TrackedValue
 
     /// <summary> Inserts <paramref name="newInst"/> before the block terminator, if one exists. </summary>
     public void InsertAnteLast(Instruction newInst)
-        => InsertRange(Last is { IsBranch: true } ? Last.Prev : Last, newInst, newInst);
+        => InsertRange(LastNonBranch, newInst, newInst);
 
     //Inserts a range of instructions into this block after `pos` (null means before the first instruction).
     internal void InsertRange(Instruction? pos, Instruction rangeFirst, Instruction rangeLast, bool transfering = false)
@@ -120,6 +122,23 @@ public class BasicBlock : TrackedValue
 
         UnlinkRange(first, last);
         newParent.InsertRange(newParentPos, first, last, transfering: true);
+    }
+    /// <summary> Moves all instructions in this block to the end of <paramref name="block"/>, then removes it from the parent method. </summary>
+    public void MergeInto(BasicBlock block, bool replaceBranch = false, bool redirectSuccPhis = true)
+    {
+        Ensure.That(!HasHeader, "Cannot move code from block with header instructions");
+
+        if (redirectSuccPhis) {
+            RedirectSuccPhis(block);
+        }
+        if (replaceBranch) {
+            block.Last.Remove();
+            MoveRange(block, block.Last, First, Last);
+        } else if (LastNonBranch != null) {
+            MoveRange(block, block.LastNonBranch, First, LastNonBranch);
+        }
+        Remove();
+        
     }
 
     /// <summary> Detaches <paramref name="inst"/> from this block. </summary>

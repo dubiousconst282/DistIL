@@ -37,13 +37,21 @@ public class ForestAnalysis : IMethodAnalysis
     /// <summary> Returns whether the specified instruction is a leaf or branch (i.e. can be inlined into an operand). </summary>
     public bool IsLeaf(Instruction inst) => !IsTreeRoot(inst);
 
-    public IEnumerable<Instruction> GetStatements(BasicBlock block)
+    /// <summary> Checks if <paramref name="inst"/> is a leaf and any of its descendants have side effects. </summary>
+    public bool IsLeafWithSideEffects(Instruction inst)
     {
-        foreach (var inst in block) {
-            if (IsTreeRoot(inst)) {
-                yield return inst;
+        if (!IsLeaf(inst)) {
+            return false;
+        }
+        if (inst.HasSideEffects) {
+            return true;
+        }
+        foreach (var oper in inst.Operands) {
+            if (oper is Instruction operI && IsLeafWithSideEffects(operI)) {
+                return true;
             }
         }
+        return false;
     }
 
     private static bool IsAlwaysRooted(Instruction inst)

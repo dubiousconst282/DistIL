@@ -45,8 +45,8 @@ public partial class ILGenerator : InstVisitor
             }
 
             //Emit code for all statements
-            foreach (var inst in _forest.GetStatements(_currBlock)) {
-                if (inst is GuardInst or PhiInst) continue;
+            foreach (var inst in _currBlock) {
+                if (!_forest.IsTreeRoot(inst) || inst is GuardInst or PhiInst) continue;
 
                 inst.Accept(this);
                 StoreResult(inst);
@@ -113,11 +113,10 @@ public partial class ILGenerator : InstVisitor
     
     private void EmitFallthrough(ILCode code, BasicBlock target)
     {
-        //Emit phi-related copies before branching
         EmitOutgoingPhiCopies();
 
         if (_nextBlock != target || code != ILCode.Br) {
-            _asm.Emit(code, target);
+            _asm.Emit(code, (ILLabel)target);
         }
     }
 
@@ -125,10 +124,11 @@ public partial class ILGenerator : InstVisitor
     {
         EmitOutgoingPhiCopies();
 
+        Debug.Assert(operand is ILLabel or ILLabel[]);
         _asm.Emit(code, operand);
 
         if (_nextBlock != fallthrough) {
-            _asm.Emit(ILCode.Br, fallthrough);
+            _asm.Emit(ILCode.Br, (ILLabel)fallthrough);
         }
     }
 

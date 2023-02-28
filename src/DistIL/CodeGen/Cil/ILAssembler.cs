@@ -9,18 +9,30 @@ internal class ILAssembler
     int _index = 0;
 
     Dictionary<Variable, int> _varSlots = new();
-    Dictionary<BasicBlock, int> _blockStarts = new();
+    Dictionary<ILLabel, int> _labelStarts = new();
     int _stackDepth = 0, _maxStackDepth = 0;
 
-    /// <summary> Specifies that next emitted instructions belongs to the specified block. </summary>
+    /// <summary> Marks the label for the specified block. </summary>
     public void StartBlock(BasicBlock block, bool isCatchEntry)
     {
-        _blockStarts.Add(block, _index);
+        _labelStarts.Add(block, _index);
 
         if (isCatchEntry) {
             _stackDepth++;
             _maxStackDepth = Math.Max(_maxStackDepth, _stackDepth);
         }
+    }
+
+    public ILLabel DefineLabel()
+    {
+        var label = new ILLabel(_labelStarts.Count);
+        _labelStarts.Add(label, -1);
+        return label;
+    }
+    public void MarkLabel(ILLabel label)
+    {
+        Debug.Assert(_labelStarts[label] < 0, "Label already marked");
+        _labelStarts[label] = _index;
     }
 
     public void Emit(ILCode op, object? operand = null)
@@ -56,11 +68,6 @@ internal class ILAssembler
             }
         }
         _maxStackDepth = Math.Max(_maxStackDepth, _stackDepth);
-
-        if (op.IsTerminator()) {
-            //We don't generate code that leaves values on the stack yet.
-            Debug.Assert(_stackDepth == 0);
-        }
     }
 
     public void EmitLoad(Value var) => EmitVarInst(var, 0);
@@ -123,7 +130,7 @@ internal class ILAssembler
         }
 
         //Early return for methods with no branches
-        if (_blockStarts.Count == 1 && insts[^1].OpCode == ILCode.Ret) return;
+        if (_labelStarts.Count == 1 && insts[^1].OpCode == ILCode.Ret) return;
 
         //Optimize branches using a simple greedy algorithm;
         //Better algorithms do exist (https://arxiv.org/pdf/0812.4973.pdf), but they'd probably just
@@ -133,7 +140,7 @@ internal class ILAssembler
             inst.Offset = currOffset;
             currOffset += inst.GetSize();
 
-            if (inst.Operand is BasicBlock target) {
+            if (inst.Operand is ILLabel target) {
                 int dist = GetLabelOffset(target) - currOffset;
                 var shortCode = ILTables.GetShortBranchCode(inst.OpCode);
 
@@ -146,9 +153,9 @@ internal class ILAssembler
 
         //Replace label refs with actual offsets
         foreach (ref var inst in insts) {
-            if (inst.Operand is BasicBlock target) {
+            if (inst.Operand is ILLabel target) {
                 inst.Operand = GetLabelOffset(target);
-            } else if (inst.Operand is BasicBlock[] targets) {
+            } else if (inst.Operand is ILLabel[] targets) {
                 inst.Operand = targets.Select(GetLabelOffset).ToArray();
             }
         }
@@ -156,13 +163,13 @@ internal class ILAssembler
 
     private ExceptionRegion[] BuildEHClauses(LayoutedCFG layout)
     {
-        var ehRegions = new ExceptionRegion[layout.Regions.Length];
+        var clauses = new ExceptionRegion[layout.Regions.Length];
 
-        for (int i = 0; i < ehRegions.Length; i++) {
+        for (int i = 0; i < clauses.Length; i++) {
             ref var region = ref layout.Regions[i];
             var guard = region.Guard;
 
-            var ehr = ehRegions[i] = new ExceptionRegion() {
+            var clause = clauses[i] = new ExceptionRegion() {
                 Kind = guard.Kind switch {
                     GuardKind.Catch => guard.HasFilter ? EHRegionKind.Filter : EHRegionKind.Catch,
                     GuardKind.Fault => EHRegionKind.Fault,
@@ -173,15 +180,15 @@ internal class ILAssembler
                 HandlerStart = GetBlockOffset(region.HandlerRange.Start),
                 HandlerEnd = GetBlockOffset(region.HandlerRange.End)
             };
-            if (ehr.Kind == EHRegionKind.Catch) {
-                ehr.CatchType = (TypeDefOrSpec?)guard.CatchType;
+            if (clause.Kind == EHRegionKind.Catch) {
+                clause.CatchType = (TypeDefOrSpec?)guard.CatchType;
             }
             if (guard.HasFilter) {
-                Debug.Assert(GetBlockOffset(region.FilterRange.End) == ehr.HandlerStart);
-                ehr.FilterStart = GetBlockOffset(region.FilterRange.Start);
+                Debug.Assert(GetBlockOffset(region.FilterRange.End) == clause.HandlerStart);
+                clause.FilterStart = GetBlockOffset(region.FilterRange.Start);
             }
         }
-        return ehRegions;
+        return clauses;
 
         int GetBlockOffset(int index)
         {
@@ -194,14 +201,14 @@ internal class ILAssembler
     private Span<ILInstruction> GetInstructions()
         => _insts.AsSpan(0, _index);
 
-    private int GetLabelOffset(BasicBlock block)
-        => _insts[_blockStarts[block]].Offset;
+    private int GetLabelOffset(ILLabel label)
+        => _insts[_labelStarts[label]].Offset;
 
     public override string ToString()
     {
         var sb = new StringBuilder();
 
-        var labels = _blockStarts.ToLookup(e => e.Value, e => e.Key);
+        var labels = _labelStarts.ToLookup(e => e.Value, e => e.Key);
         for (int i = 0; i < _index; i++) {
             foreach (var block in labels[i]) {
                 sb.Append(block + ":\n");
@@ -210,4 +217,19 @@ internal class ILAssembler
         }
         return sb.ToString();
     }
+}
+
+internal readonly struct ILLabel : IEquatable<ILLabel>
+{
+    readonly object _token; //Either<BasicBlock, int>
+
+    internal ILLabel(object token) => _token = token;
+
+    public override int GetHashCode() => _token.GetHashCode();
+    public override bool Equals(object? obj) => obj is ILLabel other && Equals(other);
+    public override string ToString() => "@" + _token;
+
+    public bool Equals(ILLabel other) => _token.Equals(other._token);
+
+    public static implicit operator ILLabel(BasicBlock block) => new(block);
 }

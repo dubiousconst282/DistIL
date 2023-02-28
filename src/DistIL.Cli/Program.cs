@@ -31,9 +31,12 @@ static void RunOptimizer(OptimizerOptions options)
     var logger = new ConsoleLogger() { MinLevel = options.Verbosity };
 
     var resolver = new ModuleResolver(logger);
+    resolver.AddSearchPaths(new[] { Path.GetDirectoryName(Path.GetFullPath(options.InputPath))! });
     resolver.AddSearchPaths(options.ResolverPaths);
-    resolver.AddSearchPaths(new[] { Path.GetDirectoryName(options.InputPath)!, Environment.CurrentDirectory });
-    resolver.AddTrustedSearchPaths();
+
+    if (!options.NoResolverFallback) {
+        resolver.AddTrustedSearchPaths();
+    }
 
     var module = resolver.Load(options.InputPath);
 
@@ -135,6 +138,9 @@ class OptimizerOptions
 
     [Option('r', HelpText = "Module resolver search paths.")]
     public IEnumerable<string> ResolverPaths { get; set; } = null!;
+
+    [Option("no-resolver-fallback", HelpText = "Don't use fallback search paths for module resolution.")]
+    public bool NoResolverFallback { get; set; } = false;
 
     [Option("filter-unmarked", HelpText = "Only transform methods and classes marked with `OptimizeAttribute`.")]
     public bool FilterUnmarked { get; set; } = false;

@@ -14,7 +14,7 @@
     <PropertyGroup>
       <!-- Trailing slashes are removed to prevent issues with argument splitting. -->
       <JoinedAsmRefPaths>@(AsmRefPaths -> '"%(Identity)"', ' ')</JoinedAsmRefPaths>
-      <ResolverPathsArg>-r $(JoinedAsmRefPaths.Replace('\"', '"'))</ResolverPathsArg>
+      <ResolverPathsArg>-r $(JoinedAsmRefPaths.Replace('\"', '"')) --no-resolver-fallback</ResolverPathsArg>
 
       <FilterUnmarkedArg Condition="'$(DistilAllMethods)' != 'true'">--filter-unmarked</FilterUnmarkedArg>
     </PropertyGroup>

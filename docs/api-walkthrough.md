@@ -1,10 +1,10 @@
 # API Walkthrough
-_Short walkthrough and code samples, because they're easy to write and worth more than a hundred words._
+Note that this is mainly intended as an introduction for internal development, as many parts of the API are largely unpolished and may be changed without notice.
 
 See also the [internals](./internals.md) document for details on inner-workings.
 
 ## Loading and saving modules
-A module (assembly) and all its dependencies must be loaded before IL code can be manipulated. This is done through the `ModuleResolver` class:
+A module (or assembly) and all its dependencies must be loaded before IL-code can be manipulated. This is done through the `ModuleResolver` class:
 
 ```cs
 var resolver = new ModuleResolver();
@@ -16,7 +16,7 @@ module.Save("Foo_out.dll");
 ```
 
 ## Parsing and generating IL
-Transforming IL directly is possible to some extent, after which it quickly becomes unscalable. DistIL provides infrastructure for a [SSA-based intermediate representation](https://en.wikipedia.org/wiki/Static_single-assignment_form) similar to that of LLVM, in order to allow for complex analyses and transformations.
+Transforming IL directly is possible to some extent, after which it quickly becomes intractable. DistIL provides infrastructure for a [SSA-based intermediate representation](https://en.wikipedia.org/wiki/Static_single-assignment_form) similar to that of LLVM, in order to allow for complex analyses and transformations.
 
 ```cs
 MethodDef method = module.MethodDefs().First(m => m.Name == "<Main>$"); //Find top-level program entry-point
@@ -25,7 +25,7 @@ MethodBody body = ILImporter.ParseCode(method); //Parse IL into a control flow g
 method.ILBody = ILGenerator.GenerateCode(body); //Generate IL code, taking care of register allocation and SSA-destruction
 ```
 
-Note that SSA promotion and other passes require setting up a `PassManager` (or at least a `MethodTransformContext`). See [DistIL.Cli's source](../src/DistIL.Cli/Program.cs).
+Note that SSA promotion and other passes require the setup of a `PassManager` (or at least a `MethodTransformContext`). See [DistIL.Cli's source](../src/DistIL.Cli/Program.cs).
 
 ## Dumping the IR
 Taking easily readable snapshots of the IR is essential for development. DistIL supports a variety of flavors for IR dumps:
@@ -40,9 +40,8 @@ IRPrinter.ExportPlain(body, Console.Out);
 // - Online sites such as http://magjac.com/graphviz-visual-editor
 // - `Graphviz Interactive Preview` VSCode extension
 // - Graphviz CLI
-//This method also accepts a list of `IPrintDecorator` objects, 
-//which is currently implemented by analyses such as
-//LivenessAnalysis, InterferenceGraph, and RegisterAllocator.
+//This method also accepts a list of `IPrintDecorator` objects, which is 
+//currently implemented by analyses such as `LivenessAnalysis` and `RegisterAllocator`.
 IRPrinter.ExportDot(body, "logs/cfg.dot");
 
 //Dump the IR in tree form to a text file
@@ -50,11 +49,11 @@ IRPrinter.ExportForest(body, "logs/forest.txt");
 ```
 
 ## Traversing blocks and instructions
-`MethodBody` provides a simple helper to traverse the entire instruction list at once:
+`MethodBody` provides a simple helper for enumerating all instructions at once:
 
 ```cs
 foreach (Instruction inst in body.Instructions()) {
-    //...
+    // ...
 }
 ```
 
@@ -63,18 +62,18 @@ However, it may be the case where individual blocks need to be considered indivi
 ```cs
 foreach (BasicBlock block in body) {
     // ...
-    foreach (Instruction inst in block) {  //alt: block.Phis(), block.Guards(), block.NonPhis()
+    foreach (Instruction inst in block) {  //add: block.Phis(), block.Guards(), block.NonPhis()
         // ...
     }
 }
 ```
 
-Blocks and instructions are stored in linked lists. It's okay to add or remove them inside an active loop given some care.
+Blocks and instructions are stored in linked lists. It's generally okay to add or remove them inside an active loop because enumerators won't be invalidated.
 
-The default order is as found in the source IL. The `MethodBody.TraverseDepthFirst()` method can be used for pre/post depth-first block traversals.
+The ordering is preserved from the source IL. The `MethodBody.TraverseDepthFirst()` method can be used to obtain pre and post depth-first block ordering.
 
 ## Basic pattern matching and rewriting
-The basis for many transformations is pattern matching. For simple needs, C# support for pattern matching can be very useful (but not very scalable):
+The basis for many transformations is pattern matching. For simple needs, C# support for pattern matching can be very useful (albeit not very scalable):
 
 ```cs
 //Rewrite ((x + y) - y) -> x, for all int types
@@ -84,7 +83,7 @@ if (inst is BinaryInst { Op: BinaryOp.Sub, Left: BinaryInst { Op: BinaryOp.Add }
 ```
 
 ## Generating complex IR
-While it's possible to generate IR through constructors and manual insertion, it quickly becomes tedious. The `IRBuilder` class helps with the creation of complex sequences and control flow.
+While it's possible to generate IR through constructors and manual insertion, such quickly becomes tedious. The `IRBuilder` class helps with the creation of complex sequences and control flow:
 
 ```cs
 if (inst is CallInst { Method.Name: "WriteLine", Args: [ConstString { Value: "Hello, World!" }] } origCall) {
@@ -117,22 +116,20 @@ if (inst is CallInst { Method.Name: "WriteLine", Args: [ConstString { Value: "He
     origCall.SetArg(0, ConstString.Create("Correct key! Bye, world."));
 }
 ```
-<div style="display: flex; align-items: center; height: 230px; gap: 10px;">
-  <img src="./images/callrewrite_irdump.png" />
-  <img src="./images/callrewrite_out.png" />
-</div>
+<img src="./images/callrewrite_irdump.png" height="230" />
+<img src="./images/callrewrite_out.png" hspace="10"/>
 
 _Generated IR and decompiled output_
 
 ## Traversing value use-chains
-The use-chain of each `TrackedValue` is automatically updated whenever an instruction is created or removed. Constants and type system entities don't keep use-chains.
+The use-chain of each `TrackedValue` is automatically updated whenever an instruction is created or removed. They are not keept for constants and type system entities.
 
-The need to manually traverse use-chains is rare, however they are implicitly used to derive block successor/predecessor edges, and by helpers such as `TrackedValue.ReplaceUses()` and `Instruction.ReplaceWith()`.
+The need to manually traverse use-chains is uncommon, however they are implicitly used to derive block successor/predecessor edges, and by helpers such as `TrackedValue.ReplaceUses()` and `Instruction.ReplaceWith()`.
 
 ```cs
 //Check if all uses of an object allocation are from field load instructions
 if (inst is NewObjInst && inst.Users().All(u => u is FieldLoadInst)) {
-    //...
+    // ...
 }
 ```
 

@@ -5,7 +5,7 @@
 Post-build IL optimizer and intermediate representation for .NET programs.
 
 # Installation and Usage
-The optimizer is distributed as a MSBuild task via NuGet, [DistIL.OptimizerTask](https://www.nuget.org/packages/DistIL.OptimizerTask). It currently only targets .NET 7 projects.
+The optimizer is distributed as a MSBuild task via NuGet, [DistIL.OptimizerTask](https://www.nuget.org/packages/DistIL.OptimizerTask). It currently only targets .NET 7+ projects.
 
 By default, it will only be invoked in _Release_ mode and transform methods and classes annotated with `[Optimize]`.
 It can be enabled globally by setting the `DistilAllMethods` project property to `true`, however that is not recommended because it could lead to unexpected behavior changes.
@@ -18,13 +18,11 @@ The IR and infrastructure is provided separately as a standalone library, [DistI
 - Lambda Devirtualization
 - Method Inlining
 - Scalar Replacement of Aggregates
-- Value Numbering (🚧 WIP)
-- SLP and Loop Auto-vectorization (🚧 WIP)
 
-The project is stable enough to process libraries such as _ICSharpCode.Decompiler_ and _ImageSharp_ in full without crashing and without changing normal execution behavior (though unit tests may reveal some of them).
+The project is currently stable enough to process libraries such as _ICSharpCode.Decompiler_ and _ImageSharp_ in full without crashing or noticeably changing execution behavior.
 
 ## Linq Expansion
-This transform opportunistically rewrites Linq queries into imperative code in bottom-up order. It works by pattern matching and can only recognize a predefined set of known calls, which are listed below.
+Opportunistically rewrites Linq queries into imperative code in bottom-up order. This transform works by pattern matching and can only recognize a predefined set of known calls, which are listed below.
 
 For [typical queries](./tests/Benchmarks/LinqBenchs.cs), it yields speed-ups ranging between 2-8x:
 
@@ -66,7 +64,7 @@ For [typical queries](./tests/Benchmarks/LinqBenchs.cs), it yields speed-ups ran
   - Null argument checks are removed
     - Result may throw `NullReferenceException` instead of `ArgumentNullException`.
   - `List<T>` version checks are bypassed
-    - Result will never throw `InvalidOperationException` for concurrent modifications. On the worst case where lists are mutated by different threads, this could lead to buffer over-reads and access violations.
+    - Result will never throw `InvalidOperationException` for concurrent modifications. In the worst case where lists are mutated by different threads, this could lead to buffer over-reads and access violations.
 
 ### Example
 ```cs
@@ -100,12 +98,12 @@ public float Aggregate()
 ```
 
 ## Method Inlining
-The inliner will aggressively inline any calls for non-virtual method defined in the same assembly, whose IL-code size was originally less than 32-bytes. Recursive inlines are not currently accounted for, and so this may significantly increase the assembly size and possibly cause performance regressions if the optimizer is enabled globally.
+Aggressively inline calls for any non-virtual method defined in the same assembly and originally smaller than 32 IL instructions. Recursive inlines are not currently accounted for, and so this may significantly increase the output assembly size and possibly cause performance regressions if the optimizer is enabled globally.
 
-It heavily depends on `IgnoresAccessChecksToAttribute` in order to effectively inline methods accessing private members.
+Inlining of methods accessing private members is supported by disabling runtime access checks via `IgnoresAccessChecksToAttribute`, which is undocumented but supported since _.NET Core 1.0_ and by newer versions of _Mono_.
 
 ## Scalar Replacement
-SROA removes simple non-escaping object allocations by inlining constituent fields into local variables.  
+Removes simple non-escaping object allocations by inlining constituent fields into local variables.  
 An object allocation is considered to be non-escaping if all uses throughout the method are from field related instructions.
 
 ### Example
@@ -127,3 +125,13 @@ public int GetMagic()
     return 86102;
 }
 ```
+
+# Future
+Although there is a lot of opportunities for what can be done, the usefulness of this project is still fairly unclear, considering the amount of effort needed to implement most transforms and the relative improvement they could bring.  
+The primary focus will be on "aggressive" and "high-level" optimizations, namely:
+
+- Loop and SLP Auto-vectorization
+  - It should be as basic and simple as possible, at least initially. For loops, runtime aliasing guards would be a need.
+- Partial Redundancy Elimination
+  - The goal is to de-duplicate and hoist known "high-level" instructions such as string operations and stateful calls like dictionary lookups, which is apparently not done even by native compilers.  
+  This would be an evolution of the current _Value Numbering_ pass, which is incomplete and have some significant issues.

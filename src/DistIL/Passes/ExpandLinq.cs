@@ -69,7 +69,7 @@ public class ExpandLinq : IMethodPass
                 "Aggregate"                 => new AggregationSink(call),
                 "Count"                     => new CountSink(call),
                 "First" or "FirstOrDefault" => new FindSink(call),
-                "Any" or "All"              => new SatisfySink(call),
+                "Any" or "All"              => new QuantifySink(call),
                 _ => null
             };
 #pragma warning restore format

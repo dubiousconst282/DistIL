@@ -52,7 +52,10 @@ public class LoopBuilder
         Header.SetBranch(hasNext, Body.Block, Exit.Block);
 
         emitBody(Body);
-        Body.SetBranch(Latch.Block);
+
+        if (Body.Block.Last is not { IsBranch: true }) {
+            Body.SetBranch(Latch.Block);
+        }
 
         foreach (var (headPhi, next) in _pendingAccums) {
             headPhi.ReplaceOperand(next, InsertAccumPhis(Latch.Block, next, headPhi));

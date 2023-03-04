@@ -45,9 +45,9 @@ internal class FindSink : LinqSink
 }
 
 //Any(pred), All(pred)
-internal class SatisfySink : LinqSink
+internal class QuantifySink : LinqSink
 {
-    public SatisfySink(CallInst call)
+    public QuantifySink(CallInst call)
         : base(call) { }
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)

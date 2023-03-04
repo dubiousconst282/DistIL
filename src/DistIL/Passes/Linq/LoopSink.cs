@@ -37,20 +37,18 @@ internal class LoopSink : LinqSink
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
-        //Once EmitBody() returns, the current builder's block will have its branch replaced to the latch.
         builder.SetBranch(_body);
-        builder.SetPosition(_latch);
-
         _getCurrent.ReplaceWith(currItem);
-    }
-    public void RewireLoop(LoopBuilder loop)
-    {
-        _latch.Last.ReplaceOperand(_header, loop.Header.Block);
+        
+        //Rewire old loop
+        _latch.Last.ReplaceOperand(_header, loopData.SkipBlock);
+        _regionEntry.Last.ReplaceOperand(_header, loopData.SourceLoop.EntryBlock);
 
-        _regionEntry.Last.ReplaceOperand(_header, loop.EntryBlock);
-        loop.Exit.SetBranch(_exit);
+        loopData.Exit.SetBranch(_exit);
 
-        _header.Remove(); //the old header should now be unreachable and can be removed
+        //Old header should now be unreachable and can be removed
+        Debug.Assert(_header.NumPreds == 0);
+        _header.Remove(); 
     }
     public override void DeleteSubject()
     {
@@ -79,11 +77,9 @@ internal class LoopSink : LinqSink
                 if (!calls.TryAdd(call.Method.Name, call)) {
                     return false;
                 }
-            }
-            else if (user is CompareInst { Right: ConstNull } cmp && _nullCheck == null) {
+            } else if (user is CompareInst { Right: ConstNull } cmp && _nullCheck == null) {
                 _nullCheck = cmp;
-            }
-            else {
+            } else {
                 return false;
             }
         }
@@ -124,10 +120,14 @@ internal class LoopSink : LinqSink
     private bool MergeBackedges()
     {
         //Try reuse some block with a single jump, otherwise create a new one.
-        _latch =
-            _header.Preds.FirstOrDefault(b => b.First is BranchInst { IsJump: true }) ??
-            _header.Method.CreateBlock(insertAfter: _header.Preds.First()); //EmitBody() will set the branch
+        _latch = _header.Preds.FirstOrDefault(b => b.First is BranchInst { IsJump: true })!;
 
+        if (_latch == null) {
+            _latch = _header.Method.CreateBlock(insertAfter: _header.Preds.First());
+            _latch.SetBranch(_header);
+        }
+
+        //Redirect predecessors
         foreach (var pred in _header.Preds) {
             if (pred != _regionEntry && pred != _latch) {
                 pred.Last.ReplaceOperand(_header, _latch);

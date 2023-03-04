@@ -12,8 +12,8 @@ internal abstract class LinqSink : LinqStageNode
         Method = call.Block.Method;
     }
 
-    public override void EmitHead(IRBuilder builder, Value? estimCount) { }
-    public override void EmitTail(IRBuilder builder) { }
+    public virtual void EmitHead(IRBuilder builder, Value? estimCount) { }
+    public virtual void EmitTail(IRBuilder builder) { }
     public abstract override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData);
 }
 
@@ -41,14 +41,8 @@ internal abstract class LinqStageNode
     //  }
     //Exit:
     //  Tail();
-    public virtual void EmitHead(IRBuilder builder, Value? estimCount)
-        => Drain.EmitHead(builder, estimCount);
-
     public virtual void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
         => Drain.EmitBody(builder, currItem, loopData);
-
-    public virtual void EmitTail(IRBuilder builder)
-        => Drain.EmitTail(builder);
 
     public virtual void DeleteSubject()
     {
@@ -65,22 +59,6 @@ internal abstract class LinqStageNode
         }
         return (LinqSink)node;
     }
-
-    public record BodyLoopData
-    {
-        public BasicBlock SkipBlock;
-        public IRBuilder PreHeader, Header, Exit;
-        public LoopAccumVarFactory CreateAccum;
-
-        public BodyLoopData(LoopBuilder loop)
-        {
-            SkipBlock = loop.Latch.Block;
-            PreHeader = loop.PreHeader;
-            Header = loop.Header;
-            Exit = loop.Exit;
-            CreateAccum = loop.CreateAccum;
-        }
-    }
 }
 internal abstract class LinqSourceNode : LinqStageNode
 {
@@ -92,13 +70,14 @@ internal abstract class LinqSourceNode : LinqStageNode
         PhysicalSource = physicalSource;
     }
 
-    public virtual void Emit()
+    public void Emit()
     {
         var sink = GetSink();
+
         var loop = new LoopBuilder(sink.SubjectCall.Block);
 
         EmitHead(loop, out var count);
-        Drain.EmitHead(loop.PreHeader, count);
+        sink.EmitHead(loop.PreHeader, count);
         
         loop.Build(
             emitCond: EmitMoveNext,
@@ -107,11 +86,9 @@ internal abstract class LinqSourceNode : LinqStageNode
                 Drain.EmitBody(body, currItem, new BodyLoopData(loop));
             }
         );
-        Drain.EmitTail(loop.Exit);
+        sink.EmitTail(loop.Exit);
 
-        if (sink is LoopSink ls) {
-            ls.RewireLoop(loop);
-        } else {
+        if (sink is not LoopSink) {
             loop.InsertBefore(sink.SubjectCall);
         }
     }
@@ -121,4 +98,21 @@ internal abstract class LinqSourceNode : LinqStageNode
     protected abstract Value EmitCurrent(IRBuilder builder);
 }
 
+internal record BodyLoopData
+{
+    public LoopBuilder SourceLoop;
+    public BasicBlock SkipBlock;
+    public LoopAccumVarFactory CreateAccum;
+
+    public IRBuilder PreHeader => SourceLoop.PreHeader;
+    public IRBuilder Header => SourceLoop.Header;
+    public IRBuilder Exit => SourceLoop.Exit;
+
+    public BodyLoopData(LoopBuilder loop)
+    {
+        SourceLoop = loop;
+        SkipBlock = loop.Latch.Block;
+        CreateAccum = loop.CreateAccum;
+    }
+}
 internal delegate Value LoopAccumVarFactory(Value seed, Func<Value, Value> emitUpdate);

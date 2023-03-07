@@ -78,6 +78,35 @@ partial class ILGenerator
         }
     }
 
+    public void Visit(ArrayAddrInst inst)
+    {
+        Push(inst.Array);
+        Push(inst.Index);
+
+        if (inst.IsReadOnly) {
+            _asm.Emit(ILCode.Readonly_);
+        }
+        _asm.Emit(ILCode.Ldelema, inst.ElemType);
+    }
+    public void Visit(PtrOffsetInst inst)
+    {
+        //Emit (add addr, (mul (conv.i index), sizeof elemType)
+        Push(inst.BasePtr);
+        Push(inst.Index);
+
+        if (inst.Index.ResultType.StackType != StackType.NInt) {
+            _asm.Emit(ILCode.Conv_I);
+        }
+
+        if (inst.Stride != 0) {
+            _asm.EmitLdcI4(inst.Stride);
+        } else {
+            _asm.Emit(ILCode.Sizeof, inst.ElemType);
+        }
+        _asm.Emit(ILCode.Mul);
+        _asm.Emit(ILCode.Add);
+    }
+
     public void Visit(LoadFieldInst inst)
     {
         if (!inst.IsStatic) {

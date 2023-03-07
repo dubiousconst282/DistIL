@@ -156,10 +156,6 @@ public class IRCloner
         public void Visit(ArrayAddrInst inst) => Out(new ArrayAddrInst(Remap(inst.Array), Remap(inst.Index), Remap(inst.ElemType), inst.InBounds, inst.IsReadOnly));
         public void Visit(PtrOffsetInst inst) => Out(new PtrOffsetInst(Remap(inst.BasePtr), Remap(inst.Index), Remap(inst.ResultType), inst.Stride, 0));
 
-        public void Visit(ArrayLenInst inst) => Out(new ArrayLenInst(Remap(inst.Array)));
-        public void Visit(LoadArrayInst inst) => Out(new LoadArrayInst(Remap(inst.Array), Remap(inst.Index), Remap(inst.ElemType), inst.Flags));
-        public void Visit(StoreArrayInst inst) => Out(new StoreArrayInst(Remap(inst.Array), Remap(inst.Index), Remap(inst.Value), Remap(inst.ElemType), inst.Flags));
-
         public void Visit(LoadFieldInst inst) => Out(new LoadFieldInst(Remap(inst.Field), inst.IsStatic ? null : Remap(inst.Obj)));
         public void Visit(StoreFieldInst inst) => Out(new StoreFieldInst(Remap(inst.Field), inst.IsStatic ? null : Remap(inst.Obj), Remap(inst.Value)));
         public void Visit(FieldAddrInst inst) => Out(new FieldAddrInst(Remap(inst.Field), inst.IsStatic ? null : Remap(inst.Obj)));

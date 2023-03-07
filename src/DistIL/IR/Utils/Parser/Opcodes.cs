@@ -1,18 +1,19 @@
 namespace DistIL.IR.Utils.Parser;
 
+#pragma warning disable format
+
 internal enum Opcode
 {
     Unknown,
 
     Goto, Ret, Phi,
     Call, CallVirt, NewObj,
-    LdFld, StFld, FldAddr,
     LdVar, StVar, VarAddr,
-    LdArr, StArr, ArrAddr,
     Intrinsic,
 
     //Has modifiers
-    LdPtr, StPtr,
+    ArrAddr, FldAddr,
+    Load, Store,
     Conv,
 
     //Note: Entries must be keept in the same order as in BinaryOp
@@ -42,17 +43,19 @@ internal enum Opcode
     Cmp_FUlt, Cmp_FUgt, Cmp_FUle, Cmp_FUge, Cmp_FUeq, Cmp_FUne,
     _Cmp_Last,
 }
+
 [Flags]
 internal enum OpcodeModifiers
 {
-    None = 0,
-    Ovf = 1 << 0,
-    Un = 1 << 1,
-    Volatile = 1 << 2,
+    None        = 0,
+    Ovf         = 1 << 0,
+    Un          = 1 << 1,
+    Volatile    = 1 << 2,
+    InBounds    = 1 << 3,
+    ReadOnly    = 1 << 4,
 }
 internal static class Opcodes
 {
-#pragma warning disable format
     public static (Opcode Op, OpcodeModifiers Mods) TryParse(string str)
     {
         var op = str switch {
@@ -63,18 +66,10 @@ internal static class Opcodes
             "call"      => Opcode.Call,
             "callvirt"  => Opcode.CallVirt,
             "newobj"    => Opcode.NewObj,
-
-            "ldfld"     => Opcode.LdFld,
-            "stfld"     => Opcode.StFld,
-            "fldaddr"   => Opcode.FldAddr,
             
             "ldvar"     => Opcode.LdVar,
             "stvar"     => Opcode.StVar,
             "varaddr"   => Opcode.VarAddr,
-
-            "ldarr"     => Opcode.LdArr,
-            "starr"     => Opcode.StArr,
-            "arraddr"   => Opcode.ArrAddr,
 
             "intrinsic" => Opcode.Intrinsic,
 
@@ -137,8 +132,10 @@ internal static class Opcodes
             if (offset < 0) offset = str.Length;
 
             op = str.AsSpan(0, offset) switch {
-                "ldptr" => Opcode.LdPtr,
-                "stptr" => Opcode.StPtr,
+                "load" => Opcode.Load,
+                "store" => Opcode.Store,
+                "arraddr" => Opcode.ArrAddr,
+                "fldaddr" => Opcode.FldAddr,
                 "conv"  => Opcode.Conv,
                 _ => Opcode.Unknown
             };
@@ -153,8 +150,9 @@ internal static class Opcodes
     {
         return (str.Contains(".ovf")        ? OpcodeModifiers.Ovf : 0) |
                (str.Contains(".un")         ? OpcodeModifiers.Un : 0) |
-               (str.Contains(".volatile")   ? OpcodeModifiers.Volatile : 0);
+               (str.Contains(".volatile")   ? OpcodeModifiers.Volatile : 0) |
+               (str.Contains(".inbounds")   ? OpcodeModifiers.InBounds : 0) |
+               (str.Contains(".readonly")   ? OpcodeModifiers.ReadOnly : 0);
 
     }
-#pragma warning restore format
 }

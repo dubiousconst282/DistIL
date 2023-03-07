@@ -49,11 +49,23 @@ partial class ILGenerator
 
     public void Visit(LoadPtrInst inst)
     {
+        switch (inst.Address) {
+            case ArrayAddrInst addr when addr.ElemType == inst.ElemType && _forest.IsLeaf(addr): {
+                EmitLoadOrStoreArray(addr, null);
+                return;
+            }
+        }
         Push(inst.Address);
         EmitLoadOrStorePtr(inst);
     }
     public void Visit(StorePtrInst inst)
     {
+        switch (inst.Address) {
+            case ArrayAddrInst addr when addr.ElemType == inst.ElemType && _forest.IsLeaf(addr): {
+                EmitLoadOrStoreArray(addr, inst.Value);
+                return;
+            }
+        }
         Push(inst.Address);
         Push(inst.Value);
         EmitLoadOrStorePtr(inst);
@@ -75,6 +87,22 @@ partial class ILGenerator
         } else {
             var code = ILTables.GetPtrAccessCode(interpType, isLoad);
             _asm.Emit(code, code == objCode ? interpType : null);
+        }
+    }
+    private void EmitLoadOrStoreArray(ArrayAddrInst addr, Value? valToStore)
+    {
+        bool ld = valToStore == null;
+
+        Push(addr.Array);
+        Push(addr.Index);
+        if (!ld) Push(valToStore!);
+
+        var code = ILTables.GetArrayElemMacro(addr.ElemType, ld);
+
+        if (code != default) {
+            _asm.Emit(code);
+        } else {
+            _asm.Emit(ld ? ILCode.Ldelem : ILCode.Stelem, addr.ElemType);
         }
     }
 
@@ -133,44 +161,6 @@ partial class ILGenerator
         _asm.Emit(code, inst.Field);
     }
 
-    public void Visit(ArrayLenInst inst)
-    {
-        Push(inst.Array);
-        _asm.Emit(ILCode.Ldlen);
-    }
-    //TODO: array inst prefixes: no. / readonly.
-    public void Visit(LoadArrayInst inst)
-    {
-        Push(inst.Array);
-        Push(inst.Index);
-
-        var code = ILTables.GetArrayElemMacro(inst.ElemType, ld: true);
-        if (code != default) {
-            _asm.Emit(code);
-        } else {
-            _asm.Emit(ILCode.Ldelem, inst.ElemType);
-        }
-    }
-    public void Visit(StoreArrayInst inst)
-    {
-        Push(inst.Array);
-        Push(inst.Index);
-        Push(inst.Value);
-
-        var code = ILTables.GetArrayElemMacro(inst.ElemType, ld: false);
-        if (code != default) {
-            _asm.Emit(code);
-        } else {
-            _asm.Emit(ILCode.Stelem, inst.ElemType);
-        }
-    }
-    public void Visit(ArrayAddrInst inst)
-    {
-        Push(inst.Array);
-        Push(inst.Index);
-        _asm.Emit(ILCode.Ldelema, inst.ElemType);
-    }
-
     public void Visit(CallInst inst)
     {
         foreach (var arg in inst.Args) {
@@ -199,7 +189,7 @@ partial class ILGenerator
     }
     public void Visit(IntrinsicInst inst)
     {
-        if (inst.Is(IRIntrinsicId.Marker)) return;
+        if (inst.Intrinsic == IRIntrinsic.Marker) return;
 
         var intrinsic = (inst.Intrinsic as CilIntrinsic) ?? 
             throw new InvalidOperationException("Only CilIntrinsic`s can be called during codegen");
@@ -220,6 +210,7 @@ partial class ILGenerator
                 _asm.Emit(intrinsic.Opcode, inst.Args[0]);
                 break;
             }
+            case CilIntrinsicId.ArrayLen:
             case CilIntrinsicId.Alloca: {
                 Push(inst.Args[0]);
                 _asm.Emit(intrinsic.Opcode);

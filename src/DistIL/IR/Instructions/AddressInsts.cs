@@ -46,11 +46,6 @@ public class ArrayAddrInst : AddressInst
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
-
-    protected override void PrintOperands(PrintContext ctx)
-    {
-        ctx.Print($" {Array}[{Index}]");
-    }
 }
 /// <summary> Computes the offset address of a pointer. </summary>
 public class PtrOffsetInst : AddressInst

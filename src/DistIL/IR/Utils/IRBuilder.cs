@@ -86,7 +86,7 @@ public class IRBuilder
     public Value CreateBin(BinaryOp op, Value left, Value right)
     {
         return ConstFolding.FoldBinary(op, left, right) ??
-               Add(new BinaryInst(op, left, right));
+               Emit(new BinaryInst(op, left, right));
     }
 
     public Value CreateAdd(Value left, Value right) => CreateBin(BinaryOp.Add, left, right);
@@ -108,7 +108,7 @@ public class IRBuilder
     public Value CreateCmp(CompareOp op, Value left, Value right)
     {
         return ConstFolding.FoldCompare(op, left, right) ??
-               Add(new CompareInst(op, left, right));
+               Emit(new CompareInst(op, left, right));
     }
     public Value CreateEq(Value left, Value right) => CreateCmp(CompareOp.Eq, left, right);
     public Value CreateNe(Value left, Value right) => CreateCmp(CompareOp.Ne, left, right);
@@ -118,14 +118,14 @@ public class IRBuilder
     public Value CreateSge(Value left, Value right) => CreateCmp(CompareOp.Sge, left, right);
 
     public ConvertInst CreateConvert(Value srcValue, TypeDesc dstType, bool checkOverflow = false, bool srcUnsigned = false)
-        => Add(new ConvertInst(srcValue, dstType, checkOverflow, srcUnsigned));
+        => Emit(new ConvertInst(srcValue, dstType, checkOverflow, srcUnsigned));
 
 
     public CallInst CreateCall(MethodDesc method, params Value[] args)
-        => Add(new CallInst(method, args));
+        => Emit(new CallInst(method, args));
 
     public CallInst CreateCallVirt(MethodDesc method, params Value[] args)
-        => Add(new CallInst(method, args, true));
+        => Emit(new CallInst(method, args, true));
 
     /// <summary> Searches for <paramref name="methodName"/> in the instance object type (first argument), and creates a callvirt instruction for it. </summary>
     public CallInst CreateCallVirt(string methodName, params Value[] args)
@@ -144,86 +144,80 @@ public class IRBuilder
     }
 
     public NewObjInst CreateNewObj(MethodDesc ctor, params Value[] args)
-        => Add(new NewObjInst(ctor, args));
+        => Emit(new NewObjInst(ctor, args));
 
     public IntrinsicInst CreateIntrinsic(IntrinsicDesc intrinsic, params Value[] args)
-        => Add(new IntrinsicInst(intrinsic, args));
+        => Emit(new IntrinsicInst(intrinsic, args));
 
 
     public LoadFieldInst CreateFieldLoad(FieldDesc field, Value? obj = null)
-        => Add(new LoadFieldInst(field, obj));
+        => Emit(new LoadFieldInst(field, obj));
 
     public StoreFieldInst CreateFieldStore(FieldDesc field, Value? obj, Value value)
-        => Add(new StoreFieldInst(field, obj, value));
+        => Emit(new StoreFieldInst(field, obj, value));
 
     public FieldAddrInst CreateFieldAddr(FieldDesc field, Value? obj)
-        => Add(new FieldAddrInst(field, obj));
+        => Emit(new FieldAddrInst(field, obj));
 
 
     public LoadFieldInst CreateFieldLoad(string fieldName, Value obj)
-        => Add(new LoadFieldInst(obj.ResultType.FindField(fieldName), obj));
+        => Emit(new LoadFieldInst(obj.ResultType.FindField(fieldName), obj));
 
 
     public LoadVarInst CreateVarLoad(Variable var)
-        => Add(new LoadVarInst(var));
+        => Emit(new LoadVarInst(var));
 
     public StoreVarInst CreateVarStore(Variable var, Value value)
-        => Add(new StoreVarInst(var, value));
+        => Emit(new StoreVarInst(var, value));
 
     public VarAddrInst CreateVarAddr(Variable var)
-        => Add(new VarAddrInst(var));
+        => Emit(new VarAddrInst(var));
 
 
-    public ArrayLenInst CreateArrayLen(Value array)
-        => Add(new ArrayLenInst(array));
+    public IntrinsicInst CreateNewArray(TypeDesc elemType, Value length)
+        => Emit(new IntrinsicInst(CilIntrinsic.NewArray, elemType, length));
 
-    public LoadArrayInst CreateArrayLoad(Value array, Value index, TypeDesc? elemType = null, ArrayAccessFlags flags = default)
-        => Add(new LoadArrayInst(array, index, elemType ?? ((ArrayType)array.ResultType).ElemType, flags));
+    public IntrinsicInst CreateArrayLen(Value array)
+        => Emit(new IntrinsicInst(CilIntrinsic.ArrayLen, array));
 
-    public StoreArrayInst CreateArrayStore(Value array, Value index, Value value, TypeDesc? elemType = null, ArrayAccessFlags flags = default)
-        => Add(new StoreArrayInst(array, index, value, elemType ?? ((ArrayType)array.ResultType).ElemType, flags));
+    public LoadPtrInst CreateArrayLoad(Value array, Value index, TypeDesc? elemType = null, bool inBounds = false)
+    {
+        var addr = CreateArrayAddr(array, index, elemType, inBounds, readOnly: true);
+        return CreatePtrLoad(addr);
+    }
 
-    public ArrayAddrInst CreateArrayAddr(Value array, Value index, TypeDesc? elemType = null, ArrayAccessFlags flags = default)
-        => Add(new ArrayAddrInst(array, index, elemType ?? ((ArrayType)array.ResultType).ElemType, flags));
+    public StorePtrInst CreateArrayStore(Value array, Value index, Value value, TypeDesc? elemType = null, bool inBounds = false)
+    {
+        var addr = CreateArrayAddr(array, index, elemType, inBounds);
+        return CreatePtrStore(addr, value);
+    }
 
+    public ArrayAddrInst CreateArrayAddr(Value array, Value index, TypeDesc? elemType = null, bool inBounds = false, bool readOnly = false)
+    {
+        return Emit(new ArrayAddrInst(array, index, elemType, inBounds, readOnly));
+    }
 
     public LoadPtrInst CreatePtrLoad(Value addr, TypeDesc? elemType = null, PointerFlags flags = default)
-        => Add(new LoadPtrInst(addr, elemType ?? ((PointerType)addr.ResultType).ElemType, flags));
+        => Emit(new LoadPtrInst(addr, elemType, flags));
 
     public StorePtrInst CreatePtrStore(Value addr, Value value, TypeDesc? elemType = null, PointerFlags flags = default)
-        => Add(new StorePtrInst(addr, value, elemType ?? ((PointerType)addr.ResultType).ElemType, flags));
+        => Emit(new StorePtrInst(addr, value, elemType, flags));
 
-    /// <summary> Creates the sequence <c>addr + (nuint)elemOffset * sizeof(elemType)</c>. </summary>
-    public Value CreatePtrOffset(Value addr, Value elemOffset, TypeDesc? elemType = null, bool signed = true)
+    /// <summary> Creates the sequence <c>addr + (nint)elemOffset * sizeof(elemType)</c>. </summary>
+    public Value CreatePtrOffset(Value addr, Value elemOffset, TypeDesc? elemType = null)
     {
-        if (elemOffset is ConstInt { Value: 0 or 1 } c) {
-            return c.Value == 0 ? addr : CreatePtrIncrement(addr, elemType);
-        }
-        if (elemOffset.ResultType.StackType != StackType.NInt) {
-            elemOffset = CreateConvert(elemOffset, signed ? PrimType.IntPtr : PrimType.UIntPtr);
-        }
         elemType ??= ((PointerType)addr.ResultType).ElemType;
-        int size = elemType.Kind.Size();
-        var stride = size != 0 ? ConstInt.CreateI(size) : CreateIntrinsic(CilIntrinsic.SizeOf, elemType) as Value;
-
-        return CreateAdd(addr, CreateMul(elemOffset, stride));
+        return Emit(new PtrOffsetInst(addr, elemOffset, elemType));
     }
     /// <summary> Creates the sequence <c>addr + sizeof(elemType)</c>, i.e. offset to the next element. </summary>
     public Value CreatePtrIncrement(Value addr, TypeDesc? elemType = null)
     {
-        elemType ??= ((PointerType)addr.ResultType).ElemType;
-        var stride = CreateIntrinsic(CilIntrinsic.SizeOf, elemType) as Value;
-
-        return CreateAdd(addr, stride);
+        return CreatePtrOffset(addr, ConstInt.CreateI(1), elemType);
     }
 
 
-    public IntrinsicInst CreateNewArray(TypeDesc elemType, Value length)
-        => Add(new IntrinsicInst(CilIntrinsic.NewArray, elemType, length));
-
-
     public void CreateMarker(string text)
-        => Add(new IntrinsicInst(IRIntrinsic.Marker, ConstString.Create(text)));
+        => Emit(new IntrinsicInst(IRIntrinsic.Marker, ConstString.Create(text)));
 
     /// <summary> Creates the <see langword="default"/> value for the given type. </summary>
     public Value CreateDefaultOf(TypeDesc type)
@@ -237,7 +231,7 @@ public class IRBuilder
     }
 
     /// <summary> Adds the specified instruction at the current position. </summary>
-    public TInst Add<TInst>(TInst inst) where TInst : Instruction
+    public TInst Emit<TInst>(TInst inst) where TInst : Instruction
     {
         Append(inst);
         return inst;

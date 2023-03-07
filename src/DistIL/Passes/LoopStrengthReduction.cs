@@ -1,6 +1,7 @@
 namespace DistIL.Passes;
 
 using DistIL.Analysis;
+using DistIL.IR.Intrinsics;
 using DistIL.IR.Utils;
 
 //Key is either an Instruction or a (Value Array, Value Index)
@@ -90,7 +91,7 @@ public class LoopStrengthReduction : IMethodPass
                     bool shouldReplaceCond = mayReplaceCond && cond.Cmp?.Block != null;
 
                     //Reduction may only be beneficial if all uses inside the loop can be replaced
-                    if (!mayReplaceCond && array.Users().Any(u => u is ArrayAccessInst acc && acc.Index != index && loop.Contains(u.Block))) break;
+                    if (!mayReplaceCond && array.Users().Any(u => u is ArrayAddrInst acc && acc.Index != index && loop.Contains(u.Block))) break;
 
                     //Preheader:
                     //  ...
@@ -114,14 +115,9 @@ public class LoopStrengthReduction : IMethodPass
                     }
                     //Replace indexed accesses with strength-reduced var
                     foreach (var user in array.Users()) {
-                        if (user is not ArrayAccessInst acc || acc.Index != index) continue;
+                        if (user is not ArrayAddrInst acc || acc.Index != index || acc.IsCasting) continue;
 
-                        var repl = acc switch {
-                            LoadArrayInst => new LoadPtrInst(currPtr, acc.ElemType),
-                            StoreArrayInst st => new StorePtrInst(currPtr, st.Value, acc.ElemType),
-                            ArrayAddrInst => currPtr as Value
-                        };
-                        acc.ReplaceWith(repl, insertIfInst: true);
+                        acc.ReplaceWith(currPtr, insertIfInst: true);
                     }
                     numReduced++;
                     break;
@@ -171,7 +167,7 @@ public class LoopStrengthReduction : IMethodPass
         {
             switch (inst) {
                 //DIV = &Array[IV]
-                case ArrayAccessInst { Array: { ResultType: ArrayType } source, Index: var index }
+                case ArrayAddrInst { Array: var source, Index: var index, IsCasting: false }
                 when indVars.TryGetValue(index, out var indexIV) && loop.IsInvariant(source): {
                     indVars.TryAdd((source, index), indexIV);
                     return true;
@@ -228,9 +224,10 @@ public class LoopStrengthReduction : IMethodPass
 
         //Match cond is {icmp.slt i, (conv.i32 (arrlen array))}
         if (cond?.Op == CompareOp.Slt && 
-            cond.Right is ConvertInst { Value: ArrayLenInst bound, ResultType.Kind: TypeKind.Int32 }
+            cond.Right is ConvertInst { Value: IntrinsicInst bound, ResultType.Kind: TypeKind.Int32 } &&
+            bound.Is(CilIntrinsicId.ArrayLen)
         ) {
-            return (cond, bound.Array, cond.Left);
+            return (cond, bound.Args[0], cond.Left);
         }
         if (cond?.Op is CompareOp.Slt or CompareOp.Ult) {
             return (cond, null, cond.Left);
@@ -263,7 +260,7 @@ public class LoopStrengthReduction : IMethodPass
             )
         };
         //T& endPtr = startPtr + (nuint)count * sizeof(T)
-        var endPtr = getCount ? builder.CreatePtrOffset(basePtr, count!, signed: false) : null;
+        var endPtr = getCount ? builder.CreatePtrOffset(basePtr, count!) : null;
         return (basePtr, endPtr, count);
 
         static CallInst CreateGetArrayDataRef(IRBuilder builder, Value source)

@@ -113,7 +113,7 @@ public class ValueNumbering : IMethodPass
             HashFn = (inst) => HashCode.Combine(inst.Field, inst.Obj, 1234)
         });
         Reg<ArrayAddrInst>(new() {
-            CompareFn = (a, b) => a.Array.Equals(b.Array) && a.Index.Equals(b.Index) && a.ElemType == b.ElemType && a.Flags == b.Flags,
+            CompareFn = (a, b) => a.Array.Equals(b.Array) && a.Index.Equals(b.Index) && a.ElemType == b.ElemType && a.InBounds == b.InBounds && a.IsReadOnly == b.IsReadOnly,
             HashFn = (inst) => HashCode.Combine(inst.Array, inst.Index, 1234)
         });
 
@@ -137,11 +137,6 @@ public class ValueNumbering : IMethodPass
             //  stfld Foo::wrapper, ...
             //  int x2 = ldfld Point::X, ptr  //different from x1
             MayAliasFn = (st, acc) => acc is PtrAccessInst or FieldAccessInst or VarAccessInst { Var.IsExposed: true }
-        });
-        RegLoc<ArrayAccessInst, LoadArrayInst, StoreArrayInst>(new() {
-            CompareFn = (a, b) => a.Array.Equals(b.Array) && a.Index.Equals(b.Index) && a.ElemType == b.ElemType && a.Flags == b.Flags,
-            HashFn = (inst) => HashCode.Combine(inst.Array, inst.Index),
-            MayAliasFn = (st, acc) => acc is PtrAccessInst or ArrayAccessInst
         });
         s_Taggers.Add(typeof(CallInst), new CallTagger());
         //FIXME: tag invalidators for NewObj and Intrinsic insts

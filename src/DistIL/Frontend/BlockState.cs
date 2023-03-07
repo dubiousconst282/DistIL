@@ -643,43 +643,35 @@ internal class BlockState
     private void ImportLoadLen()
     {
         var array = Pop();
-        Push(new ArrayLenInst(array));
+        Push(new IntrinsicInst(CilIntrinsic.ArrayLen, array));
     }
-    private void ImportLoadElem(TypeDesc? type)
+    private void ImportLoadElem(TypeDesc? elemType)
     {
-        var index = Pop();
-        var array = Pop();
-
-        if (type == null) {
-            type = ((ArrayType)array.ResultType).ElemType; //ldelem_any
-        }
-        Push(new LoadArrayInst(array, index, type, PopArrayAccFlags()));
+        var addr = EmitArrayAddress(elemType);
+        Push(new LoadPtrInst(addr));
     }
-    private void ImportStoreElem(TypeDesc? type)
+    private void ImportStoreElem(TypeDesc? elemType)
     {
         var value = Pop();
-        var index = Pop();
-        var array = Pop();
+        var addr = EmitArrayAddress(elemType);
 
-        if (type == null) {
-            type = ((ArrayType)array.ResultType).ElemType; //stelem_any
-        }
-        Emit(new StoreArrayInst(array, index, value, type, PopArrayAccFlags()));
+        Emit(new StorePtrInst(addr, value));
     }
     private void ImportLoadElemAddr(TypeDesc elemType)
     {
+        PushNoEmit(EmitArrayAddress(elemType));
+    }
+    private AddressInst EmitArrayAddress(TypeDesc? elemType)
+    {
         var index = Pop();
         var array = Pop();
-        Push(new ArrayAddrInst(array, index, elemType, PopArrayAccFlags()));
-    }
-    private ArrayAccessFlags PopArrayAccFlags()
-    {
-        var flags = ArrayAccessFlags.None;
-        if (HasPrefix(InstFlags.NoRangeCheck)) flags |= ArrayAccessFlags.NoBoundsCheck;
-        if (HasPrefix(InstFlags.NoTypeCheck)) flags |= ArrayAccessFlags.NoTypeCheck;
-        if (HasPrefix(InstFlags.NoNullCheck)) flags |= ArrayAccessFlags.NoNullCheck;
-        if (HasPrefix(InstFlags.Readonly)) flags |= ArrayAccessFlags.ReadOnly;
-        return flags;
+
+        var inst = new ArrayAddrInst(
+            array, index, elemType,
+            inBounds: HasPrefix(InstFlags.NoRangeCheck | InstFlags.NoNullCheck),
+            readOnly: HasPrefix(InstFlags.Readonly));
+        Emit(inst);
+        return inst;
     }
 
     private void ImportLoadInd(TypeDesc? type)

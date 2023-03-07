@@ -1,6 +1,7 @@
 namespace DistIL.IR;
 
 using DistIL.IR.Intrinsics;
+using DistIL.IR.Utils;
 
 public class IntrinsicInst : Instruction
 {

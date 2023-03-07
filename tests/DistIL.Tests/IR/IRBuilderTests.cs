@@ -17,7 +17,7 @@ public class IRBuilderTests
         var r2 = builder.CreatePhi(PrimType.Int32, (block, ConstInt.CreateI(2)));
         var r3 = (BinaryInst)builder.CreateAdd(r2, r1);
         var r4 = (BinaryInst)builder.CreateMul(r1, r3);
-        var r5 = builder.Add(new ReturnInst(r4));
+        var r5 = builder.Emit(new ReturnInst(r4));
 
         Assert.Equal(r1, block.First);
         Assert.Equal(r5, block.Last);

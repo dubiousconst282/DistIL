@@ -1,5 +1,8 @@
 namespace DistIL.Analysis;
 
+using DistIL.IR.Intrinsics;
+using DistIL.IR.Utils;
+
 /// <summary> Computes information that can be used to build expression trees from the linear IR. </summary>
 public class ForestAnalysis : IMethodAnalysis
 {
@@ -54,7 +57,7 @@ public class ForestAnalysis : IMethodAnalysis
     private static bool IsAlwaysLeaf(Instruction inst)
     {
         //Cheaper to rematerialize
-        return inst is VarAddrInst or ArrayLenInst;
+        return inst is AddressInst || inst.Is(CilIntrinsicId.ArrayLen, CilIntrinsicId.SizeOf);
     }
 
     class BlockInterfs
@@ -111,7 +114,7 @@ public class ForestAnalysis : IMethodAnalysis
             }
             //Like exposed variables, these can be aliased globally and we need
             //something like alias analysis for precise results.
-            if (def is LoadArrayInst or LoadFieldInst or LoadPtrInst) {
+            if (def is LoadInst) {
                 return _memInterfs.ContainsRange(defIdx, useIdx);
             }
             //Consider:

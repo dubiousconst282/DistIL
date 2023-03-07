@@ -16,6 +16,12 @@ public class CilIntrinsic : IntrinsicDesc
             ParamTypes = ImmutableArray.Create(s_TypePar, PrimType.IntPtr),
             ReturnType = s_Typeof0.CreateArray()
         },
+        ArrayLen = new() {
+            Id = CilIntrinsicId.ArrayLen,
+            Opcode = ILCode.Ldlen,
+            ParamTypes = ImmutableArray.Create<TypeDesc>(s_Typeof0.CreateArray()),
+            ReturnType = PrimType.IntPtr
+        },
         //T CastClass<T>(object obj)
         CastClass = new() {
             Id = CilIntrinsicId.CastClass,
@@ -102,7 +108,7 @@ public class CilIntrinsic : IntrinsicDesc
 
 public enum CilIntrinsicId
 {
-    NewArray,
+    NewArray, ArrayLen,
     CastClass, AsInstance,
     Box, UnboxObj, UnboxRef,
     LoadHandle,

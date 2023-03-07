@@ -13,16 +13,9 @@ public class IRIntrinsic : IntrinsicDesc
             Id = IRIntrinsicId.Marker,
             ParamTypes = ImmutableArray.Create<TypeDesc>(PrimType.String),
             ReturnType = PrimType.Void
-        },
-        //T CopyDef<T>(T value)         Creates a SSA copy for use by the RemovePhis pass.
-        CopyDef = new() {
-            Id = IRIntrinsicId.CopyDef,
-            ParamTypes = ImmutableArray.Create(s_AnyType),
-            ReturnType = s_Typeof0
         };
 }
 public enum IRIntrinsicId
 {
-    Marker,
-    CopyDef
+    Marker
 }

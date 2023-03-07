@@ -274,10 +274,10 @@ public partial class IRParser
             Opcode.Ret => ParseRet(),
             Opcode.Phi => ParsePhi(),
             Opcode.Call or Opcode.CallVirt or Opcode.NewObj => ParseCallInst(op),
-            Opcode.LdFld or Opcode.StFld or Opcode.FldAddr => ParseFieldInst(op),
+            Opcode.FldAddr => ParseFieldAddr(mods),
+            Opcode.ArrAddr => ParseArrayAddr(mods),
             Opcode.LdVar or Opcode.StVar or Opcode.VarAddr => ParseVarInst(op),
-            Opcode.LdArr or Opcode.StArr or Opcode.ArrAddr => ParseArrayInst(op),
-            Opcode.LdPtr or Opcode.StPtr => ParsePtrInst(op, mods),
+            Opcode.Load or Opcode.Store => ParsePtrInst(op, mods),
             Opcode.Conv => ParseConv(op, mods),
             _ => ParseMultiOpInst(op, mods, slotToken.Position),
         };
@@ -413,7 +413,7 @@ public partial class IRParser
         return new CallInst(method, opers.ToArray(), op == Opcode.CallVirt);
     }
 
-    private Instruction ParseFieldInst(Opcode op)
+    private Instruction ParseFieldAddr(OpcodeModifiers mods)
     {
         int start = _lexer.NextPos();
         var declType = ParseType();
@@ -425,22 +425,7 @@ public partial class IRParser
 
         var obj = _lexer.Match(TokenType.Comma) ? ParseValue() : null;
 
-        switch (op) {
-            case Opcode.FldAddr: {
-                return new FieldAddrInst(field, obj);
-            }
-            case Opcode.LdFld: {
-                return new LoadFieldInst(field, obj);
-            }
-            case Opcode.StFld when _lexer.Match(TokenType.Comma): {
-                var value = ParseValue();
-                return new StoreFieldInst(field, obj, value);
-            }
-            case Opcode.StFld: {
-                return new StoreFieldInst(field, null, obj);
-            }
-            default: throw new UnreachableException();
-        }
+        return new FieldAddrInst(field, obj);
     }
 
     private Instruction ParseVarInst(Opcode op)
@@ -484,11 +469,11 @@ public partial class IRParser
         flags |= (mods & OpcodeModifiers.Un) != 0 ? PointerFlags.Unaligned : 0;
 
         switch (op) {
-            case Opcode.LdPtr: {
+            case Opcode.Load: {
                 var type = ParseResultType();
                 return new LoadPtrInst(address, type, flags);
             }
-            case Opcode.StPtr: {
+            case Opcode.Store: {
                 _lexer.Expect(TokenType.Comma);
                 var value = ParseValue();
                 _lexer.ExpectId("as");
@@ -499,31 +484,19 @@ public partial class IRParser
         }
     }
 
-    private Instruction ParseArrayInst(Opcode op)
+    private Instruction ParseArrayAddr(OpcodeModifiers mods)
     {
         var array = ParseValue();
         _lexer.Expect(TokenType.Comma);
         var index = ParseValue();
 
-        switch (op) {
-            case Opcode.LdArr: {
-                var type = ParseResultType();
-                return new LoadArrayInst(array, index, type);
-            }
-            case Opcode.StArr: {
-                _lexer.Expect(TokenType.Comma);
-                var value = ParseValue();
+        var type = ParseResultType();
 
-                _lexer.ExpectId("as");
-                var type = ParseType();
-                return new StoreArrayInst(array, index, value, type);
-            }
-            case Opcode.ArrAddr: {
-                var type = ParseResultType();
-                return new ArrayAddrInst(array, index, ((ByrefType)type).ElemType);
-            }
-            default: throw new UnreachableException();
-        }
+        return new ArrayAddrInst(
+            array, index, 
+            elemType: ((ByrefType)type).ElemType,
+            inBounds: mods.HasFlag(OpcodeModifiers.InBounds),
+            readOnly: mods.HasFlag(OpcodeModifiers.ReadOnly));
     }
 
     private BasicBlock ParseLabel()

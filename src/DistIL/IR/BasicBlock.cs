@@ -26,7 +26,7 @@ public class BasicBlock : TrackedValue
                 //Guard has exactly one or two blocks: [handlerBlock, filterBlock?]
                 count += inst.Operands.Length;
             }
-            if (IsBranchLike(Last)) {
+            if (IsBranchWithSuccEdges(Last)) {
                 //Unconditional branches only have one operand, cond and switches have at least 2.
                 //See comment in SuccIterator for details.
                 int numOpers = Last.Operands.Length;
@@ -283,7 +283,7 @@ public class BasicBlock : TrackedValue
         }
     }
 
-    private static bool IsBranchLike(Instruction? inst)
+    private static bool IsBranchWithSuccEdges(Instruction? inst)
         => inst is BranchInst or SwitchInst or LeaveInst;
 
     //Enumerating block users (ignoring phis) will lead directly to predecessors.
@@ -313,7 +313,6 @@ public class BasicBlock : TrackedValue
     //Enumerating guard and branch instruction operands will directly lead to successors.
     public struct SuccIterator : Iterator<BasicBlock>
     {
-        BasicBlock _block;
         Instruction? _currInst;
         int _operIdx;
 
@@ -321,23 +320,9 @@ public class BasicBlock : TrackedValue
 
         internal SuccIterator(BasicBlock block)
         {
-            _block = block;
             _currInst = block.Last;
 
-            if (!IsBranchLike(_currInst)) {
-                _currInst = _block.First as GuardInst;
-            }
-            Debug.Assert(_block.Last is not GuardInst);
-        }
-
-        public bool MoveNext()
-        {
-            Debug.Assert(IsBranchLike(_currInst) || _currInst is GuardInst or null);
-
-            while (true) {
-                if (_currInst == null) {
-                    return false;
-                }
+            if (IsBranchWithSuccEdges(_currInst)) {
                 //Unconditional branches only have one operand, cond and switches have at least 2.
                 //  Branch: [thenBlock]
                 //  CondBr: [cond, thenBlock, elseBlock]
@@ -345,20 +330,28 @@ public class BasicBlock : TrackedValue
                 //  Guard:  [handlerBlock, filterBlock?]
                 //  Leave:  [targetBlock]
                 var opers = _currInst.Operands;
-                int offset = opers.Length >= 2 && _currInst is not GuardInst ? 1 : 0;
+                _operIdx = opers.Length >= 2 && _currInst is not GuardInst ? 1 : 0;
+            } else {
+                _currInst = block.First as GuardInst;
+                Ensure.That(block.Last is not GuardInst); //prevents an infinite loop in MoveNext()
+            }
+        }
 
-                if (_operIdx + offset < opers.Length) {
-                    Current = (BasicBlock)opers[_operIdx + offset];
-                    _operIdx++;
+        public bool MoveNext()
+        {
+            Debug.Assert(IsBranchWithSuccEdges(_currInst) || _currInst is GuardInst or null);
+
+            while (_currInst != null) {
+                var opers = _currInst.Operands;
+                if (_operIdx < opers.Length) {
+                    Current = (BasicBlock)opers[_operIdx++];
                     return true;
                 }
-                var nextInst = 
-                    _currInst.Next == null && _currInst != _block.First
-                        ? _block.First //(if `_currInst` is the terminator)
-                        : _currInst.Next;
-                _currInst = nextInst as GuardInst;
+                //If `_currInst` is the terminator (next == null), go back and start looking at guards
+                _currInst = (_currInst.Next ?? _currInst.Block.First) as GuardInst;
                 _operIdx = 0;
             }
+            return false;
         }
 
         public override string ToString() => "[" + string.Join(", ", this.AsEnumerable()) + "]";

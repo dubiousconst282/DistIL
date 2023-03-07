@@ -72,29 +72,27 @@ public class MethodBody
     /// <summary> Performs a depth-first traversal over this method's control flow graph, starting from the entry block and visiting only reachable blocks. </summary>
     public void TraverseDepthFirst(Action<BasicBlock>? preVisit = null, Action<BasicBlock>? postVisit = null)
     {
-        var worklist = new ArrayStack<(BasicBlock Block, bool Entered)>();
+        var pending = new ArrayStack<(BasicBlock Block, BasicBlock.SuccIterator Itr)>();
         var visited = new RefSet<BasicBlock>();
 
-        worklist.Push((EntryBlock, false));
-        visited.Add(EntryBlock);
+        Push(EntryBlock);
 
-        while (!worklist.IsEmpty) {
-            var (block, entered) = worklist.Top;
+        while (!pending.IsEmpty) {
+            ref var top = ref pending.Top;
 
-            if (!entered) {
-                worklist.Top.Entered = true;
-                preVisit?.Invoke(block);
-
-                //Note that this will result in edges being visited in reverse-order,
-                //but it shouldn't really matter in most cases.
-                foreach (var succ in block.Succs) {
-                    if (visited.Add(succ)) {
-                        worklist.Push((succ, false));
-                    }
-                }
+            if (top.Itr.MoveNext()) {
+                Push(top.Itr.Current);
             } else {
-                postVisit?.Invoke(block);
-                worklist.Pop();
+                postVisit?.Invoke(top.Block);
+                pending.Pop();
+            }
+        }
+
+        void Push(BasicBlock block)
+        {
+            if (visited.Add(block)) {
+                pending.Push((block, block.Succs));
+                preVisit?.Invoke(block);
             }
         }
     }

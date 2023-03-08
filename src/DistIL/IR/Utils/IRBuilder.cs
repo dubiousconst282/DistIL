@@ -130,18 +130,11 @@ public class IRBuilder
     /// <summary> Searches for <paramref name="methodName"/> in the instance object type (first argument), and creates a callvirt instruction for it. </summary>
     public CallInst CreateCallVirt(string methodName, params Value[] args)
     {
-        var instanceType = args[0].ResultType;
-
-        if (instanceType is ByrefType refType) {
-            instanceType = refType.ElemType;
-            Ensure.That(instanceType.IsValueType);
-        }
-        if (instanceType is PrimType prim) {
-            instanceType = prim.GetDefinition(Resolver);
-        }
+        var instanceType = GetInstanceType(args[0]);
         var method = instanceType.FindMethod(methodName, searchBaseAndItfs: true);
         return CreateCallVirt(method, args);
     }
+
 
     public NewObjInst CreateNewObj(MethodDesc ctor, params Value[] args)
         => Emit(new NewObjInst(ctor, args));
@@ -150,18 +143,24 @@ public class IRBuilder
         => Emit(new IntrinsicInst(intrinsic, args));
 
 
-    public LoadFieldInst CreateFieldLoad(FieldDesc field, Value? obj = null)
-        => Emit(new LoadFieldInst(field, obj));
+    public LoadPtrInst CreateFieldLoad(FieldDesc field, Value? obj = null, bool inBounds = false)
+    {
+        var addr = CreateFieldAddr(field, obj, inBounds);
+        return CreatePtrLoad(addr);
+    }
 
-    public StoreFieldInst CreateFieldStore(FieldDesc field, Value? obj, Value value)
-        => Emit(new StoreFieldInst(field, obj, value));
+    public StorePtrInst CreateFieldStore(FieldDesc field, Value? obj, Value value, bool inBounds = false)
+    {
+        var addr = CreateFieldAddr(field, obj, inBounds);
+        return CreatePtrStore(addr, value);
+    }
 
-    public FieldAddrInst CreateFieldAddr(FieldDesc field, Value? obj)
-        => Emit(new FieldAddrInst(field, obj));
+    public FieldAddrInst CreateFieldAddr(FieldDesc field, Value? obj = null, bool inBounds = false)
+        => Emit(new FieldAddrInst(field, obj, inBounds));
 
 
-    public LoadFieldInst CreateFieldLoad(string fieldName, Value obj)
-        => Emit(new LoadFieldInst(obj.ResultType.FindField(fieldName), obj));
+    public LoadPtrInst CreateFieldLoad(string fieldName, Value obj)
+        => CreateFieldLoad(GetInstanceType(obj).FindField(fieldName), obj);
 
 
     public LoadVarInst CreateVarLoad(Variable var)
@@ -206,6 +205,9 @@ public class IRBuilder
     /// <summary> Creates the sequence <c>addr + (nint)elemOffset * sizeof(elemType)</c>. </summary>
     public Value CreatePtrOffset(Value addr, Value elemOffset, TypeDesc? elemType = null)
     {
+        if (elemOffset is ConstInt { Value: 0 }) {
+            return addr;
+        }
         elemType ??= ((PointerType)addr.ResultType).ElemType;
         return Emit(new PtrOffsetInst(addr, elemOffset, elemType));
     }
@@ -235,6 +237,20 @@ public class IRBuilder
     {
         Append(inst);
         return inst;
+    }
+
+    private TypeDesc GetInstanceType(Value obj)
+    {
+        var type = obj.ResultType;
+
+        if (type is ByrefType refType) {
+            type = refType.ElemType;
+            Ensure.That(type.IsValueType);
+        }
+        if (type is PrimType prim) {
+            type = prim.GetDefinition(Resolver);
+        }
+        return type;
     }
 
     protected virtual void Append(Instruction inst)

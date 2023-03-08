@@ -22,7 +22,7 @@ public class NamifyIR : IMethodPass
 
             foreach (var inst in block) {
                 if (inst.HasResult && !symTable.HasCustomName(inst)) {
-                    symTable.SetName(inst, $"{GetBaseName(inst)}{++instId}");
+                    symTable.SetName(inst, $"t{++instId}");
                 }
             }
         }
@@ -40,15 +40,5 @@ public class NamifyIR : IMethodPass
             return "Cond";
         }
         return "";
-    }
-    private static string GetBaseName(Instruction inst)
-    {
-        if (inst is CallInst call) {
-            return "c_" + call.Method.Name;
-        }
-        if (inst is LoadFieldInst fld) {
-            return "ldf_" + fld.Field.Name;
-        }
-        return "i";
     }
 }

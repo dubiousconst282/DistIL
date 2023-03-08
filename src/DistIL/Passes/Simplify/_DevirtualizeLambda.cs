@@ -2,6 +2,8 @@ namespace DistIL.Passes;
 
 using System.Runtime.CompilerServices;
 
+using DistIL.IR.Utils;
+
 partial class SimplifyInsts
 {
     //Directize delegate invokes if target is known:
@@ -33,7 +35,7 @@ partial class SimplifyInsts
             var phiArg1 = phi.GetValue(0);
             var phiArg2 = phi.GetValue(1);
             var allocInst = (phiArg1 as NewObjInst) ?? (phiArg2 as NewObjInst);
-            var cacheLoad = (phiArg1 as LoadFieldInst) ?? (phiArg2 as LoadFieldInst);
+            var cacheLoad = (phiArg1 as LoadPtrInst) ?? (phiArg2 as LoadPtrInst);
 
             if (allocInst == null || cacheLoad == null || !DevirtWithCtorArgs(call, allocInst)) return false;
 
@@ -63,8 +65,10 @@ partial class SimplifyInsts
             } else if (method.IsInstance) {
                 call.Method = method;
                 //Create a new load before call to assert dominance
-                if (instanceObj is LoadFieldInst { IsStatic: true, Field: var field }) {
-                    var newLoad = new LoadFieldInst(field);
+                if (Match.StaticFieldLoad(instanceObj, out var field)) {
+                    var fieldAddr = new FieldAddrInst(field);
+                    var newLoad = new LoadPtrInst(fieldAddr);
+                    fieldAddr.InsertBefore(call);
                     newLoad.InsertBefore(call);
                     instanceObj = newLoad;
                 }
@@ -73,7 +77,7 @@ partial class SimplifyInsts
             }
             return false;
         }
-        static bool DeleteCache(PhiInst phi, NewObjInst allocInst, LoadFieldInst cacheLoad)
+        static bool DeleteCache(PhiInst phi, NewObjInst allocInst, LoadPtrInst cacheLoad)
         {
             var condBlock = cacheLoad.Block;
 
@@ -86,9 +90,10 @@ partial class SimplifyInsts
                     condCache == cacheLoad &&
                 //BB_CacheLoad must store to the cache field
                 allocInst.NumUses == 2 && //phi and next store
-                allocInst.Next is StoreFieldInst cacheStore &&
-                cacheStore.Field == cacheLoad.Field &&
-                cacheStore.Field.DeclaringType is TypeDefOrSpec declType && 
+                Match.StaticFieldLoad(cacheLoad, out var cacheField) &&
+                allocInst.Next?.Next is StorePtrInst cacheStore && 
+                (cacheStore.Address as FieldAddrInst)?.Field == cacheField &&
+                cacheField.DeclaringType is TypeDefOrSpec declType && 
                 declType.Definition.HasCustomAttrib(typeof(CompilerGeneratedAttribute))
             )) return false;
 

@@ -1,8 +1,8 @@
 namespace DistIL.CodeGen.Cil;
 
+#pragma warning disable format
 internal static class ILTables
 {
-#pragma warning disable format
     const bool T = true, F = false;
 
     public static ILCode GetBinaryCode(BinaryOp op)
@@ -197,7 +197,7 @@ internal static class ILTables
         };
     }
 
-    public static ILCode GetArrayElemMacro(TypeDesc type, bool ld) => type.Kind switch {
+    public static ILCode GetArrayElemCode(TypeDesc type, bool ld) => type.Kind switch {
         TypeKind.SByte      => ld ? ILCode.Ldelem_I1 : ILCode.Stelem_I1,
         TypeKind.Int16      => ld ? ILCode.Ldelem_I2 : ILCode.Stelem_I2,
         TypeKind.Int32      => ld ? ILCode.Ldelem_I4 : ILCode.Stelem_I4,
@@ -213,7 +213,6 @@ internal static class ILTables
         TypeKind.IntPtr or
         TypeKind.UIntPtr or 
         TypeKind.Pointer    => ld ? ILCode.Ldelem_I  : ILCode.Stelem_I,
-        _ => default
+        _                   => ld ? ILCode.Ldelem    : ILCode.Stelem
     };
-#pragma warning restore format
 }

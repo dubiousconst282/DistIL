@@ -13,12 +13,10 @@ public interface InstVisitor
     
     void Visit(LoadPtrInst inst);
     void Visit(StorePtrInst inst);
+    
     void Visit(ArrayAddrInst inst);
-    void Visit(PtrOffsetInst inst);
-
-    void Visit(LoadFieldInst inst);
-    void Visit(StoreFieldInst inst);
     void Visit(FieldAddrInst inst);
+    void Visit(PtrOffsetInst inst);
 
     void Visit(CallInst inst);
     void Visit(NewObjInst inst);

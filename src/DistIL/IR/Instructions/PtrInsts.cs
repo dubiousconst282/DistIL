@@ -3,10 +3,17 @@ namespace DistIL.IR;
 public abstract class PtrAccessInst : Instruction, AccessInst
 {
     public Value Address {
-        get => Operands[0];
+        get => _operands[0];
         set => ReplaceOperand(0, value);
     }
-    public override bool MayThrow => true;
+    public override bool MayThrow {
+        get {
+            if (Address is AddressInst addr && addr is FieldAddrInst or ArrayAddrInst) {
+                return addr.MayThrow || addr.ElemType != ElemType;
+            }
+            return true;
+        }
+    }
 
     public abstract TypeDesc ElemType { get; set; }
     public PointerFlags Flags { get; set; }
@@ -42,10 +49,13 @@ public class LoadPtrInst : PtrAccessInst, LoadInst
 public class StorePtrInst : PtrAccessInst, StoreInst
 {
     public Value Value {
-        get => Operands[1];
+        get => _operands[1];
         set => ReplaceOperand(1, value);
     }
     public override TypeDesc ElemType { get; set; }
+
+    /// <summary> Checks if <see cref="AddressInst.ElemType"/> differs from the value type. </summary>
+    public bool IsCasting => ElemType != Value.ResultType;
 
     public override string InstName => "stptr" + (Unaligned ? ".un" : "") + (Volatile ? ".volatile" : "");
     public override bool HasSideEffects => true;
@@ -62,8 +72,11 @@ public class StorePtrInst : PtrAccessInst, StoreInst
     protected override void PrintOperands(PrintContext ctx)
     {
         base.PrintOperands(ctx);
-        ctx.Print(" as ", PrintToner.InstName);
-        ElemType.Print(ctx);
+
+        if (IsCasting) {
+            ctx.Print(" as ", PrintToner.InstName);
+            ElemType.Print(ctx);
+        }
     }
 }
 

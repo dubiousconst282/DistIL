@@ -1,5 +1,6 @@
 namespace DistIL.Passes;
 
+using DistIL.IR.Intrinsics;
 using DistIL.IR.Utils;
 
 using Bin = IR.BinaryOp;
@@ -32,7 +33,7 @@ public partial class SimplifyInsts : IMethodPass
                 _ => null
             };
             if (newValue != null) {
-                inst.ReplaceWith(newValue);
+                inst.ReplaceWith(newValue, insertIfInst: true);
             }
         }
         //TODO: track invalidations precisely
@@ -79,6 +80,9 @@ public partial class SimplifyInsts : IMethodPass
         ) {
             inst.Left = l_nc_c.Left;
             inst.Right = lr_op_r;
+        }
+        if (inst.ResultType.IsPointerLike() && SimplifyAddress(inst) is { } addr) {
+            return addr;
         }
         return ConstFolding.FoldBinary(inst.Op, inst.Left, inst.Right);
     }
@@ -128,5 +132,31 @@ public partial class SimplifyInsts : IMethodPass
     private Value? SimplifyConvert(ConvertInst inst)
     {
         return ConstFolding.FoldConvert(inst.Value, inst.ResultType, inst.CheckOverflow, inst.SrcUnsigned);
+    }
+    //r5 = conv r18 -> long         (?)
+    //r6 = mul r5, stride -> long
+    //r7 = conv r6 -> nint          (?)
+    //r8 = add basePtr, r7 -> nint
+    //
+    // -> lea basePtr + r18 * stride
+    private static Value? SimplifyAddress(BinaryInst? inst)
+    {
+        if (!Match.Add(inst, out var basePtr, out var index)) return null;
+
+        if (index is ConvertInst { ResultType.StackType: StackType.NInt } conv1) {
+            index = conv1.Value;
+        }
+        if (!Match.Mul(index, out index, out var stride)) return null;
+
+        if (index is ConvertInst { IsTruncation: false } conv2) {
+            index = conv2.Value;
+        }
+
+        if (stride.Is(CilIntrinsicId.SizeOf, out var sizeIntrin)) {
+            return new PtrOffsetInst(basePtr, index, (TypeDesc)sizeIntrin.Args[0]);
+        } else if (stride is ConstInt cstride) {
+            return new PtrOffsetInst(basePtr, index, (int)cstride.Value);
+        }
+        return null;
     }
 }

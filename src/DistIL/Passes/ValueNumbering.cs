@@ -128,16 +128,6 @@ public class ValueNumbering : IMethodPass
             HashFn = (inst) => HashCode.Combine(inst.Address, inst.ElemType),
             MayAliasFn = (st, acc) => true
         });
-        RegLoc<FieldAccessInst, LoadFieldInst, StoreFieldInst>(new() {
-            CompareFn = (a, b) => a.Field.Equals(b.Field) && a.Obj == b.Obj,
-            HashFn = (inst) => HashCode.Combine(inst.Field, inst.Obj),
-            //Field stores may alias local variables in some cases, e.g:
-            //  Point& ptr = fldaddr Foo::wrapper
-            //  int x1 = ldfld Point::X, ptr
-            //  stfld Foo::wrapper, ...
-            //  int x2 = ldfld Point::X, ptr  //different from x1
-            MayAliasFn = (st, acc) => acc is PtrAccessInst or FieldAccessInst or VarAccessInst { Var.IsExposed: true }
-        });
         s_Taggers.Add(typeof(CallInst), new CallTagger());
         //FIXME: tag invalidators for NewObj and Intrinsic insts
 

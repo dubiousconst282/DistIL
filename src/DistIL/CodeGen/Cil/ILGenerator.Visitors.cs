@@ -49,61 +49,72 @@ partial class ILGenerator
 
     public void Visit(LoadPtrInst inst)
     {
-        switch (inst.Address) {
-            case ArrayAddrInst addr when addr.ElemType == inst.ElemType && _forest.IsLeaf(addr): {
-                EmitLoadOrStoreArray(addr, null);
-                return;
-            }
-        }
+        if (EmitContainedLoadOrStore(inst, null)) return;
+
         Push(inst.Address);
-        EmitLoadOrStorePtr(inst);
+        EmitLoadOrStorePtr(inst, isLoad: true);
     }
     public void Visit(StorePtrInst inst)
     {
-        switch (inst.Address) {
-            case ArrayAddrInst addr when addr.ElemType == inst.ElemType && _forest.IsLeaf(addr): {
-                EmitLoadOrStoreArray(addr, inst.Value);
-                return;
-            }
-        }
+        if (EmitContainedLoadOrStore(inst, inst.Value)) return;
+
         Push(inst.Address);
         Push(inst.Value);
-        EmitLoadOrStorePtr(inst);
+        EmitLoadOrStorePtr(inst, isLoad: false);
     }
-    private void EmitLoadOrStorePtr(PtrAccessInst inst)
+    private bool EmitContainedLoadOrStore(PtrAccessInst inst, Value? valToStore)
     {
-        bool isLoad = inst is LoadPtrInst;
-        if (inst.Volatile) _asm.Emit(ILCode.Volatile_);
+        if (inst.Address is AddressInst addr && addr.ElemType == inst.ElemType && _forest.IsLeaf(addr)) {
+            if (addr is ArrayAddrInst arrayAddr) {
+                EmitLoadOrStoreArray(arrayAddr, valToStore);
+                return true;
+            }
+            if (addr is FieldAddrInst fldAddr) {
+                EmitLoadOrStoreField(fldAddr, valToStore);
+                return true;
+            }
+        }
+        return false;
+    }
+    private void EmitLoadOrStorePtr(PtrAccessInst inst, bool isLoad)
+    {
         if (inst.Unaligned) _asm.Emit(ILCode.Unaligned_, 1); //TODO: keep alignment in IR
+        if (inst.Volatile) _asm.Emit(ILCode.Volatile_);
 
         var addrType = inst.Address.ResultType;
         var interpType = inst.ElemType;
 
-        var refCode = isLoad ? ILCode.Ldind_Ref : ILCode.Stind_Ref;
-        var objCode = isLoad ? ILCode.Ldobj : ILCode.Stobj;
-
-        if (!interpType.IsValueType && interpType is not GenericParamType && addrType.ElemType == interpType) {
-            _asm.Emit(refCode);
-        } else {
+        if (interpType.IsValueType || interpType is GenericParamType || addrType.ElemType != interpType) {
             var code = ILTables.GetPtrAccessCode(interpType, isLoad);
-            _asm.Emit(code, code == objCode ? interpType : null);
+            var oper = code is ILCode.Ldobj or ILCode.Stobj ? interpType : null;
+            _asm.Emit(code, oper);
+        } else {
+            _asm.Emit(isLoad ? ILCode.Ldind_Ref : ILCode.Stind_Ref);
         }
     }
     private void EmitLoadOrStoreArray(ArrayAddrInst addr, Value? valToStore)
     {
-        bool ld = valToStore == null;
+        bool isLoad = valToStore == null;
 
         Push(addr.Array);
         Push(addr.Index);
-        if (!ld) Push(valToStore!);
+        if (!isLoad) Push(valToStore!);
 
-        var code = ILTables.GetArrayElemMacro(addr.ElemType, ld);
+        var code = ILTables.GetArrayElemCode(addr.ElemType, isLoad);
+        var oper = code is ILCode.Ldelem or ILCode.Stelem ? addr.ElemType : null;
+        _asm.Emit(code, oper);
+    }
+    private void EmitLoadOrStoreField(FieldAddrInst addr, Value? valToStore)
+    {
+        bool isLoad = valToStore == null;
 
-        if (code != default) {
-            _asm.Emit(code);
-        } else {
-            _asm.Emit(ld ? ILCode.Ldelem : ILCode.Stelem, addr.ElemType);
-        }
+        if (addr.IsInstance) Push(addr.Obj);
+        if (!isLoad) Push(valToStore!);
+
+        var code = addr.IsStatic
+            ? (isLoad ? ILCode.Ldsfld : ILCode.Stsfld)
+            : (isLoad ? ILCode.Ldfld : ILCode.Stfld);
+        _asm.Emit(code, addr.Field);
     }
 
     public void Visit(ArrayAddrInst inst)
@@ -115,6 +126,14 @@ partial class ILGenerator
             _asm.Emit(ILCode.Readonly_);
         }
         _asm.Emit(ILCode.Ldelema, inst.ElemType);
+    }
+    public void Visit(FieldAddrInst inst)
+    {
+        if (!inst.IsStatic) {
+            Push(inst.Obj);
+        }
+        var code = inst.IsStatic ? ILCode.Ldsflda : ILCode.Ldflda;
+        _asm.Emit(code, inst.Field);
     }
     public void Visit(PtrOffsetInst inst)
     {
@@ -133,32 +152,6 @@ partial class ILGenerator
         }
         _asm.Emit(ILCode.Mul);
         _asm.Emit(ILCode.Add);
-    }
-
-    public void Visit(LoadFieldInst inst)
-    {
-        if (!inst.IsStatic) {
-            Push(inst.Obj);
-        }
-        var code = inst.IsStatic ? ILCode.Ldsfld : ILCode.Ldfld;
-        _asm.Emit(code, inst.Field);
-    }
-    public void Visit(StoreFieldInst inst)
-    {
-        if (!inst.IsStatic) {
-            Push(inst.Obj);
-        }
-        Push(inst.Value);
-        var code = inst.IsStatic ? ILCode.Stsfld : ILCode.Stfld;
-        _asm.Emit(code, inst.Field);
-    }
-    public void Visit(FieldAddrInst inst)
-    {
-        if (!inst.IsStatic) {
-            Push(inst.Obj);
-        }
-        var code = inst.IsStatic ? ILCode.Ldsflda : ILCode.Ldflda;
-        _asm.Emit(code, inst.Field);
     }
 
     public void Visit(CallInst inst)

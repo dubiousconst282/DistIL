@@ -46,20 +46,9 @@ public class ScalarReplacement : IMethodPass
 
         foreach (var user in alloc.Users()) {
             switch (user) {
-                case LoadFieldInst load: {
-                    var slot = GetSlot(load.Field);
-                    load.ReplaceWith(new LoadVarInst(slot), insertIfInst: true);
-                    break;
-                }
                 case FieldAddrInst addr: {
                     var slot = GetSlot(addr.Field);
-                    slot.IsExposed = true;
-                    addr.ReplaceWith(new VarAddrInst(slot), insertIfInst: true);
-                    break;
-                }
-                case StoreFieldInst store: {
-                    var slot = GetSlot(store.Field);
-                    store.ReplaceWith(new StoreVarInst(slot, store.Value), insertIfInst: true);
+                    ScalarizeRef(addr, slot);
                     break;
                 }
                 default: {
@@ -82,6 +71,29 @@ public class ScalarReplacement : IMethodPass
         }
     }
 
+    private static void ScalarizeRef(FieldAddrInst addr, Variable slot)
+    {
+        foreach (var use in addr.Uses()) {
+            switch (use.Parent) {
+                case LoadPtrInst load: {
+                    load.ReplaceWith(new LoadVarInst(slot), insertIfInst: true);
+                    break;
+                }
+                case StorePtrInst store: {
+                    store.ReplaceWith(new StoreVarInst(slot, store.Value), insertIfInst: true);
+                    break;
+                }
+                default: {
+                    var varAddr = new VarAddrInst(slot);
+                    varAddr.InsertBefore(use.Parent);
+                    use.Operand = varAddr;
+                    slot.IsExposed = true;
+                    break;
+                }
+            }
+        }
+    }
+
     private static bool IsSimpleCtor(NewObjInst alloc)
     {
         if (alloc.Constructor is not MethodDefOrSpec { Definition.Body: MethodBody body }) {
@@ -93,11 +105,7 @@ public class ScalarReplacement : IMethodPass
     private static bool Escapes(TrackedValue obj, bool isCtor = false)
     {
         //Consider obj as escaping if it is being passed somewhere
-        return !obj.Users().All(u => 
-            (u is LoadFieldInst or FieldAddrInst) || 
-            (u is StoreFieldInst st && st.Value != obj) ||
-            (isCtor && IsObjectCtorCall(u))
-        );
+        return !obj.Users().All(u => u is FieldAddrInst || (isCtor && IsObjectCtorCall(u)));
     }
 
     private static bool IsObjectCtorCall(Instruction inst)

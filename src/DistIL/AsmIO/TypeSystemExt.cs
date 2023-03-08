@@ -16,4 +16,16 @@ public static class TypeSystemExt
                desc.Name == rtType.Name &&
                desc.Namespace == rtType.Namespace;
     }
+
+    /// <summary> Checks whether <paramref name="type"/> is a byref, pointer, or nint. </summary>
+    public static bool IsPointerLike(this TypeDesc type)
+    {
+        return type.StackType is StackType.ByRef or StackType.NInt;
+    }
+
+    /// <summary> Checks whether <paramref name="type"/> is an unmanaged pointer or nint. </summary>
+    public static bool IsRawPointer(this TypeDesc type)
+    {
+        return type.StackType is StackType.NInt;
+    }
 }

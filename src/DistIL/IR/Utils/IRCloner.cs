@@ -153,12 +153,10 @@ public class IRCloner
 
         public void Visit(LoadPtrInst inst) => Out(new LoadPtrInst(Remap(inst.Address), Remap(inst.ElemType), inst.Flags));
         public void Visit(StorePtrInst inst) => Out(new StorePtrInst(Remap(inst.Address), Remap(inst.Value), Remap(inst.ElemType), inst.Flags));
-        public void Visit(ArrayAddrInst inst) => Out(new ArrayAddrInst(Remap(inst.Array), Remap(inst.Index), Remap(inst.ElemType), inst.InBounds, inst.IsReadOnly));
-        public void Visit(PtrOffsetInst inst) => Out(new PtrOffsetInst(Remap(inst.BasePtr), Remap(inst.Index), Remap(inst.ResultType), inst.Stride, 0));
 
-        public void Visit(LoadFieldInst inst) => Out(new LoadFieldInst(Remap(inst.Field), inst.IsStatic ? null : Remap(inst.Obj)));
-        public void Visit(StoreFieldInst inst) => Out(new StoreFieldInst(Remap(inst.Field), inst.IsStatic ? null : Remap(inst.Obj), Remap(inst.Value)));
+        public void Visit(ArrayAddrInst inst) => Out(new ArrayAddrInst(Remap(inst.Array), Remap(inst.Index), Remap(inst.ElemType), inst.InBounds, inst.IsReadOnly));
         public void Visit(FieldAddrInst inst) => Out(new FieldAddrInst(Remap(inst.Field), inst.IsStatic ? null : Remap(inst.Obj)));
+        public void Visit(PtrOffsetInst inst) => Out(new PtrOffsetInst(Remap(inst.BasePtr), Remap(inst.Index), Remap(inst.ResultType), inst.Stride, 0));
 
         public void Visit(CallInst inst) => Out(new CallInst(Remap(inst.Method), RemapArgs(inst.Args), inst.IsVirtual, inst.Constraint == null ? null : Remap(inst.Constraint)));
         public void Visit(NewObjInst inst) => Out(new NewObjInst(Remap(inst.Constructor), RemapArgs(inst.Args)));

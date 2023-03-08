@@ -224,20 +224,20 @@ import @ from TestAsm
 
 public ParserDummy::TestCase() {
 Entry:
-    a = ldfld ParserDummy::_foo, #this -> int
-    b = ldfld ParserDummy::s_Bar -> int
-    stfld ParserDummy::_foo, #this, b
-    stfld ParserDummy::s_Bar, a
+    a = fldaddr ParserDummy::_foo, #this -> int&
+    b = fldaddr ParserDummy::s_Bar -> int&
+    stptr a, 123
+    stptr b, 456
     ret
 }
 ";
         var body = Parse(code);
         var insts = body.Instructions().ToArray();
 
-        Assert.True(insts[0] is LoadFieldInst { Field.Name: "_foo", Obj: Argument });
-        Assert.True(insts[1] is LoadFieldInst { Field.Name: "s_Bar", Obj: null });
-        Assert.True(insts[2] is StoreFieldInst { Field.Name: "_foo", Obj: Argument } st1 && st1.Value == insts[1]);
-        Assert.True(insts[3] is StoreFieldInst { Field.Name: "s_Bar", Obj: null } st2 && st2.Value == insts[0]);
+        Assert.True(insts[0] is FieldAddrInst { Field.Name: "_foo", Obj: Argument });
+        Assert.True(insts[1] is FieldAddrInst { Field.Name: "s_Bar", Obj: null });
+        Assert.True(insts[2] is StorePtrInst { Value: ConstInt { Value: 123 } } st1 && st1.Value == insts[1]);
+        Assert.True(insts[3] is StorePtrInst { Value: ConstInt { Value: 456 } } st2 && st2.Value == insts[0]);
     }
 
     [Fact]

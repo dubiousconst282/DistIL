@@ -18,7 +18,7 @@ using MethodAttribs = System.Reflection.MethodAttributes;
 //    "goto"  (Label | (Value "?" Label ":" Label))
 //  | "phi"  Seq{"["  Label  ":"  Value  "]"}  ResultType
 //  | ("call" | "callvirt" | "newobj")  Method  "(" Seq{CallArg} ")"  ResultType
-//  | ("ldfld" | "fldaddr")  Field  Value?  ResultType
+//  | ("fldaddr")  Field  Value?  ResultType
 //  | "stfld"  Field Value ["," Value]
 //  | Opcode  Operands
 //  | Id  "="  Opcode  Operands  ResultType

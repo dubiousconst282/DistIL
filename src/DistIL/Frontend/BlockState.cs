@@ -678,9 +678,6 @@ internal class BlockState
     {
         var addr = Pop();
 
-        if (type == null) {
-            type = ((PointerType)addr.ResultType).ElemType; //ldind_ref
-        }
         Push(new LoadPtrInst(addr, type, PopPointerFlags()));
     }
     private void ImportStoreInd(TypeDesc? type)
@@ -688,9 +685,6 @@ internal class BlockState
         var value = Pop();
         var addr = Pop();
 
-        if (type == null) {
-            type = ((PointerType)addr.ResultType).ElemType; //stind_ref
-        }
         Emit(new StorePtrInst(addr, value, type, PopPointerFlags()));
     }
     private PointerFlags PopPointerFlags()
@@ -703,19 +697,24 @@ internal class BlockState
 
     private void ImportLoadField(FieldDesc field, bool isStatic)
     {
-        var obj = isStatic ? null : Pop();
-        Push(new LoadFieldInst(field, obj));
+        var addr = EmitFieldAddr(field, isStatic);
+        Push(new LoadPtrInst(addr, flags: PopPointerFlags()));
     }
     private void ImportStoreField(FieldDesc field, bool isStatic)
     {
         var value = Pop();
-        var obj = isStatic ? null : Pop();
-        Emit(new StoreFieldInst(field, obj, value));
+        var addr = EmitFieldAddr(field, isStatic);
+        Emit(new StorePtrInst(addr, value, flags: PopPointerFlags()));
     }
     private void ImportFieldAddr(FieldDesc field, bool isStatic)
     {
-        var obj = isStatic ? null : Pop();
-        Push(new FieldAddrInst(field, obj));
+        PushNoEmit(EmitFieldAddr(field, isStatic));
+    }
+    private FieldAddrInst EmitFieldAddr(FieldDesc field, bool isStatic)
+    {
+        var inst = new FieldAddrInst(field, isStatic ? null : Pop());
+        Emit(inst);
+        return inst;
     }
 
     private void ImportCall(MethodDesc method, bool isVirt)

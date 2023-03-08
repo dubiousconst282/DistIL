@@ -86,6 +86,7 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
 
     manager.AddPasses()
         .Apply<LoopStrengthReduction>()
+        .Apply<LoopVectorization>()
         .Apply<LoopUnrolling>()
         .Apply<SlpVectorizer>()
         .IfChanged(simplifySeg);

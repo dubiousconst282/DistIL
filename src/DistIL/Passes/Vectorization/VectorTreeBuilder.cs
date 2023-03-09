@@ -57,17 +57,17 @@ internal struct VectorTreeBuilder
 
             if (i == 0) continue;
 
-            allSameIndex &= addrs[0].SameIndex(addrs[i]);
-            allConsecutive &= addrs[i].Displacement == addrs[i - 1].Displacement + 1;
+            allSameIndex &= addrs[0].SameBase(addrs[i]);
+            allConsecutive &= addrs[i].Index == addrs[i - 1].Index + 1;
 
-            if (addrs[i].Displacement < addrs[minDispIdx].Displacement) {
+            if (addrs[i].Index < addrs[minDispIdx].Index) {
                 minDispIdx = i;
             }
-            if (addrs[i].Displacement > addrs[maxDispIdx].Displacement) {
+            if (addrs[i].Index > addrs[maxDispIdx].Index) {
                 maxDispIdx = i;
             }
         }
-        int maxDist = addrs[maxDispIdx].Displacement - addrs[minDispIdx].Displacement;
+        int maxDist = addrs[maxDispIdx].Index - addrs[minDispIdx].Index;
 
         //If all loads are within the same vector block, a single load will do.
         if (allSameIndex && (allConsecutive || maxDist + 1 == lanes.Length)) {
@@ -76,10 +76,10 @@ internal struct VectorTreeBuilder
             Cost -= VecType.Count * 1.25f;
 
             if (!allConsecutive) {
-                int baseDisp = addrs[minDispIdx].Displacement;
+                int baseDisp = addrs[minDispIdx].Index;
                 node = new ShuffleNode() {
                     Type = VecType,
-                    Indices = addrs.Select(a => a.Displacement - baseDisp).ToArray(),
+                    Indices = addrs.Select(a => a.Index - baseDisp).ToArray(),
                     Arg = node
                 };
                 Cost += 0.5f;

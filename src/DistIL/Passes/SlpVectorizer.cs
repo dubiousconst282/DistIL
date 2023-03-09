@@ -41,7 +41,7 @@ public class SlpVectorizer : IMethodPass
                 var stores = bucket.AsSpan();
 
                 //Sort bucket so that consecutive stores are next to each other
-                stores.Sort((a, b) => a.Addr.SameIndex(b.Addr) ? a.Addr.Displacement - b.Addr.Displacement : +1);
+                stores.Sort((a, b) => a.Addr.SameBase(b.Addr) ? a.Addr.Index - b.Addr.Index : +1);
 
                 //Break up stores into vector-size chunks and try vectorize them
                 for (int i = 0; i < stores.Length; ) {

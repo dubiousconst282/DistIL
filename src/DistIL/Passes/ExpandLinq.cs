@@ -52,7 +52,7 @@ public class ExpandLinq : IMethodPass
         //Linq can special-case source types and defer to e.g. Array.Copy().
         //Similarly, expanding an enumerator source to a loop sink is an expansive no-op.
         if (source is EnumeratorSource && source.Drain == sink) {
-            return sink is not ConcretizationSink or LoopSink;
+            return sink is not (ConcretizationSink or LoopSink);
         }
         return true;
     }

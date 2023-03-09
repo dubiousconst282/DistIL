@@ -97,6 +97,15 @@ public class MethodDef : MethodDefOrSpec
             ? new MethodSpec(DeclaringType.GetSpec(ctx), this, ctx.FillParams(GenericParams))
             : this;
     }
+    public MethodSpec GetSpec(ImmutableArray<TypeDesc> genArgs)
+    {
+        Ensure.That(IsGeneric && genArgs.Length == GenericParams.Count);
+        return new MethodSpec(DeclaringType, this, genArgs);
+    }
+    public MethodSpec GetSpec(TypeDesc genArg1)
+    {
+        return GetSpec(ImmutableArray.Create(genArg1));
+    }
 
     public override IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
         => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);

@@ -71,10 +71,12 @@ public class PrimType : TypeDesc
     public static PrimType? GetFromDefinition(TypeDef def)
         => IsSystemType(def) ? _fromName.GetValueOrDefault((def.Name, false)) : null;
 
+    public static PrimType GetFromKind(TypeKind kind) => GetFromSrmCode(kind.ToSrmTypeCode());
+
     private static bool IsSystemType(TypeDef type)
         => type.Namespace == "System" && type.IsCorelibType();
 
-    internal static TypeDesc GetFromSrmCode(PrimitiveTypeCode typeCode)
+    internal static PrimType GetFromSrmCode(PrimitiveTypeCode typeCode)
     {
         return typeCode switch {
             PrimitiveTypeCode.Void    => Void,

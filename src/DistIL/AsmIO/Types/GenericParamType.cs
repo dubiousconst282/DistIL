@@ -33,6 +33,24 @@ public class GenericParamType : TypeDesc
         Constraints = constraints.EmptyIfDefault();
     }
 
+    const int kCacheSize = 8;
+    static readonly GenericParamType?[] s_UnboundCache = new GenericParamType?[kCacheSize * 2];
+
+    /// <summary> Returns an unbound generic type parameter at <paramref name="index"/>. </summary>
+    public static TypeDesc GetUnboundT(int index) => GetUnbound(index, isMethodParam: false);
+
+    /// <summary> Returns an unbound generic method parameter at <paramref name="index"/>. </summary>
+    public static TypeDesc GetUnboundM(int index) => GetUnbound(index, isMethodParam: true);
+
+    public static TypeDesc GetUnbound(int index, bool isMethodParam)
+    {
+        if (index >= 0 && index < kCacheSize) {
+            int cacheIdx = index + (isMethodParam ? kCacheSize : 0);
+            return s_UnboundCache[cacheIdx] ??= new(index, isMethodParam);
+        }
+        return new GenericParamType(index, isMethodParam);
+    }
+
     internal void Load3(ModuleLoader loader, GenericParameter info)
     {
         Constraints = DecodeConstraints(loader, info.GetConstraints());

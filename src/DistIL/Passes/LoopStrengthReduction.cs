@@ -266,7 +266,7 @@ public class LoopStrengthReduction : IMethodPass
         static CallInst CreateGetArrayDataRef(IRBuilder builder, Value source)
         {
             var elemType = ((ArrayType)source.ResultType).ElemType;
-            var T0 = new GenericParamType(0, isMethodParam: true);
+            var T0 = GenericParamType.GetUnboundM(0);
 
             var m_GetArrayDataRef = builder.Resolver
                 .Import(typeof(System.Runtime.InteropServices.MemoryMarshal))

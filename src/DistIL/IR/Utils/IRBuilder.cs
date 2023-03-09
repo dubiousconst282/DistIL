@@ -143,23 +143,23 @@ public class IRBuilder
         => Emit(new IntrinsicInst(intrinsic, args));
 
 
-    public LoadPtrInst CreateFieldLoad(FieldDesc field, Value? obj = null, bool inBounds = false)
+    public LoadInst CreateFieldLoad(FieldDesc field, Value? obj = null, bool inBounds = false)
     {
         var addr = CreateFieldAddr(field, obj, inBounds);
-        return CreatePtrLoad(addr);
+        return CreateLoad(addr);
     }
 
-    public StorePtrInst CreateFieldStore(FieldDesc field, Value? obj, Value value, bool inBounds = false)
+    public StoreInst CreateFieldStore(FieldDesc field, Value? obj, Value value, bool inBounds = false)
     {
         var addr = CreateFieldAddr(field, obj, inBounds);
-        return CreatePtrStore(addr, value);
+        return CreateStore(addr, value);
     }
 
     public FieldAddrInst CreateFieldAddr(FieldDesc field, Value? obj = null, bool inBounds = false)
         => Emit(new FieldAddrInst(field, obj, inBounds));
 
 
-    public LoadPtrInst CreateFieldLoad(string fieldName, Value obj)
+    public LoadInst CreateFieldLoad(string fieldName, Value obj)
         => CreateFieldLoad(GetInstanceType(obj).FindField(fieldName), obj);
 
 
@@ -179,16 +179,16 @@ public class IRBuilder
     public IntrinsicInst CreateArrayLen(Value array)
         => Emit(new IntrinsicInst(CilIntrinsic.ArrayLen, array));
 
-    public LoadPtrInst CreateArrayLoad(Value array, Value index, TypeDesc? elemType = null, bool inBounds = false)
+    public LoadInst CreateArrayLoad(Value array, Value index, TypeDesc? elemType = null, bool inBounds = false)
     {
         var addr = CreateArrayAddr(array, index, elemType, inBounds, readOnly: true);
-        return CreatePtrLoad(addr);
+        return CreateLoad(addr);
     }
 
-    public StorePtrInst CreateArrayStore(Value array, Value index, Value value, TypeDesc? elemType = null, bool inBounds = false)
+    public StoreInst CreateArrayStore(Value array, Value index, Value value, TypeDesc? elemType = null, bool inBounds = false)
     {
         var addr = CreateArrayAddr(array, index, elemType, inBounds);
-        return CreatePtrStore(addr, value);
+        return CreateStore(addr, value);
     }
 
     public ArrayAddrInst CreateArrayAddr(Value array, Value index, TypeDesc? elemType = null, bool inBounds = false, bool readOnly = false)
@@ -196,11 +196,11 @@ public class IRBuilder
         return Emit(new ArrayAddrInst(array, index, elemType, inBounds, readOnly));
     }
 
-    public LoadPtrInst CreatePtrLoad(Value addr, TypeDesc? elemType = null, PointerFlags flags = default)
-        => Emit(new LoadPtrInst(addr, elemType, flags));
+    public LoadInst CreateLoad(Value addr, TypeDesc? elemType = null, PointerFlags flags = default)
+        => Emit(new LoadInst(addr, elemType, flags));
 
-    public StorePtrInst CreatePtrStore(Value addr, Value value, TypeDesc? elemType = null, PointerFlags flags = default)
-        => Emit(new StorePtrInst(addr, value, elemType, flags));
+    public StoreInst CreateStore(Value addr, Value value, TypeDesc? elemType = null, PointerFlags flags = default)
+        => Emit(new StoreInst(addr, value, elemType, flags));
 
     /// <summary> Creates the sequence <c>addr + (nint)elemOffset * sizeof(elemType)</c>. </summary>
     public Value CreatePtrOffset(Value addr, Value elemOffset, TypeDesc? elemType = null)

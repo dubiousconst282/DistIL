@@ -47,14 +47,14 @@ partial class ILGenerator
         _asm.EmitAddrOf(inst.Var);
     }
 
-    public void Visit(LoadPtrInst inst)
+    public void Visit(LoadInst inst)
     {
         if (EmitContainedLoadOrStore(inst, null)) return;
 
         Push(inst.Address);
         EmitLoadOrStorePtr(inst, isLoad: true);
     }
-    public void Visit(StorePtrInst inst)
+    public void Visit(StoreInst inst)
     {
         if (EmitContainedLoadOrStore(inst, inst.Value)) return;
 
@@ -62,7 +62,7 @@ partial class ILGenerator
         Push(inst.Value);
         EmitLoadOrStorePtr(inst, isLoad: false);
     }
-    private bool EmitContainedLoadOrStore(PtrAccessInst inst, Value? valToStore)
+    private bool EmitContainedLoadOrStore(MemoryInst inst, Value? valToStore)
     {
         if (inst.Address is AddressInst addr && addr.ElemType == inst.ElemType && _forest.IsLeaf(addr)) {
             if (addr is ArrayAddrInst arrayAddr) {
@@ -76,10 +76,10 @@ partial class ILGenerator
         }
         return false;
     }
-    private void EmitLoadOrStorePtr(PtrAccessInst inst, bool isLoad)
+    private void EmitLoadOrStorePtr(MemoryInst inst, bool isLoad)
     {
-        if (inst.Unaligned) _asm.Emit(ILCode.Unaligned_, 1); //TODO: keep alignment in IR
-        if (inst.Volatile) _asm.Emit(ILCode.Volatile_);
+        if (inst.IsUnaligned) _asm.Emit(ILCode.Unaligned_, 1); //TODO: keep alignment in IR
+        if (inst.IsVolatile) _asm.Emit(ILCode.Volatile_);
 
         var addrType = inst.Address.ResultType;
         var interpType = inst.ElemType;

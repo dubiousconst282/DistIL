@@ -25,7 +25,7 @@ internal class MemorySource : LinqSourceNode
         => builder.CreateCmp(CompareOp.Ult, _currPtr!, _endPtr!); //ptr < endPtr
 
     protected override Value EmitCurrent(IRBuilder builder)
-        => builder.CreatePtrLoad(_currPtr!); //*ptr
+        => builder.CreateLoad(_currPtr!); //*ptr
 }
 internal class EnumeratorSource : LinqSourceNode
 {

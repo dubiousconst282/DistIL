@@ -45,7 +45,7 @@ public class LoopStrengthReduction : IMethodPass
                     //Only reduce pointer related IVs, to avoid inadvertedly increasing
                     //register pressure and adding loop-caried dependencies.
                     //See https://stackoverflow.com/questions/72306573/why-does-this-code-execute-more-slowly-after-strength-reducing-multiplications-t
-                    if (!inst.Users().Any(u => u is PtrAccessInst)) break;
+                    if (!inst.Users().Any(u => u is MemoryInst)) break;
                     if (iv.Offset is not TrackedValue basePtr || basePtr.Users().Count(u => loop.Contains(u.Block)) > 2) break;
 
                     bool mayReplaceCond = cond.Cmp != null && cond.Cmp.Left == iv.Base && loop.IsInvariant(cond.Cmp.Right);

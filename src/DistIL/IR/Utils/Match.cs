@@ -21,16 +21,16 @@ public static class Match
 
     public static bool StaticFieldLoad(Value? inst, out FieldDesc field)
     {
-        if (inst is LoadPtrInst { Address: FieldAddrInst { IsStatic: true } flda }) {
+        if (inst is LoadInst { Address: FieldAddrInst { IsStatic: true } flda }) {
             field = flda.Field;
             return true;
         }
         field = null!;
         return false;
     }
-    public static bool StaticFieldStore(Value? inst, out StorePtrInst store, out FieldDesc field)
+    public static bool StaticFieldStore(Value? inst, out StoreInst store, out FieldDesc field)
     {
-        if (inst is StorePtrInst { Address: FieldAddrInst { IsStatic: true } flda } st) {
+        if (inst is StoreInst { Address: FieldAddrInst { IsStatic: true } flda } st) {
             store = st;
             field = flda.Field;
             return true;

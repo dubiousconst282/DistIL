@@ -277,7 +277,7 @@ public partial class IRParser
             Opcode.FldAddr => ParseFieldAddr(mods),
             Opcode.ArrAddr => ParseArrayAddr(mods),
             Opcode.LdVar or Opcode.StVar or Opcode.VarAddr => ParseVarInst(op),
-            Opcode.Load or Opcode.Store => ParsePtrInst(op, mods),
+            Opcode.Load or Opcode.Store => ParseMemInst(op, mods),
             Opcode.Conv => ParseConv(op, mods),
             _ => ParseMultiOpInst(op, mods, slotToken.Position),
         };
@@ -461,24 +461,23 @@ public partial class IRParser
         return new ConvertInst(srcValue, type, checkOvf, unsigned);
     }
 
-    private Instruction ParsePtrInst(Opcode op, OpcodeModifiers mods)
+    private Instruction ParseMemInst(Opcode op, OpcodeModifiers mods)
     {
         var address = ParseValue();
         var flags = PointerFlags.None;
-        flags |= (mods & OpcodeModifiers.Volatile) != 0 ? PointerFlags.Volatile : 0;
         flags |= (mods & OpcodeModifiers.Un) != 0 ? PointerFlags.Unaligned : 0;
+        flags |= (mods & OpcodeModifiers.Volatile) != 0 ? PointerFlags.Volatile : 0;
 
         switch (op) {
             case Opcode.Load: {
                 var type = ParseResultType();
-                return new LoadPtrInst(address, type, flags);
+                return new LoadInst(address, type, flags);
             }
             case Opcode.Store: {
                 _lexer.Expect(TokenType.Comma);
                 var value = ParseValue();
-                _lexer.ExpectId("as");
-                var type = ParseType();
-                return new StorePtrInst(address, value, type, flags);
+                var type = _lexer.MatchKeyword("as") ? ParseType() : null;
+                return new StoreInst(address, value, type, flags);
             }
             default: throw new UnreachableException();
         }

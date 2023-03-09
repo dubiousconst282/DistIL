@@ -648,14 +648,14 @@ internal class BlockState
     private void ImportLoadElem(TypeDesc? elemType)
     {
         var addr = EmitArrayAddress(elemType);
-        Push(new LoadPtrInst(addr));
+        Push(new LoadInst(addr));
     }
     private void ImportStoreElem(TypeDesc? elemType)
     {
         var value = Pop();
         var addr = EmitArrayAddress(elemType);
 
-        Emit(new StorePtrInst(addr, value));
+        Emit(new StoreInst(addr, value));
     }
     private void ImportLoadElemAddr(TypeDesc elemType)
     {
@@ -678,14 +678,14 @@ internal class BlockState
     {
         var addr = Pop();
 
-        Push(new LoadPtrInst(addr, type, PopPointerFlags()));
+        Push(new LoadInst(addr, type, PopPointerFlags()));
     }
     private void ImportStoreInd(TypeDesc? type)
     {
         var value = Pop();
         var addr = Pop();
 
-        Emit(new StorePtrInst(addr, value, type, PopPointerFlags()));
+        Emit(new StoreInst(addr, value, type, PopPointerFlags()));
     }
     private PointerFlags PopPointerFlags()
     {
@@ -698,13 +698,13 @@ internal class BlockState
     private void ImportLoadField(FieldDesc field, bool isStatic)
     {
         var addr = EmitFieldAddr(field, isStatic);
-        Push(new LoadPtrInst(addr, flags: PopPointerFlags()));
+        Push(new LoadInst(addr, flags: PopPointerFlags()));
     }
     private void ImportStoreField(FieldDesc field, bool isStatic)
     {
         var value = Pop();
         var addr = EmitFieldAddr(field, isStatic);
-        Emit(new StorePtrInst(addr, value, flags: PopPointerFlags()));
+        Emit(new StoreInst(addr, value, flags: PopPointerFlags()));
     }
     private void ImportFieldAddr(FieldDesc field, bool isStatic)
     {

@@ -1,14 +1,11 @@
 namespace DistIL.IR;
 
-public abstract class VarAccessInst : Instruction, AccessInst
+public abstract class VarAccessInst : Instruction
 {
     public Variable Var {
         get => (Variable)Operands[0];
         set => ReplaceOperand(0, value);
     }
-
-    Value AccessInst.Location => Var;
-    TypeDesc AccessInst.LocationType => Var.ResultType;
 
     public VarAccessInst(TypeDesc resultType, params Value[] operands)
         : base(operands)
@@ -16,7 +13,7 @@ public abstract class VarAccessInst : Instruction, AccessInst
         ResultType = resultType;
     }
 }
-public class LoadVarInst : VarAccessInst, LoadInst
+public class LoadVarInst : VarAccessInst
 {
     public override string InstName => "ldvar";
 
@@ -25,7 +22,7 @@ public class LoadVarInst : VarAccessInst, LoadInst
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }
-public class StoreVarInst : VarAccessInst, StoreInst
+public class StoreVarInst : VarAccessInst
 {
     public Value Value {
         get => Operands[1];

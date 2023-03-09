@@ -35,7 +35,7 @@ partial class SimplifyInsts
             var phiArg1 = phi.GetValue(0);
             var phiArg2 = phi.GetValue(1);
             var allocInst = (phiArg1 as NewObjInst) ?? (phiArg2 as NewObjInst);
-            var cacheLoad = (phiArg1 as LoadPtrInst) ?? (phiArg2 as LoadPtrInst);
+            var cacheLoad = (phiArg1 as LoadInst) ?? (phiArg2 as LoadInst);
 
             if (allocInst == null || cacheLoad == null || !DevirtWithCtorArgs(call, allocInst)) return false;
 
@@ -67,7 +67,7 @@ partial class SimplifyInsts
                 //Create a new load before call to assert dominance
                 if (Match.StaticFieldLoad(instanceObj, out var field)) {
                     var fieldAddr = new FieldAddrInst(field);
-                    var newLoad = new LoadPtrInst(fieldAddr);
+                    var newLoad = new LoadInst(fieldAddr);
                     fieldAddr.InsertBefore(call);
                     newLoad.InsertBefore(call);
                     instanceObj = newLoad;
@@ -77,7 +77,7 @@ partial class SimplifyInsts
             }
             return false;
         }
-        static bool DeleteCache(PhiInst phi, NewObjInst allocInst, LoadPtrInst cacheLoad)
+        static bool DeleteCache(PhiInst phi, NewObjInst allocInst, LoadInst cacheLoad)
         {
             var condBlock = cacheLoad.Block;
 
@@ -91,7 +91,7 @@ partial class SimplifyInsts
                 //BB_CacheLoad must store to the cache field
                 allocInst.NumUses == 2 && //phi and next store
                 Match.StaticFieldLoad(cacheLoad, out var cacheField) &&
-                allocInst.Next?.Next is StorePtrInst cacheStore && 
+                allocInst.Next?.Next is StoreInst cacheStore && 
                 (cacheStore.Address as FieldAddrInst)?.Field == cacheField &&
                 cacheField.DeclaringType is TypeDefOrSpec declType && 
                 declType.Definition.HasCustomAttrib(typeof(CompilerGeneratedAttribute))

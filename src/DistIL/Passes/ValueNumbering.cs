@@ -4,27 +4,30 @@ public class ValueNumbering : IMethodPass
 {
     public MethodPassResult Run(MethodTransformContext ctx)
     {
-        foreach (var block in ctx.Method) {
-            var map = new VNMap();
+        var map = new VNMap();
 
+        foreach (var block in ctx.Method) {
             foreach (var inst in block) {
                 if (s_Taggers.TryGetValue(inst.GetType(), out var tagger)) {
                     tagger.Update(map, inst);
                 }
             }
+            map.Clear();
         }
-        return MethodInvalidations.DataFlow;
+        return map.MadeChanges ? MethodInvalidations.DataFlow : 0;
     }
 
     class VNMap
     {
         readonly Dictionary<Instruction, Value> _map = new(VNComparer.Instance);
+        public bool MadeChanges = false;
 
         //Memoize inst result, or replace it with a memoized equivalent value.
         public void MemoizeOrReplace(Instruction inst)
         {
             if (_map.TryGetValue(inst, out var memoized)) {
                 inst.ReplaceWith(memoized);
+                MadeChanges = true;
             } else {
                 Replace(inst, inst);
             }
@@ -41,7 +44,7 @@ public class ValueNumbering : IMethodPass
         public void InvalidateAccesses<TInst>(TInst inst, Func<TInst, Instruction, bool> mayAlias)
         {
             //Load/Store insts are used interchangeably as location keys
-            foreach (var access in _map.Keys.Where(k => k is LoadInst or StoreInst)) {
+            foreach (var access in _map.Keys.Where(k => k is MemoryInst or LoadVarInst or StoreVarInst)) {
                 if (mayAlias(inst, access)) {
                     Invalidate(access);
                 }
@@ -56,6 +59,11 @@ public class ValueNumbering : IMethodPass
                 }
             }
         }
+
+        public void Clear()
+        {
+            _map.Clear();
+        }
     }
 
     //Note: methods of this class will only be called for instructions with a registered tagger.
@@ -68,8 +76,8 @@ public class ValueNumbering : IMethodPass
             var type = x!.GetType();
             if (y!.GetType() != type) {
                 type = type.BaseType;
-                //Both `x` and `y` must derive from some class, "SomethingAccessInst" 
-                if (!typeof(AccessInst).IsAssignableFrom(type) || !typeof(AccessInst).IsAssignableFrom(y.GetType())) {
+                //Both `x` and `y` must derive from MemoryInst
+                if (!typeof(MemoryInst).IsAssignableFrom(type) || !typeof(MemoryInst).IsAssignableFrom(y.GetType())) {
                     return false; //hashes collide
                 }
                 Debug.Assert(type != typeof(object) && type == y.GetType().BaseType);
@@ -117,33 +125,13 @@ public class ValueNumbering : IMethodPass
             HashFn = (inst) => HashCode.Combine(inst.Array, inst.Index, 1234)
         });
 
-        RegLoc<VarAccessInst, LoadVarInst, StoreVarInst>(new() {
-            CompareFn = (a, b) => a.Var == b.Var,
-            HashFn = (inst) => HashCode.Combine(inst.Var),
-            //Variables can't alias, unless they're exposed
-            MayAliasFn = (st, acc) => st.Var.IsExposed && acc is PtrAccessInst
-        });
-        RegLoc<PtrAccessInst, LoadPtrInst, StorePtrInst>(new() {
-            CompareFn = (a, b) => false,//a.Address == b.Address && a.ElemType == b.ElemType && a.Flags == b.Flags,
-            HashFn = (inst) => HashCode.Combine(inst.Address, inst.ElemType),
-            MayAliasFn = (st, acc) => true
-        });
         s_Taggers.Add(typeof(CallInst), new CallTagger());
         //FIXME: tag invalidators for NewObj and Intrinsic insts
 
-        void Reg<TInst>(LambdaTagger<TInst> tagger)
+        static void Reg<TInst>(LambdaTagger<TInst> tagger)
             where TInst : Instruction
         {
             s_Taggers.Add(typeof(TInst), tagger);
-        }
-        void RegLoc<TBase, TLoad, TStore>(LocationLambdaTagger<TBase, TLoad, TStore> tagger)
-            where TBase : Instruction, AccessInst
-            where TLoad : TBase, LoadInst
-            where TStore : TBase, StoreInst
-        {
-            s_Taggers.Add(typeof(TBase), tagger);
-            s_Taggers.Add(typeof(TLoad), tagger);
-            s_Taggers.Add(typeof(TStore), tagger);
         }
     }
 
@@ -168,26 +156,49 @@ public class ValueNumbering : IMethodPass
         public override int Hash(Instruction inst)
             => HashFn.Invoke((TInst)inst);
     }
-    class LocationLambdaTagger<TBase, TLoad, TStore> : LambdaTagger<TBase>
-        where TBase : Instruction, AccessInst
-        where TLoad : TBase, LoadInst
-        where TStore : TBase, StoreInst
+    class MemoryTagger : InstTagger
     {
-        //Checks if a store may alias with a memoized AccessInst
-        public Func<TStore, Instruction, bool> MayAliasFn { get; init; } = null!;
+        public override bool Compare(Instruction a, Instruction b)
+        {
+            var ma = (MemoryInst)a;
+            var mb = (MemoryInst)b;
+            return ma.Address == mb.Address && ma.ElemType == mb.ElemType;
+        }
+        public override int Hash(Instruction inst)
+        {
+            return HashCode.Combine(((MemoryInst)inst).Address);
+        }
 
         public override void Update(VNMap map, Instruction inst)
         {
-            if (inst is TLoad) {
+            if (inst is LoadInst) {
                 map.MemoizeOrReplace(inst);
                 return;
             }
-            var store = (TStore)inst;
-            map.InvalidateAccesses(store, MayAliasFn);
+            var store = (StoreInst)inst;
+            map.InvalidateAccesses(store, CheckMayAlias);
 
-            if (!store.IsCoerced) {
+            if (!StoreInst.MustBeCoerced(store.ElemType, store.Value)) {
                 map.Replace(store, store.Value);
             }
+        }
+
+        private static bool CheckMayAlias(StoreInst store, Instruction otherAcc)
+        {
+            return otherAcc switch {
+                VarAccessInst v => v.Var.IsExposed, //Non-exposed vars can never alias
+                MemoryInst m => MayAlias(store.Address, m.Address),
+                _ => true
+            };
+        }
+
+        private static bool MayAlias(Value addr1, Value addr2)
+        {
+            return (addr1, addr2) switch {
+                //Different fields will never alias unless they're have explicit layout struct; but we don't care for now
+                (FieldAddrInst f1, FieldAddrInst f2) => f1.Field == f2.Field,
+                _ => true //assume the worst
+            };
         }
     }
     class CallTagger : InstTagger

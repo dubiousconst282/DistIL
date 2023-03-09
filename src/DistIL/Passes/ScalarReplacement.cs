@@ -75,11 +75,11 @@ public class ScalarReplacement : IMethodPass
     {
         foreach (var use in addr.Uses()) {
             switch (use.Parent) {
-                case LoadPtrInst load: {
+                case LoadInst load: {
                     load.ReplaceWith(new LoadVarInst(slot), insertIfInst: true);
                     break;
                 }
-                case StorePtrInst store: {
+                case StoreInst store: {
                     store.ReplaceWith(new StoreVarInst(slot, store.Value), insertIfInst: true);
                     break;
                 }

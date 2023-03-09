@@ -11,8 +11,8 @@ public interface InstVisitor
     void Visit(StoreVarInst inst);
     void Visit(VarAddrInst inst);
     
-    void Visit(LoadPtrInst inst);
-    void Visit(StorePtrInst inst);
+    void Visit(LoadInst inst);
+    void Visit(StoreInst inst);
     
     void Visit(ArrayAddrInst inst);
     void Visit(FieldAddrInst inst);

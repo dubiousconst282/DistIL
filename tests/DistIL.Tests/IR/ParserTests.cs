@@ -197,23 +197,21 @@ import @ from TestAsm
 
 static ParserDummy::TestCase(#ptr: int*) {
 Entry:
-    a = ldptr #ptr -> int
-    b = ldptr.un.volatile #ptr -> int
-    stptr #ptr, 123 as int
-    stptr.un.volatile #ptr, 123 as byte
+    a = load #ptr -> int
+    b = load.un.volatile #ptr -> int
+    store #ptr, 123 as int
+    store.un.volatile #ptr, 123 as byte
     ret
 }
 ";
         var body = Parse(code);
         var insts = body.Instructions().ToArray();
 
-        const PointerFlags UnVol = PointerFlags.Unaligned | PointerFlags.Volatile;
+        Assert.True(insts[0] is LoadInst { IsVolatile: false, IsUnaligned: false, Address: Argument } ld1 && ld1.ElemType == PrimType.Int32);
+        Assert.True(insts[1] is LoadInst { IsVolatile: true, IsUnaligned: true, Address: Argument });
 
-        Assert.True(insts[0] is LoadPtrInst { Flags: 0, Address: Argument } ld1 && ld1.ElemType == PrimType.Int32);
-        Assert.True(insts[1] is LoadPtrInst { Flags: UnVol, Address: Argument });
-
-        Assert.True(insts[2] is StorePtrInst { Flags: 0, Address: Argument } st1 && st1.ElemType == PrimType.Int32);
-        Assert.True(insts[3] is StorePtrInst { Flags: UnVol, Address: Argument } st2 && st2.ElemType == PrimType.Byte);
+        Assert.True(insts[2] is StoreInst { IsVolatile: false, IsUnaligned: false, Address: Argument } st1 && st1.ElemType == PrimType.Int32);
+        Assert.True(insts[3] is StoreInst { IsVolatile: true, IsUnaligned: true, Address: Argument } st2 && st2.ElemType == PrimType.Byte);
     }
 
     [Fact]
@@ -226,8 +224,8 @@ public ParserDummy::TestCase() {
 Entry:
     a = fldaddr ParserDummy::_foo, #this -> int&
     b = fldaddr ParserDummy::s_Bar -> int&
-    stptr a, 123
-    stptr b, 456
+    store a, 123
+    store b, 456
     ret
 }
 ";
@@ -236,8 +234,8 @@ Entry:
 
         Assert.True(insts[0] is FieldAddrInst { Field.Name: "_foo", Obj: Argument });
         Assert.True(insts[1] is FieldAddrInst { Field.Name: "s_Bar", Obj: null });
-        Assert.True(insts[2] is StorePtrInst { Value: ConstInt { Value: 123 } } st1 && st1.Value == insts[1]);
-        Assert.True(insts[3] is StorePtrInst { Value: ConstInt { Value: 456 } } st2 && st2.Value == insts[0]);
+        Assert.True(insts[2] is StoreInst { Value: ConstInt { Value: 123 } } st1 && st1.Address == insts[0]);
+        Assert.True(insts[3] is StoreInst { Value: ConstInt { Value: 456 } } st2 && st2.Address == insts[1]);
     }
 
     [Fact]

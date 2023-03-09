@@ -364,17 +364,16 @@ public class TypeSpec : TypeDefOrSpec
     }
 
     public override MethodDesc? FindMethod(
-        string name, in MethodSig sig = default, in GenericContext spec = default, 
+        string name, in MethodSig sig = default, 
         bool searchBaseAndItfs = false, [DoesNotReturnIf(true)] bool throwIfNotFound = true)
     {
-        var actualSpec = spec.IsNull ? new GenericContext(this) : spec;
-        var method = Definition.FindMethod(name, sig, actualSpec, searchBaseAndItfs, throwIfNotFound);
+        var method = Definition.FindMethod(name, sig, searchBaseAndItfs, throwIfNotFound);
 
         if (method == null) {
             return null;
         }
-        if (method.DeclaringType != Definition || !spec.IsNullOrEmpty) {
-            return method.GetSpec(actualSpec);
+        if (method.DeclaringType != Definition) {
+            return method.GetSpec(new GenericContext(this));
         }
         var memberList = (MemberList<MethodDef, MethodSpec>)Methods;
         return memberList.GetMapping((MethodDef)method);

@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(SolutionDir)src/DistIL/DistIL.csproj" />
+    <ProjectReference Include="../../src/DistIL/DistIL.csproj" />
     <ProjectReference Include="../misc/TestAsm/TestAsm.csproj; ../misc/TestAsm.IL/TestAsm.IL.ilproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <OutputItemType>Content</OutputItemType>

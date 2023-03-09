@@ -1,5 +1,7 @@
 namespace DistIL.Passes;
 
+using DistIL.IR.Utils;
+
 partial class SimplifyInsts
 {
     //Optimize double dictionary lookups:
@@ -38,17 +40,14 @@ partial class SimplifyInsts
             getCall.Args[0] != instance || getCall.Args[1] != key) return false;
 
         var tempVar = new Variable(declType.GenericParams[1], exposed: true);
-        var tempAddr = new VarAddrInst(tempVar);
-        var resultLoad = new LoadVarInst(tempVar);
-        var tryGetCall = new CallInst(
-            declType.FindMethod("TryGetValue", 
-                new MethodSig(PrimType.Bool, new TypeSig[] { key.ResultType, tempAddr.ResultType })),
-            new[] { instance, key, tempAddr }, isVirtual: true);
 
-        tempAddr.InsertBefore(call);
-        call.ReplaceWith(tryGetCall, insertIfInst: true);
-        resultLoad.InsertBefore(getCall);
-        getCall.ReplaceWith(resultLoad);
+        var builder = new IRBuilder(call, InsertionDir.After);
+        call.ReplaceWith(
+            builder.CreateCallVirt("TryGetValue", instance, key, builder.CreateVarAddr(tempVar)));
+
+        builder.SetPosition(getCall, InsertionDir.After);
+        getCall.ReplaceWith(
+            builder.CreateVarLoad(tempVar));
 
         return true;
     }

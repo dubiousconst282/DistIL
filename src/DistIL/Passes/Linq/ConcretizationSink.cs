@@ -48,7 +48,7 @@ internal class ConcretizationSink : LinqSink
         var lastParType = SubjectCall.Method.ParamSig[^1].Type;
         if (type.Name is "Dictionary`2" or "HashSet`1" && lastParType.Name is "IEqualityComparer`1") {
             args.Add(SubjectCall.Args[^1]);
-            sig.Add(lastParType);
+            sig.Add(lastParType.GetUnboundSpec());
         }
         var ctor = type.FindMethod(".ctor", new MethodSig(PrimType.Void, sig));
         return builder.CreateNewObj(ctor, args.ToArray());

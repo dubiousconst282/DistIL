@@ -144,10 +144,9 @@ internal class ModuleLoader
         var rootParent = (TypeDesc)GetEntity(info.Parent);
         string name = _reader.GetString(info.Name);
         var signature = new SignatureDecoder(this, info.Signature).DecodeMethodSig();
-        var spec = GenericContext.Empty;
 
         for (var parent = rootParent; parent != null; parent = parent.BaseType) {
-            var method = parent.FindMethod(name, signature, spec, throwIfNotFound: false);
+            var method = parent.FindMethod(name, signature, throwIfNotFound: false);
             if (method != null) {
                 return method;
             }

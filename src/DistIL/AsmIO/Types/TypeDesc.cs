@@ -44,24 +44,27 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     public virtual ByrefType CreateByref() => new(this);
 
     /// <summary> Searches for a method with the specified signature. </summary>
-    /// <param name="sig">The method signature to search for, or <see langword="default"/> to match any signature. Should not include the instance parameter type. </param>
-    /// <param name="spec">A generic context used to specialize methods before matching with the signature.</param>
+    /// <param name="sig">
+    /// The method signature to search for, or <see langword="default"/> to match any signature. <br/>
+    /// If the target method is generic, this should contain unbound parameters rather than arguments.
+    /// It also should not include the instance parameter type.
+    /// </param>
     public virtual MethodDesc? FindMethod(
-        string name, in MethodSig sig = default, in GenericContext spec = default,
+        string name, in MethodSig sig = default,
         bool searchBaseAndItfs = false, [DoesNotReturnIf(true)] bool throwIfNotFound = true)
     {
         foreach (var method in Methods) {
-            if (method.Name == name && (sig.IsNull || sig.Matches(method, spec))) {
+            if (method.Name == name && (sig.IsNull || sig.Matches(method))) {
                 return method;
             }
         }
         if (searchBaseAndItfs) {
             foreach (var itf in Interfaces) {
-                if (itf.FindMethod(name, sig, spec, searchBaseAndItfs, throwIfNotFound: false) is { } itfMethod) {
+                if (itf.FindMethod(name, sig, searchBaseAndItfs, throwIfNotFound: false) is { } itfMethod) {
                     return itfMethod;
                 }
             }
-            if (BaseType?.FindMethod(name, sig, spec, searchBaseAndItfs, throwIfNotFound: false) is { } baseMethod) {
+            if (BaseType?.FindMethod(name, sig, searchBaseAndItfs, throwIfNotFound: false) is { } baseMethod) {
                 return baseMethod;
             }
         }

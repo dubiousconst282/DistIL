@@ -44,15 +44,15 @@ public readonly struct MethodSig
         Ensure.That(!header.Attributes.HasFlag(kMaybeInstance));
     }
 
-    public bool Matches(MethodDesc method, in GenericContext spec)
+    public bool Matches(MethodDesc method)
     {
         return method.GenericParams.Count == NumGenericParams &&
             (IsInstance == null || IsInstance == method.IsInstance) &&
-            method.ReturnSig.GetSpec(spec) == ReturnType &&
-            CompareParams(method, spec);
+            method.ReturnSig == ReturnType &&
+            CompareParams(method);
     }
 
-    private bool CompareParams(MethodDesc method, in GenericContext spec)
+    private bool CompareParams(MethodDesc method)
     {
         var pars1 = method.ParamSig;
         int offset = method.IsInstance ? 1 : 0;
@@ -61,7 +61,7 @@ public readonly struct MethodSig
             return false;
         }
         for (int i = 0; i < ParamTypes.Count; i++) {
-            var type1 = pars1[i + offset].GetSpec(spec);
+            var type1 = pars1[i + offset];
             if (type1 != ParamTypes[i]) {
                 return false;
             }

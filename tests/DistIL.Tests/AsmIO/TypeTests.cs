@@ -69,4 +69,23 @@ public class TypeTests
         Assert.False(t_ListString.IsAssignableTo(t_ICollectionInt));
         Assert.False(t_ListInt.IsAssignableTo(t_IROListObject));
     }
+
+    [Fact]
+    public void FindMethod_InGenericHierarchy()
+    {
+        var t_Derived3 = _modResolver.Resolve("TestAsm").FindType("TestAsm.TypeSys.Generics", "DerivedC`1");
+        var derivedSpec = t_Derived3.GetSpec(PrimType.String);
+
+        var t_TupleStrInt = _modResolver.Import(typeof(ValueTuple<string, int>));
+
+        var t_T0 = GenericParamType.GetUnboundT(0);
+        var t_MT0 = GenericParamType.GetUnboundM(0);
+        var sig = new MethodSig(t_T0, new TypeSig[] { t_MT0 }, numGenPars: 1);
+
+        var method = derivedSpec.FindMethod("GetFoo", sig, searchBaseAndItfs: true);
+
+        Assert.Equal("DerivedA`1", method.DeclaringType.Name);
+        Assert.Equal(t_TupleStrInt, method.ReturnType);
+        Assert.Equal(t_MT0, method.GenericParams[0]);
+    }
 }

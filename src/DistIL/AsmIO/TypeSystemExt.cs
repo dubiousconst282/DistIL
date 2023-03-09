@@ -28,4 +28,12 @@ public static class TypeSystemExt
     {
         return type.StackType is StackType.NInt;
     }
+
+    /// <summary> If <paramref name="type"/> is a generic type, returns an <see cref="TypeSpec"/> with all unbound parameters. Otherwise, returns <paramref name="type"/> unchanged. </summary>
+    public static TypeDesc GetUnboundSpec(this TypeDesc type)
+    {
+        return type is TypeDefOrSpec { Definition: var def } 
+            ? def.GetSpec(new GenericContext(def))
+            : type;
+    }
 }

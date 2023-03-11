@@ -53,12 +53,13 @@ public class ScalarReplacement : IMethodPass
                 }
                 default: {
                     if (IsObjectCtorCall(user)) {
-                        user.Remove(); //nop from the inlined ctor
+                        //nop from the inlined ctor
                         break;
                     }
                     throw new UnreachableException();
                 }
             }
+            user.Remove();
         }
 
         //Remove redundant allocation

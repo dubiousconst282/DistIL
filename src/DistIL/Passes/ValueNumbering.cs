@@ -74,13 +74,13 @@ public class ValueNumbering : IMethodPass
         public bool Equals(Instruction? x, Instruction? y)
         {
             var type = x!.GetType();
+
+            //Load/store instructions can have matching tags.
             if (y!.GetType() != type) {
-                type = type.BaseType;
-                //Both `x` and `y` must derive from MemoryInst
-                if (!typeof(MemoryInst).IsAssignableFrom(type) || !typeof(MemoryInst).IsAssignableFrom(y.GetType())) {
-                    return false; //hashes collide
+                if (!(x is MemoryInst && y is MemoryInst)) {
+                    return false;
                 }
-                Debug.Assert(type != typeof(object) && type == y.GetType().BaseType);
+                type = typeof(LoadInst);
             }
             return s_Taggers[type].Compare(x, y);
         }
@@ -124,6 +124,14 @@ public class ValueNumbering : IMethodPass
             CompareFn = (a, b) => a.Array.Equals(b.Array) && a.Index.Equals(b.Index) && a.ElemType == b.ElemType && a.InBounds == b.InBounds && a.IsReadOnly == b.IsReadOnly,
             HashFn = (inst) => HashCode.Combine(inst.Array, inst.Index, 1234)
         });
+        Reg<PtrOffsetInst>(new() {
+            CompareFn = (a, b) => a.BasePtr == b.BasePtr && a.Index.Equals(b.Index) && (a.KnownStride ? a.Stride == b.Stride : a.ElemType == b.ElemType),
+            HashFn = (inst) => HashCode.Combine(inst.BasePtr, inst.Index, inst.Stride)
+        });
+
+        var memTagger = new MemoryTagger();
+        s_Taggers.Add(typeof(LoadInst), memTagger);
+        s_Taggers.Add(typeof(StoreInst), memTagger);
 
         s_Taggers.Add(typeof(CallInst), new CallTagger());
         //FIXME: tag invalidators for NewObj and Intrinsic insts

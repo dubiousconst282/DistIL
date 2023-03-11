@@ -198,7 +198,7 @@ public class PassManager
                     result.InvalidateAffectedAnalyses(ctx);
                     changed = true;
 
-                    ctx.Logger.Debug($"{pass.GetType().Name} changed {result.Changes}");
+                    ctx.Logger.Trace($"{pass.GetType().Name} changed {result.Changes}");
                 }
                 _manager.IncrementStat(pass.GetType(), startTs, result.Changes != 0);
             }

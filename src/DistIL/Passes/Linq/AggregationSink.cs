@@ -12,7 +12,7 @@ internal class AggregationSink : LinqSink
 
     public override void EmitHead(IRBuilder builder, Value? estimCount)
     {
-        _seed = GetSeed(builder);
+        _seed = GetSeed(builder, estimCount);
     }
     public override void EmitTail(IRBuilder builder)
     {
@@ -54,7 +54,7 @@ internal class AggregationSink : LinqSink
         }).SetName("lq_has_data");
     }
 
-    protected virtual Value GetSeed(IRBuilder builder)
+    protected virtual Value GetSeed(IRBuilder builder, Value? estimCount)
     {
         if (SubjectCall.NumArgs >= 3) {
             return SubjectCall.Args[1];
@@ -79,21 +79,27 @@ internal class CountSink : AggregationSink
     public CountSink(CallInst call)
         : base(call) { }
 
-    protected override Value GetSeed(IRBuilder builder)
+    bool _mayBeLongSource;
+
+    protected override Value GetSeed(IRBuilder builder, Value? estimCount)
     {
-        return ConstInt.CreateL(0);
+        //If `estimCount != null`, the source size is guaranteed to fit in an int32.
+        _mayBeLongSource = estimCount == null;
+
+        return ConstInt.CreateI(0);
     }
     protected override Value Accumulate(IRBuilder builder, Value currAccum, Value currItem, BasicBlock skipBlock)
     {
-        if (SubjectCall.Args.Length >= 2) {
-            var cond = builder.CreateLambdaInvoke(SubjectCall.Args[1], currItem);
-            builder.Fork(cond, skipBlock);
-        }
-        return builder.CreateAdd(currAccum, ConstInt.CreateL(1));
+        //Assume that bools are always normalized to 0/1.
+        var inc = SubjectCall.Args.Length >= 2
+            ? builder.CreateLambdaInvoke(SubjectCall.Args[1], currItem)
+            : ConstInt.CreateI(1);
+
+        var op = _mayBeLongSource ? BinaryOp.AddOvf : BinaryOp.Add;
+        return builder.CreateBin(op, currAccum, inc);
     }
     protected override Value MapResult(IRBuilder builder, Value accum)
     {
-        //TODO: overflow check is redundant if source is known to be a Array/List
-        return builder.CreateConvert(accum, PrimType.Int32, checkOverflow: true, srcUnsigned: true);
+        return accum;
     }
 }

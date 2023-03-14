@@ -74,7 +74,7 @@ internal abstract class LinqSourceNode : LinqStageNode
     {
         var sink = GetSink();
 
-        var loop = new LoopBuilder(sink.SubjectCall.Block);
+        var loop = new LoopBuilder(sink.SubjectCall.Block, "LQ_");
 
         EmitHead(loop, out var count);
         sink.EmitHead(loop.PreHeader, count);

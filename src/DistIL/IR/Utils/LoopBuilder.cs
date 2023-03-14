@@ -1,7 +1,6 @@
-namespace DistIL.Passes.Linq;
+namespace DistIL.IR.Utils;
 
-using DistIL.IR.Utils;
-
+/// <summary> Helper for building a for-style loop. </summary>
 public class LoopBuilder
 {
     public readonly IRBuilder PreHeader, Header, Latch, Exit;
@@ -10,22 +9,7 @@ public class LoopBuilder
     public readonly BasicBlock EntryBlock; //PreHeader may be forked and so we need to keep track of the actual entry block
     readonly List<(PhiInst HeadPhi, Instruction Next)> _pendingAccums = new();
 
-    //PreHeader:
-    //  ...
-    //  goto Header
-    //Header:
-    //  var accumN = phi [PreHeader -> accumN_Seed, Latch -> accumN_Next]
-    //  bool hasNext = createBound()
-    //  goto hasNext ? Body : Exit
-    //Body:
-    //  ...
-    //  goto Latch
-    //Latch:
-    //  var accumN_Next = update(accumN)
-    //  goto Header
-    //Exit:
-    //  ...
-    public LoopBuilder(BasicBlock blockPos)
+    public LoopBuilder(BasicBlock blockInsertPos, string blockNamePrefix = "l_")
     {
         PreHeader = CreateBlock("PreHeader");
         Header = CreateBlock("Header");
@@ -37,17 +21,30 @@ public class LoopBuilder
 
         IRBuilder CreateBlock(string name)
         {
-            blockPos = blockPos.Method.CreateBlock(insertAfter: blockPos).SetName("LQ_" + name);
-            return new IRBuilder(blockPos);
+            blockInsertPos = blockInsertPos.Method.CreateBlock(insertAfter: blockInsertPos);
+            return new IRBuilder(blockInsertPos.SetName(blockNamePrefix + name));
         }
     }
 
+    //PreHeader:
+    //  ...
+    //  goto Header
+    //Header:
+    //  var accumN = phi [PreHeader -> accumN_Seed, Latch -> accumN_Next]
+    //  bool hasNext = ${emitBound()}
+    //  goto hasNext ? Body : Exit
+    //Body:
+    //  ${emitBody()}
+    //  goto Latch
+    //Latch:
+    //  var accumN_Next = update(accumN)
+    //  goto Header
+    //Exit:
+    //  ...
     public void Build(
         Func<IRBuilder, Value> emitCond,
         Action<IRBuilder> emitBody)
     {
-        PreHeader.SetBranch(Header.Block);
-
         var hasNext = emitCond(Header);
         Header.SetBranch(hasNext, Body.Block, Exit.Block);
 
@@ -56,6 +53,7 @@ public class LoopBuilder
         if (Body.Block.Last is not { IsBranch: true }) {
             Body.SetBranch(Latch.Block);
         }
+        PreHeader.SetBranch(Header.Block);
 
         foreach (var (headPhi, next) in _pendingAccums) {
             headPhi.ReplaceOperand(next, InsertAccumPhis(Latch.Block, next, headPhi));
@@ -103,7 +101,7 @@ public class LoopBuilder
         return CreateAccum(
             seed: ConstInt.CreateI(0),
             emitUpdate: curr => Latch.CreateAdd(curr, ConstInt.CreateI(1))
-        ).SetName("lq_index");
+        ).SetName("index");
     }
 
     public void InsertBefore(Instruction inst)

@@ -91,7 +91,7 @@ internal class FlattenStage : LinqStageNode
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
-        var innerLoop = new LoopBuilder(SubjectCall.Block);
+        var innerLoop = new LoopBuilder(SubjectCall.Block, "LQ_Flatten_");
 
         var subCollection = builder.CreateLambdaInvoke(SubjectCall.Args[1], currItem);
         var enumerator = builder.CreateCallVirt("GetEnumerator", subCollection);

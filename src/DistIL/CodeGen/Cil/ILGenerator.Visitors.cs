@@ -145,12 +145,13 @@ partial class ILGenerator
             _asm.Emit(ILCode.Conv_I);
         }
 
-        if (inst.Stride != 0) {
-            _asm.EmitLdcI4(inst.Stride);
-        } else {
+        if (inst.Stride == 0) {
             _asm.Emit(ILCode.Sizeof, inst.ElemType);
+            _asm.Emit(ILCode.Mul);
+        } else if (inst.Stride > 1) {
+            _asm.EmitLdcI4(inst.Stride);
+            _asm.Emit(ILCode.Mul);
         }
-        _asm.Emit(ILCode.Mul);
         _asm.Emit(ILCode.Add);
     }
 

@@ -141,12 +141,15 @@ public partial class SimplifyInsts : IMethodPass
     // -> lea basePtr + r18 * stride
     private static Value? SimplifyAddress(BinaryInst? inst)
     {
-        if (!Match.Add(inst, out var basePtr, out var index)) return null;
+        if (!Match.Add(inst, out var basePtr, out var disp)) return null;
 
-        if (index is ConvertInst { ResultType.StackType: StackType.NInt } conv1) {
-            index = conv1.Value;
+        if (disp is ConvertInst { ResultType.StackType: StackType.NInt } conv1) {
+            disp = conv1.Value;
         }
-        if (!Match.Mul(index, out index, out var stride)) return null;
+        if (!Match.Mul(disp, out var index, out var stride)) {
+            //Byte addressing
+            return new PtrOffsetInst(basePtr, disp, stride: 1);
+        }
 
         if (index is ConvertInst { IsTruncation: false } conv2) {
             index = conv2.Value;

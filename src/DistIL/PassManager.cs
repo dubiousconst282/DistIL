@@ -215,16 +215,26 @@ public class PassManager
             return this;
         }
 
-        public void IfChanged(Action<PipelineSegment> buildChildPipe)
+        public PipelineSegment IfChanged(Action<PipelineSegment> buildChildPipe)
         {
             Ensure.That(_contIfChanged == null);
 
             _contIfChanged = new PipelineSegment(_manager, false);
             buildChildPipe(_contIfChanged);
+
+            return this;
         }
-        public void RepeatUntilFixedPoint(int maxIters)
+        public PipelineSegment IfChanged(PipelineSegment segmentToApply)
+        {
+            Ensure.That(_contIfChanged == null);
+            _contIfChanged = segmentToApply;
+            return this;
+        }
+        public PipelineSegment RepeatUntilFixedPoint(int maxIters)
         {
             _maxIters = maxIters;
+
+            return this;
         }
     }
 }

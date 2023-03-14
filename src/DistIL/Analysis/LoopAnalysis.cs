@@ -3,6 +3,7 @@ namespace DistIL.Analysis;
 /// <summary> Finds natural loops in the CFG. </summary>
 public class LoopAnalysis : IMethodAnalysis
 {
+    /// <summary> List of outer-most loops. </summary>
     public List<LoopInfo> Loops { get; } = new();
 
     public LoopAnalysis(MethodBody method, DominatorTree domTree)
@@ -37,12 +38,15 @@ public class LoopAnalysis : IMethodAnalysis
         }
     }
 
+    public IEnumerable<LoopInfo> GetInnermostLoops()
+        => Loops; //FIXME: proper impl once we have loop trees
+
     static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
         => new LoopAnalysis(mgr.Method, mgr.GetAnalysis<DominatorTree>());
 }
 
 /// <summary>
-/// Represents the composition of a loop in a CFG.
+/// Represents the structure of a loop in a CFG.
 /// See https://llvm.org/docs/LoopTerminology.html
 /// </summary>
 public class LoopInfo
@@ -52,6 +56,9 @@ public class LoopInfo
 
     public LoopInfo? Parent { get; set; }
     internal LoopInfo? _firstChild, _nextSibling;
+
+    public bool HasChildren => _firstChild != null;
+    public int NumBlocks => Blocks.Count;
 
     /// <summary> Checks if the specified block is part of this loop. </summary>
     /// <remarks> This includes the header, latch, preheader and any other body block. </remarks>
@@ -63,10 +70,10 @@ public class LoopInfo
         return val is Argument or Const || (val is Instruction inst && !Contains(inst.Block));
     }
 
-    public BasicBlock? GetPreheader() => GetPred() is { NumSuccs: 1 } bb ? bb : null;
+    public BasicBlock? GetPreheader() => GetPredecessor() is { NumSuccs: 1 } bb ? bb : null;
 
     /// <summary> Returns the unique block entering the loop (its predecessor). Differently from the pre-header, this block may have multiple successors. </summary>
-    public BasicBlock? GetPred() => GetUniquePredAround(Header, inside: false);
+    public BasicBlock? GetPredecessor() => GetUniquePredAround(Header, inside: false);
 
     /// <summary> Returns the unique block with a back-edge to the header. </summary>
     public BasicBlock? GetLatch() => GetUniquePredAround(Header, inside: true);
@@ -88,8 +95,8 @@ public class LoopInfo
         return count == 1 ? exit : null;
     }
 
-    /// <summary> Returns the condition controlling the loop exit, assuming the loop is in the <i>roslyn canonical</i> form: <c> while (cond) { ... } </c> </summary>
-    public CompareInst? GetCanonicalExitCond()
+    /// <summary> Returns the unique condition controlling the loop exit. </summary>
+    public CompareInst? GetExitCondition()
     {
         //Header: goto cmp ? Body : Exit
         var exit = GetExit();

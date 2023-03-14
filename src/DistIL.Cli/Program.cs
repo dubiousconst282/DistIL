@@ -76,15 +76,18 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
         .IfChanged(c => c.Apply<SsaPromotion>());
 
     manager.AddPasses()
+        .Apply<ValueNumbering>();
+        
+    var simplifySeg = manager.AddPasses()
         .Apply<SimplifyInsts>()
         .Apply<SimplifyCFG>()
         .Apply<DeadCodeElim>()
         .RepeatUntilFixedPoint(maxIters: 3);
-    
+
     manager.AddPasses()
-        .Apply<ValueNumbering>()
-        .Apply<LoopStrengthReduction>()
-        .IfChanged(c => c.Apply<DeadCodeElim>());
+        //.Apply<LoopStrengthReduction>()
+        .Apply<LoopVectorizer>()
+        .IfChanged(simplifySeg);
 
     if (comp.Logger.IsEnabled(LogLevel.Debug)) {
         manager.AddPasses().Apply<VerificationPass>();

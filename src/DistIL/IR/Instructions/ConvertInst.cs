@@ -11,13 +11,14 @@ public class ConvertInst : Instruction
     /// <summary> Treat the source value as unsigned. Only relevant if target type is float or <c>CheckOverflow == true</c>. </summary>
     public bool SrcUnsigned { get; set; }
 
-    public TypeDesc SrcType => Value.ResultType;
+    public TypeKind SrcType => Value.ResultType.Kind;
+    public TypeKind DestType => ResultType.Kind;
 
-    public bool IsExtension => IsSizeDiffDir(SrcType.Kind, ResultType.Kind, +1);
-    public bool IsTruncation => IsSizeDiffDir(SrcType.Kind, ResultType.Kind, -1);
+    public bool IsExtension => IsSizeDiffDir(SrcType, DestType, +1);
+    public bool IsTruncation => IsSizeDiffDir(SrcType, DestType, -1);
 
-    public bool IsSignExtension => IsExtension && ResultType.Kind.IsSigned();
-    public bool IsZeroExtension => IsExtension && ResultType.Kind.IsUnsigned();
+    public bool IsSignExtension => IsExtension && DestType.IsSigned();
+    public bool IsZeroExtension => IsExtension && DestType.IsUnsigned();
 
     public override bool MayThrow => CheckOverflow;
     public override string InstName => "conv" + (CheckOverflow ? ".ovf" : "") + (SrcUnsigned ? ".un" : "");

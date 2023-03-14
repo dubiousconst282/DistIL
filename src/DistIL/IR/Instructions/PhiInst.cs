@@ -82,6 +82,16 @@ public class PhiInst : Instruction
     public void RemoveArg(BasicBlock block, bool removeTrivialPhi) 
         => RemoveArg(FindArgIndex(block), removeTrivialPhi);
 
+    public void RedirectArg(BasicBlock oldBlock, BasicBlock newBlock, Value? newValue = null)
+    {
+        int index = FindArgIndex(oldBlock);
+        ReplaceOperand(index * 2 + 0, newBlock);
+
+        if (newValue != null) {
+            ReplaceOperand(index * 2 + 1, newValue);
+        }
+    }
+
     private int FindArgIndex(Value operand, bool isValue = false)
     {
         for (int i = isValue ? 1 : 0; i < _operands.Length - 1; i += 2) {

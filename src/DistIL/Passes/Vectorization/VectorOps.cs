@@ -32,6 +32,9 @@ internal enum VectorOp
     //Casting
     I2F, F2I,
     SignExt, ZeroExt,
+
+    //Internal
+    _Sum,
 }
 
 /// <summary> Helper for mapping and emission of vector instructions. </summary>
@@ -48,8 +51,66 @@ internal class VectorTranslator
 
     public Instruction EmitOp(IRBuilder builder, VectorType type, VectorOp op, params Value[] args)
     {
-        var func = _funcMap.GetOrAddRef((type, op)) ??= FindFunc(type, op);
-        return builder.CreateCall(func, args);
+        switch (op) {
+            case VectorOp.Load: {
+                return builder.CreateLoad(args[0], GetActualType(type), PointerFlags.Unaligned);
+            }
+            case VectorOp.Store: {
+                return builder.CreateStore(args[0], args[1], GetActualType(type), PointerFlags.Unaligned);
+            }
+            case VectorOp.Pack when args.All(a => a.Equals(args[0])): {
+                return EmitOp(builder, type, VectorOp.Splat, args[0]);
+            }
+            default: {
+                var func = _funcMap.GetOrAddRef((type, op)) ??= FindFunc(type, op);
+                return builder.CreateCall(func, args);
+            }
+        }
+    }
+
+    public Instruction EmitReduction(IRBuilder builder, VectorType type, VectorOp op, Value vector)
+    {
+        //Summation has a dedicated helper: Vector.Sum()
+        if (op == VectorOp.Add) {
+            return EmitOp(builder, type, VectorOp._Sum, vector);
+        }
+        //For any other op, we use a divide and conquer algo, see https://stackoverflow.com/a/35270026
+        //TODO: support for ARM (https://stackoverflow.com/q/31197216)
+        //
+        //256:  var t1 = Vector128.Max(x.GetLower(), x.GetUpper());                               = max([a,  b,  c, d], [e,  f,  g,  h])
+        //128:  var t2 = Vector128.Max(t1, Vector128.Shuffle(t1, Vector128.Create(2, 3, 0, 0)));  = max([ae, bf, ?, ?], [cg, dh, ?, ?])
+        //64:   var t3 = Vector128.Max(t2, Vector128.Shuffle(t2, Vector128.Create(1, 1, 0, 0)));  = max([aecg, ?, ?, ?], [bfdh, ?, ?, ?])
+        //32:   return t3.GetElement(0);
+        int width = type.BitWidth;
+        int scalarWidth = type.ElemKind.BitSize();
+        
+        Debug.Assert(scalarWidth >= 8 && width <= 256 && vector.ResultType == GetActualType(type));
+
+        if (width >= 256) {
+            var baseType = GetBaseType(type);
+            type = new VectorType(type.ElemKind, type.Count / 2);
+            vector = EmitOp(builder, type, op, EmitGetHalf("GetLower"), EmitGetHalf("GetUpper"));
+            width = 128;
+
+            Value EmitGetHalf(string name)
+            {
+                var func = (MethodDef)baseType.FindMethod(name);
+                return builder.CreateCall(func.GetSpec(type.ElemType), vector);
+            }
+        }
+        for (; width > scalarWidth; width /= 2) {
+            var shuffInds = new ConstInt[type.Count];
+            int halfWidth = width / (scalarWidth * 2);
+
+            for (int i = 0; i < shuffInds.Length; i++) {
+                shuffInds[i] = ConstInt.CreateI(halfWidth + i % halfWidth);
+            }
+            var shuffMaskType = new VectorType(GetShuffleIndexType(type), type.Count);
+            var shuffMask = EmitOp(builder, shuffMaskType, VectorOp.Pack, shuffInds);
+            var shuffledVec = EmitOp(builder, type, VectorOp.Shuffle, vector, shuffMask);
+            vector = EmitOp(builder, type, op, vector, shuffledVec);
+        }
+        return EmitOp(builder, type, VectorOp.GetLane, vector, ConstInt.CreateI(0));
     }
 
     public TypeSpec GetActualType(VectorType type)
@@ -135,14 +196,14 @@ internal class VectorTranslator
             "Abs"       => VectorOp.Abs,
             "Min"       => VectorOp.Min,
             "Max"       => VectorOp.Max,
+            "Sqrt"      => VectorOp.Sqrt,
             "Floor"     => VectorOp.Floor,
             "Ceiling"   => VectorOp.Ceil,
-            "Round" when func.ParamSig.Count == 1
-                        => VectorOp.Round,
-            "Sqrt"      => VectorOp.Sqrt,
-            "FusedMultiplyAdd"          => VectorOp.Fmadd,
-            "ReciprocalSqrtEstimate"    => VectorOp.RSqrt, 
-            "ReciprocalEstimate"        => VectorOp.Recip,
+            //"Round" when func.ParamSig.Count == 1
+            //            => VectorOp.Round,
+            //"FusedMultiplyAdd"          => VectorOp.Fmadd,
+            //"ReciprocalSqrtEstimate"    => VectorOp.RSqrt, 
+            //"ReciprocalEstimate"        => VectorOp.Recip,
             _ => VectorOp.Invalid
         };
     }
@@ -161,7 +222,9 @@ internal class VectorTranslator
         var typeL = inst.Left.ResultType.Kind;
         var typeR = inst.Right.ResultType.Kind;
 
-        if (typeL.GetStorageType() != typeR.GetStorageType()) {
+        if (inst.Right is ConstInt consR && consR.FitsInType(inst.Left.ResultType)) {
+            typeR = typeL;
+        } else if (typeL.GetStorageType() != typeR.GetStorageType()) {
             return default;
         }
         //TODO: handle compare operand sign mismatch
@@ -192,8 +255,9 @@ internal class VectorTranslator
         return op switch {
             VectorOp.Splat      => FindDef("Create",        vecType,        type.ElemType),
             VectorOp.Pack       => FindDef("Create",        vecType,        Enumerable.Repeat((TypeSig)type.ElemType, type.Count).ToArray()),
-            VectorOp.Load       => FindGen("LoadUnsafe",    gm_Vec,         gm_Elem.CreateByref()),
-            VectorOp.Store      => FindGen("StoreUnsafe",   PrimType.Void,  gm_Vec, gm_Elem.CreateByref()),
+            VectorOp.Shuffle    => FindDef("Shuffle",       vecType,        vecType, vecType.Definition.GetSpec(GetShuffleIndexType(type))),
+            VectorOp.GetLane    => FindGen("GetElement",    gm_Elem,        gm_Vec, PrimType.Int32),
+            VectorOp.SetLane    => FindGen("WithElement",   gm_Vec,         gm_Vec, PrimType.Int32, gm_Elem),
 
             VectorOp.Add        => FindVOp("op_Addition"),
             VectorOp.Sub        => FindVOp("op_Subtraction"),
@@ -206,10 +270,13 @@ internal class VectorTranslator
             VectorOp.Neg        => FindVOp("op_UnaryNegation", unary: true),
             VectorOp.Not        => FindVOp("op_OnesComplement", unary: true),
 
-            VectorOp.Abs        => FindGen("Abs",           gm_Vec, gm_Vec),
-            VectorOp.Min        => FindGen("Min",           gm_Vec, gm_Vec, gm_Vec),
-            VectorOp.Max        => FindGen("Max",           gm_Vec, gm_Vec, gm_Vec),
-            VectorOp.Sqrt       => FindGen("Sqrt",          gm_Vec, gm_Vec),
+            VectorOp.Abs        => FindGen("Abs",               gm_Vec, gm_Vec),
+            VectorOp.Min        => FindGen("Min",               gm_Vec, gm_Vec, gm_Vec),
+            VectorOp.Max        => FindGen("Max",               gm_Vec, gm_Vec, gm_Vec),
+            VectorOp.Sqrt       => FindGen("Sqrt",              gm_Vec, gm_Vec),
+            
+            VectorOp.Floor      => FindDef("Floor",             vecType, vecType),
+            VectorOp.Ceil       => FindDef("Ceiling",           vecType, vecType),
 
             VectorOp.CmpEq      => FindGen("Equals",            gm_Vec, gm_Vec, gm_Vec),
             VectorOp.CmpLt      => FindGen("LessThan",          gm_Vec, gm_Vec, gm_Vec),
@@ -217,8 +284,12 @@ internal class VectorTranslator
             VectorOp.CmpLe      => FindGen("LessThanOrEqual",   gm_Vec, gm_Vec, gm_Vec),
             VectorOp.CmpGe      => FindGen("GreaterThanOrEqual",gm_Vec, gm_Vec, gm_Vec),
             VectorOp.Select     => FindGen("ConditionalSelect", gm_Vec, gm_Vec, gm_Vec, gm_Vec),
+            VectorOp.ExtractMSB => FindGen("ExtractMostSignificantBits", PrimType.UInt32, gm_Vec),
 
-            VectorOp.Shuffle    => FindDef("Shuffle",       vecType,        vecType.Definition.GetSpec(GetShuffleIndexType(type))),
+            VectorOp.F2I        => FindDef("ConvertToInt32",    vecType.Definition.GetSpec(PrimType.Int32), vecType),
+            VectorOp.I2F        => FindDef("ConvertToSingle",   vecType.Definition.GetSpec(PrimType.Single), vecType),
+
+            VectorOp._Sum       => FindGen("Sum",               gm_Elem, gm_Vec),
 
             _ => throw new NotImplementedException()
         };

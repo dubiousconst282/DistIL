@@ -17,19 +17,30 @@ public static class TypeSystemExt
                desc.Namespace == rtType.Namespace;
     }
 
-    /// <summary> Checks whether <paramref name="type"/> is a byref, pointer, or nint. </summary>
+    /// <summary> Whether this type represents a primitive integer (byte, int, long, etc.). </summary>
+    public static bool IsInt(this TypeDesc type)
+    {
+        return type.StackType is StackType.Int or StackType.Long;
+    }
+    /// <summary> Whether this type represents a float or double. </summary>
+    public static bool IsFloat(this TypeDesc type)
+    {
+        return type.StackType is StackType.Float;
+    }
+
+    /// <summary> Whether this type represents a byref, pointer, or nint. </summary>
     public static bool IsPointerLike(this TypeDesc type)
     {
         return type.StackType is StackType.ByRef or StackType.NInt;
     }
 
-    /// <summary> Checks whether <paramref name="type"/> is an unmanaged pointer or nint. </summary>
+    /// <summary> Whether this type represents an unmanaged pointer or nint. </summary>
     public static bool IsRawPointer(this TypeDesc type)
     {
         return type.StackType is StackType.NInt;
     }
 
-    /// <summary> If <paramref name="type"/> is a generic type, returns an <see cref="TypeSpec"/> with all unbound parameters. Otherwise, returns <paramref name="type"/> unchanged. </summary>
+    /// <summary> If this type is generic, returns an <see cref="TypeSpec"/> with all unbound parameters. Otherwise, returns the unchanged instance. </summary>
     public static TypeDesc GetUnboundSpec(this TypeDesc type)
     {
         return type is TypeDefOrSpec { Definition: var def } 

@@ -83,7 +83,7 @@ public class LoopBuilder
     }
 
     /// <summary> Creates a loop accumulator/induction variable. </summary>
-    public Value CreateAccum(Value seed, Func<Value, Value> emitUpdate)
+    public PhiInst CreateAccum(Value seed, Func<Value, Value> emitUpdate)
     {
         var phi = Header.CreatePhi(seed.ResultType);
         var next = emitUpdate(phi);
@@ -96,7 +96,7 @@ public class LoopBuilder
     }
 
     /// <summary> Creates an <see cref="int"/> index var which increments on every iteration. </summary>
-    public Value CreateInductor()
+    public PhiInst CreateInductor()
     {
         return CreateAccum(
             seed: ConstInt.CreateI(0),

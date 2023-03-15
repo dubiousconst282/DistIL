@@ -18,6 +18,8 @@ internal readonly struct VectorType : IEquatable<VectorType>
         ElemKind = elemKind;
         Count = count;
     }
+    public VectorType(TypeDesc elemType, int count)
+        : this(elemType.Kind, count) { }
 
     public static bool IsSupportedElemType(TypeDesc elemType)
     {

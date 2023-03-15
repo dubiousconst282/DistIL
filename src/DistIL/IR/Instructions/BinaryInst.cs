@@ -33,6 +33,11 @@ public class BinaryInst : Instruction
 
     private static TypeDesc? GetResultType(BinaryOp op, TypeDesc a, TypeDesc b)
     {
+        //Return original type for bit ops that never overflow (useful for bools)
+        if (op is BinaryOp.And or BinaryOp.Or or BinaryOp.Xor && a == b) {
+            return a;
+        }
+
         //ECMA335 III.1.5
         var sa = a.StackType;
         var sb = b.StackType;

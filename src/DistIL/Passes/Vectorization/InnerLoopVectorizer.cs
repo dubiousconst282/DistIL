@@ -88,12 +88,12 @@ internal class InnerLoopVectorizer
                 }
                 case MemoryInst acc: {
                     if (!VectorType.IsSupportedElemType(acc.ElemType)) {
-                        logger?.Debug($"AutoVec: unsupported type for memory access '{acc.ElemType}'");
+                        logger?.Debug($"AutoVec: unsupported memory access type '{acc.ElemType}'");
                         return false;
                     }
                     _mappings.Add(inst, new InstMapping() {
                         TargetOp = inst is LoadInst ? VectorOp.Load : VectorOp.Store,
-                        ScalarType = acc.ElemType.Kind,
+                        ElemType = acc.ElemType.Kind,
                     });
                     break;
                 }
@@ -101,30 +101,37 @@ internal class InnerLoopVectorizer
                     //Ignore branch or loop counter update
                     if (inst is BranchInst || inst == _counter.GetValue(_bodyBlock)) break;
 
-                    var (op, scalarType) = _trans.GetVectorOp(inst);
+                    var (op, elemType) = _trans.GetVectorOp(inst);
 
                     if (op == VectorOp.Invalid) {
                         logger?.Debug($"AutoVec: unsupported instruction '{inst}'");
                         return false;
                     }
+                    if (inst.ResultType == PrimType.Bool) {
+                        elemType = GetConditionalElemType(inst);
+                        if (elemType == TypeKind.Void) {
+                            logger?.Debug("AutoVec: mismatching conditional element width (compares of different types?)");
+                            return false;
+                        }
+                        if (!inst.Users().All(u => IsSupportedConditionalUse(u, elemType))) {
+                            logger?.Debug("AutoVec: unsupported use of bool-returning instruction");
+                            return false;
+                        }
+                    }
+                    if (IsPredicatedCountStep(inst)) {
+                        var rhs = (Instruction)inst.Operands[1];
+                        elemType = _mappings.GetRef(rhs).ElemType;
+                        op = VectorOp._PredicatedCount;
+                    }
                     _mappings.Add(inst, new InstMapping() {
                         TargetOp = op,
-                        ScalarType = scalarType
+                        ElemType = elemType
                     });
                     break;
                 }
             }
         }
-        //TODO: support any primitive type
-        return _mappings.Values.All(m => m.ScalarType == TypeKind.Void || m.ScalarType.Size() == 4);
-    }
-
-    private static bool IsSupportedReductionOp(VectorOp op)
-    {
-        return op is
-            VectorOp.Add or VectorOp.Mul or
-            VectorOp.And or VectorOp.Or or VectorOp.Xor or
-            VectorOp.Min or VectorOp.Max;
+        return true;
     }
 
     public void EmitVectorizedLoop()
@@ -138,34 +145,7 @@ internal class InnerLoopVectorizer
 
         //Create reduction accumulator phis
         foreach (var phi in _reductionPhis.Keys) {
-            ref var data = ref _reductionPhis.GetRef(phi);
-
-            var vecType = new VectorType(phi.ResultType, _width);
-            var seed = data.Op switch {
-                //Additive: [seed, 0, 0, ...]
-                VectorOp.Add or VectorOp.Or or VectorOp.Xor
-                    => EmitAccumOpSeed(data.Seed, 0),
-                //Multiplicative: [seed, 1, 1, ...]
-                VectorOp.Mul
-                    => EmitAccumOpSeed(data.Seed, 1),
-                //Exclusive: [seed, seed, ...]
-                VectorOp.And or VectorOp.Min or VectorOp.Max
-                    => _trans.EmitOp(newLoop.PreHeader, vecType, VectorOp.Splat, data.Seed),
-            };
-            data.NewPhi = newLoop.CreateAccum(seed, currVal => currVal);
-
-            Value EmitAccumOpSeed(Value seed, int identity)
-            {
-                Value rest = seed.ResultType.IsFloat()
-                    ? ConstFloat.Create(seed.ResultType, identity) 
-                    : ConstInt.Create(seed.ResultType, identity);
-
-                var args = new Value[_width];
-                args[0] = seed;
-                args.AsSpan(1..).Fill(rest);
-
-                return _trans.EmitOp(newLoop.PreHeader, vecType, VectorOp.Pack, args);
-            }
+            CreateReductionPhi(newLoop, phi);
         }
 
         //Emit loop and widen instructions
@@ -182,13 +162,18 @@ internal class InnerLoopVectorizer
             }
         );
 
-        //Finalize reductions
+        //Finalize reduction phis
         foreach (var (phi, data) in _reductionPhis) {
-            var vecType = new VectorType(phi.ResultType, _width);
-            var finalValue = _trans.EmitReduction(newLoop.Exit, vecType, data.Op, data.NewPhi);
+            Value exitValue;
 
+            if (_trans.IsVectorType(data.NewPhi.ResultType)) {
+                var vecType = new VectorType(phi.ResultType, _width);
+                exitValue = _trans.EmitReduction(newLoop.Exit, vecType, data.Op, data.NewPhi);
+            } else {
+                exitValue = data.NewPhi;
+            }
             data.NewPhi.SetValue(newLoop.Latch.Block, _mappings.GetRef(data.IterOut).ClonedDef!);
-            phi.RedirectArg(_predBlock, newLoop.Exit.Block, finalValue);
+            phi.RedirectArg(_predBlock, newLoop.Exit.Block, exitValue);
         }
 
         newLoop.Exit.SetBranch(_loop.Header);
@@ -197,29 +182,30 @@ internal class InnerLoopVectorizer
         _counter.RedirectArg(_predBlock, newLoop.Exit.Block, _newCounter);
     }
 
-    private Instruction VectorizeInst(LoopBuilder newLoop, Instruction inst, ref InstMapping mapping)
+    private Value VectorizeInst(LoopBuilder newLoop, Instruction inst, ref InstMapping mapping)
     {
         if (inst is PtrOffsetInst addr) {
             Debug.Assert(!addr.KnownStride || addr.Stride == addr.ElemType.Kind.Size());
 
-            return (Instruction)newLoop.Body.CreatePtrOffset(
+            return newLoop.Body.CreatePtrOffset(
                 GetScalarMapping(addr.BasePtr),
                 GetScalarMapping(addr.Index),
                 addr.ElemType
             );
         }
-
         Debug.Assert(mapping.TargetOp != VectorOp.Invalid);
 
+        var vecType = new VectorType(mapping.ElemType, _width);
         var args = new Value[inst.Operands.Length];
+
         for (int i = 0; i < args.Length; i++) {
             var arg = inst.Operands[i];
-            args[i] = GetVectorMapping(newLoop.Body, arg);
+            args[i] = GetVectorMapping(newLoop.Body, vecType, arg);
         }
-        var vecType = new VectorType(mapping.ScalarType, _width);
         return _trans.EmitOp(newLoop.Body, vecType, mapping.TargetOp, args);
     }
-    private Value GetVectorMapping(IRBuilder builder, Value scalar)
+
+    private Value GetVectorMapping(IRBuilder builder, VectorType vecType, Value scalar)
     {
         if (scalar is Instruction inst && inst.Block == _bodyBlock) {
             return _mappings.GetRef(inst).ClonedDef
@@ -228,12 +214,11 @@ internal class InnerLoopVectorizer
         if (scalar is PhiInst phi && _reductionPhis.ContainsKey(phi)) {
             return _reductionPhis.GetRef(phi).NewPhi;
         }
-        var vecType = new VectorType(scalar.ResultType.Kind, _width);
 
         //TODO: cache and hoist invariant/constant vectors
         if (scalar == _counter) {
-            var seqOffsets = Enumerable.Range(0, _width)
-                    .Select(i => ConstInt.Create(scalar.ResultType, i))
+            var seqOffsets = Enumerable.Range(0, vecType.Count)
+                    .Select(i => ConstInt.Create(vecType.ElemType, i))
                     .ToArray();
 
             //v_idx = [idx, idx, ...] + [0, 1, ...]
@@ -255,13 +240,94 @@ internal class InnerLoopVectorizer
         Debug.Assert(_loop.IsInvariant(val));
         return val;
     }
+
+    private void CreateReductionPhi(LoopBuilder newLoop, PhiInst phi)
+    {
+        ref var data = ref _reductionPhis.GetRef(phi);
+        var vecType = new VectorType(phi.ResultType, _width);
+
+        var seed = data.Op switch {
+            //For bool sums, it's easier to use scalar phi + movemask
+            VectorOp.Add when IsPredicatedCountStep(data.IterOut)
+                => data.Seed,
+            //Additive: [seed, 0, 0, ...]
+            VectorOp.Add or VectorOp.Or or VectorOp.Xor
+                => EmitAccumOpSeed(data.Seed, 0),
+            //Multiplicative: [seed, 1, 1, ...]
+            VectorOp.Mul
+                => EmitAccumOpSeed(data.Seed, 1),
+            //Exclusive: [seed, seed, ...]
+            VectorOp.And or VectorOp.Min or VectorOp.Max
+                => _trans.EmitOp(newLoop.PreHeader, vecType, VectorOp.Splat, data.Seed),
+        };
+        data.NewPhi = newLoop.CreateAccum(seed, currVal => currVal);
+
+        Value EmitAccumOpSeed(Value seed, int identity)
+        {
+            var identityConst = seed.ResultType.IsFloat()
+                ? ConstFloat.Create(seed.ResultType, identity)
+                : ConstInt.Create(seed.ResultType, identity) as Const;
+
+            var args = new Value[_width];
+            args[0] = seed;
+            args.AsSpan(1..).Fill(identityConst);
+
+            return _trans.EmitOp(newLoop.PreHeader, vecType, VectorOp.Pack, args);
+        }
+    }
+    //Checks if we know how to vectorize a reduction with the given accum op
+    private static bool IsSupportedReductionOp(VectorOp op)
+    {
+        return op is
+            VectorOp.Add or VectorOp.Mul or
+            VectorOp.And or VectorOp.Or or VectorOp.Xor or
+            VectorOp.Min or VectorOp.Max;
+    }
+
+    //Returns the nominal element type for some conditional (e.g. `cmp i32, i32` -> i32)
+    private TypeKind GetConditionalElemType(Instruction inst)
+    {
+        //Widen conditionals like ((cmp x, y) | (cmp z, w)) to their comparand scalar widths
+        if (inst is BinaryInst or CompareInst) {
+            var type = TypeKind.Void;
+            if (inst.Operands[0] is Instruction lhs && _mappings.ContainsKey(lhs)) {
+                type = _mappings.GetRef(lhs).ElemType;
+            }
+            if (inst.Operands[1] is Instruction rhs && _mappings.ContainsKey(rhs)) {
+                var otherType = _mappings.GetRef(rhs).ElemType;
+                if (type.Size() != otherType.Size()) {
+                    return TypeKind.Void;
+                }
+            }
+            return type;
+        }
+        return TypeKind.Void;
+    }
+    //Checks if we know how to vectorize a conditional (inst returning bool) with the given user
+    private static bool IsSupportedConditionalUse(Instruction user, TypeKind nominalElemType)
+    {
+        return
+            (user is SelectInst sel && sel.ResultType.Kind.Size() == nominalElemType.Size()) ||
+            (user is BinaryInst { Op: BinaryOp.And or BinaryOp.Or or BinaryOp.Xor, ResultType.Kind: TypeKind.Bool }) ||
+            IsPredicatedCountStep(user);
+    }
+    //Checks if `inst` is an `add (int32)phi, (bool)cond`.
+    private static bool IsPredicatedCountStep(Instruction inst)
+    {
+        return inst is BinaryInst {
+            Op: BinaryOp.Add,
+            Left: PhiInst phi,
+            Right.ResultType.Kind: TypeKind.Bool,
+            NumUses: 1
+        } bin && inst.Users().First() == phi;
+    }
 }
 
 internal struct InstMapping
 {
-    public Instruction? ClonedDef;
+    public Value? ClonedDef;
     public VectorOp TargetOp;
-    public TypeKind ScalarType;
+    public TypeKind ElemType;
 
     //Whether this is a load/store of an small int type (byte/short), implicitly widened to a int.
     public bool IsWidenedMemAcc;

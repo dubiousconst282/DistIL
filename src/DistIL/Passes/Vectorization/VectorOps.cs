@@ -1,5 +1,7 @@
 namespace DistIL.Passes.Vectorization;
 
+using System.Numerics;
+
 using DistIL.IR.Utils;
 
 internal enum VectorOp
@@ -34,7 +36,8 @@ internal enum VectorOp
     SignExt, ZeroExt,
 
     //Internal
-    _Sum,
+    _Sum, _PredicatedCount,
+    _Bitcast0, _BitcastN = _Bitcast0 + (TypeKind.Double - TypeKind.SByte + 1),
 }
 
 /// <summary> Helper for mapping and emission of vector instructions. </summary>
@@ -49,7 +52,7 @@ internal class VectorTranslator
         _resolver = resolver;
     }
 
-    public Instruction EmitOp(IRBuilder builder, VectorType type, VectorOp op, params Value[] args)
+    public Value EmitOp(IRBuilder builder, VectorType type, VectorOp op, params Value[] args)
     {
         switch (op) {
             case VectorOp.Load: {
@@ -61,6 +64,10 @@ internal class VectorTranslator
             case VectorOp.Pack when args.All(a => a.Equals(args[0])): {
                 return EmitOp(builder, type, VectorOp.Splat, args[0]);
             }
+            case VectorOp._PredicatedCount: {
+                Debug.Assert(args[0].ResultType == PrimType.Int32 && GetActualType(type) == args[1].ResultType);
+                return builder.CreateAdd(args[0], EmitPopCount(builder, type, args[1]));
+            }
             default: {
                 var func = _funcMap.GetOrAddRef((type, op)) ??= FindFunc(type, op);
                 return builder.CreateCall(func, args);
@@ -68,7 +75,26 @@ internal class VectorTranslator
         }
     }
 
-    public Instruction EmitReduction(IRBuilder builder, VectorType type, VectorOp op, Value vector)
+    public Value EmitBitcast(IRBuilder builder, VectorType type, TypeKind newElemType, Value vector)
+    {
+        if (type.ElemKind == newElemType) {
+            return vector;
+        }
+        Debug.Assert(newElemType is >= TypeKind.SByte and <= TypeKind.Double);
+        var placeholderOp = VectorOp._Bitcast0 + (newElemType - TypeKind.SByte);
+        var func = _funcMap.GetOrAddRef((type, placeholderOp)) ??= FindCastFn();
+
+        return builder.CreateCall(func, vector);
+
+        MethodDesc FindCastFn()
+        {
+            string name = "As" + newElemType.ToString();
+            var funcDef = (MethodDef)GetBaseType(type).FindMethod(name);
+            return funcDef.GetSpec(type.ElemType);
+        }
+    }
+
+    public Value EmitReduction(IRBuilder builder, VectorType type, VectorOp op, Value vector)
     {
         //Summation has a dedicated helper: Vector.Sum()
         if (op == VectorOp.Add) {
@@ -89,10 +115,10 @@ internal class VectorTranslator
         if (width >= 256) {
             var baseType = GetBaseType(type);
             type = new VectorType(type.ElemKind, type.Count / 2);
-            vector = EmitOp(builder, type, op, EmitGetHalf("GetLower"), EmitGetHalf("GetUpper"));
+            vector = EmitOp(builder, type, op, EmitHalf("GetLower"), EmitHalf("GetUpper"));
             width = 128;
 
-            Value EmitGetHalf(string name)
+            Value EmitHalf(string name)
             {
                 var func = (MethodDef)baseType.FindMethod(name);
                 return builder.CreateCall(func.GetSpec(type.ElemType), vector);
@@ -111,6 +137,21 @@ internal class VectorTranslator
             vector = EmitOp(builder, type, op, vector, shuffledVec);
         }
         return EmitOp(builder, type, VectorOp.GetLane, vector, ConstInt.CreateI(0));
+    }
+
+    private Value EmitPopCount(IRBuilder builder, VectorType type, Value vector)
+    {
+        var m_PopCount = _resolver.Import(typeof(BitOperations))
+            .FindMethod("PopCount", new MethodSig(PrimType.Int32, new TypeSig[] { PrimType.UInt32 }));
+
+        //uiCA says movmskb+popcount takes ~1c, but there's probably a better way to do this.
+        var mask = EmitOp(builder,
+            new VectorType(TypeKind.Byte, type.BitWidth / 8),
+            VectorOp.ExtractMSB, 
+            EmitBitcast(builder, type, TypeKind.Byte, vector));
+
+        int shiftAmount = BitOperations.Log2((uint)type.ElemKind.Size());
+        return builder.CreateShrl(builder.CreateCall(m_PopCount, mask), ConstInt.CreateI(shiftAmount));
     }
 
     public TypeSpec GetActualType(VectorType type)
@@ -143,10 +184,15 @@ internal class VectorTranslator
         };
     }
 
-#pragma warning disable format
-    public (VectorOp Op, TypeKind ScalarType) GetVectorOp(Instruction inst)
+    public bool IsVectorType(TypeDesc type)
     {
-        if (!VectorType.IsSupportedElemType(inst.ResultType) && inst is not CompareInst) {
+        return type.IsCorelibType() && type.Name is "Vector128`1" or "Vector256`1";
+    }
+
+#pragma warning disable format
+    public (VectorOp Op, TypeKind ElemType) GetVectorOp(Instruction inst)
+    {
+        if (!VectorType.IsSupportedElemType(inst.ResultType) && inst.ResultType != PrimType.Bool) {
             return default;
         }
         return inst switch {
@@ -208,7 +254,7 @@ internal class VectorTranslator
         };
     }
 
-    private static (VectorOp Op, TypeKind ScalarType) GetConvertOp(ConvertInst inst)
+    private static (VectorOp Op, TypeKind ElemType) GetConvertOp(ConvertInst inst)
     {
         return (inst.SrcType, inst.DestType) switch {
             (TypeKind.Int32, TypeKind.Single) => (VectorOp.I2F, TypeKind.Single),
@@ -217,7 +263,7 @@ internal class VectorTranslator
         };
     }
 
-    private static (VectorOp Op, TypeKind ScalarType) GetCompareOp(CompareInst inst)
+    private static (VectorOp Op, TypeKind ElemType) GetCompareOp(CompareInst inst)
     {
         var typeL = inst.Left.ResultType.Kind;
         var typeR = inst.Right.ResultType.Kind;

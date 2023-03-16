@@ -40,7 +40,7 @@ internal enum VectorOp
     _Bitcast0, _BitcastN = _Bitcast0 + (TypeKind.Double - TypeKind.SByte + 1),
 }
 
-/// <summary> Helper for mapping and emission of vector instructions. </summary>
+/// <summary> Helps with mapping and emission of vector instructions. </summary>
 internal class VectorTranslator
 {
     readonly ModuleResolver _resolver;
@@ -63,6 +63,10 @@ internal class VectorTranslator
             }
             case VectorOp.Pack when args.All(a => a.Equals(args[0])): {
                 return EmitOp(builder, type, VectorOp.Splat, args[0]);
+            }
+            case VectorOp.CmpNe: {
+                var eqMask = EmitOp(builder, type, VectorOp.CmpEq, args);
+                return EmitOp(builder, type, VectorOp.Not, eqMask);
             }
             case VectorOp._PredicatedCount: {
                 Debug.Assert(args[0].ResultType == PrimType.Int32 && GetActualType(type) == args[1].ResultType);
@@ -101,7 +105,7 @@ internal class VectorTranslator
             return EmitOp(builder, type, VectorOp._Sum, vector);
         }
         //For any other op, we use a divide and conquer algo, see https://stackoverflow.com/a/35270026
-        //TODO: support for ARM (https://stackoverflow.com/q/31197216)
+        //TODO: this is not optimal for ARM (https://stackoverflow.com/q/31197216)
         //
         //256:  var t1 = Vector128.Max(x.GetLower(), x.GetUpper());                               = max([a,  b,  c, d], [e,  f,  g,  h])
         //128:  var t2 = Vector128.Max(t1, Vector128.Shuffle(t1, Vector128.Create(2, 3, 0, 0)));  = max([ae, bf, ?, ?], [cg, dh, ?, ?])
@@ -197,6 +201,7 @@ internal class VectorTranslator
         }
         return inst switch {
             BinaryInst c => (GetBinaryOp(c.Op), inst.ResultType.Kind),
+            UnaryInst c => (GetUnaryOp(c.Op), inst.ResultType.Kind),
             CallInst c => (GetMathOp(c.Method), inst.ResultType.Kind),
             SelectInst c => (VectorOp.Select, inst.ResultType.Kind),
             CompareInst c => GetCompareOp(c),
@@ -227,6 +232,16 @@ internal class VectorTranslator
             BinaryOp.FDiv => VectorOp.Div,
             //Also no HW support for FRem.
 
+            _ => default
+        };
+    }
+
+    private static VectorOp GetUnaryOp(UnaryOp op)
+    {
+        return op switch {
+            UnaryOp.Neg     => VectorOp.Neg,
+            UnaryOp.FNeg    => VectorOp.Neg,
+            UnaryOp.Not     => VectorOp.Not,
             _ => default
         };
     }
@@ -265,19 +280,27 @@ internal class VectorTranslator
 
     private static (VectorOp Op, TypeKind ElemType) GetCompareOp(CompareInst inst)
     {
+        var op = inst.Op;
         var typeL = inst.Left.ResultType.Kind;
         var typeR = inst.Right.ResultType.Kind;
 
-        if (inst.Right is ConstInt consR && consR.FitsInType(inst.Left.ResultType)) {
+        //TODO: better handling for operand signess mismatch
+        //This allows compares like (sge u16, 10), but not (uge, i32, 0)
+        if (typeL.IsUnsigned() && inst.Right is ConstInt c && c.FitsInType(inst.Left.ResultType)) {
             typeR = typeL;
-        } else if (typeL.GetStorageType() != typeR.GetStorageType()) {
+
+            if (typeL.IsSmallInt() && op.IsSigned()) {
+                op = op.GetUnsigned();
+            }
+        }
+
+        if (typeL.GetStorageType() != typeR.GetStorageType() ||
+            op.IsSigned() != typeL.IsSigned() ||
+            op.IsSigned() != typeR.IsSigned()
+        ) {
             return default;
         }
-        //TODO: handle compare operand sign mismatch
-        if (typeL.IsInt() && (inst.Op.IsSigned() != typeL.IsSigned() || inst.Op.IsSigned() != typeR.IsSigned())) {
-            return default;
-        }
-        var op = inst.Op switch {
+        var vecOp = op switch {
             CompareOp.Eq or CompareOp.FOeq => VectorOp.CmpEq,
             CompareOp.Ne or CompareOp.FUne => VectorOp.CmpNe,
             CompareOp.Slt or CompareOp.Ult or CompareOp.FOlt => VectorOp.CmpLt,
@@ -286,7 +309,7 @@ internal class VectorTranslator
             CompareOp.Sge or CompareOp.Uge or CompareOp.FOge => VectorOp.CmpGe,
             _ => default
         };
-        return (op, typeL);
+        return (vecOp, typeL);
     }
 
     private MethodDesc FindFunc(VectorType type, VectorOp op)
@@ -332,8 +355,8 @@ internal class VectorTranslator
             VectorOp.Select     => FindGen("ConditionalSelect", gm_Vec, gm_Vec, gm_Vec, gm_Vec),
             VectorOp.ExtractMSB => FindGen("ExtractMostSignificantBits", PrimType.UInt32, gm_Vec),
 
-            VectorOp.F2I        => FindDef("ConvertToInt32",    vecType.Definition.GetSpec(PrimType.Int32), vecType),
-            VectorOp.I2F        => FindDef("ConvertToSingle",   vecType.Definition.GetSpec(PrimType.Single), vecType),
+            VectorOp.F2I        => FindDef("ConvertToInt32",    vecType, vecType.Definition.GetSpec(PrimType.Single)),
+            VectorOp.I2F        => FindDef("ConvertToSingle",   vecType, vecType.Definition.GetSpec(PrimType.Int32)),
 
             VectorOp._Sum       => FindGen("Sum",               gm_Elem, gm_Vec),
 

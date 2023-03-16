@@ -65,7 +65,7 @@ public class ForestAnalysis : IMethodAnalysis
     private static bool IsAlwaysLeaf(Instruction inst)
     {
         //Cheaper to rematerialize
-        return inst is AddressInst || inst.Is(CilIntrinsicId.ArrayLen, CilIntrinsicId.SizeOf);
+        return inst is VarAddrInst || inst.Is(CilIntrinsicId.ArrayLen, CilIntrinsicId.SizeOf);
     }
 
     class BlockInterfs

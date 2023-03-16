@@ -94,6 +94,9 @@ public class ConstFolding
 
     public static Value? FoldConvert(Value srcValue, TypeDesc dstType, bool chkOverflow, bool srcUnsigned)
     {
+        if (srcValue.ResultType == dstType) {
+            return srcValue;
+        }
         if (chkOverflow) {
             return null; //TODO
         }

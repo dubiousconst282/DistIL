@@ -45,7 +45,7 @@ internal class InnerLoopVectorizer
             _exitCond = exitCond,
             _counter = counter
         };
-        if (vectorizer.BuildMappings(reportLogger)) {
+        if (vectorizer.BuildMappings(reportLogger) && vectorizer.PickVectorWidth()) {
             vectorizer.EmitVectorizedLoop();
             return true;
         }
@@ -138,7 +138,31 @@ internal class InnerLoopVectorizer
         return true;
     }
 
-    public void EmitVectorizedLoop()
+    private bool PickVectorWidth()
+    {
+        //Check if all mappings have the same scalar width
+        //TODO: support for partial unrolling
+        int commonElemSize = 0;
+
+        foreach (var inst in _mappings.Keys) {
+            ref var mapping = ref _mappings.GetRef(inst);
+
+            if (mapping.ElemType == TypeKind.Void) continue;
+
+            int size = mapping.ElemType.BitSize();
+
+            if (commonElemSize == 0) {
+                commonElemSize = size;
+            } else if (commonElemSize != size) {
+                return false;
+            }
+        }
+        //TODO: figure out when it's better to use 128-bit vectors (ARM/old CPUs)
+        _width = 256 / commonElemSize;
+        return true;
+    }
+
+    private void EmitVectorizedLoop()
     {
         var newLoop = new LoopBuilder(_predBlock, "Vec_");
         var steppedCounter = _counter.GetValue(_bodyBlock);

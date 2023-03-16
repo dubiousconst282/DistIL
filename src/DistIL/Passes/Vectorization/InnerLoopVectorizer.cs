@@ -23,9 +23,9 @@ internal class InnerLoopVectorizer
         //Only consider loops with a single body block (the latch).
         if (loop.NumBlocks != 2) return false;
 
-        var pred = loop.GetPredecessor()!;
-        var latch = loop.GetLatch()!;
-        var exitCond = loop.GetExitCondition()!;
+        var pred = loop.GetPredecessor();
+        var latch = loop.GetLatch();
+        var exitCond = loop.GetExitCondition();
 
         if (pred == null || latch == null || exitCond == null) return false;
 
@@ -33,6 +33,7 @@ internal class InnerLoopVectorizer
 
         //Currently we only support loops in the form of:
         //  for (int i = ...; i < bound; i++)
+        //  for (ptr p = ...; p < bound; p = lea p + 1)
         if (!IsSequentialLoop()) return false;
 
         //Everything looks right, try to build mappings and vectorize
@@ -52,10 +53,11 @@ internal class InnerLoopVectorizer
 
         bool IsSequentialLoop()
         {
-            return
-                exitCond.Op is CompareOp.Slt or CompareOp.Ult &&
-                counter.GetValue(latch) is BinaryInst { Op: BinaryOp.Add, Right: ConstInt { Value: 1 } } &&
-                loop.IsInvariant(exitCond.Right);
+            return exitCond.Op is CompareOp.Slt or CompareOp.Ult && 
+                   loop.IsInvariant(exitCond.Right) &&
+                   counter.GetValue(latch) is var iterOut &&
+                   (iterOut is BinaryInst { Op: BinaryOp.Add, Right: ConstInt { Value: 1 } } ||
+                   (iterOut is PtrOffsetInst { BasePtr: var basePtr, Index: ConstInt { Value: 1 }, KnownStride: true } && basePtr == counter));
         }
     }
 
@@ -65,6 +67,7 @@ internal class InnerLoopVectorizer
             if (phi == _counter) continue;
 
             if (phi.GetValue(_bodyBlock) is not Instruction iterOut || iterOut.Block != _bodyBlock) return false;
+            if (phi.Users().Any(u => _loop.Contains(u.Block) && u != iterOut)) return false;
 
             var op = _trans.GetVectorOp(iterOut).Op;
             if (!IsSupportedReductionOp(op)) return false;
@@ -80,7 +83,8 @@ internal class InnerLoopVectorizer
             switch (inst) {
                 case PtrOffsetInst addr: {
                     //TODO: aliasing checks
-                    if (!_loop.IsInvariant(addr.BasePtr) || addr.Index != _counter) {
+                    if ((!_loop.IsInvariant(addr.BasePtr) || addr.Index != _counter) && addr.BasePtr is not PhiInst) {
+                        logger?.Debug($"AutoVec: unsupported pointer addressing '{addr}'");
                         return false;
                     }
                     _mappings.Add(inst, new());
@@ -137,10 +141,17 @@ internal class InnerLoopVectorizer
     public void EmitVectorizedLoop()
     {
         var newLoop = new LoopBuilder(_predBlock, "Vec_");
+        var steppedCounter = _counter.GetValue(_bodyBlock);
 
         _newCounter = newLoop.CreateAccum(
             seed: _counter.GetValue(_predBlock),
-            emitUpdate: currIdx => newLoop.Latch.CreateAdd(currIdx, ConstInt.CreateI(_width))
+            emitUpdate: currVal => {
+                var step = ConstInt.CreateI(_width);
+
+                return steppedCounter is PtrOffsetInst lea
+                    ? newLoop.Latch.CreatePtrOffset(currVal, step, lea.ElemType)
+                    : newLoop.Latch.CreateAdd(currVal, step);
+            }
         ).SetName("v_idx");
 
         //Create reduction accumulator phis
@@ -151,6 +162,10 @@ internal class InnerLoopVectorizer
         //Emit loop and widen instructions
         newLoop.Build(
             emitCond: builder => {
+                if (steppedCounter is PtrOffsetInst lea) {
+                    var remBytes = builder.CreateSub(_exitCond.Right, _newCounter);
+                    return builder.CreateSge(remBytes, ConstInt.CreateI(_width * lea.Stride));
+                }
                 var newBound = newLoop.PreHeader.CreateSub(_exitCond.Right, ConstInt.CreateI(_width - 1)).SetName("v_bound");
                 return builder.CreateSlt(_newCounter, newBound);
             },
@@ -216,7 +231,7 @@ internal class InnerLoopVectorizer
         }
 
         //TODO: cache and hoist invariant/constant vectors
-        if (scalar == _counter) {
+        if (scalar == _counter && scalar.ResultType.IsInt()) {
             var seqOffsets = Enumerable.Range(0, vecType.Count)
                     .Select(i => ConstInt.Create(vecType.ElemType, i))
                     .ToArray();
@@ -226,6 +241,10 @@ internal class InnerLoopVectorizer
                 _trans.EmitOp(builder, vecType, VectorOp.Splat, _newCounter),
                 _trans.EmitOp(builder, vecType, VectorOp.Pack, seqOffsets)
             );
+        }
+        if (scalar == _counter) {
+            Debug.Assert(_counter.ResultType.IsPointerLike());
+            return _newCounter;
         }
         if (_loop.IsInvariant(scalar)) {
             return _trans.EmitOp(builder, vecType, VectorOp.Splat, scalar);

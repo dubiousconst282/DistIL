@@ -85,7 +85,7 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
         .RepeatUntilFixedPoint(maxIters: 3);
 
     manager.AddPasses()
-        //.Apply<LoopStrengthReduction>()
+        .Apply<LoopStrengthReduction>()
         .Apply<LoopVectorizer>()
         .IfChanged(simplifySeg);
 

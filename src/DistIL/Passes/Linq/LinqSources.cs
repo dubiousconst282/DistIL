@@ -22,7 +22,7 @@ internal class MemorySource : LinqSourceNode
     }
 
     protected override Value EmitMoveNext(IRBuilder builder)
-        => builder.CreateCmp(CompareOp.Ult, _currPtr!, _endPtr!); //ptr < endPtr
+        => builder.CreateUlt(_currPtr!, _endPtr!); //ptr < endPtr
 
     protected override Value EmitCurrent(IRBuilder builder)
         => builder.CreateLoad(_currPtr!); //*ptr
@@ -80,8 +80,8 @@ internal class IntRangeSource : LinqSourceNode
         builder.Throw(
             typeof(ArgumentOutOfRangeException),
             builder.CreateOr(
-                builder.CreateCmp(CompareOp.Slt, count, ConstInt.CreateI(0)),
-                builder.CreateCmp(CompareOp.Ugt,
+                builder.CreateSlt(count, ConstInt.CreateI(0)),
+                builder.CreateUgt(
                     builder.CreateAdd(
                         builder.CreateConvert(start, PrimType.Int64),
                         builder.CreateConvert(count, PrimType.Int64)),
@@ -93,7 +93,7 @@ internal class IntRangeSource : LinqSourceNode
     }
 
     protected override Value EmitMoveNext(IRBuilder builder)
-        => builder.CreateCmp(CompareOp.Slt, _index!, _end!);
+        => builder.CreateSlt(_index!, _end!);
 
     protected override Value EmitCurrent(IRBuilder builder)
         => _index!;

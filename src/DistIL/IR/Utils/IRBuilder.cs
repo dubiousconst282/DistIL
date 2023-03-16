@@ -116,6 +116,10 @@ public class IRBuilder
     public Value CreateSgt(Value left, Value right) => CreateCmp(CompareOp.Sgt, left, right);
     public Value CreateSle(Value left, Value right) => CreateCmp(CompareOp.Sle, left, right);
     public Value CreateSge(Value left, Value right) => CreateCmp(CompareOp.Sge, left, right);
+    public Value CreateUlt(Value left, Value right) => CreateCmp(CompareOp.Ult, left, right);
+    public Value CreateUgt(Value left, Value right) => CreateCmp(CompareOp.Ugt, left, right);
+    public Value CreateUle(Value left, Value right) => CreateCmp(CompareOp.Ule, left, right);
+    public Value CreateUge(Value left, Value right) => CreateCmp(CompareOp.Uge, left, right);
 
     public ConvertInst CreateConvert(Value srcValue, TypeDesc dstType, bool checkOverflow = false, bool srcUnsigned = false)
         => Emit(new ConvertInst(srcValue, dstType, checkOverflow, srcUnsigned));

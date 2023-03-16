@@ -15,7 +15,7 @@ internal readonly struct VectorType : IEquatable<VectorType>
 
     public VectorType(TypeKind elemKind, int count)
     {
-        ElemKind = elemKind;
+        ElemKind = elemKind == TypeKind.Char ? TypeKind.UInt16 : elemKind;
         Count = count;
     }
     public VectorType(TypeDesc elemType, int count)
@@ -23,7 +23,7 @@ internal readonly struct VectorType : IEquatable<VectorType>
 
     public static bool IsSupportedElemType(TypeDesc elemType)
     {
-        return elemType.Kind is >= TypeKind.SByte and <= TypeKind.Double;
+        return elemType.Kind is (>= TypeKind.SByte and <= TypeKind.Double) or TypeKind.Char;
     }
 
     public bool Equals(VectorType other) => other.Count == Count && other.ElemKind == ElemKind;

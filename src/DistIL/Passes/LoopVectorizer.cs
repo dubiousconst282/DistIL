@@ -17,6 +17,9 @@ public class LoopVectorizer : IMethodPass
 
     public MethodPassResult Run(MethodTransformContext ctx)
     {
+        if (!IsMarked(ctx.Definition) && !IsMarked(ctx.Definition.DeclaringType)) {
+            return MethodInvalidations.None;
+        }
         var loopAnalysis = ctx.GetAnalysis<LoopAnalysis>(preserve: true);
         bool changed = false;
 
@@ -25,5 +28,12 @@ public class LoopVectorizer : IMethodPass
         }
 
         return changed ? MethodInvalidations.Loops : MethodInvalidations.None;
+    }
+
+    private static bool IsMarked(ModuleEntity entity)
+    {
+        return entity
+            .GetCustomAttribs().Find("DistIL.Attributes", "OptimizeAttribute")
+            ?.GetNamedArg("TryVectorize")?.Value is true;
     }
 }

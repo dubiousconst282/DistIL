@@ -14,8 +14,10 @@ internal class MemorySource : LinqSourceNode
     protected override void EmitHead(LoopBuilder loop, out Value? count)
     {
         //T& startPtr = call MemoryMarshal.GetArrayDataReference<T>(T[]: source)  //or akin.
+        (_currPtr, count) = LoopStrengthReduction.CreateGetDataPtrRange(loop.PreHeader, PhysicalSource.Operand);
+
         //T& endPtr = startPtr + (nint)count * sizeof(T)
-        (_currPtr, _endPtr, count) = LoopStrengthReduction.CreateGetDataPtrRange(loop.PreHeader, PhysicalSource.Operand);
+        _endPtr = loop.PreHeader.CreatePtrOffset(_currPtr, count);
 
         //T& currPtr = phi [PreHeader: startPtr], [Latch: {currPtr + sizeof(T)}]
         _currPtr = loop.CreateAccum(_currPtr, currPtr => loop.Latch.CreatePtrIncrement(currPtr)).SetName("lq_currPtr");

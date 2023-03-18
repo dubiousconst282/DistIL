@@ -48,6 +48,10 @@ public partial class ILGenerator : InstVisitor
             foreach (var inst in _currBlock) {
                 if (!_forest.IsTreeRoot(inst) || inst is GuardInst or PhiInst) continue;
 
+                if (inst is SelectInst sel) {
+                    EmitCondSelect(sel, _regAlloc.GetRegister(sel));
+                    continue;
+                }
                 inst.Accept(this);
                 StoreResult(inst);
             }
@@ -130,6 +134,39 @@ public partial class ILGenerator : InstVisitor
         if (_nextBlock != fallthrough) {
             _asm.Emit(ILCode.Br, (ILLabel)fallthrough);
         }
+    }
+
+    private void EmitCondSelect(SelectInst inst, Variable resultReg)
+    {
+        //TODO: Consider merging adjacent selects into a single branch
+
+        //We must be careful about push order and register live ranges.
+        //We can only store to `resultReg` after all operands have been emitted,
+        //because we don't know if it's live before.
+        //  push(cond)
+        //  tmp = ifTrue
+        //  res = ifFalse
+        //  if (!pop()) res = tmp
+        var tempReg = default(Variable);
+        var brCode = GetBranchCodeAndPushCond(inst.Cond, negate: true);
+
+        if (inst.IfTrue is not Const) {
+            tempReg = new Variable(inst.ResultType, "selTemp");
+            Push(inst.IfTrue);
+            _asm.EmitStore(tempReg);
+        }
+        Push(inst.IfFalse);
+        _asm.EmitStore(resultReg);
+
+        var labelEnd = _asm.DefineLabel();
+        _asm.Emit(brCode, labelEnd);
+        if (tempReg != null) {
+            _asm.EmitLoad(tempReg);
+        } else {
+            Push(inst.IfTrue);
+        }
+        _asm.EmitStore(resultReg);
+        _asm.MarkLabel(labelEnd);
     }
 
     //Emits phi-related copies for outgoing values in this block.

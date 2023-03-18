@@ -215,30 +215,9 @@ partial class ILGenerator
     }
     public void Visit(SelectInst inst)
     {
-        //TODO: Consider merging adjacent selects into a single branch
-        //Note however that the if-conversion pass in RyuJIT .NET 8 only supports a single 
-        //assignment on each branch, but it'd be probably best to avoid these kinds of assumptions.
-
-        //Emit an equivalent of this:
-        //  push(ifTrue);
-        //  if (!cond) { pop(); push(ifFalse); }
-
-        Push(inst.IfTrue);
-        var valF = inst.IfFalse;
-
-        //Force unconditional execution for leafs with side effects
-        if (valF is Instruction valFI && _forest.IsLeafWithSideEffects(valFI)) {
-            var reg = _regAlloc.GetRegister(valFI);
-            valFI.Accept(this);
-            _asm.EmitStore(reg);
-            valF = reg;
-        }
-        
-        var labelEnd = _asm.DefineLabel();
-        _asm.Emit(GetBranchCodeAndPushCond(inst.Cond, negate: false), labelEnd);
-        _asm.Emit(ILCode.Pop);
-        Push(valF);
-        _asm.MarkLabel(labelEnd);
+        var resultReg = _regAlloc.GetRegister(inst);
+        EmitCondSelect(inst, resultReg);
+        _asm.EmitLoad(resultReg);
     }
 
     public void Visit(BranchInst inst)

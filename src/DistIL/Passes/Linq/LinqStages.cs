@@ -69,19 +69,49 @@ internal class CastStage : LinqStageNode
 }
 internal class SkipStage : LinqStageNode
 {
-    public SkipStage(CallInst call, LinqStageNode drain)
-        : base(call, drain) { }
+    public SkipStage(CallInst call, LinqStageNode sink)
+        : base(call, sink) { }
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
-        loopData.CreateAccum(ConstInt.CreateI(0), emitUpdate: curr => {
-            //goto ++curr > skipCount ? NextBody : Continue;
-            var next = builder.CreateAdd(curr, ConstInt.CreateI(1));
-            builder.Fork(builder.CreateSgt(next, SubjectCall.Args[1]), loopData.SkipBlock);
+        //Behavior for `count <= 0` is nop (drain all source items)
+        var count = SubjectCall.Args[1];
 
+        loopData.CreateAccum(count, emitUpdate: curr => {
+            //if (count > 0) goto DecrAndSkip;
+            //  ...
+            //DecrAndSkip:
+            //  count--;
+            //  goto Skip
+            var decrAndSkip = builder.Method.CreateBlock(insertAfter: loopData.SkipBlock.Prev);
+            var decr = new BinaryInst(BinaryOp.Sub, curr, ConstInt.CreateI(1));
+            decrAndSkip.InsertFirst(decr);
+            decrAndSkip.SetBranch(loopData.SkipBlock);
+
+            builder.Fork(builder.CreateSle(curr, ConstInt.CreateI(0)), decrAndSkip);
             Drain.EmitBody(builder, currItem, loopData);
-            return next;
-        });
+
+            return decr;
+        }).SetName("lq_skipRem");
+    }
+}
+internal class TakeStage : LinqStageNode
+{
+    public TakeStage(CallInst call, LinqStageNode sink)
+        : base(call, sink) { }
+
+    public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
+    {
+        //Behavior for `count <= 0` is to discard all elements.
+        var count = SubjectCall.Args[1];
+
+        loopData.CreateAccum(count, emitUpdate: curr => {
+            //if (count <= 0) goto SkipBlock;
+            //count--;
+            builder.Fork(builder.CreateSgt(curr, ConstInt.CreateI(0)), loopData.SkipBlock);
+            Drain.EmitBody(builder, currItem, loopData);
+            return builder.CreateSub(curr, ConstInt.CreateI(1));
+        }).SetName("lq_takeRem");
     }
 }
 internal class FlattenStage : LinqStageNode

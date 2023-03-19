@@ -165,6 +165,15 @@ public class ConstFolding
         return r == null ? null : ConstInt.CreateI(r.Value ? 1 : 0);
     }
 
+    public static Value? FoldSelect(Value cond, Value ifTrue, Value ifFalse)
+    {
+        return cond switch {
+            ConstInt c => c.Value != 0 ? ifTrue : ifFalse,
+            ConstNull => ifFalse,
+            _ => null
+        };
+    }
+
     public static Value? FoldCall(MethodDesc method, ReadOnlySpan<Value> args)
     {
         if (IsCoreLibMethod(method, out var methodDef) && AllConsts(args)) {

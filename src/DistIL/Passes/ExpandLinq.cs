@@ -99,8 +99,10 @@ public class ExpandLinq : IMethodPass
                 "Where"         => new WhereStage(call, drain),
                 "OfType"        => new OfTypeStage(call, drain),
                 "Cast"          => new CastStage(call, drain),
-                "Skip"          => new SkipStage(call, drain),
                 "SelectMany"    => new FlattenStage(call, drain),
+                "Skip"          => new SkipStage(call, drain),
+                "Take" when call.Method.ParamSig[1] == PrimType.Int32
+                                => new TakeStage(call, drain),
                 _ => default(LinqStageNode)
             };
 #pragma warning restore format

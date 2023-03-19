@@ -75,16 +75,14 @@ internal abstract class LinqSourceNode : LinqStageNode
         var sink = GetSink();
 
         var loop = new LoopBuilder(sink.SubjectCall.Block, "LQ_");
+        var firstStage = Drain;
 
-        EmitHead(loop, out var count);
+        EmitHead(loop, out var count, ref firstStage);
         sink.EmitHead(loop.PreHeader, count);
         
         loop.Build(
             emitCond: EmitMoveNext,
-            emitBody: body => {
-                var currItem = EmitCurrent(body);
-                Drain.EmitBody(body, currItem, new BodyLoopData(loop));
-            }
+            emitBody: body => firstStage.EmitBody(body, EmitCurrent(body), new BodyLoopData(loop))
         );
         sink.EmitTail(loop.Exit);
 
@@ -93,7 +91,32 @@ internal abstract class LinqSourceNode : LinqStageNode
         }
     }
 
-    protected abstract void EmitHead(LoopBuilder loop, out Value? count);
+    protected static void IntegrateSkipTakeRanges(IRBuilder builder, ref LinqStageNode firstStage, out Value? offset, ref Value count)
+    {
+        offset = null;
+
+        if (firstStage is SkipStage { SubjectCall.Args: [_, var skipCount] }) {
+            //It's important to clamp skipCount both ways to avoid creating GC tracking holes.
+            //  offset = clamp(skipCount, 0, (int)count)
+            //  startPtr += offset
+            //  count -= offset
+            offset = builder.CreateMin(
+                builder.CreateMax(skipCount, ConstInt.CreateI(0)),
+                builder.CreateConvert(count, PrimType.Int32));
+            count = builder.CreateSub(count, offset);
+            firstStage = firstStage.Drain;
+        }
+        if (firstStage is TakeStage { SubjectCall.Args: [_, var takeCount] }) {
+            //Take() is easier, we can exploit twos-complement by using an unsigned min() to clamp between 0..count.
+            //  count = min(count, (uint)takeCount)
+            count = builder.CreateMin(
+                builder.CreateConvert(count, PrimType.Int32),
+                takeCount, unsigned: true);
+            firstStage = firstStage.Drain;
+        }
+    }
+
+    protected abstract void EmitHead(LoopBuilder loop, out Value? count, ref LinqStageNode firstStage);
     protected abstract Value EmitMoveNext(IRBuilder builder);
     protected abstract Value EmitCurrent(IRBuilder builder);
 }

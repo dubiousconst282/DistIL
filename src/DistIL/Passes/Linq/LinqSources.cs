@@ -11,13 +11,19 @@ internal class MemorySource : LinqSourceNode
 
     Value? _currPtr, _endPtr;
 
-    protected override void EmitHead(LoopBuilder loop, out Value? count)
+    protected override void EmitHead(LoopBuilder loop, out Value? count, ref LinqStageNode firstStage)
     {
+        var builder = loop.PreHeader;
         //T& startPtr = call MemoryMarshal.GetArrayDataReference<T>(T[]: source)  //or akin.
-        (_currPtr, count) = LoopStrengthReduction.CreateGetDataPtrRange(loop.PreHeader, PhysicalSource.Operand);
+        (_currPtr, count) = LoopStrengthReduction.CreateGetDataPtrRange(builder, PhysicalSource.Operand);
 
-        //T& endPtr = startPtr + (nint)count * sizeof(T)
-        _endPtr = loop.PreHeader.CreatePtrOffset(_currPtr, count);
+        IntegrateSkipTakeRanges(builder, ref firstStage, out var offset, ref count);
+        if (offset != null) {
+            _currPtr = builder.CreatePtrOffset(_currPtr, offset);
+        }
+
+        //T& endPtr = lea startPtr + (nint)count * sizeof(T)
+        _endPtr = builder.CreatePtrOffset(_currPtr, count);
 
         //T& currPtr = phi [PreHeader: startPtr], [Latch: {currPtr + sizeof(T)}]
         _currPtr = loop.CreateAccum(_currPtr, currPtr => loop.Latch.CreatePtrIncrement(currPtr)).SetName("lq_currPtr");
@@ -36,7 +42,7 @@ internal class EnumeratorSource : LinqSourceNode
 
     Value? _enumerator;
 
-    protected override void EmitHead(LoopBuilder loop, out Value? count)
+    protected override void EmitHead(LoopBuilder loop, out Value? count, ref LinqStageNode firstStage)
     {
         var builder = loop.PreHeader;
         var source = PhysicalSource.Operand;
@@ -71,7 +77,7 @@ internal class IntRangeSource : LinqSourceNode
 
     Value? _index, _end;
 
-    protected override void EmitHead(LoopBuilder loop, out Value? count)
+    protected override void EmitHead(LoopBuilder loop, out Value? count, ref LinqStageNode firstStage)
     {
         var start = SubjectCall.Args[0];
         count = SubjectCall.Args[1];

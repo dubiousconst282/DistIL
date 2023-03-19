@@ -121,8 +121,36 @@ public class IRBuilder
     public Value CreateUle(Value left, Value right) => CreateCmp(CompareOp.Ule, left, right);
     public Value CreateUge(Value left, Value right) => CreateCmp(CompareOp.Uge, left, right);
 
-    public ConvertInst CreateConvert(Value srcValue, TypeDesc dstType, bool checkOverflow = false, bool srcUnsigned = false)
-        => Emit(new ConvertInst(srcValue, dstType, checkOverflow, srcUnsigned));
+    public Value CreateSelect(Value cond, Value ifTrue, Value ifFalse, TypeDesc? resultType = null)
+    {
+        return ConstFolding.FoldSelect(cond, ifTrue, ifFalse) ??
+               Emit(new SelectInst(cond, ifTrue, ifFalse, resultType));
+    }
+
+    public Value CreateMin(Value x, Value y, bool unsigned = false)
+    {
+        var type = x.ResultType;
+        Ensure.That(type.IsStackAssignableTo(y.ResultType));
+
+        var op = type.IsFloat() ? CompareOp.FOlt : 
+                 unsigned ? CompareOp.Ult : CompareOp.Slt;
+        return CreateSelect(CreateCmp(op, x, y), x, y);
+    }
+    public Value CreateMax(Value x, Value y, bool unsigned = false)
+    {
+        var type = x.ResultType;
+        Ensure.That(type.IsStackAssignableTo(y.ResultType));
+
+        var op = type.IsFloat() ? CompareOp.FOgt :
+                 unsigned ? CompareOp.Ugt : CompareOp.Sgt;
+        return CreateSelect(CreateCmp(op, x, y), x, y);
+    }
+
+    public Value CreateConvert(Value srcValue, TypeDesc dstType, bool checkOverflow = false, bool srcUnsigned = false)
+    {
+        return ConstFolding.FoldConvert(srcValue, dstType, checkOverflow, srcUnsigned) ??
+               Emit(new ConvertInst(srcValue, dstType, checkOverflow, srcUnsigned));
+    }
 
 
     public CallInst CreateCall(MethodDesc method, params Value[] args)
@@ -148,16 +176,10 @@ public class IRBuilder
 
 
     public LoadInst CreateFieldLoad(FieldDesc field, Value? obj = null, bool inBounds = false)
-    {
-        var addr = CreateFieldAddr(field, obj, inBounds);
-        return CreateLoad(addr);
-    }
+        => CreateLoad(CreateFieldAddr(field, obj, inBounds));
 
     public StoreInst CreateFieldStore(FieldDesc field, Value? obj, Value value, bool inBounds = false)
-    {
-        var addr = CreateFieldAddr(field, obj, inBounds);
-        return CreateStore(addr, value);
-    }
+        => CreateStore(CreateFieldAddr(field, obj, inBounds), value);
 
     public FieldAddrInst CreateFieldAddr(FieldDesc field, Value? obj = null, bool inBounds = false)
         => Emit(new FieldAddrInst(field, obj, inBounds));

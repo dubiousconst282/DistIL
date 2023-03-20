@@ -510,45 +510,37 @@ internal class BlockState
     private void ImportVarInst(ref ILInstruction inst)
     {
         var (op, index) = ILImporter.GetVarInstOp(inst.OpCode, inst.Operand);
-        var (slot, flags) = _importer.GetVarSlot(op, index);
+        var (slot, flags, isBlockLocal) = _importer.GetVarSlot(op, index);
 
         //Arguments that are only ever loaded don't need variables
-        if (slot is Argument) {
+        if (!isBlockLocal && slot is Argument) {
             Debug.Assert((flags | op) == (VarFlags.IsArg | VarFlags.Loaded));
             Push(slot);
             return;
         }
-        //Variables used only within a single block can be promoted to SSA
-        var slotVar = (Variable)slot;
-        var blockLocalFlags = (VarFlags.IsLocal | VarFlags.Loaded | VarFlags.Stored) & ~VarFlags.CrossesBlock;
-        bool isBlockLocal = flags == blockLocalFlags && !slotVar.IsPinned;
+        Debug.Assert(isBlockLocal || slot is LocalSlot);
 
         switch (op & VarFlags.OpMask) {
             case VarFlags.Loaded: {
                 if (isBlockLocal) {
-                    PushNoEmit(_importer.GetBlockLocalVarState(index, op) ?? new Undef(slotVar.Sig.Type));
-                } else if (Block.Last is LoadVarInst prevLoad && prevLoad.Var == slotVar) {
+                    PushNoEmit(slot);
+                } else if (Block.Last is LoadInst prevLoad && prevLoad.Address == slot) {
                     PushNoEmit(prevLoad);
                 } else {
-                    Push(new LoadVarInst(slotVar));
+                    Push(new LoadInst(slot));
                 }
                 break;
             }
             case VarFlags.Stored: {
                 if (isBlockLocal) {
-                    _importer.GetBlockLocalVarState(index, op) = Pop();
+                    _importer.SetBlockLocalVarSlot(index, Pop());
                 } else {
-                    Emit(new StoreVarInst(slotVar, Pop()));
+                    Emit(new StoreInst(slot, Pop()));
                 }
                 break;
             }
             case VarFlags.AddrTaken: {
-                ref var state = ref _importer.GetBlockLocalVarState(index, op);
-                if (state == null || ((VarAddrInst)state).Block != Block) {
-                    Push(state = new VarAddrInst(slotVar));
-                } else {
-                    PushNoEmit(state);
-                }
+                Push(slot);
                 break;
             }
             default: throw new UnreachableException();

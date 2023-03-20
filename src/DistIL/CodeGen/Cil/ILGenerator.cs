@@ -8,6 +8,7 @@ public partial class ILGenerator : InstVisitor
     readonly RegisterAllocator _regAlloc;
     readonly ForestAnalysis _forest;
     readonly ILAssembler _asm = new();
+    readonly Dictionary<LocalSlot, ILVariable> _slotVars = new();
 
     BasicBlock? _currBlock, _nextBlock;
     ParallelCopyEmitter? _pcopyEmitter;
@@ -69,11 +70,20 @@ public partial class ILGenerator : InstVisitor
         }
     }
 
+    private ILVariable GetSlotVarMapping(LocalSlot slot)
+    {
+        return _slotVars.GetOrAddRef(slot) ??= new(slot.Type, -1, slot.IsPinned);
+    }
+
     private void Push(Value value)
     {
         switch (value) {
-            case Variable or Argument: {
-                _asm.EmitLoad(value);
+            case LocalSlot slot: {
+                _asm.EmitAddr(GetSlotVarMapping(slot));
+                break;
+            }
+            case Argument arg: {
+                _asm.EmitLoad(arg);
                 break;
             }
             case ConstInt cons: {
@@ -114,7 +124,7 @@ public partial class ILGenerator : InstVisitor
             default: throw new NotSupportedException(value.GetType().Name + " as operand");
         }
     }
-    
+
     private void EmitFallthrough(ILCode code, BasicBlock target)
     {
         EmitOutgoingPhiCopies();
@@ -136,7 +146,7 @@ public partial class ILGenerator : InstVisitor
         }
     }
 
-    private void EmitCondSelect(SelectInst inst, Variable resultReg)
+    private void EmitCondSelect(SelectInst inst, ILVariable resultReg)
     {
         //TODO: Consider merging adjacent selects into a single branch
 
@@ -147,11 +157,11 @@ public partial class ILGenerator : InstVisitor
         //  tmp = ifTrue
         //  res = ifFalse
         //  if (!pop()) res = tmp
-        var tempReg = default(Variable);
+        var tempReg = default(ILVariable);
         var brCode = GetBranchCodeAndPushCond(inst.Cond, negate: true);
 
         if (inst.IfTrue is not Const) {
-            tempReg = new Variable(inst.ResultType, "selTemp");
+            tempReg = new ILVariable(inst.ResultType, -1);
             Push(inst.IfTrue);
             _asm.EmitStore(tempReg);
         }

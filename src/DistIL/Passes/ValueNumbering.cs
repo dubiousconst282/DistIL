@@ -41,10 +41,10 @@ public class ValueNumbering : IMethodPass
             _map.Remove(inst);
         }
         
-        public void InvalidateAccesses<TInst>(TInst inst, Func<TInst, Instruction, bool> mayAlias)
+        public void InvalidateAccesses<TInst>(TInst inst, Func<TInst, MemoryInst, bool> mayAlias)
         {
             //Load/Store insts are used interchangeably as location keys
-            foreach (var access in _map.Keys.Where(k => k is MemoryInst or LoadVarInst or StoreVarInst)) {
+            foreach (var access in _map.Keys.OfType<MemoryInst>()) {
                 if (mayAlias(inst, access)) {
                     Invalidate(access);
                 }
@@ -112,10 +112,6 @@ public class ValueNumbering : IMethodPass
             HashFn = (inst) => HashCode.Combine(inst.ResultType, inst.Value)
         });
         
-        Reg<VarAddrInst>(new() {
-            CompareFn = (a, b) => a.Var == b.Var,
-            HashFn = (inst) => HashCode.Combine(inst.Var, 1234)
-        });
         Reg<FieldAddrInst>(new() {
             CompareFn = (a, b) => a.Field == b.Field && a.Obj == b.Obj,
             HashFn = (inst) => HashCode.Combine(inst.Field, inst.Obj, 1234)
@@ -184,20 +180,11 @@ public class ValueNumbering : IMethodPass
                 return;
             }
             var store = (StoreInst)inst;
-            map.InvalidateAccesses(store, CheckMayAlias);
+            map.InvalidateAccesses(store, (store, otherAcc) => MayAlias(store.Address, otherAcc.Address));
 
             if (!StoreInst.MustBeCoerced(store.ElemType, store.Value)) {
                 map.Replace(store, store.Value);
             }
-        }
-
-        private static bool CheckMayAlias(StoreInst store, Instruction otherAcc)
-        {
-            return otherAcc switch {
-                VarAccessInst v => v.Var.IsExposed, //Non-exposed vars can never alias
-                MemoryInst m => MayAlias(store.Address, m.Address),
-                _ => true
-            };
         }
 
         private static bool MayAlias(Value addr1, Value addr2)
@@ -245,10 +232,10 @@ public class ValueNumbering : IMethodPass
             }
         }
 
-        private static bool MayAffectAccess(CallInst call, Instruction acc)
+        private static bool MayAffectAccess(CallInst call, MemoryInst acc)
         {
-            //Local vars can't be affected by a call, unless they're exposed (and the method takes some pointer or ref).
-            return acc is not VarAccessInst { Var.IsExposed: false };
+            //Local vars can't be affected by a call unless they're exposed
+            return acc.Address is not LocalSlot slot || slot.IsExposed();
         }
 
         private static FuncKind GetKind(MethodDesc fn)

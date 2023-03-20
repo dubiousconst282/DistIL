@@ -149,22 +149,22 @@ import @ from TestAsm
 
 static ParserDummy::TestCase(#arr: int[]) {
 $Locals:
-    a, b: int
-    c: String
+    num: int
+    str: String
     pin: int[]^
 Entry:
-    addr = varaddr $b -> int&
-    stvar $pin, #arr
-    stvar $a, 123
-    stvar $c, ""hello world""
+    store $pin, #arr
+    text = call Int32::ToString(this: $num) -> string
+    store $str, text
     ret
 }
 ";
         var body = Parse(code);
         var insts = body.Instructions().ToArray();
 
-        Assert.True(insts[0] is VarAddrInst { Var: { Name: "b", IsExposed: true }});
-        Assert.True(insts[1] is StoreVarInst { Var: { Name: "pin", IsPinned: true } v1, Value: Argument } && v1.Sig == PrimType.Int32.CreateArray());
+        Assert.True(insts[0] is StoreInst { Address: LocalSlot { Name: "pin", IsPinned: true, Type: ArrayType { ElemType.Kind: TypeKind.Int32 } }, Value: Argument });
+        Assert.True(insts[1] is CallInst { Method.Name: "ToString", Args: [LocalSlot { Name: "num", Type.Kind: TypeKind.Int32 }] });
+        Assert.True(insts[2] is StoreInst { Address: LocalSlot { Name: "str" }, Value: CallInst });
     }
 
     [Fact]

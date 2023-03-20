@@ -42,7 +42,7 @@ public class SymbolTable
 
     public string GetName(BasicBlock block) => GetName(block, "BB_{0:00}");
     public string GetName(Instruction inst) => GetName(inst, "r{0}");
-    public string GetName(Variable var) => GetName(var, "loc{0}");
+    public string GetName(LocalSlot var) => GetName(var, "loc{0}");
 
     private string GetName(TrackedValue value, string format)
     {

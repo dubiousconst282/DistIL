@@ -8,7 +8,6 @@ internal enum Opcode
 
     Goto, Ret, Phi,
     Call, CallVirt, NewObj,
-    LdVar, StVar, VarAddr,
     Intrinsic,
     Lea,
 
@@ -68,10 +67,6 @@ internal static class Opcodes
             "callvirt"  => Opcode.CallVirt,
             "newobj"    => Opcode.NewObj,
             
-            "ldvar"     => Opcode.LdVar,
-            "stvar"     => Opcode.StVar,
-            "varaddr"   => Opcode.VarAddr,
-
             "intrinsic" => Opcode.Intrinsic,
             "lea"       => Opcode.Lea,
 

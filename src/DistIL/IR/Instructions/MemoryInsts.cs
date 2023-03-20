@@ -6,14 +6,16 @@ public abstract class MemoryInst : Instruction
         get => _operands[0];
         set => ReplaceOperand(0, value);
     }
-    public override bool MayThrow {
-        get {
-            if (Address is AddressInst addr && addr is FieldAddrInst or ArrayAddrInst) {
-                return addr.MayThrow || addr.ElemType != ElemType;
-            }
-            return true;
-        }
-    }
+    public override bool MayThrow =>
+        Address switch {
+            AddressInst addr and (FieldAddrInst or ArrayAddrInst)
+                => addr.MayThrow || ElemType != addr.ElemType,
+
+            LocalSlot slot
+                => ElemType != slot.Type,
+
+            _ => true
+        };
 
     public abstract TypeDesc ElemType { get; }
 

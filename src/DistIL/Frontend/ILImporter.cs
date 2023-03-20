@@ -4,26 +4,29 @@ using ExceptionRegionKind = System.Reflection.Metadata.ExceptionRegionKind;
 
 public class ILImporter
 {
-    internal MethodDef _method;
-    internal MethodBody _body;
-    internal RegionNode? _regionTree;
+    internal readonly MethodDef _method;
+    internal readonly MethodBody _body;
+    internal readonly RegionNode? _regionTree;
 
-    internal Variable?[] _argSlots;
-    internal VarFlags[] _varFlags;
-    internal Value?[]? _blockLocalVarStates;
+    internal readonly ILMethodBody _ilBody;
+    internal readonly VarFlags[] _varFlags;
+    internal readonly Value?[] _varSlots;
 
     readonly Dictionary<int, BlockState> _blocks = new();
 
     private ILImporter(MethodDef method)
     {
         Ensure.That(method.ILBody != null);
+
+        _ilBody = method.ILBody;
         _method = method;
         _body = new MethodBody(method);
 
-        _argSlots = new Variable?[method.Params.Length];
-        _regionTree = RegionNode.BuildTree(method.ILBody.ExceptionRegions);
+        _regionTree = RegionNode.BuildTree(_ilBody.ExceptionRegions);
 
-        _varFlags = new VarFlags[_body.Args.Length + method.ILBody!.Locals.Length];
+        int numVars = _body.Args.Length + _ilBody.Locals.Length;
+        _varFlags = new VarFlags[numVars];
+        _varSlots = new Value[numVars];
     }
 
     public static MethodBody ParseCode(MethodDef method)
@@ -33,9 +36,8 @@ public class ILImporter
 
     private MethodBody ImportCode()
     {
-        var ilBody = _method.ILBody!;
-        var code = ilBody.Instructions.AsSpan();
-        var ehRegions = ilBody.ExceptionRegions;
+        var code = _ilBody.Instructions.AsSpan();
+        var ehRegions = _ilBody.ExceptionRegions;
         var leaders = FindLeaders(code, ehRegions);
 
         AnalyseVars(code, leaders);
@@ -134,13 +136,12 @@ public class ILImporter
         var entryBlock = _body.EntryBlock ?? GetBlock(0).Block;
 
         //Copy stored/address taken arguments to local variables
-        for (int i = 0; i < _argSlots.Length; i++) {
+        for (int i = 0; i < _body.Args.Length; i++) {
             if (!Has(_varFlags[i], VarFlags.AddrTaken | VarFlags.Stored)) continue;
 
             var arg = _body.Args[i];
-            var slot = _argSlots[i] = new Variable(arg.ResultType, name: $"a_{arg.Name}");
-            slot.IsExposed = Has(_varFlags[i], VarFlags.AddrTaken);
-            entryBlock.InsertAnteLast(new StoreVarInst(slot, arg));
+            var slot = _varSlots[i] = new LocalSlot(arg.ResultType, $"a_{arg.Name}");
+            entryBlock.InsertAnteLast(new StoreInst(slot, arg));
         }
 
         //Import code
@@ -156,8 +157,7 @@ public class ILImporter
     private void AnalyseVars(Span<ILInstruction> code, BitSet leaders)
     {
         int blockStartIdx = 0;
-        var localVars = _method.ILBody!.Locals;
-        var lastInfos = new (int BlockIdx, int StoreRegionOffset, int LoadOffset)[localVars.Length];
+        var lastInfos = new (int BlockIdx, int StoreRegionOffset, int LoadOffset)[_ilBody.Locals.Length];
 
         foreach (int endOffset in leaders) {
             int blockEndIdx = FindIndex(code, endOffset);
@@ -168,10 +168,6 @@ public class ILImporter
 
                 if (Has(op, VarFlags.IsLocal)) {
                     CalcLocalVarFlags(ref inst, ref op, varIdx);
-
-                    if (Has(op, VarFlags.AddrTaken | VarFlags.CrossesRegions)) {
-                        localVars[varIdx].IsExposed = true;
-                    }
                     varIdx += _body.Args.Length;
                 }
                 _varFlags[varIdx] |= op;
@@ -289,20 +285,35 @@ public class ILImporter
     /// <summary> Gets the block for the leader instruction at the specified offset. </summary>
     internal BlockState GetBlock(int offset) => _blocks[offset];
 
-    internal (Value Slot, VarFlags CombinedFlags) GetVarSlot(VarFlags op, int index)
+    internal (Value Slot, VarFlags CombinedFlags, bool IsBlockLocal) GetVarSlot(VarFlags op, int index)
     {
         Debug.Assert(op != VarFlags.None);
 
-        return Has(op, VarFlags.IsArg)
-            ? (_argSlots[index] ?? _body.Args[index] as Value, _varFlags[index])
-            : (_method.ILBody!.Locals[index], _varFlags[index + _body.Args.Length]);
+        if (Has(op, VarFlags.IsArg)) {
+            return (_varSlots[index] ?? _body.Args[index], _varFlags[index], false);
+        }
+        const VarFlags kBlockLocalFlags = (VarFlags.IsLocal | VarFlags.Loaded | VarFlags.Stored) & ~VarFlags.CrossesBlock;
+
+        var localVar = _ilBody.Locals[index];
+        index += _body.Args.Length;
+
+        ref var slot = ref _varSlots[index];
+        var flags = _varFlags[index];
+        bool isBlockLocal = flags == kBlockLocalFlags && !localVar.IsPinned;
+
+        slot ??= isBlockLocal
+            ? (Has(op, VarFlags.Loaded) ? new Undef(localVar.Type) : null)
+            : new LocalSlot(
+                    localVar.Type, "loc" + index,
+                    pinned: localVar.IsPinned,
+                    hardExposed: Has(flags, VarFlags.CrossesRegions));
+
+        return (slot!, flags, isBlockLocal);
     }
 
-    internal ref Value? GetBlockLocalVarState(int varIndex, VarFlags type)
+    internal void SetBlockLocalVarSlot(int index, Value value)
     {
-        _blockLocalVarStates ??= new Value[_varFlags.Length];
-        varIndex += Has(type, VarFlags.IsLocal) ? _body.Args.Length : 0;
-        return ref _blockLocalVarStates[varIndex];
+        _varSlots[index + _body.Args.Length] = value;
     }
 
     internal static (VarFlags Op, int Index) GetVarInstOp(ILCode code, object? operand)

@@ -11,7 +11,7 @@ public class RegisterAllocator : IPrintDecorator
     readonly MethodBody _method;
     readonly InterferenceGraph _interfs;
 
-    readonly Dictionary<(TypeDesc Type, int Color), Variable> _registers = new();
+    readonly Dictionary<(TypeDesc Type, int Color), ILVariable> _registers = new();
     readonly Dictionary<BasicBlock, List<(PhiInst Dest, Value Src)>> _phiCopies = new();
 
     public RegisterAllocator(MethodBody method)
@@ -72,14 +72,14 @@ public class RegisterAllocator : IPrintDecorator
         }
     }
 
-    private Variable PickRegister(TypeDesc type, int color)
+    private ILVariable PickRegister(TypeDesc type, int color)
     {
         return _registers.GetOrAddRef((type, color))
-            ??= new(type, name: "reg" + _registers.Count);
+            ??= new(type, index: _registers.Count, isPinned: false);
     }
 
     /// <summary> Returns the register assigned to <paramref name="def"/>. </summary>
-    public Variable GetRegister(Instruction def)
+    public ILVariable GetRegister(Instruction def)
         => _interfs.GetNode(def)?.Register 
             ?? PickRegister(def.ResultType, -1); //defs with no nodes don't interfere with anything, just give them a dummy register
 
@@ -90,7 +90,7 @@ public class RegisterAllocator : IPrintDecorator
     void IPrintDecorator.DecorateInst(PrintContext ctx, Instruction inst)
     {
         if (inst.HasResult && GetRegister(inst) is { } reg) {
-            ctx.Print(" @" + reg.Name, PrintToner.Comment);
+            ctx.Print(" @" + reg.Index, PrintToner.Comment);
         }
         if (inst.Next == null && GetPhiCopies(inst.Block) is { } copies) {
             ctx.PrintLine();

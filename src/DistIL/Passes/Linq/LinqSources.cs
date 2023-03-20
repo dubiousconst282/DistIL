@@ -58,9 +58,9 @@ internal class EnumeratorSource : LinqSourceNode
 
         //If the enumerator itself is a struct, we need to copy it to a new variable and use its address instead
         if (_enumerator.ResultType.IsValueType) {
-            var slot = new Variable(_enumerator.ResultType, "lq_EnumerSrcTmp", exposed: true);
-            builder.CreateVarStore(slot, _enumerator);
-            _enumerator = builder.CreateVarAddr(slot);
+            var slot = new LocalSlot(_enumerator.ResultType, "lq_EnumerSrcTmp");
+            builder.CreateStore(slot, _enumerator);
+            _enumerator = slot;
         }
         count = null;
     }

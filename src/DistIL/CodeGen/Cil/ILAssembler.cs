@@ -8,8 +8,8 @@ internal class ILAssembler
     ILInstruction[] _insts = new ILInstruction[16];
     int _index = 0;
 
-    Dictionary<Variable, int> _varSlots = new();
     Dictionary<ILLabel, int> _labelStarts = new();
+    List<ILVariable> _usedVars = new();
     int _stackDepth = 0, _maxStackDepth = 0;
 
     /// <summary> Marks the label for the specified block. </summary>
@@ -70,28 +70,30 @@ internal class ILAssembler
         _maxStackDepth = Math.Max(_maxStackDepth, _stackDepth);
     }
 
-    public void EmitLoad(Value var) => EmitVarInst(var, 0);
-    public void EmitStore(Value var) => EmitVarInst(var, 1);
-    public void EmitAddrOf(Value var) => EmitVarInst(var, 2);
-
-    private void EmitVarInst(Value var, int codeTableIdx)
+    public void EmitLoad(Argument arg)
     {
-        int index;
-        if (var is Argument arg) {
-            index = arg.Index;
-            codeTableIdx += 3;
-        } else if (!_varSlots.TryGetValue((Variable)var, out index)) {
-            _varSlots[(Variable)var] = index = _varSlots.Count;
-        }
-        ref var codes = ref ILTables.VarCodes[codeTableIdx];
+        var (code, hasOper) = ILTables.GetShortVarCode(ILCode.Ldarg, arg.Index);
+        Emit(code, hasOper ? arg.Index : null);
+    }
 
-        if (index < 4 && codes.Inline != ILCode.Nop) {
-            Emit((ILCode)((int)codes.Inline + index));
-        } else if (index < 256) {
-            Emit(codes.Short, index);
+    public void EmitLoad(ILVariable var) => EmitVarInst(ILCode.Ldloc, var);
+    public void EmitStore(ILVariable var) => EmitVarInst(ILCode.Stloc, var);
+    public void EmitAddr(ILVariable var) => EmitVarInst(ILCode.Ldloca, var);
+
+    private void EmitVarInst(ILCode code, ILVariable var)
+    {
+        //ILVariable.Index above this value is reserved for the use counter
+        //This value was choosen based on the fact that encoded var indices are limited to 16-bit.
+        const int kCounterStartIdx = ushort.MaxValue + 1;
+
+        if (var.Index >= kCounterStartIdx) {
+            var.Index++;
         } else {
-            Emit(codes.Normal, index);
+            Debug.Assert(!_usedVars.Contains(var));
+            var.Index = kCounterStartIdx;
+            _usedVars.Add(var);
         }
+        Emit(code, var);
     }
 
     public void EmitLdcI4(int value)
@@ -111,7 +113,7 @@ internal class ILAssembler
         
         return new ILMethodBody() {
             Instructions = new ArraySegment<ILInstruction>(_insts, 0, _index),
-            Locals = _varSlots.Keys.ToArray(),
+            Locals = _usedVars.ToArray(),
             ExceptionRegions = BuildEHClauses(layout),
             MaxStack = _maxStackDepth,
             InitLocals = true //TODO: preserve InitLocals
@@ -129,26 +131,34 @@ internal class ILAssembler
             currOffset += inst.GetSize();
         }
 
-        //Early return for methods with no branches
-        if (_labelStarts.Count == 1 && insts[^1].OpCode == ILCode.Ret) return;
+        //Early return for methods with no branches or local vars
+        if (_labelStarts.Count == 1 && insts[^1].OpCode == ILCode.Ret && _usedVars.Count == 0) return;
 
-        //Optimize branches using a simple greedy algorithm;
-        //Better algorithms do exist (https://arxiv.org/pdf/0812.4973.pdf), but they'd probably just
-        //save a few hundred bytes at best. Not worth since the result will most likely be recompiled again.
+        //Assign smaller indices to most used variables first
+        _usedVars.Sort((a, b) => b.Index - a.Index);
+
+        for (int i = 0; i < _usedVars.Count; i++) {
+            _usedVars[i].Index = i;
+        }
+
+        //Optimize branches and macros using a greedly algorithm
         currOffset = 0;
         foreach (ref var inst in insts) {
             inst.Offset = currOffset;
-            currOffset += inst.GetSize();
 
             if (inst.Operand is ILLabel target) {
-                int dist = GetLabelOffset(target) - currOffset;
+                int maxDist = GetLabelOffset(target) - inst.GetEndOffset();
                 var shortCode = ILTables.GetShortBranchCode(inst.OpCode);
 
-                if ((sbyte)dist == dist && shortCode != default) {
+                if ((sbyte)maxDist == maxDist && shortCode != default) {
                     inst.OpCode = shortCode;
-                    currOffset -= 3;
                 }
+            } else if (inst.Operand is ILVariable var) {
+                var (code, hasOper) = ILTables.GetShortVarCode(inst.OpCode, var.Index);
+                inst.OpCode = code;
+                inst.Operand = hasOper ? var.Index : null;
             }
+            currOffset += inst.GetSize();
         }
 
         //Replace label refs with actual offsets

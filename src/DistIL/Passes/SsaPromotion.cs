@@ -1,12 +1,15 @@
 namespace DistIL.Passes;
 
+using System.Runtime.CompilerServices;
+
 using DistIL.Analysis;
 
 /// <summary> Promotes non-exposed local variables to SSA. </summary>
 public class SsaPromotion : IMethodPass
 {
     MethodBody _method = null!;
-    Dictionary<PhiInst, Variable> _phiDefs = new(); //phi -> variable
+    Dictionary<LocalSlot, SlotInfo> _slotInfos = new();
+    Dictionary<PhiInst, LocalSlot> _phiDefs = new(); //phi -> variable
 
     public MethodPassResult Run(MethodTransformContext ctx)
     {
@@ -19,29 +22,32 @@ public class SsaPromotion : IMethodPass
 
         _method = null!;
         _phiDefs.Clear();
+        _slotInfos.Clear();
 
         return MethodInvalidations.DataFlow;
     }
 
     private void InsertPhis(DominanceFrontier domFrontier)
     {
-        var varDefs = new Dictionary<Variable, (bool Global, ArrayStack<BasicBlock> Wl)>(); //var -> blocks assigning to var
-        var killedVars = new RefSet<Variable>();
+        var killedVars = new RefSet<LocalSlot>();
 
-        //Find variable definitions
+        //Find definitions
         foreach (var block in _method) {
             foreach (var inst in block) {
-                if (inst is StoreVarInst store && CanPromote(store)) {
-                    var worklist = varDefs.GetOrAddRef(store.Var).Wl ??= new();
+                ref var slotInfo = ref GetAccessedSlotInfo(inst, out var slot);
+                if (Unsafe.IsNullRef(ref slotInfo)) continue;
+
+                if (inst is StoreInst) {
+                    var worklist = slotInfo.AssignBlocks ??= new();
                     //Add parent block to the worklist, avoiding dupes
                     if (worklist.Count == 0 || worklist.Top != block) {
                         worklist.Push(block);
                     }
-                    killedVars.Add(store.Var);
+                    killedVars.Add(slot);
                 }
                 //If we are loading a variable that has not yet been assigned in this block, mark it as global
-                else if (inst is LoadVarInst load && CanPromote(load) && !killedVars.Contains(load.Var)) {
-                    varDefs.GetOrAddRef(load.Var).Global = true;
+                else if (!killedVars.Contains(slot)) {
+                    slotInfo.IsGlobal = true;
                 }
             }
             killedVars.Clear();
@@ -51,9 +57,11 @@ public class SsaPromotion : IMethodPass
         var processed = new RefSet<BasicBlock>(); //blocks already visited in worklist
 
         //Insert phis
-        foreach (var (variable, (isGlobal, worklist)) in varDefs) {
+        foreach (var (slot, info) in _slotInfos) {
+            var worklist = info.AssignBlocks;
+
             //Avoid inserting phis for variables only alive in a single block (semi-pruned ssa)
-            if (worklist == null || !isGlobal) continue;
+            if (worklist == null || !info.IsGlobal) continue;
 
             //Initialize processed set (we do this to avoid keeping a whole HashSet for each variable)
             foreach (var def in worklist) {
@@ -64,8 +72,8 @@ public class SsaPromotion : IMethodPass
                 foreach (var dom in domFrontier.Of(block)) {
                     if (!phiAdded.Add(dom)) continue;
                     
-                    var phi = dom.InsertPhi(variable.ResultType);
-                    _phiDefs.Add(phi, variable);
+                    var phi = dom.InsertPhi(slot.Type);
+                    _phiDefs.Add(phi, slot);
 
                     if (processed.Add(dom)) {
                         worklist.Push(dom);
@@ -79,9 +87,7 @@ public class SsaPromotion : IMethodPass
 
     private void RenameDefs(DominatorTree domTree)
     {
-        //TODO: Push once per block (would need another dictionary, may not be worth)
-        var defStacks = new Dictionary<Variable, ArrayStack<Value>>();
-        var defDeltas = new ArrayStack<(BasicBlock B, Variable V)>();
+        var defDeltas = new ArrayStack<(BasicBlock B, ArrayStack<Value> DefStack)>();
         defDeltas.Push((null!, null!)); //dummy element so we don't need to check IsEmpty in RestoreDefs
 
         domTree.Traverse(
@@ -93,30 +99,33 @@ public class SsaPromotion : IMethodPass
         {
             //Init phi defs
             foreach (var phi in block.Phis()) {
-                if (_phiDefs.TryGetValue(phi, out var variable)) {
-                    PushDef(block, variable, phi);
+                if (_phiDefs.TryGetValue(phi, out var slot)) {
+                    PushDef(ref GetSlotInfo(slot), block, phi);
                 }
             }
+            //Promote load/stores
             foreach (var inst in block.NonPhis()) {
+                ref var slotInfo = ref GetAccessedSlotInfo(inst, out var slot);
+                if (Unsafe.IsNullRef(ref slotInfo)) continue;
+
                 //Update latest def
-                if (inst is StoreVarInst store && CanPromote(store)) {
-                    var value = StoreInst.Coerce(store.Var.ResultType, store.Value, insertBefore: store);
-                    PushDef(block, store.Var, value);
-                    store.Remove();
+                if (inst is StoreInst store) {
+                    var value = StoreInst.Coerce(store.ElemType, store.Value, insertBefore: inst);
+                    PushDef(ref slotInfo, block, value);
+                    inst.Remove();
                 }
                 //Replace load with latest def
-                else if (inst is LoadVarInst load && CanPromote(load)) {
-                    var currDef = ReadDef(load.Var);
-                    load.ReplaceWith(currDef);
+                else {
+                    Debug.Assert(inst is LoadInst);
+                    inst.ReplaceWith(ReadDef(ref slotInfo, slot));
                 }
             }
             //Fill successors phis
             foreach (var succ in block.Succs) {
                 foreach (var phi in succ.Phis()) {
-                    if (_phiDefs.TryGetValue(phi, out var variable)) {
-                        var currDef = ReadDef(variable);
+                    if (_phiDefs.TryGetValue(phi, out var slot)) {
                         //TODO: AddArg() is O(n), maybe rewrite all phis in a final pass
-                        phi.AddArg(block, currDef);
+                        phi.AddArg(block, ReadDef(ref GetSlotInfo(slot), slot));
                     }
                 }
             }
@@ -125,7 +134,7 @@ public class SsaPromotion : IMethodPass
         {
             //Restore def stack to what it was before visiting `block`
             while (defDeltas.Top.B == block) {
-                defStacks[defDeltas.Top.V].Pop();
+                defDeltas.Top.DefStack.Pop();
                 defDeltas.Pop();
             }
 
@@ -137,24 +146,44 @@ public class SsaPromotion : IMethodPass
             }
         }
         //Helpers for R/W the def stack
-        void PushDef(BasicBlock block, Variable var, Value def)
+        void PushDef(ref SlotInfo slotInfo, BasicBlock block, Value value)
         {
-            var stack = defStacks.GetOrAddRef(var) ??= new();
-            stack.Push(def);
-            defDeltas.Push((block, var));
+            var stack = slotInfo.DefStack ??= new();
+            stack.Push(value);
+            defDeltas.Push((block, stack));
         }
-        Value ReadDef(Variable var)
+        Value ReadDef(ref SlotInfo slotInfo, LocalSlot slot)
         {
-            var stack = defStacks.GetValueOrDefault(var);
+            var stack = slotInfo.DefStack;
             return stack != null && !stack.IsEmpty 
                 ? stack.Top 
-                : new Undef(var.ResultType);
+                : new Undef(slot.Type);
         }
     }
 
-    private static bool CanPromote(VarAccessInst inst)
+    private ref SlotInfo GetAccessedSlotInfo(Instruction? inst, out LocalSlot slot)
     {
-        //We don't have a way to represent metadata in the IR currently, so don't enreg pinned variables.
-        return inst.Var is { IsExposed: false, IsPinned: false };
+        slot = ((inst as MemoryInst)?.Address as LocalSlot)!;
+
+        if (slot != null && !slot.IsPinned) {
+            ref var info = ref _slotInfos.GetOrAddRef(slot);
+
+            if (info.CanPromote ??= !slot.IsExposed()) {
+                return ref info;
+            }
+        }
+        return ref Unsafe.NullRef<SlotInfo>();
+    }
+    private ref SlotInfo GetSlotInfo(LocalSlot slot)
+    {
+        return ref _slotInfos.GetRef(slot);
+    }
+
+    struct SlotInfo
+    {
+        public bool? CanPromote;
+        public bool IsGlobal;
+        public ArrayStack<BasicBlock>? AssignBlocks;
+        public ArrayStack<Value>? DefStack;
     }
 }

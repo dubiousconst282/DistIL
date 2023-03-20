@@ -175,7 +175,7 @@ public partial class IRParser
             bool pinned = _lexer.Match(TokenType.Caret);
 
             foreach (var token in tokens) {
-                var slot = new Variable(type, token.StrValue, pinned);
+                var slot = new LocalSlot(type, token.StrValue, pinned);
                 AssignId(token, slot, "$" + token.StrValue);
             }
         });
@@ -276,7 +276,6 @@ public partial class IRParser
             Opcode.Call or Opcode.CallVirt or Opcode.NewObj => ParseCallInst(op),
             Opcode.FldAddr => ParseFieldAddr(mods),
             Opcode.ArrAddr => ParseArrayAddr(mods),
-            Opcode.LdVar or Opcode.StVar or Opcode.VarAddr => ParseVarInst(op),
             Opcode.Load or Opcode.Store => ParseMemInst(op, mods),
             Opcode.Conv => ParseConv(op, mods),
             _ => ParseMultiOpInst(op, mods, slotToken.Position),
@@ -428,29 +427,6 @@ public partial class IRParser
         return new FieldAddrInst(field, obj);
     }
 
-    private Instruction ParseVarInst(Opcode op)
-    {
-        int start = _lexer.NextPos();
-        var slot = ParseValue() as Variable 
-                ?? throw _ctx.Fatal("Undeclared variable", (start, _lexer.LastPos()));
-
-        switch (op) {
-            case Opcode.LdVar: {
-                return new LoadVarInst(slot);
-            }
-            case Opcode.StVar: {
-                _lexer.Expect(TokenType.Comma);
-                var value = ParseValue();
-                return new StoreVarInst(slot, value);
-            }
-            case Opcode.VarAddr: {
-                slot.IsExposed = true;
-                return new VarAddrInst(slot);
-            }
-            default: throw new UnreachableException();
-        }
-    }
-
     private Instruction ParseConv(Opcode op, OpcodeModifiers mods)
     {
         var srcValue = ParseValue();
@@ -526,6 +502,9 @@ public partial class IRParser
                         }
                         return _method!.Args.FirstOrDefault(a => a.Name == name[1..])
                             ?? throw _ctx.Fatal($"Unknown argument '{name}'", token.Position);
+                    }
+                    if (name.StartsWith("$")) {
+                        _ctx.Error($"Undeclared local variable '{name}'", token.Position);
                     }
                     return new PendingValue() { Position = token.Position };
                 });

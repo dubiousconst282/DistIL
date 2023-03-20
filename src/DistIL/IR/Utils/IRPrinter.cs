@@ -125,11 +125,14 @@ public class IRPrinter
         pc.PrintSequence("(", ")", method.Args.Skip(def.IsInstance ? 1 : 0), arg => pc.Print($"{arg}: {arg.ResultType}"));
         pc.Print($" -> {def.ReturnType} {{\n");
 
-        var declaredVars = method.Instructions().OfType<VarAccessInst>().Select(a => a.Var).Distinct();
+        var declaredVars = method.Instructions()
+            .Where(d => d is MemoryInst { Address: LocalSlot })
+            .Select(a => (LocalSlot)a.Operands[0])
+            .Distinct();
 
         if (declaredVars.Any()) {
             pc.Print("$Locals:\n");
-            foreach (var group in declaredVars.GroupBy(v => (v.Sig.Type, v.IsPinned))) {
+            foreach (var group in declaredVars.GroupBy(v => (v.Type, v.IsPinned))) {
                 pc.PrintSequence("  ", "", group, v => pc.Print(v.ToString()[1..], PrintToner.VarName));
                 pc.Print($": {group.Key.Type}{(group.Key.IsPinned ? "^" : "")}\n");
             }

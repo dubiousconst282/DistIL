@@ -130,7 +130,7 @@ public abstract class DataFlowAnalysis
 
 public class VarLivenessAnalysis : DataFlowAnalysis, IMethodAnalysis
 {
-    private readonly IndexMap<Variable> _varIds = new();
+    private readonly IndexMap<LocalSlot> _varIds = new();
 
     public VarLivenessAnalysis(MethodBody method)
         : base(method, backward: true) { }
@@ -144,12 +144,13 @@ public class VarLivenessAnalysis : DataFlowAnalysis, IMethodAnalysis
         var killed = new BitSet();
 
         foreach (var inst in block) {
-            if (inst is VarAccessInst acc) {
-                int varId = _varIds.Add(acc.Var);
+            if (inst is MemoryInst { Address: LocalSlot slot } acc) {
+                int varId = _varIds.Add(slot);
 
-                if (inst is StoreVarInst) {
+                if (inst is StoreInst) {
                     killed.Add(varId);
-                } else if (inst is LoadVarInst && !killed.Contains(varId)) {
+                } else if (!killed.Contains(varId)) {
+                    Debug.Assert(inst is LoadInst);
                     globals.Add(varId); //used before being assigned in this block
                 }
             }
@@ -158,6 +159,6 @@ public class VarLivenessAnalysis : DataFlowAnalysis, IMethodAnalysis
     }
     protected override void PrintValue(PrintContext ctx, int index) => ctx.PrintAsOperand(_varIds.At(index));
 
-    public JointBitSet<Variable> GetLiveIn(BasicBlock block) => new(_varIds, GetState(block).In);
-    public JointBitSet<Variable> GetLiveOut(BasicBlock block) => new(_varIds, GetState(block).Out);
+    public JointBitSet<LocalSlot> GetLiveIn(BasicBlock block) => new(_varIds, GetState(block).In);
+    public JointBitSet<LocalSlot> GetLiveOut(BasicBlock block) => new(_varIds, GetState(block).Out);
 }

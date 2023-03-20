@@ -76,13 +76,6 @@ public class IRVerifier
                 Check(argTypesMatch, phi, "Phi arguments should be assignable to its result type", DiagnosticSeverity.Warn);
                 break;
             }
-            case StoreVarInst { Var.ResultType: var dstType, Value.ResultType: var srcType, Value: var srcVal }: {
-
-                if (!srcType.IsStackAssignableTo(dstType)) {
-                    Error(inst, $"Store to incompatible type: {srcType} -> {dstType}", DiagnosticSeverity.Warn);
-                }
-                break;
-            }
             case { IsBranch: true, Next: not null }: {
                 Error(inst, "Branch must be the last instruction in the block");
                 break;
@@ -163,10 +156,6 @@ public class IRVerifier
                 } else if (oper is TrackedValue trackedOper) {
                     var expUsers = _expectedUsers.GetOrAddRef(trackedOper) ??= new();
                     expUsers.Add(inst);
-                }
-
-                if (oper is Variable && inst is not VarAccessInst) {
-                    verifier.Error(inst, "Variables should only be used as operands by VarAccessInst (unless after RemovePhis)", DiagnosticSeverity.Warn);
                 }
             }
             _blockIndices[inst] = blockIndex;

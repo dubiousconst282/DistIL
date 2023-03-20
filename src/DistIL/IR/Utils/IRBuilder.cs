@@ -189,16 +189,6 @@ public class IRBuilder
         => CreateFieldLoad(GetInstanceType(obj).FindField(fieldName), obj);
 
 
-    public LoadVarInst CreateVarLoad(Variable var)
-        => Emit(new LoadVarInst(var));
-
-    public StoreVarInst CreateVarStore(Variable var, Value value)
-        => Emit(new StoreVarInst(var, value));
-
-    public VarAddrInst CreateVarAddr(Variable var)
-        => Emit(new VarAddrInst(var));
-
-
     public IntrinsicInst CreateNewArray(TypeDesc elemType, Value length)
         => Emit(new IntrinsicInst(CilIntrinsic.NewArray, elemType, length));
 
@@ -251,9 +241,9 @@ public class IRBuilder
     public Value CreateDefaultOf(TypeDesc type)
     {
         if (type.Kind == TypeKind.Struct) {
-            var slot = new Variable(type, exposed: true);
-            CreateIntrinsic(CilIntrinsic.InitObj, type, CreateVarAddr(slot));
-            return CreateVarLoad(slot);
+            var slot = new LocalSlot(type, "tmpZeroInit");
+            CreateIntrinsic(CilIntrinsic.InitObj, type, slot);
+            return CreateLoad(slot);
         }
         return Const.CreateZero(type);
     }

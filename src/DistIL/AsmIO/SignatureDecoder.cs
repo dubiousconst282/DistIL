@@ -2,8 +2,6 @@ namespace DistIL.AsmIO;
 
 using System.Reflection.Metadata;
 
-using DistIL.IR;
-
 //II.23.2 Blobs and signatures
 internal struct SignatureDecoder
 {
@@ -116,24 +114,21 @@ internal struct SignatureDecoder
         return new TypeSig(type, customMods);
     }
 
-    static readonly string[] s_DefaultLocalNames4 = { "loc1", "loc2", "loc3", "loc4" };
-
-    public Variable[] DecodeLocals()
+    public ILVariable[] DecodeLocals()
     {
         ExpectHeader(SignatureKind.LocalVariables);
 
-        var vars = new Variable[Reader.ReadCompressedInteger()];
+        var vars = new ILVariable[Reader.ReadCompressedInteger()];
 
         for (int i = 0; i < vars.Length; i++) {
-            var customMods = DecodeCustomMods();
+            DecodeCustomMods(); //Custom modifiers on local vars are pretty useless, skip them
             bool isPinned = Reader.ReadSignatureTypeCode() == SignatureTypeCode.Pinned;
             if (!isPinned) {
                 Reader.Offset--;
             }
             var type = DecodeType();
-            string name = i < 4 ? s_DefaultLocalNames4[i] : "loc" + (i + 1);
 
-            vars[i] = new Variable(new TypeSig(type, customMods), name, isPinned);
+            vars[i] = new ILVariable(type, i, isPinned);
         }
         return vars;
     }

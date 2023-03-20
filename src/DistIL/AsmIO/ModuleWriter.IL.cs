@@ -35,7 +35,7 @@ partial class ModuleWriter
         return enc.Offset;
     }
 
-    private StandaloneSignatureHandle EncodeLocalVars(Variable[] localVars)
+    private StandaloneSignatureHandle EncodeLocalVars(ILVariable[] localVars)
     {
         if (localVars.Length == 0) {
             return default;
@@ -45,7 +45,7 @@ partial class ModuleWriter
 
             foreach (var local in localVars) {
                 var typeEnc = sigEnc.AddVariable().Type(false, local.IsPinned);
-                EncodeType(typeEnc, local.Sig);
+                EncodeType(typeEnc, local.Type);
             }
         });
         return _builder.AddStandaloneSignature(sigBlob);

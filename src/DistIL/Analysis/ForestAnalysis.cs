@@ -49,32 +49,26 @@ public class ForestAnalysis : IMethodAnalysis
     private static bool IsAlwaysLeaf(Instruction inst)
     {
         //Cheaper to rematerialize
-        return inst is VarAddrInst || inst.Is(CilIntrinsicId.ArrayLen, CilIntrinsicId.SizeOf);
+        return inst.Is(CilIntrinsicId.ArrayLen, CilIntrinsicId.SizeOf);
     }
 
     class BlockInterfs
     {
         Dictionary<Instruction, int> _indices = new();
-        Dictionary<Variable, BitSet> _varInterfs = new();
         BitSet _memInterfs = new();
         BitSet _sideEffects = new();
 
         public void Update(BasicBlock block)
         {
             _indices.Clear();
-            _varInterfs.Clear();
             _memInterfs.Clear();
             _sideEffects.Clear();
 
             int index = 0;
             foreach (var inst in block) {
-                if (inst is StoreVarInst store) {
-                    var set = _varInterfs.GetOrAddRef(store.Var) ??= new();
-                    set.Add(index);
-                } else if (inst.MayWriteToMemory) {
+                if (inst.MayWriteToMemory) {
                     _memInterfs.Add(index);
                 }
-
                 if (inst.HasSideEffects) {
                     _sideEffects.Add(index);
                 }
@@ -93,17 +87,6 @@ public class ForestAnalysis : IMethodAnalysis
             int defIdx = _indices[def] + 1; //offset by one to ignore def when checking for interferences
             int useIdx = GetLastSafeUsePoint(def);
 
-            if (def is LoadVarInst { Var: var var }) {
-                //If this variable is exposed, assume that any store can change its value
-                if (var.IsExposed && _memInterfs.ContainsRange(defIdx, useIdx)) {
-                    return true;
-                }
-                //...otherwise, we can use precise interferences
-                if (_varInterfs.TryGetValue(var, out var localInterfs)) {
-                    return localInterfs.ContainsRange(defIdx, useIdx);
-                }
-                return false;
-            }
             //Like exposed variables, these can be aliased globally and we need
             //something like alias analysis for precise results.
             if (def is LoadInst) {
@@ -145,7 +128,7 @@ public class ForestAnalysis : IMethodAnalysis
         //Returns whether the instruction operands are ordered in the same way as they would be pushed on the stack
         private static bool HasConsistentEvalOrder(Instruction inst)
         {
-            return inst is not (IntrinsicInst or SwitchInst or VarAccessInst);
+            return inst is not (IntrinsicInst or SwitchInst);
         }
     }
 }

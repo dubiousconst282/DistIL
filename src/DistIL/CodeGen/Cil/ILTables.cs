@@ -136,14 +136,22 @@ internal static class ILTables
         };
     }
 
-    public static readonly (ILCode Normal, ILCode Inline, ILCode Short)[] VarCodes = {
-        /* Load  Var */ (ILCode.Ldloc,  ILCode.Ldloc_0, ILCode.Ldloc_S),
-        /* Store Var */ (ILCode.Stloc,  ILCode.Stloc_0, ILCode.Stloc_S),
-        /* Addr  Var */ (ILCode.Ldloca, ILCode.Nop,     ILCode.Ldloca_S),
-        /* Load  Arg */ (ILCode.Ldarg,  ILCode.Ldarg_0, ILCode.Ldarg_S),
-        /* Store Arg */ (ILCode.Starg,  ILCode.Nop,     ILCode.Starg_S),
-        /* Addr  Arg */ (ILCode.Ldarga, ILCode.Nop,     ILCode.Ldarga_S),
-    };
+    public static (ILCode Code, bool HasOper) GetShortVarCode(ILCode code, int varIndex)
+    {
+        var (inlineCode, shortCode) = code switch {
+            ILCode.Ldarg    => (ILCode.Ldarg_0, ILCode.Ldarg_S),
+            ILCode.Ldarga   => (ILCode.Nop,     ILCode.Ldarga_S),
+            ILCode.Starg    => (ILCode.Nop,     ILCode.Starg_S),
+            ILCode.Ldloc    => (ILCode.Ldloc_0, ILCode.Ldloc_S),
+            ILCode.Ldloca   => (ILCode.Nop,     ILCode.Ldloca_S),
+            ILCode.Stloc    => (ILCode.Stloc_0, ILCode.Stloc_S),
+        };
+        if (varIndex < 4 && inlineCode != ILCode.Nop) {
+            code = (ILCode)((int)inlineCode + varIndex);
+            return (code, false);
+        }
+        return (varIndex < 256 ? shortCode : code, true);
+    }
     
     public static ILCode GetShortBranchCode(ILCode code) => code switch {
         ILCode.Br      => ILCode.Br_S,

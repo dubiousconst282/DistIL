@@ -2,7 +2,7 @@ namespace DistIL.Passes;
 
 using DistIL.IR.Utils;
 
-/// <summary> Inline object/structs into local variables. aka "Scalar Replacement of Aggregates" </summary>
+/// <summary> Inlines fields of non-escaping object allocations into local variables. </summary>
 public class ScalarReplacement : IMethodPass
 {
     public MethodPassResult Run(MethodTransformContext ctx)
@@ -28,13 +28,13 @@ public class ScalarReplacement : IMethodPass
     {
         //FieldSpecs don't have proper equality comparisons and may have multiple 
         //instances for the same spec, we must use the definition as key instead.
-        var fieldSlots = new Dictionary<FieldDef, Variable>();
+        var fieldSlots = new Dictionary<FieldDef, LocalSlot>();
 
-        //Zero-init fields
+        //Zero-init fields (this is necessary for correct SSA promotion)
         var builder = new IRBuilder(alloc, InsertionDir.Before);
 
         foreach (var field in alloc.ResultType.Fields) {
-            builder.CreateVarStore(GetSlot(field), builder.CreateDefaultOf(field.Type));
+            builder.CreateStore(GetSlot(field), builder.CreateDefaultOf(field.Type));
         }
 
         //At this point we know that the constructor doesn't let the instance escape,
@@ -45,19 +45,10 @@ public class ScalarReplacement : IMethodPass
         InlineMethods.Inline(alloc, (MethodDefOrSpec)alloc.Constructor, ctorArgs);
 
         foreach (var user in alloc.Users()) {
-            switch (user) {
-                case FieldAddrInst addr: {
-                    var slot = GetSlot(addr.Field);
-                    ScalarizeRef(addr, slot);
-                    break;
-                }
-                default: {
-                    if (IsObjectCtorCall(user)) {
-                        //nop from the inlined ctor
-                        break;
-                    }
-                    throw new UnreachableException();
-                }
+            if (user is FieldAddrInst addr) {
+                addr.ReplaceWith(GetSlot(addr.Field));
+            } else {
+                Debug.Assert(IsObjectCtorCall(user));
             }
             user.Remove();
         }
@@ -65,33 +56,10 @@ public class ScalarReplacement : IMethodPass
         //Remove redundant allocation
         alloc.Remove();
 
-        Variable GetSlot(FieldDesc field)
+        LocalSlot GetSlot(FieldDesc field)
         {
             var def = ((FieldDefOrSpec)field).Definition;
-            return fieldSlots.GetOrAddRef(def) ??= new Variable(field.Sig, "sroa." + field.Name);
-        }
-    }
-
-    private static void ScalarizeRef(FieldAddrInst addr, Variable slot)
-    {
-        foreach (var use in addr.Uses()) {
-            switch (use.Parent) {
-                case LoadInst load: {
-                    load.ReplaceWith(new LoadVarInst(slot), insertIfInst: true);
-                    break;
-                }
-                case StoreInst store: {
-                    store.ReplaceWith(new StoreVarInst(slot, store.Value), insertIfInst: true);
-                    break;
-                }
-                default: {
-                    var varAddr = new VarAddrInst(slot);
-                    varAddr.InsertBefore(use.Parent);
-                    use.Operand = varAddr;
-                    slot.IsExposed = true;
-                    break;
-                }
-            }
+            return fieldSlots.GetOrAddRef(def) ??= new LocalSlot(field.Type, "sroa." + field.Name);
         }
     }
 

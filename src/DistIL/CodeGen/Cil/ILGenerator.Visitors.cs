@@ -33,20 +33,6 @@ partial class ILGenerator
         }
     }
 
-    public void Visit(LoadVarInst inst)
-    {
-        _asm.EmitLoad(inst.Var);
-    }
-    public void Visit(StoreVarInst inst)
-    {
-        Push(inst.Value);
-        _asm.EmitStore(inst.Var);
-    }
-    public void Visit(VarAddrInst inst)
-    {
-        _asm.EmitAddrOf(inst.Var);
-    }
-
     public void Visit(LoadInst inst)
     {
         if (EmitContainedLoadOrStore(inst, null)) return;
@@ -74,6 +60,10 @@ partial class ILGenerator
                 return true;
             }
         }
+        if (inst.Address is LocalSlot slot && slot.Type == inst.ElemType) {
+            EmitLoadOrStoreLocal(slot, valToStore);
+            return true;
+        }
         return false;
     }
     private void EmitLoadOrStorePtr(MemoryInst inst, bool isLoad)
@@ -90,6 +80,17 @@ partial class ILGenerator
             _asm.Emit(code, oper);
         } else {
             _asm.Emit(isLoad ? ILCode.Ldind_Ref : ILCode.Stind_Ref);
+        }
+    }
+    private void EmitLoadOrStoreLocal(LocalSlot slot, Value? valToStore)
+    {
+        var localVar = GetSlotVarMapping(slot);
+
+        if (valToStore == null) {
+            _asm.EmitLoad(localVar);
+        } else {
+            Push(valToStore);
+            _asm.EmitStore(localVar);
         }
     }
     private void EmitLoadOrStoreArray(ArrayAddrInst addr, Value? valToStore)

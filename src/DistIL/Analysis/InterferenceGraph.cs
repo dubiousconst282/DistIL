@@ -164,7 +164,7 @@ public class InterferenceGraph : IMethodAnalysis
         public readonly BitSet Adjacent = new();
         public readonly int Id;
         public int Color;
-        public Variable? Register;
+        public ILVariable? Register;
 
         internal Node? MergedWith;
 

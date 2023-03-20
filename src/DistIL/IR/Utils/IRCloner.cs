@@ -72,9 +72,9 @@ public class IRCloner
         if (_mappings.TryGetValue(value, out var newValue)) {
             return newValue;
         }
-        if (value is Variable var) {
-            var newType = Remap(var.ResultType) as TypeDesc ?? throw new InvalidOperationException();
-            newValue = new Variable(new TypeSig(newType, var.Sig.CustomMods), pinned: var.IsPinned, exposed: var.IsExposed);
+        if (value is LocalSlot var) {
+            var newType = Remap(var.Type) as TypeDesc ?? throw new InvalidOperationException();
+            newValue = new LocalSlot(newType, pinned: var.IsPinned);
             _mappings.Add(value, newValue);
             return newValue;
         }
@@ -146,10 +146,6 @@ public class IRCloner
             Out(ConstFolding.FoldConvert(value, inst.ResultType, inst.CheckOverflow, inst.SrcUnsigned)
                 ?? new ConvertInst(value, inst.ResultType, inst.CheckOverflow, inst.SrcUnsigned));
         }
-
-        public void Visit(LoadVarInst inst) => Out(new LoadVarInst(Remap(inst.Var)));
-        public void Visit(StoreVarInst inst) => Out(new StoreVarInst(Remap(inst.Var), Remap(inst.Value)));
-        public void Visit(VarAddrInst inst) => Out(new VarAddrInst(Remap(inst.Var)));
 
         public void Visit(LoadInst inst) => Out(new LoadInst(Remap(inst.Address), Remap(inst.ElemType), inst.Flags));
         public void Visit(StoreInst inst) => Out(new StoreInst(Remap(inst.Address), Remap(inst.Value), Remap(inst.ElemType), inst.Flags));

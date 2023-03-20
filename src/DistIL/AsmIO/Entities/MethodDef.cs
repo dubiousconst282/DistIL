@@ -274,7 +274,7 @@ public class ParamDef
 public class ILMethodBody
 {
     public ArraySegment<ILInstruction> Instructions { get; set; }
-    public Variable[] Locals { get; set; } = Array.Empty<Variable>();
+    public ILVariable[] Locals { get; set; } = Array.Empty<ILVariable>();
     public ExceptionRegion[] ExceptionRegions { get; set; } = Array.Empty<ExceptionRegion>();
     public int MaxStack { get; set; }
     public bool InitLocals { get; set; }
@@ -391,14 +391,29 @@ public class ILMethodBody
         return regions;
     }
 
-    private static Variable[] DecodeLocals(ModuleLoader loader, MethodBodyBlock block)
+    private static ILVariable[] DecodeLocals(ModuleLoader loader, MethodBodyBlock block)
     {
         if (block.LocalSignature.IsNil) {
-            return Array.Empty<Variable>();
+            return Array.Empty<ILVariable>();
         }
         var info = loader._reader.GetStandaloneSignature(block.LocalSignature);
         return new SignatureDecoder(loader, info.Signature).DecodeLocals();
     }
+}
+public class ILVariable
+{
+    public TypeDesc Type { get; set; }
+    public int Index { get; set; }
+    public bool IsPinned { get; set; }
+
+    public ILVariable(TypeDesc type, int index, bool isPinned = false)
+    {
+        Type = type;
+        Index = index;
+        IsPinned = isPinned;
+    }
+
+    public override string ToString() => $"V_{(Index < 0 ? "?" : Index.ToString())}({Type}{(IsPinned ? "^" : "")})";
 }
 public class ExceptionRegion
 {

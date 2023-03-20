@@ -8,14 +8,14 @@ namespace DistIL.CodeGen.Cil;
 //Other info: https://github.com/pfalcon/parcopy
 public class ParallelCopyEmitter
 {
-    List<Variable> _dests = new();
-    ArrayStack<Variable> _ready = new();
-    ArrayStack<Variable> _pending = new();
-    Dictionary<Variable, (Variable? Pred, Variable? Loc)> _links = new();
+    List<ILVariable> _dests = new();
+    ArrayStack<ILVariable> _ready = new();
+    ArrayStack<ILVariable> _pending = new();
+    Dictionary<ILVariable, (ILVariable? Pred, ILVariable? Loc)> _links = new();
 
     public int Count => _dests.Count;
 
-    public void Add(Variable dest, Variable src)
+    public void Add(ILVariable dest, ILVariable src)
     {
         if (dest == src) return;
         
@@ -26,7 +26,7 @@ public class ParallelCopyEmitter
         _dests.Add(dest);
     }
 
-    public void SequentializeAndClear(Action<Variable, Variable> emitCopy)
+    public void SequentializeAndClear(Action<ILVariable, ILVariable> emitCopy)
     {
         if (_dests.Count == 1) {
             var dest = _dests[0];
@@ -39,7 +39,7 @@ public class ParallelCopyEmitter
         _dests.Clear();
     }
 
-    private void SequentializeMany(Action<Variable, Variable> emitCopy)
+    private void SequentializeMany(Action<ILVariable, ILVariable> emitCopy)
     {
         foreach (var dest in _dests) {
             if (Loc(dest) == null) {
@@ -63,7 +63,7 @@ public class ParallelCopyEmitter
 
             var pendingDest = _pending.Pop();
             if (pendingDest != Loc(Pred(pendingDest)!)) {
-                var tempSlot = new Variable(pendingDest.ResultType);
+                var tempSlot = new ILVariable(pendingDest.Type, -1);
                 emitCopy(tempSlot, pendingDest);
 
                 Loc(pendingDest) = tempSlot;
@@ -72,6 +72,6 @@ public class ParallelCopyEmitter
         }
     }
 
-    private ref Variable? Loc(Variable var) => ref _links.GetOrAddRef(var).Loc;
-    private ref Variable? Pred(Variable var) => ref _links.GetOrAddRef(var).Pred;
+    private ref ILVariable? Loc(ILVariable var) => ref _links.GetOrAddRef(var).Loc;
+    private ref ILVariable? Pred(ILVariable var) => ref _links.GetOrAddRef(var).Pred;
 }

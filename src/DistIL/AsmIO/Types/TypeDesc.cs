@@ -28,6 +28,11 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     public virtual IReadOnlyList<MethodDesc> Methods { get; } = s_EmptyMethodList;
     public virtual IReadOnlyList<FieldDesc> Fields { get; } = s_EmptyFieldList;
 
+    //Cached compound types
+    private ArrayType? _arrayType;
+    private PointerType? _ptrType;
+    private ByrefType? _byrefType;
+
     /// <summary>
     /// Creates a generic type instantiation with the given context as arguments, 
     /// or returns the current instance if it is not a generic type definition.
@@ -35,13 +40,13 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     public virtual TypeDesc GetSpec(GenericContext context) => this;
 
     /// <summary> Creates an <see cref="ArrayType"/> of the current type. </summary>
-    public virtual ArrayType CreateArray() => new(this);
+    public ArrayType CreateArray() => _arrayType ??= new(this);
 
     /// <summary> Creates a <see cref="PointerType"/> of the current type. </summary>
-    public virtual PointerType CreatePointer() => new(this);
+    public PointerType CreatePointer() => _ptrType ??= new(this);
 
     /// <summary> Creates a <see cref="ByrefType"/> of the current type. </summary>
-    public virtual ByrefType CreateByref() => new(this);
+    public ByrefType CreateByref() => _byrefType ??= new(this);
 
     /// <summary> Searches for a method with the specified signature. </summary>
     /// <param name="sig">

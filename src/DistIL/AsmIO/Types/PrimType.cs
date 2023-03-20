@@ -48,11 +48,6 @@ public class PrimType : TypeDesc
     public override IReadOnlyList<MethodDesc> Methods => throw new InvalidOperationException();
     public override IReadOnlyList<FieldDesc> Fields => throw new InvalidOperationException();
 
-    //Cached compound types
-    private ArrayType? _arrayType;
-    private PointerType? _ptrType;
-    private ByrefType? _byrefType;
-
     private PrimType(TypeKind kind, StackType stackType, string name, string? alias)
     {
         Kind = kind;
@@ -103,10 +98,6 @@ public class PrimType : TypeDesc
 
     public TypeDef GetDefinition(ModuleResolver resolver) => resolver.SysTypes.GetPrimitiveDef(Kind);
     public bool IsDefinition(TypeDef def) => def.Name == Name && IsSystemType(def);
-
-    public override ArrayType CreateArray() => _arrayType ??= new(this);
-    public override PointerType CreatePointer() => _ptrType ??= new(this);
-    public override ByrefType CreateByref() => _byrefType ??= new(this);
 
     public override void Print(PrintContext ctx, bool includeNs = false)
     {

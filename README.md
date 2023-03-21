@@ -24,21 +24,23 @@ The project is currently stable enough to process libraries such as _ICSharpCode
 ## Linq Expansion
 Opportunistically rewrites Linq queries into imperative code in bottom-up order. This transform works by pattern matching and can only recognize a predefined set of known calls, which are listed below.
 
-For [typical queries](./tests/Benchmarks/LinqBenchs.cs), it yields speed-ups ranging between 2-8x:
-
-|        Method |         Arguments |         Mean |      Error |     StdDev | Ratio |
-|-------------- |------------------ |-------------:|-----------:|-----------:|------:|
-| FilterObjects |           Default |     38.72 us |   0.239 us |   0.350 us |  1.00 |
-| FilterObjects | /p:RunDistil=true |     15.50 us |   0.126 us |   0.188 us |  0.40 |
-|               |                   |              |            |            |       |
-|     Aggregate |           Default |    123.32 us |   0.061 us |   0.089 us |  1.00 |
-|     Aggregate | /p:RunDistil=true |     15.62 us |   0.122 us |   0.167 us |  0.13 |
-|               |                   |              |            |            |       |
-|  CountLetters |           Default |     76.94 us |   0.445 us |   0.665 us |  1.00 |
-|  CountLetters | /p:RunDistil=true |     12.25 us |   0.027 us |   0.037 us |  0.16 |
-|               |                   |              |            |            |       |
-| LinqRayTracer |           Default | 33,384.17 us | 394.423 us | 590.354 us |  1.00 |
-| LinqRayTracer | /p:RunDistil=true | 22,164.15 us | 269.759 us | 403.762 us |  0.66 |
+For [typical queries](./tests/Benchmarks/LinqBenchs.cs), the speed-ups range between 2-10x:
+|         Method |         Toolchain |          Mean |       Error |      StdDev | Ratio | RatioSD |
+|--------------- |------------------ |--------------:|------------:|------------:|------:|--------:|
+|  FilterObjects |          .NET 7.0 |     25.789 μs |   0.9277 μs |   1.0684 μs |  1.00 |    0.00 |
+|  FilterObjects | .NET 7.0 + DistIL |     11.986 μs |   0.7977 μs |   0.9187 μs |  0.47 |    0.04 |
+|                |                   |               |             |             |       |         |
+| FirstPredicate |          .NET 7.0 |     43.959 μs |   1.1397 μs |   1.3124 μs |  1.00 |    0.00 |
+| FirstPredicate | .NET 7.0 + DistIL |     12.397 μs |   0.3286 μs |   0.3784 μs |  0.28 |    0.01 |
+|                |                   |               |             |             |       |         |
+|      Aggregate |          .NET 7.0 |     74.475 μs |   3.6544 μs |   4.2084 μs |  1.00 |    0.00 |
+|      Aggregate | .NET 7.0 + DistIL |      5.971 μs |   0.1545 μs |   0.1779 μs |  0.08 |    0.00 |
+|                |                   |               |             |             |       |         |
+|   CountLetters |          .NET 7.0 |     40.919 μs |   0.9485 μs |   1.0924 μs |  1.00 |    0.00 |
+|   CountLetters | .NET 7.0 + DistIL |      3.684 μs |   0.0377 μs |   0.0434 μs |  0.09 |    0.00 |
+|                |                   |               |             |             |       |         |
+|      RayTracer |          .NET 7.0 | 18,766.715 μs | 493.8189 μs | 568.6825 μs |  1.00 |    0.00 |
+|      RayTracer | .NET 7.0 + DistIL | 12,499.714 μs | 373.6395 μs | 430.2838 μs |  0.67 |    0.03 |
 
 ---
 
@@ -49,7 +51,7 @@ For [typical queries](./tests/Benchmarks/LinqBenchs.cs), it yields speed-ups ran
 **Supported stages**
   - `Where`, `Select`, `OfType`, `Cast`
   - `SelectMany`
-  - `Skip`
+  - `Skip`, `Take`
 
 **Supported sinks**
   - `ToList`, `ToArray`, `ToHashSet`, `ToDictionary`
@@ -58,7 +60,7 @@ For [typical queries](./tests/Benchmarks/LinqBenchs.cs), it yields speed-ups ran
   - `Any(predicate)`, `All(predicate)`
   - Loop enumeration
 
-**Behavior differences**
+**Caveats**
   - `Dispose()` is never called for IEnumerable sources _(not implemented)_
     - Result may leak memory for sources such as `File.ReadLines()`.  
   - Null argument checks are removed
@@ -97,6 +99,109 @@ public float Aggregate()
 }
 ```
 
+# Loop Vectorization
+Basic loop vectorizer which works on simple for loops, having no complex branches or instructions.
+It is an unstable prototype and not enabled by default, requires explicit opt-in via `[Optimize(TryVectorize = true)]`.
+
+The impact for [trivial cases](./tests/Benchmarks/AutoVecBenchs.cs) is considerable, sometimes yielding speed-ups ranging by orders of magnitude:
+|          Method |         Toolchain |        Mean |       Error |      StdDev | Ratio | Code Size |
+|---------------- |------------------ |------------:|------------:|------------:|------:|----------:|
+|    CountLetters |          .NET 7.0 | 42,182.7 ns | 1,876.84 ns | 2,161.37 ns |  1.00 |     338 B |
+|    CountLetters | .NET 7.0 + DistIL |    463.2 ns |    10.47 ns |    12.06 ns |  0.01 |     178 B |
+|                 |                   |             |             |             |       |           |
+|    GenerateInts |          .NET 7.0 |  2,039.7 ns |    88.91 ns |    98.83 ns |  1.00 |      80 B |
+|    GenerateInts | .NET 7.0 + DistIL |    524.5 ns |    12.61 ns |    14.52 ns |  0.26 |     158 B |
+|                 |                   |             |             |             |       |           |
+|  GenerateFloats |          .NET 7.0 |  4,617.9 ns |   168.72 ns |   194.30 ns |  1.00 |     462 B |
+|  GenerateFloats | .NET 7.0 + DistIL |    896.2 ns |    10.43 ns |    10.71 ns |  0.19 |     563 B |
+|                 |                   |             |             |             |       |           |
+| NormalizeFloats |          .NET 7.0 |  9,553.2 ns |   194.62 ns |   224.13 ns |  1.00 |     686 B |
+| NormalizeFloats | .NET 7.0 + DistIL |  1,020.1 ns |    22.23 ns |    25.60 ns |  0.11 |     819 B |
+
+---
+
+**Supported ops**
+- Memory accesses: pointer load/stores (where address is either the loop IV or an invariant offset by loop IV).
+- Arithmetic: `+`, `-`, `*`, `/` (float), `&`, `|`, `^`, `~`
+- Math calls: `Abs`, `Min`, `Max`, `Sqrt`, `Floor`, `Ceil`
+- Comparisons: any relop if used by `&`, `|`, `^`, `cond ? x : y`, `r += cond`
+- Conversions: `float`<->`int`
+- Types: any numeric primitive (byte, int, float, etc.)
+- If-conversion: transform patterns such as `cond ? x : y`, short `if..else`s, `x && y` into branchless code
+- Reductions: `+=`, `*=`, `&=`, `|=`, `^=`, `Min`, `Max`, `+= cond ? 1 : 0`
+
+**Caveats**
+- No legality checks: generated code may be wrong in some circumstances (carried dependencies and aliasing)
+- No support for mixed types. This is particularly problematic for small int types (byte/short), since they're implicitly widened on arithmetic ops.
+- Different behavior for floats and some Math calls:
+  - Non-associative float reductions
+  - NaNs not propagated in `Min`, `Max`
+  - Int `Abs` won't throw on overflow
+
+### Examples
+```cs
+//Original
+[Optimize(TryVectorize = true)]
+public static int CountLetters(string text)
+    => text.Count(ch => ch is >= 'A' and <= 'Z');
+
+//Decompiled output (reformatted)
+[Optimize(TryVectorize = true)]
+public static int CountLetters(string text)
+{
+    ref readonly char reference = ref text.GetPinnableReference();
+    ref char reference2 = ref Unsafe.Add(ref reference, text.Length);
+    int num = 0;
+    for (; (nint)Unsafe.ByteOffset(target: ref reference2, origin: ref reference) >= 32; reference = ref Unsafe.Add(ref reference, 16))
+    {
+        Vector256<ushort> left = Unsafe.ReadUnaligned<Vector256<ushort>>(ref Unsafe.As<char, byte>(ref reference));
+        Vector256<ushort> vector = Vector256.GreaterThanOrEqual(left, Vector256.Create((ushort)65));
+        num += BitOperations.PopCount(
+            (vector & Vector256.LessThanOrEqual(left, Vector256.Create((ushort)90)))
+                .AsByte().ExtractMostSignificantBits()
+        ) >>> 1;
+    }
+    for (; Unsafe.IsAddressLessThan(ref reference, ref reference2); reference = ref Unsafe.Add(ref reference, 1))
+    {
+        char c = reference;
+        num += ((c >= 'A' && c <= 'Z') ? 1 : 0);
+    }
+    return num;
+}
+```
+
+Basic loops bounded by array/span length are supported via strength-reduction. Range and assertion propagation via SCCP could help safe support for cases involving multiple buffers (TODO).
+```cs
+//Original
+public static void GenerateInts(Span<int> dest, int x) {
+    for (int i = 0; i < dest.Length; i++) {
+        dest[i] = Math.Abs(i - 50 * x);
+    }
+}
+
+//Decompiled output
+public static void GenerateInts(Span<int> dest, int x)
+{
+    Span<int> span = dest;
+    ref int reference = ref span._reference;
+    int length = span.Length;
+    int num = length - 7;
+    int i;
+    for (i = 0; i < num; i += 8)
+    {
+        ref int reference2 = ref Unsafe.Add(ref reference, i);
+        Vector256<int> vector = Vector256.Create(x) * Vector256.Create(50);
+        Unsafe.WriteUnaligned(
+            ref Unsafe.As<int, byte>(ref reference2), 
+            Vector256.Abs(Vector256.Create(i) + Vector256.Create(0, 1, 2, 3, 4, 5, 6, 7) - vector));
+    }
+    for (; i < length; i++)
+    {
+        Unsafe.Add(ref reference, i) = Math.Abs(i - x * 50);
+    }
+}
+```
+
 ## Method Inlining
 Aggressively inline calls for any non-virtual method defined in the same assembly and originally smaller than 32 IL instructions. Recursive inlines are not currently accounted for, and so this may significantly increase the output assembly size and possibly cause performance regressions if the optimizer is enabled globally.
 
@@ -125,13 +230,3 @@ public int GetMagic()
     return 86102;
 }
 ```
-
-# Future
-Although there is a lot of opportunities for what can be done, the usefulness of this project is still fairly unclear, considering the amount of effort needed to implement most transforms and the relative improvement they could bring.  
-The primary focus will be on "aggressive" and "high-level" optimizations, namely:
-
-- Loop and SLP Auto-vectorization
-  - It should be as basic and simple as possible, at least initially. For loops, runtime aliasing guards would be a need.
-- Partial Redundancy Elimination
-  - The goal is to de-duplicate and hoist known "high-level" instructions such as string operations and stateful calls like dictionary lookups, which is apparently not done even by native compilers.  
-  This would be an evolution of the current _Value Numbering_ pass, which is incomplete and have some significant issues.

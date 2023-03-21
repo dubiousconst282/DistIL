@@ -4,17 +4,11 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
-  <Target Name="_ExecOptimizer" AfterTargets="Build" Condition="'$(RunDistil)' == 'true'">
-    <Exec
-      WorkingDirectory="$(TargetDir)"
-      Command="dotnet DistIL.Cli.dll -i $(AssemblyName).dll"
-    />
-  </Target>
-
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" Version="0.13.4" />
-
     <ProjectReference Include="../../src/DistIL.Cli/DistIL.Cli.csproj" />
+
+    <Compile Include="../../src/DistIL.OptimizerTask/Attributes.cs" />
   </ItemGroup>
 
 </Project>

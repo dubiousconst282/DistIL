@@ -1,5 +1,7 @@
 using BenchmarkDotNet.Attributes;
 
+using DistIL.Attributes;
+
 public class LinqBenchs
 {
     [Params(4096)]
@@ -7,10 +9,8 @@ public class LinqBenchs
         set {
             var rng = new Random(value - 1);
 
-            var seq = Enumerable.Range(0, value);
-            _sourceText = RandStr(value);
-            _sourceItems = seq.Select(i => 
-                new Item() {
+            _sourceItems = Enumerable.Range(0, value)
+                .Select(i => new Item() {
                     Id = RandStr(12),
                     Timestamp = _currDate.AddDays(rng.NextDouble() * -7),
                     Weight = rng.NextSingle(),
@@ -18,6 +18,8 @@ public class LinqBenchs
                         Data = RandStr(512)
                     }
                 }).ToList();
+
+            _sourceText = RandStr(value);
             _elemCount = value;
 
             string RandStr(int length)
@@ -42,6 +44,13 @@ public class LinqBenchs
             .Where(x => x.Weight > 0.5f && x.Timestamp >= _currDate.AddDays(-3))
             .Select(x => x.Payload)
             .ToList();
+    }
+
+    [Benchmark]
+    public string? FirstPredicate()
+    {
+        string id = _sourceItems[^3].Id;
+        return _sourceItems.FirstOrDefault(x => x.Id == id)?.Payload.Data;
     }
 
     [Benchmark]

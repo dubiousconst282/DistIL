@@ -38,23 +38,35 @@ public class LoopStrengthReduction : IMethodPass
             counter.GetValue(latch) is BinaryInst { Op: BinaryOp.Add, Right: ConstInt { Value: 1 } } steppedCounter
         )) return 0;
 
-        var indexedArrays = new List<ArrayAddrInst>();
+        var indexedAccs = new Dictionary<Value, (List<Instruction> Addrs, bool BoundsLoop, bool IsSpan)>();
 
         foreach (var user in counter.Users()) {
             if (user == steppedCounter || user == exitCond || !loop.Contains(user.Block)) continue;
 
             switch (user) {
-                case ArrayAddrInst addr when IsArrayInBounds(addr, exitCond): {
-                    indexedArrays.Add(addr);
+                case ArrayAddrInst addr 
+                when !addr.IsCasting && IsBoundedByArrayLen(addr, exitCond) is bool isBounded && (isBounded || addr.InBounds): {
+                    ref var info = ref indexedAccs.GetOrAddRef(addr.Array);
+                    info.Addrs ??= new();
+
+                    info.Addrs.Add(addr);
+                    info.BoundsLoop |= isBounded;
                     break;
                 }
-                default: {
-                    return 0; //Reduce everything or nothing
+                case CallInst { Method.Name: "get_Item" } call when IsBoundedBySpanLen(call, exitCond): {
+                    ref var info = ref indexedAccs.GetOrAddRef(call.Args[0]);
+                    info.Addrs ??= new();
+
+                    info.Addrs.Add(call);
+                    info.BoundsLoop = true;
+                    info.IsSpan = true;
+                    break;
                 }
             }
         }
 
-        foreach (var addr in indexedArrays) {
+        foreach (var (source, (addrs, boundsLoop, isSpan)) in indexedAccs) {
+            if (isSpan && !IsSpanLive(source, loop)) continue;
             //Preheader:
             //  ...
             //  T& basePtr = call MemoryMarshal::GetArrayDataReference<T>(T[]: array)
@@ -63,40 +75,92 @@ public class LoopStrengthReduction : IMethodPass
             //  goto Header
             //Header:
             //  T& currPtr = phi [Pred: startPtr], [Latch: {currPtr + iv.Scale}]
+            bool mayReplaceCond = exitCond.Block != null && boundsLoop;
+            bool shouldCreateIV = mayReplaceCond && indexedAccs.Count == 1 && addrs.Count == 1 && counter.NumUses == 3;
+
             var builder = new IRBuilder(preheader);
+            var (startPtr, count) = CreateGetDataPtrRange(builder, source, getCount: shouldCreateIV);
 
-            bool shouldReplaceCond = exitCond.Block != null && IsBoundedByArrayLen(addr, exitCond);
-            var (startPtr, count) = CreateGetDataPtrRange(builder, addr.Array, getCount: shouldReplaceCond);
+            if (shouldCreateIV) {
+                var currPtr = loop.Header.InsertPhi(startPtr.ResultType).SetName("lsr_ptr");
 
-            var currPtr = loop.Header.InsertPhi(startPtr.ResultType).SetName("lsr_ptr");
+                //Replace loop exit condition with `icmp.ult currPtr, endPtr` if not already.
+                if (mayReplaceCond) {
+                    var op = exitCond.Op.GetUnsigned();
+                    var endPtr = builder.CreatePtrOffset(startPtr, count);
+                    exitCond.ReplaceWith(new CompareInst(op, currPtr, endPtr), insertIfInst: true);
 
-            //Replace loop exit condition with `icmp.ult currPtr, endPtr` if not already.
-            if (shouldReplaceCond) {
-                var op = exitCond.Op.GetUnsigned();
-                var endPtr = builder.CreatePtrOffset(startPtr, count);
-                exitCond.ReplaceWith(new CompareInst(op, currPtr, endPtr), insertIfInst: true);
+                    //Delete old bound access
+                    var oldBound = (Instruction)exitCond.Right;
+                    oldBound.Remove();
+
+                    if (oldBound is ConvertInst { Value: IntrinsicInst oldLen }) {
+                        oldLen.Remove();
+                    }
+                }
+                builder.SetPosition(latch);
+                currPtr.AddArg((preheader, startPtr), (latch, builder.CreatePtrIncrement(currPtr)));
+
+                foreach (var addr in addrs) {
+                    Debug.Assert(addr is ArrayAddrInst or CallInst && addr.Operands[1] == counter);
+
+                    addr.ReplaceWith(currPtr);
+                }
+            } else {
+                //Replacing complex addressings with leas is still worth, do it
+                foreach (var addr in addrs) {
+                    Debug.Assert(addr is ArrayAddrInst or CallInst);
+
+                    builder.SetPosition(addr, InsertionDir.Before);
+                    addr.ReplaceWith(builder.CreatePtrOffset(startPtr, addr.Operands[1]));
+                }
+
+                //Hoist array/span length access
+                var oldBound = (Instruction)exitCond.Right;
+                oldBound.MoveBefore(preheader.Last);
+
+                if (oldBound is ConvertInst { Value: IntrinsicInst oldLen }) {
+                    oldLen.MoveBefore(oldBound);
+                }
             }
-            builder.SetPosition(latch);
-            currPtr.AddArg((preheader, startPtr), (latch, builder.CreatePtrIncrement(currPtr)));
-
-            addr.ReplaceWith(currPtr);
         }
-        return indexedArrays.Count;
+
+        if (counter.NumUses == 1) {
+            steppedCounter.Remove();
+            counter.Remove();
+        }
+        return indexedAccs.Count;
     }
 
     //TODO: Get rid of this once have range-analysis and InBounds metadata
-    private static bool IsArrayInBounds(ArrayAddrInst addr, CompareInst exitCond)
-    {
-        return !addr.IsCasting && (addr.InBounds || IsBoundedByArrayLen(addr, exitCond));
-    }
     private static bool IsBoundedByArrayLen(ArrayAddrInst addr, CompareInst exitCond)
     {
+        //exitCond is cmp.slt ($index, $array.Length)
         return exitCond.Op is CompareOp.Slt &&
                exitCond.Left == addr.Index &&
                exitCond.Right is ConvertInst { Value: IntrinsicInst bound, ResultType.Kind: TypeKind.Int32 } &&
                bound.Intrinsic == CilIntrinsic.ArrayLen && bound.Args[0] == addr.Array;
     }
-
+    private static bool IsBoundedBySpanLen(CallInst getItemCall, CompareInst exitCond)
+    {
+        //exitCond is cmp.slt ($index, $span.Length)
+        return exitCond.Op is CompareOp.Slt &&
+               exitCond.Left == getItemCall.Args[1] &&
+               exitCond.Right is CallInst { Method.Name: "get_Length" } bound &&
+               bound.Args[0] == getItemCall.Args[0] && IsSpanMethod(bound.Method);
+    }
+    //Checks if the span is used by any instruction other than a instance call, indicating that it may have been reassigned.
+    private static bool IsSpanLive(Value source, LoopInfo loop)
+    {
+        return source is TrackedValue def &&
+               def.Users().All(u => !loop.Contains(u.Block) || (u is CallInst call && IsSpanMethod(call.Method)));
+    }
+    private static bool IsSpanMethod(MethodDesc method)
+    {
+        return method.DeclaringType.IsCorelibType() && 
+               method.DeclaringType.Name is "Span`1" or "ReadOnlySpan`1";
+    }
+    
     /// <summary>
     /// Builds a sequence accessing the underlying ref and count from <paramref name="source"/>, assuming its type is one of:
     /// <see cref="ArrayType"/>, <see cref="string"/>, or <see cref="List{T}"/>.
@@ -121,6 +185,11 @@ public class LoopStrengthReduction : IMethodPass
             TypeSpec { Name: "List`1" } => (
                 CreateGetArrayDataRef(builder, builder.CreateFieldLoad("_items", source)),
                 getCount ? builder.CreateFieldLoad("_size", source) : null
+            ),
+            //TODO: check if it's ok to access span fields directly
+            PointerType { ElemType: { Name: "Span`1" or "ReadOnlySpan`1"} } => (
+                builder.CreateFieldLoad("_reference", source),
+                getCount ? builder.CreateFieldLoad("_length", source) : null
             )
         };
         return (basePtr, count!);

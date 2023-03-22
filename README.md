@@ -10,21 +10,20 @@ The optimizer is distributed as a MSBuild task via NuGet, [DistIL.OptimizerTask]
 By default, it will only be invoked in _Release_ mode and transform methods and classes annotated with `[Optimize]`.
 It can be enabled globally by setting the `DistilAllMethods` project property to `true`, however that is not recommended because it could lead to unexpected behavior changes.
 
-The IR and infrastructure is provided separately as a standalone library, [DistIL.Core](https://www.nuget.org/packages/DistIL.Core). See the [API walkthrough](./docs/api-walkthrough.md) for details.
+The IR and infrastructure are provided separately as a standalone library, [DistIL.Core](https://www.nuget.org/packages/DistIL.Core). See the [API walkthrough](./docs/api-walkthrough.md) for details.
 
 # Notable Features
 - SSA-based Intermediate Representation
 - Linq Expansion
+- Loop Vectorization
 - Lambda Devirtualization
 - Method Inlining
 - Scalar Replacement of Aggregates
 
-The project is currently stable enough to process libraries such as _ICSharpCode.Decompiler_ and _ImageSharp_ in full without crashing or noticeably changing execution behavior.
-
 ## Linq Expansion
 Opportunistically rewrites Linq queries into imperative code in bottom-up order. This transform works by pattern matching and can only recognize a predefined set of known calls, which are listed below.
 
-For [typical queries](./tests/Benchmarks/LinqBenchs.cs), the speed-ups range between 2-10x:
+For [typical queries](./tests/Benchmarks/LinqBenchs.cs), speed-ups range between 2-10x:
 |         Method |         Toolchain |          Mean |       Error |      StdDev | Ratio | RatioSD |
 |--------------- |------------------ |--------------:|------------:|------------:|------:|--------:|
 |  FilterObjects |          .NET 7.0 |     25.789 μs |   0.9277 μs |   1.0684 μs |  1.00 |    0.00 |
@@ -100,10 +99,10 @@ public float Aggregate()
 ```
 
 # Loop Vectorization
-Basic loop vectorizer which works on simple for loops, having no complex branches or instructions.
-It is an unstable prototype and not enabled by default, requires explicit opt-in via `[Optimize(TryVectorize = true)]`.
+Prototype loop vectorizer which works on simple for-loops, having no complex branches or instructions.
+It is not enabled by default and requires explicit opt-in via `[Optimize(TryVectorize = true)]`.
 
-The impact for [trivial cases](./tests/Benchmarks/AutoVecBenchs.cs) is considerable, sometimes yielding speed-ups ranging by orders of magnitude:
+The impact for [trivial cases](./tests/Benchmarks/AutoVecBenchs.cs) is considerable, and it can even exceed an order of magnitude:
 |          Method |         Toolchain |        Mean |       Error |      StdDev | Ratio | Code Size |
 |---------------- |------------------ |------------:|------------:|------------:|------:|----------:|
 |    CountLetters |          .NET 7.0 | 42,182.7 ns | 1,876.84 ns | 2,161.37 ns |  1.00 |     338 B |
@@ -121,7 +120,7 @@ The impact for [trivial cases](./tests/Benchmarks/AutoVecBenchs.cs) is considera
 ---
 
 **Supported ops**
-- Memory accesses: pointer load/stores (where address is either the loop IV or an invariant offset by loop IV).
+- Memory accesses: pointer load/stores (where the address is either an _invariant pointer_ offset by the loop IV `ptr[i]`, or a loop IV itself `*ptr ... ptr++`).
 - Arithmetic: `+`, `-`, `*`, `/` (float), `&`, `|`, `^`, `~`
 - Math calls: `Abs`, `Min`, `Max`, `Sqrt`, `Floor`, `Ceil`
 - Comparisons: any relop if used by `&`, `|`, `^`, `cond ? x : y`, `r += cond`
@@ -170,7 +169,7 @@ public static int CountLetters(string text)
 }
 ```
 
-Basic loops bounded by array/span length are supported via strength-reduction. Range and assertion propagation via SCCP could help safe support for cases involving multiple buffers (TODO).
+Basic loops bounded by array/span length are supported via strength-reduction. Range and assertion propagation via SCCP could help enable support for cases involving multiple buffers safely (TODO).
 ```cs
 //Original
 public static void GenerateInts(Span<int> dest, int x) {
@@ -179,7 +178,7 @@ public static void GenerateInts(Span<int> dest, int x) {
     }
 }
 
-//Decompiled output
+//Decompiled output (reformatted)
 public static void GenerateInts(Span<int> dest, int x)
 {
     Span<int> span = dest;

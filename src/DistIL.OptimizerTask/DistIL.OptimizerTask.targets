@@ -6,12 +6,17 @@
     <DistilAllMethods Condition="'$(DistilAllMethods)' == ''">false</DistilAllMethods>
   </PropertyGroup>
 
-  <Target Name="_DoRunDistil" AfterTargets="Build" Condition="'$(RunDistil)' == 'true'">
+  <!-- Specifying Inputs and Outputs will enable support for incremental builds. -->
+  <Target Name="_DoRunDistil" AfterTargets="Compile" Condition="'$(RunDistil)' == 'true'"
+          Inputs="@(IntermediateAssembly)" Outputs="@(IntermediateAssembly -> '%(Identity).bak')"
+  >
     <RemoveDuplicates Inputs="@(ReferencePath -> '%(RootDir)%(Directory)')">
       <Output TaskParameter="Filtered" ItemName="AsmRefPaths"/>
     </RemoveDuplicates>
 
     <PropertyGroup>
+      <InputAsmPath>%(IntermediateAssembly.FullPath)</InputAsmPath>
+
       <!-- Trailing slashes are removed to prevent issues with argument splitting. -->
       <JoinedAsmRefPaths>@(AsmRefPaths -> '"%(Identity)"', ' ')</JoinedAsmRefPaths>
       <ResolverPathsArg>-r $(JoinedAsmRefPaths.Replace('\"', '"')) --no-resolver-fallback</ResolverPathsArg>
@@ -21,7 +26,8 @@
 
     <Exec
       WorkingDirectory="$(TargetDir)"
-      Command='dotnet "$(MSBuildThisFileDirectory)../tools/net7.0/DistIL.Cli.dll" -i "$(AssemblyName).dll" $(ResolverPathsArg) $(FilterUnmarkedArg) $(DistilExtraArgs)'
+      Command='dotnet "$(MSBuildThisFileDirectory)../tools/net7.0/DistIL.Cli.dll" -i "$(InputAsmPath)" $(ResolverPathsArg) $(FilterUnmarkedArg) $(DistilExtraArgs)'
     />
+    <Touch Files="@(IntermediateAssembly -> '%(Identity).bak')" />
   </Target>
 </Project>

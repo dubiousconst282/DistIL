@@ -5,10 +5,10 @@
 Post-build IL optimizer and intermediate representation for .NET programs.
 
 # Installation and Usage
-The optimizer is distributed as a MSBuild task via NuGet, [DistIL.OptimizerTask](https://www.nuget.org/packages/DistIL.OptimizerTask). It currently only targets .NET 7+ projects.
+The optimizer is distributed as a MSBuild task via NuGet, [DistIL.OptimizerTask](https://www.nuget.org/packages/DistIL.OptimizerTask). It only targets .NET 7+ projects.
 
-By default, it will only be invoked in _Release_ mode and transform methods and classes annotated with `[Optimize]`.
-It can be enabled globally by setting the `DistilAllMethods` project property to `true`, however that is not recommended because it could lead to unexpected behavior changes.
+By default, it will only be invoked in _Release_ mode and transform methods and classes annotated with `[Optimize]`.  
+It can be enabled globally by setting the `DistilAllMethods` project property to `true`, but be aware that doing so may break code or lead to unexpected behavior changes.
 
 The IR and infrastructure are provided separately as a standalone library, [DistIL.Core](https://www.nuget.org/packages/DistIL.Core). See the [API walkthrough](./docs/api-walkthrough.md) for details.
 
@@ -99,7 +99,7 @@ public float Aggregate()
 ```
 
 # Loop Vectorization
-Prototype loop vectorizer which works on simple for-loops, having no complex branches or instructions.
+Prototype loop vectorizer which works on simple for-loops, having no complex branches or instructions.  
 It is not enabled by default and requires explicit opt-in via `[Optimize(TryVectorize = true)]`.
 
 The impact for [trivial cases](./tests/Benchmarks/AutoVecBenchs.cs) is considerable, and it can even exceed an order of magnitude:
@@ -120,12 +120,12 @@ The impact for [trivial cases](./tests/Benchmarks/AutoVecBenchs.cs) is considera
 ---
 
 **Supported ops**
-- Memory accesses: pointer load/stores (where the address is either an _invariant pointer_ offset by the loop IV `ptr[i]`, or a loop IV itself `*ptr ... ptr++`).
+- Memory accesses: pointer load/stores (where the address is either an _invariant pointer_ offset by the loop counter `ptr[i]`, or the loop counter itself `*ptr ... ptr++`).
 - Arithmetic: `+`, `-`, `*`, `/` (float), `&`, `|`, `^`, `~`
 - Math calls: `Abs`, `Min`, `Max`, `Sqrt`, `Floor`, `Ceil`
 - Comparisons: any relop if used by `&`, `|`, `^`, `cond ? x : y`, `r += cond`
 - Conversions: `float`<->`int`
-- Types: any numeric primitive (byte, int, float, etc.)
+- Types: any numeric primitive compatible with `Vector<T>` (byte, int, float, etc.)
 - If-conversion: transform patterns such as `cond ? x : y`, short `if..else`s, `x && y` into branchless code
 - Reductions: `+=`, `*=`, `&=`, `|=`, `^=`, `Min`, `Max`, `+= cond ? 1 : 0`
 

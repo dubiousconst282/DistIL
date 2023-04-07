@@ -40,10 +40,14 @@ public class ForestAnalysis : IMethodAnalysis
 
     private static bool IsAlwaysRooted(Instruction inst)
     {
-        return !inst.HasResult || inst.NumUses is 0 or >= 2 ||
-                inst is PhiInst or GuardInst ||
-                inst.Users().First().Block != inst.Block ||
-                inst.Users().First() is PhiInst;
+        if (!inst.HasResult || inst.NumUses is 0 or >= 2 || inst is PhiInst or GuardInst) {
+            return true;
+        }
+        var (user, useIdx) = inst.Uses().First();
+
+        return user.Block != inst.Block ||
+               user is PhiInst ||
+               (user is SelectInst && useIdx != 0); //ILGenerator depends on select values being roots, for simplicity reaons.
     }
 
     private static bool IsAlwaysLeaf(Instruction inst)

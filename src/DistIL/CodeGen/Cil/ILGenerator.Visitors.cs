@@ -216,9 +216,29 @@ partial class ILGenerator
     }
     public void Visit(SelectInst inst)
     {
-        var resultReg = _regAlloc.GetRegister(inst);
-        EmitCondSelect(inst, resultReg);
-        _asm.EmitLoad(resultReg);
+        //TODO: Consider merging adjacent selects into a single branch
+
+        //We must be careful about push order and register live ranges.
+        //We can only store to `resultReg` after all operands have been emitted,
+        //because we don't know if it's live before.
+        //  if (cond) push(ifTrue)
+        //  else      push(ifFalse)
+
+        //Neither sides can have side effects
+        Debug.Assert(inst.IfTrue is not Instruction instT || !_forest.IsLeaf(instT));
+        Debug.Assert(inst.IfFalse is not Instruction instF || !_forest.IsLeaf(instF));
+
+        var labelEnd = _asm.DefineLabel();
+        var labelFalse = _asm.DefineLabel();
+
+        _asm.Emit(GetBranchCodeAndPushCond(inst.Cond, negate: true), labelFalse);
+        Push(inst.IfTrue);
+        _asm.Emit(ILCode.Br, labelEnd);
+
+        _asm.MarkLabel(labelFalse);
+        Push(inst.IfFalse);
+
+        _asm.MarkLabel(labelEnd);
     }
 
     public void Visit(BranchInst inst)

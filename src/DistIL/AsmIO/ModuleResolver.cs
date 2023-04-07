@@ -77,7 +77,7 @@ public class ModuleResolver
     private TypeDefOrSpec? ImportGenericOrNestedType(ModuleDef scope, Type type, bool throwIfNotFound)
     {
         var resolved = type.IsNested
-            ? (Import(type.DeclaringType!, throwIfNotFound) as TypeDef)?.GetNestedType(type.Name)
+            ? (Import(type.DeclaringType!, throwIfNotFound) as TypeDef)?.FindNestedType(type.Name)
             : scope.FindType(type.Namespace, type.Name, throwIfNotFound);
 
         if (resolved != null && type.IsConstructedGenericType) {

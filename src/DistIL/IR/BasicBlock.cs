@@ -204,10 +204,42 @@ public class BasicBlock : TrackedValue
         intermBlock.SetBranch(succ);
 
         //Redirect branches/phis to the intermediate block
-        Last.ReplaceOperand(succ, intermBlock);
+        RedirectSucc(succ, intermBlock);
         succ.RedirectPhis(this, intermBlock);
 
         return intermBlock;
+    }
+
+    /// <summary> Replaces a successor edge with another. </summary>
+    public void RedirectSucc(BasicBlock oldSucc, BasicBlock newSucc)
+    {
+        var opers = Last.Operands;
+        bool hasOldSucc = false;
+        bool hasNewSucc = false;
+
+        for (int i = 0; i < opers.Length; i++) {
+            if (opers[i] == oldSucc) {
+                Last.ReplaceOperand(i, newSucc);
+                hasOldSucc = true;
+            } else if (opers[i] == newSucc) {
+                hasNewSucc = true;
+            }
+        }
+
+        //Branch instructions cannot have duplicate block uses.
+        //This case should only be reachable from conditional branches and switches .
+        if (hasOldSucc && hasNewSucc) {
+            if (Last is BranchInst br) {
+                Debug.Assert(br.IsConditional);
+                SetBranch(newSucc);
+            } else if (Last is SwitchInst sw) {
+                //Recreating the switch is kinda wasteful but this should be a relatively cold path.
+                var targets = Enumerable.Range(0, sw.NumTargets).Select(sw.GetTarget).ToArray();
+                SetBranch(new SwitchInst(sw.TargetIndex, sw.DefaultTarget, targets));
+            } else {
+                throw new UnreachableException();
+            }
+        }
     }
 
     /// <summary> Replaces the incomming block of all phis in successor blocks from this block to <paramref name="newPred"/>. </summary>

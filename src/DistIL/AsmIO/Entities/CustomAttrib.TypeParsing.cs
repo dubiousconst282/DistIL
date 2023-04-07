@@ -51,7 +51,7 @@ partial class CustomAttrib
             //Nested types
             while (Match('+')) {
                 string childName = ScanName(ref numGenArgs);
-                type = (type as TypeDef)?.GetNestedType(childName);
+                type = (type as TypeDef)?.FindNestedType(childName);
             }
             if (type == null) {
                 throw Error("Specified type could not be found");

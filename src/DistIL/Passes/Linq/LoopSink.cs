@@ -41,8 +41,8 @@ internal class LoopSink : LinqSink
         _getCurrent.ReplaceWith(currItem);
         
         //Rewire old loop
-        _latch.Last.ReplaceOperand(_header, loopData.SkipBlock);
-        _regionEntry.Last.ReplaceOperand(_header, loopData.SourceLoop.EntryBlock);
+        _latch.RedirectSucc(_header, loopData.SkipBlock);
+        _regionEntry.RedirectSucc(_header, loopData.SourceLoop.EntryBlock);
 
         loopData.Exit.SetBranch(_exit);
 
@@ -130,7 +130,7 @@ internal class LoopSink : LinqSink
         //Redirect predecessors
         foreach (var pred in _header.Preds) {
             if (pred != _regionEntry && pred != _latch) {
-                pred.Last.ReplaceOperand(_header, _latch);
+                pred.RedirectSucc(_header, _latch);
             }
         }
         return true;

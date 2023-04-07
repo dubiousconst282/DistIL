@@ -28,10 +28,14 @@ public class ConstInt : Const
         Value = value;
     }
 
-    /// <summary> Checks whether the constant value fits in the specified type, without being truncated. The value is treated as unsigned. </summary>
+    /// <summary> Checks whether this constant value fits in the specified type without being truncated. </summary>
     public bool FitsInType(TypeDesc type)
     {
         ulong mask = (ulong)GetMask(type.Kind.BitSize());
+
+        if (type.Kind.IsSigned()) {
+            return Value >= -(long)(mask / 2 + 1) && Value <= (long)(mask / 2);
+        }
         return (UValue & ~mask) == 0;
     }
 

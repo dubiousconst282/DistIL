@@ -30,7 +30,7 @@ using MethodAttribs = System.Reflection.MethodAttributes;
 //Value     := Id | Number | String | "null"
 //Seq{R}    := R  (","  R)*
 
-/// <summary> Generates an AST from an arbitrary string. </summary>
+/// <summary> Parser for textual-form IR. </summary>
 public partial class IRParser
 {
     readonly Lexer _lexer;
@@ -204,7 +204,7 @@ public partial class IRParser
         //Nested types
         while (_lexer.Match(TokenType.Plus)) {
             string childName = _lexer.ExpectId();
-            type = (type as TypeDef)?.GetNestedType(childName);
+            type = (type as TypeDef)?.FindNestedType(childName);
         }
         if (type == null) {
             _lexer.Error("Type could not be found", start);

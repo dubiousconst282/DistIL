@@ -117,7 +117,7 @@ internal class ModuleLoader
                 _mod._typeRefRoots[type] = (ModuleDef)scope;
             }
         } else if (scope is TypeDef parent) {
-            type = parent.GetNestedType(name);
+            type = parent.FindNestedType(name);
         }
         return type ?? throw new InvalidOperationException($"Could not resolve referenced type '{ns}.{name}'");
     }
@@ -130,7 +130,7 @@ internal class ModuleLoader
 
         if (info.Implementation.Kind == HandleKind.ExportedType) {
             var parent = ResolveExportedType((ExportedTypeHandle)info.Implementation);
-            impl = parent.GetNestedType(name);
+            impl = parent.FindNestedType(name);
         } else {
             var asm = (ModuleDef)GetEntity(info.Implementation);
             impl = asm.FindType(ns, name) 

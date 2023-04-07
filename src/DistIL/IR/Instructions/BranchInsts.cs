@@ -131,7 +131,8 @@ public class SwitchInst : Instruction
         
         for (int i = 0; i < NumTargets; i++) {
             ctx.PrintLine(",");
-            ctx.Print(i + ": ");
+            ctx.Print(i.ToString(), PrintToner.Number);
+            ctx.Print(": ");
             ctx.PrintAsOperand(GetTarget(i));
         }
         ctx.Pop("]");

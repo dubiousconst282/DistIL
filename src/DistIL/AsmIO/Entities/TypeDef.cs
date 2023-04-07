@@ -48,7 +48,7 @@ public class TypeDef : TypeDefOrSpec
     public override string Name { get; }
 
     /// <summary> The enclosing type of this nested type, or null if not nested. </summary>
-    public TypeDef? DeclaringType { get; set; }
+    public TypeDef? DeclaringType { get; private set; }
 
     [MemberNotNullWhen(true, nameof(DeclaringType))]
     public bool IsNested => (Attribs & TypeAttributes.NestedFamANDAssem) != 0;
@@ -121,7 +121,7 @@ public class TypeDef : TypeDefOrSpec
         return spec ??= new TypeSpec(this, filledArgs);
     }
 
-    public TypeDef? GetNestedType(string name)
+    public TypeDef? FindNestedType(string name)
     {
         return _nestedTypes?.Find(e => e.Name == name);
     }
@@ -137,6 +137,39 @@ public class TypeDef : TypeDefOrSpec
         var method = new MethodDef(this, retSig, paramSig, name, attribs, MethodImplAttributes.IL, genericPars);
         _methods.Add(method);
         return method;
+    }
+
+    public FieldDef CreateField(
+        string name, TypeSig sig, FieldAttributes attribs = FieldAttributes.Public,
+        object? defaultValue = null, int layoutOffset = -1, byte[]? mappedData = null)
+    {
+        var existingField = FindField(name, throwIfNotFound: false);
+        Ensure.That(existingField == null, "A field with the same name already exists");
+
+        var field = new FieldDef(this, sig, name, attribs, defaultValue, layoutOffset, mappedData);
+        _fields.Add(field);
+        return field;
+    }
+
+    public TypeDef CreateNestedType(
+        string name, TypeAttributes attribs = TypeAttributes.Public,
+        ImmutableArray<GenericParamType> genericParams = default,
+        TypeDefOrSpec? baseType = null)
+    {
+        var existingType = FindNestedType(name);
+        Ensure.That(existingType == null, "A nested type with the same name already exists");
+
+        var newAccess = attribs switch {
+            TypeAttributes.NotPublic => TypeAttributes.NestedPrivate,
+            TypeAttributes.Public => TypeAttributes.NestedPublic,
+            _ => attribs
+        };
+        attribs = (attribs & ~TypeAttributes.VisibilityMask) | newAccess;
+
+        var childType = new TypeDef(Module, null, name, attribs, genericParams, baseType);
+        childType.SetDeclaringType(this);
+        Module._typeDefs.Add(childType);
+        return childType;
     }
 
     public override IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
@@ -169,6 +202,12 @@ public class TypeDef : TypeDefOrSpec
         }
     }
 
+    private void SetDeclaringType(TypeDef parent)
+    {
+        DeclaringType = parent;
+        (parent._nestedTypes ??= new()).Add(this);
+    }
+
     public override void Print(PrintContext ctx, bool includeNs = false)
     {
         if (DeclaringType != null) {
@@ -197,8 +236,7 @@ public class TypeDef : TypeDefOrSpec
             _baseType = (TypeDefOrSpec)loader.GetEntity(info.BaseType);
         }
         if (info.IsNested) {
-            DeclaringType = loader.GetType(info.GetDeclaringType());
-            (DeclaringType._nestedTypes ??= new()).Add(this);
+            SetDeclaringType(loader.GetType(info.GetDeclaringType()));
         }
         var layout = info.GetLayout();
         LayoutPack = layout.PackingSize;

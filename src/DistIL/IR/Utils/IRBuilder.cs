@@ -187,7 +187,9 @@ public class IRBuilder
 
     public LoadInst CreateFieldLoad(string fieldName, Value obj)
         => CreateFieldLoad(GetInstanceType(obj).FindField(fieldName), obj);
-
+        
+    public StoreInst CreateFieldStore(string fieldName, Value obj, Value value)
+        => CreateFieldStore(GetInstanceType(obj).FindField(fieldName), obj, value);
 
     public IntrinsicInst CreateNewArray(TypeDesc elemType, Value length)
         => Emit(new IntrinsicInst(CilIntrinsic.NewArray, elemType, length));

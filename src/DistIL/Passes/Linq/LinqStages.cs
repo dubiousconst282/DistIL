@@ -20,6 +20,8 @@ internal class WhereStage : LinqStageNode
     public WhereStage(CallInst call, LinqStageNode drain)
         : base(call, drain) { }
 
+    public override bool IsFiltering => true;
+
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
         var filterLambda = SubjectCall!.Args[1];
@@ -33,6 +35,8 @@ internal class OfTypeStage : LinqStageNode
 {
     public OfTypeStage(CallInst call, LinqStageNode drain)
         : base(call, drain) { }
+
+    public override bool IsFiltering => true;
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
@@ -72,6 +76,8 @@ internal class SkipStage : LinqStageNode
     public SkipStage(CallInst call, LinqStageNode sink)
         : base(call, sink) { }
 
+    public override bool IsFiltering => true;
+
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
         //Behavior for `count <= 0` is nop (drain all source items)
@@ -100,15 +106,17 @@ internal class TakeStage : LinqStageNode
     public TakeStage(CallInst call, LinqStageNode sink)
         : base(call, sink) { }
 
+    public override bool IsFiltering => true;
+
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
         //Behavior for `count <= 0` is to discard all elements.
         var count = SubjectCall.Args[1];
 
         loopData.CreateAccum(count, emitUpdate: curr => {
-            //if (count <= 0) goto SkipBlock;
+            //if (count <= 0) goto ExitBlock;
             //count--;
-            builder.Fork(builder.CreateSgt(curr, ConstInt.CreateI(0)), loopData.SkipBlock);
+            builder.Fork(builder.CreateSgt(curr, ConstInt.CreateI(0)), loopData.Exit.Block);
             Drain.EmitBody(builder, currItem, loopData);
             return builder.CreateSub(curr, ConstInt.CreateI(1));
         }).SetName("lq_takeRem");
@@ -118,6 +126,9 @@ internal class FlattenStage : LinqStageNode
 {
     public FlattenStage(CallInst call, LinqStageNode drain)
         : base(call, drain) { }
+
+    public override bool IsFiltering => true;
+    public override bool IsGenerating => true;
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {

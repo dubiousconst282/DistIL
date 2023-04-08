@@ -11,19 +11,19 @@ internal class MemorySource : LinqSourceNode
 
     Value? _currPtr, _endPtr;
 
-    protected override void EmitHead(LoopBuilder loop, out Value? count, ref LinqStageNode firstStage)
+    protected override void EmitHead(LoopBuilder loop, out Value? length, ref LinqStageNode firstStage)
     {
         var builder = loop.PreHeader;
         //T& startPtr = call MemoryMarshal.GetArrayDataReference<T>(T[]: source)  //or akin.
-        (_currPtr, count) = LoopStrengthReduction.CreateGetDataPtrRange(builder, PhysicalSource.Operand);
+        (_currPtr, length) = LoopStrengthReduction.CreateGetDataPtrRange(builder, PhysicalSource.Operand);
 
-        IntegrateSkipTakeRanges(builder, ref firstStage, out var offset, ref count);
+        IntegrateSkipTakeRanges(builder, ref firstStage, out var offset, ref length);
         if (offset != null) {
             _currPtr = builder.CreatePtrOffset(_currPtr, offset);
         }
 
-        //T& endPtr = lea startPtr + (nint)count * sizeof(T)
-        _endPtr = builder.CreatePtrOffset(_currPtr, count);
+        //T& endPtr = lea startPtr + (nint)length * sizeof(T)
+        _endPtr = builder.CreatePtrOffset(_currPtr, length);
 
         //T& currPtr = phi [PreHeader: startPtr], [Latch: {currPtr + sizeof(T)}]
         _currPtr = loop.CreateAccum(_currPtr, currPtr => loop.Latch.CreatePtrIncrement(currPtr)).SetName("lq_currPtr");
@@ -42,7 +42,7 @@ internal class EnumeratorSource : LinqSourceNode
 
     Value? _enumerator;
 
-    protected override void EmitHead(LoopBuilder loop, out Value? count, ref LinqStageNode firstStage)
+    protected override void EmitHead(LoopBuilder loop, out Value? length, ref LinqStageNode firstStage)
     {
         var builder = loop.PreHeader;
         var source = PhysicalSource.Operand;
@@ -62,7 +62,7 @@ internal class EnumeratorSource : LinqSourceNode
             builder.CreateStore(slot, _enumerator);
             _enumerator = slot;
         }
-        count = null;
+        length = null;
     }
     protected override Value EmitMoveNext(IRBuilder builder)
         => builder.CreateCallVirt("MoveNext", _enumerator!);

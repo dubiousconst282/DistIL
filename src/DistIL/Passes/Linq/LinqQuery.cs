@@ -12,7 +12,7 @@ internal abstract class LinqSink : LinqStageNode
         Method = call.Block.Method;
     }
 
-    public virtual void EmitHead(IRBuilder builder, Value? estimCount) { }
+    public virtual void EmitHead(IRBuilder builder, EstimatedSourceLen estimLen) { }
     public virtual void EmitTail(IRBuilder builder) { }
     public abstract override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData);
 }
@@ -21,6 +21,11 @@ internal abstract class LinqStageNode
 {
     public CallInst SubjectCall { get; }
     public LinqStageNode Drain { get; }
+
+    /// <summary> Whether this stage may discard source items. </summary>
+    public virtual bool IsFiltering => false;
+    /// <summary> Whether this stage may drain more items than given by the source. </summary>
+    public virtual bool IsGenerating => false;
 
     protected LinqStageNode(CallInst call, LinqStageNode drain)
         => (SubjectCall, Drain) = (call, drain);
@@ -77,9 +82,9 @@ internal abstract class LinqSourceNode : LinqStageNode
         var loop = new LoopBuilder(sink.SubjectCall.Block, "LQ_");
         var firstStage = Drain;
 
-        EmitHead(loop, out var count, ref firstStage);
-        sink.EmitHead(loop.PreHeader, count);
-        
+        EmitHead(loop, out var length, ref firstStage);
+        sink.EmitHead(loop.PreHeader, new EstimatedSourceLen(length, firstStage));
+
         loop.Build(
             emitCond: EmitMoveNext,
             emitBody: body => firstStage.EmitBody(body, EmitCurrent(body), new BodyLoopData(loop))
@@ -91,7 +96,7 @@ internal abstract class LinqSourceNode : LinqStageNode
         }
     }
 
-    protected static void IntegrateSkipTakeRanges(IRBuilder builder, ref LinqStageNode firstStage, out Value? offset, ref Value count)
+    protected static void IntegrateSkipTakeRanges(IRBuilder builder, ref LinqStageNode firstStage, out Value? offset, ref Value length)
     {
         offset = null;
 
@@ -102,21 +107,21 @@ internal abstract class LinqSourceNode : LinqStageNode
             //  count -= offset
             offset = builder.CreateMin(
                 builder.CreateMax(skipCount, ConstInt.CreateI(0)),
-                builder.CreateConvert(count, PrimType.Int32));
-            count = builder.CreateSub(count, offset);
+                builder.CreateConvert(length, PrimType.Int32));
+            length = builder.CreateSub(length, offset);
             firstStage = firstStage.Drain;
         }
         if (firstStage is TakeStage { SubjectCall.Args: [_, var takeCount] }) {
             //Take() is easier, we can exploit twos-complement by using an unsigned min() to clamp between 0..count.
             //  count = min(count, (uint)takeCount)
-            count = builder.CreateMin(
-                builder.CreateConvert(count, PrimType.Int32),
+            length = builder.CreateMin(
+                builder.CreateConvert(length, PrimType.Int32),
                 takeCount, unsigned: true);
             firstStage = firstStage.Drain;
         }
     }
 
-    protected abstract void EmitHead(LoopBuilder loop, out Value? count, ref LinqStageNode firstStage);
+    protected abstract void EmitHead(LoopBuilder loop, out Value? length, ref LinqStageNode firstStage);
     protected abstract Value EmitMoveNext(IRBuilder builder);
     protected abstract Value EmitCurrent(IRBuilder builder);
 }
@@ -139,3 +144,25 @@ internal record BodyLoopData
     }
 }
 internal delegate Value LoopAccumVarFactory(Value seed, Func<Value, Value> emitUpdate);
+
+internal struct EstimatedSourceLen
+{
+    public Value? Length { get; }
+    public bool IsUnderEstimation { get; }
+    public bool IsOverEstimation { get; }
+
+    [MemberNotNullWhen(true, nameof(Length))]
+    public bool IsExact => Length != null && !IsUnderEstimation && !IsOverEstimation;
+
+    public EstimatedSourceLen(Value? length, LinqStageNode entryStage)
+    {
+        Length = length;
+
+        if (length == null) return;
+
+        for (var node = entryStage; node != null; node = node.Drain) {
+            IsOverEstimation |= node.IsFiltering;
+            IsUnderEstimation |= node.IsGenerating;
+        }
+    }
+}

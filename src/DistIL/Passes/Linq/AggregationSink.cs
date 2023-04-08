@@ -10,9 +10,9 @@ internal class AggregationSink : LinqSink
 
     Value? _accumulator, _seed, _hasData;
 
-    public override void EmitHead(IRBuilder builder, Value? estimCount)
+    public override void EmitHead(IRBuilder builder, EstimatedSourceLen sourceLen)
     {
-        _seed = GetSeed(builder, estimCount);
+        _seed = GetSeed(builder, sourceLen);
     }
     public override void EmitTail(IRBuilder builder)
     {
@@ -54,7 +54,7 @@ internal class AggregationSink : LinqSink
         }).SetName("lq_has_data");
     }
 
-    protected virtual Value GetSeed(IRBuilder builder, Value? estimCount)
+    protected virtual Value GetSeed(IRBuilder builder, EstimatedSourceLen sourceLen)
     {
         if (SubjectCall.NumArgs >= 3) {
             return SubjectCall.Args[1];
@@ -81,10 +81,10 @@ internal class CountSink : AggregationSink
 
     bool _mayBeLongSource;
 
-    protected override Value GetSeed(IRBuilder builder, Value? estimCount)
+    protected override Value GetSeed(IRBuilder builder, EstimatedSourceLen sourceLen)
     {
         //If `estimCount != null`, the source size is guaranteed to fit in an int32.
-        _mayBeLongSource = estimCount == null;
+        _mayBeLongSource = sourceLen.Length == null || sourceLen.IsUnderEstimation;
 
         return ConstInt.CreateI(0);
     }

@@ -63,8 +63,8 @@ public class ExpandLinq : IMethodPass
         if (method.DeclaringType == t_Enumerable) {
 #pragma warning disable format
             return method.Name switch {
-                "ToList" or "ToHashSet"     => new ConcretizationSink(call),
-                "ToArray"                   => new ArraySink(call),
+                "ToList" or "ToArray"       => new ListOrArraySink(call),
+                "ToHashSet"                 => new HashSetSink(call),
                 "ToDictionary"              => new DictionarySink(call),
                 "Aggregate"                 => new AggregationSink(call),
                 "Count"                     => new CountSink(call),

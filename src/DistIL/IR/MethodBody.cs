@@ -65,8 +65,7 @@ public class MethodBody
 
     public SymbolTable GetSymbolTable()
     {
-        //TODO: Context options and SymbolTable.ForceSeqNames
-        return _symTable ??= new(this, true);
+        return _symTable ??= new(this);
     }
 
     /// <summary> Performs a depth-first traversal over this method's control flow graph, starting from the entry block and visiting only reachable blocks. </summary>

@@ -9,16 +9,14 @@ public class SymbolTable
     public static SymbolTable Detached { get; } = new();
 
     readonly MethodBody? _method;
-    readonly bool _forceSeqNames;
 
     readonly ConditionalWeakTable<TrackedValue, object /* string | int */> _tags = new();
     readonly HashSet<string> _usedNames = new();
     int _nextId = 1;
 
-    public SymbolTable(MethodBody? method = null, bool forceSeqNames = false)
+    public SymbolTable(MethodBody? method = null)
     {
         _method = method;
-        _forceSeqNames = method != null && forceSeqNames;
     }
 
     public void SetName(TrackedValue value, string name)
@@ -50,8 +48,8 @@ public class SymbolTable
             return string.Format(format, 0);
         }
         if (!_tags.TryGetValue(value, out var tag)) {
-            if (_forceSeqNames && value is Instruction or BasicBlock) {
-                UpdateSeqNames();
+            if (_nextId == 1 && value is Instruction or BasicBlock) {
+                AssignInitialNames();
                 _tags.TryGetValue(value, out tag);
             }
             if (tag == null) {
@@ -61,7 +59,7 @@ public class SymbolTable
         }
         return tag as string ?? string.Format(format, tag);
     }
-    private void UpdateSeqNames()
+    private void AssignInitialNames()
     {
         int currId = 1;
         foreach (var block in _method!) {
@@ -83,7 +81,7 @@ public class SymbolTable
 
 public static class SymbolTableExt
 {
-    /// <summary> Sets the value name on its parent symbol table (if it is a <see cref="TrackedValue"/>). </summary>
+    /// <summary> Sets the name of a value if it is attached to a symbol table, otherwise do nothing. </summary>
     public static V SetName<V>(this V value, string name) where V : Value
     {
         if (value is TrackedValue trackedValue) {

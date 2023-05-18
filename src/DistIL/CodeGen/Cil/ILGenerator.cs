@@ -16,8 +16,11 @@ public partial class ILGenerator : InstVisitor
     private ILGenerator(MethodBody method)
     {
         _method = method;
-        _regAlloc = new RegisterAllocator(method); //may split critical edges, must be created first
         _forest = new ForestAnalysis(method);
+        var interfs = new InterferenceGraph(method, new LivenessAnalysis(method), _forest);
+        _regAlloc = new RegisterAllocator(method, interfs); //may split critical edges but ForestAnalysis is okay with that.
+
+       // DistIL.IR.Utils.IRPrinter.ExportDot(method, "code.dot", new[] { _regAlloc });
     }
 
     public static ILMethodBody GenerateCode(MethodBody method)

@@ -14,11 +14,10 @@ public class RegisterAllocator : IPrintDecorator
     readonly Dictionary<(TypeDesc Type, int Color), ILVariable> _registers = new();
     readonly Dictionary<BasicBlock, List<(PhiInst Dest, Value Src)>> _phiCopies = new();
 
-    public RegisterAllocator(MethodBody method)
+    public RegisterAllocator(MethodBody method, InterferenceGraph interfs)
     {
         _method = method;
-        var liveness = new LivenessAnalysis(method);
-        _interfs = new InterferenceGraph(method, liveness);
+        _interfs = interfs;
 
         Coalesce();
         AssignColors();
@@ -58,6 +57,7 @@ public class RegisterAllocator : IPrintDecorator
         var usedColors = new BitSet();
 
         //TODO: Coloring can be optimal since we're using a SSA graph (perfect elimination order)
+        //Note that our graphs are currently not chordal because nodes of different types are not connected, see NeedsEdgeForTypes().
         foreach (var (inst, node) in _interfs.GetNodes()) {
             if (node.Color != 0) continue; //already assigned
 

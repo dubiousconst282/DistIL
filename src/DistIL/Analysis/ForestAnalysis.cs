@@ -6,7 +6,10 @@ using DistIL.IR.Utils;
 /// <summary> Computes information that can be used to build expression trees from the linear IR. </summary>
 public class ForestAnalysis : IMethodAnalysis
 {
-    readonly RefSet<Instruction> _trees = new(); //expr tree roots / statements
+    //Note that we must track leafs rather than trees because the codegen will
+    //init the ForestAnalysis before RegisterAllocator, which may split critical edges
+    //and cause codegen to completely skip instructions in these new blocks.
+    readonly RefSet<Instruction> _leafs = new();
 
     public ForestAnalysis(MethodBody method)
     {
@@ -21,8 +24,8 @@ public class ForestAnalysis : IMethodAnalysis
 
             //Find statements
             foreach (var inst in block) {
-                if (!interfs.CanBeInlinedIntoUse(inst)) {
-                    _trees.Add(inst);
+                if (interfs.CanBeInlinedIntoUse(inst)) {
+                    _leafs.Add(inst);
                 }
             }
         }
@@ -32,10 +35,10 @@ public class ForestAnalysis : IMethodAnalysis
         => new ForestAnalysis(mgr.Method);
 
     /// <summary> Returns whether the specified instruction is a the root of a tree/statement (i.e. must be emitted and/or assigned into a temp variable). </summary>
-    public bool IsTreeRoot(Instruction inst) => _trees.Contains(inst);
+    public bool IsTreeRoot(Instruction inst) => !IsLeaf(inst);
 
     /// <summary> Returns whether the specified instruction is a leaf or branch (i.e. can be inlined into an operand). </summary>
-    public bool IsLeaf(Instruction inst) => !IsTreeRoot(inst);
+    public bool IsLeaf(Instruction inst) => _leafs.Contains(inst);
 
 
     private static bool IsAlwaysRooted(Instruction inst)
@@ -47,13 +50,14 @@ public class ForestAnalysis : IMethodAnalysis
 
         return user.Block != inst.Block ||
                user is PhiInst ||
-               (user is SelectInst && useIdx != 0); //ILGenerator depends on select values being roots, for simplicity reaons.
+               (user is SelectInst && useIdx != 0); //ILGenerator depends on select values being roots, for simplicity reaon
     }
 
     private static bool IsAlwaysLeaf(Instruction inst)
     {
         //Cheaper to rematerialize
-        return inst.Is(CilIntrinsicId.ArrayLen, CilIntrinsicId.SizeOf);
+        return inst.Is(CilIntrinsicId.ArrayLen, CilIntrinsicId.SizeOf) ||
+                (inst is FieldAddrInst fa && fa.Obj is null or LocalSlot or Argument or Instruction { NumUses: >= 2 });
     }
 
     class BlockInterfs

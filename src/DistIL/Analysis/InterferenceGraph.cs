@@ -5,16 +5,26 @@ public class InterferenceGraph : IMethodAnalysis
     Dictionary<Instruction, int> _defNodeIds = new();
     Node[] _nodes = new Node[16];
 
-    public InterferenceGraph(MethodBody method, LivenessAnalysis liveness)
+    //The ForestAnalysis may re-order instructions beyond their original live-ranges,
+    //so we must take it in consideration when generating the interference graph.
+    public InterferenceGraph(MethodBody method, LivenessAnalysis liveness, ForestAnalysis forest)
     {
         var liveNow = new RefSet<Instruction>();
 
         foreach (var block in method) {
             foreach (var def in liveness.GetLiveOut(block)) {
+                if (forest.IsLeaf(def)) {
+                    //Some instructions are always rematerialized so we need to assume that its dependencies are live.
+                    //In most cases this will not actually extend live ranges because ForestAnalysis uses a few heuristics.
+                    MarkTreeUses(def);
+                    continue;
+                }
                 liveNow.Add(def);
             }
 
             foreach (var inst in block.Reversed()) {
+                if (!forest.IsTreeRoot(inst)) continue;
+
                 if (inst.HasResult) {
                     //Definition of `inst` marks the start of its live-range
                     liveNow.Remove(inst);
@@ -25,26 +35,43 @@ public class InterferenceGraph : IMethodAnalysis
                     }
                 }
                 //Use of a def possibly marks the end of its live-range
+                MarkTreeUses(inst);
+            }
+            liveNow.Clear();
+
+            void MarkTreeUses(Instruction inst)
+            {
                 foreach (var oper in inst.Operands) {
-                    if (oper is Instruction operI) {
-                        liveNow.Add(operI);
+                    if (oper is not Instruction operI) continue;
+
+                    liveNow.Add(operI);
+
+                    if (forest.IsLeaf(operI)) {
+                        MarkTreeUses(operI);
                     }
                 }
             }
-            liveNow.Clear();
         }
     }
 
     static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
-        => new InterferenceGraph(mgr.Method, mgr.GetAnalysis<LivenessAnalysis>());
+        => new InterferenceGraph(mgr.Method, mgr.GetAnalysis<LivenessAnalysis>(), mgr.GetAnalysis<ForestAnalysis>());
 
     public void AddEdge(Instruction a, Instruction b)
     {
+        //Avoid creating edges for defs of different types to make the graph smaller.
+        if (!NeedsEdgeForTypes(a.ResultType, b.ResultType)) return;
+        
         var na = GetOrCreateNode(a);
         var nb = GetOrCreateNode(b);
 
         nb.Adjacent.Add(na.Id);
         na.Adjacent.Add(nb.Id);
+    }
+
+    public static bool NeedsEdgeForTypes(TypeDesc a, TypeDesc b)
+    {
+        return a == b;
     }
 
     public bool HasEdge(Instruction a, Instruction b)

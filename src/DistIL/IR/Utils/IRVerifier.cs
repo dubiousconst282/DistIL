@@ -76,6 +76,12 @@ public class IRVerifier
                 Check(argTypesMatch, phi, "Phi arguments should be assignable to its result type", DiagnosticSeverity.Warn);
                 break;
             }
+            case FieldAddrInst flda: {
+                if (flda.Obj is Instruction && flda.Obj.ResultType.IsValueType) {
+                    Check(flda.Users().All(u => u is LoadInst), flda, "SSA struct field address should only be used by load instructions");
+                }
+                break;
+            }
             case { IsBranch: true, Next: not null }: {
                 Error(inst, "Branch must be the last instruction in the block");
                 break;

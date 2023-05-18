@@ -704,7 +704,12 @@ internal class BlockState
     }
     private FieldAddrInst EmitFieldAddr(FieldDesc field, bool isStatic)
     {
-        var inst = new FieldAddrInst(field, isStatic ? null : Pop());
+        var obj = isStatic ? null : Pop();
+        
+        if (obj is LoadInst ld && ld.ResultType.IsValueType) {
+            obj = ld.Address;
+        }
+        var inst = new FieldAddrInst(field, obj);
         Emit(inst);
         return inst;
     }

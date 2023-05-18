@@ -126,7 +126,7 @@ public class IRPrinter
         pc.Print($" -> {def.ReturnType} {{\n");
 
         var declaredVars = method.Instructions()
-            .Where(d => d is MemoryInst { Address: LocalSlot })
+            .Where(d => d.Operands is [LocalSlot, ..])
             .Select(a => (LocalSlot)a.Operands[0])
             .Distinct();
 

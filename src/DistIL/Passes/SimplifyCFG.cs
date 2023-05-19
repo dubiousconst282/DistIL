@@ -9,7 +9,7 @@ public class SimplifyCFG : IMethodPass
         bool everChanged = false;
 
         //Canonicalization
-        everChanged |= UnifyReturns(ctx.Method);
+        everChanged |= SinkReturnsAndJumpThreads(ctx.Compilation, ctx.Method);
 
         //Simplification
         ctx.Method.TraverseDepthFirst(postVisit: block => {
@@ -33,7 +33,7 @@ public class SimplifyCFG : IMethodPass
         if (block.Last is not BranchInst { IsJump: true } br) return false;
 
         //succ can't start with a phi/guard, nor loop on itself, and we must be its only predecessor
-        if (br.Then is not { HasHeader: false, NumPreds: 1 } succ || succ == block) return false;
+        if (br.Then is not { HasPhisOrGuards: false, NumPreds: 1 } succ || succ == block) return false;
 
         succ.MergeInto(block, replaceBranch: true);
         return true;
@@ -59,69 +59,99 @@ public class SimplifyCFG : IMethodPass
         return false;
     }
 
-    //Note that this currently only works with perfect diamond sub-graphs, 
-    //and will fail to fully convert conditions like:
-    //  (x >= 10 && x <= 20) || (x >= 50 && x <= 75)
-    //This could be tackled with "path duplication" as described in chapter 16 of the SSA book.
-    //
     //  Block: ...; goto cond ? Then : Else
-    //  Then:  ...; goto Target
-    //  Else:  ...; goto Target
-    //  Target: int res = phi [Then -> x], [Else -> y]; ...
+    //  Then:  ...; goto EndBlock
+    //  Else:  ...; goto EndBlock
+    //  EndBlock: int res = phi [Then -> x], [Else -> y]; ...
     // -->
-    //  Block: ...; goto Target
-    //  Target: int res = select cond ? x : y; ...
+    //  Block: ...; goto EndBlock
+    //  EndBlock: int res = select cond ? x : y; ...
     private static bool ConvertToBranchless(BasicBlock block)
     {
         if (block.Last is not BranchInst { IsConditional: true } br) return false;
-        
-        //Match diamond branch
-        if (br.Then is not { Last: BranchInst { IsJump: true, Then: var target } }) return false;
-        if (br.Else is not { Last: BranchInst { IsJump: true, Then: var elseTarget } }) return false;
 
-        //Limit to a single select per branch to avoid suboptimal codegen
-        if (target != elseTarget || target.Phis().Count() is not 1) return false;
-        if (!CanFlattenBranch(br.Then) || !CanFlattenBranch(br.Else)) return false;
+        var succT = GetUniqueSuccWithPhis(br.Then);
+        var succF = GetUniqueSuccWithPhis(br.Else);
+        //If-Then must have at least one end block
+        if ((succT == null && br.Then != succF) || (succF == null && br.Else != succT)) return false;
+        //If-Then-Else must have the same end block
+        if (succT != null && succF != null && succT != succF) return false;
 
-        //Flatten branches
-        br.Then.MergeInto(block, redirectSuccPhis: false);
-        br.Else.MergeInto(block, redirectSuccPhis: false);
-        block.SetBranch(target);
+        //Limit to a single select per branch to avoid pessimizing the code
+        var endBlock = succT ?? succF;
+        if (endBlock == null || endBlock.Phis().Count() is not 1) return false;
+
+        //Check if we can execute both branches (they have no side-effects and it's cheap to do so)
+        if (succT != null && !CanSpeculate(br.Then)) return false;
+        if (succF != null && !CanSpeculate(br.Else)) return false;
+
+        //Merge branches to the end of `block`
+        Speculate(br.Then, endBlock);
+        Speculate(br.Else, endBlock);
+        block.SetBranch(endBlock);
+
+        //We need to preserve phi args if branches are reachable from somewhere else
+        bool keepT = br.Then.NumPreds > 0;
+        bool keepF = br.Else.NumPreds > 0;
 
         //Rewrite phis with selects
-        foreach (var phi in target.Phis()) {
-            var select = CreateSelect(br, phi);
+        foreach (var phi in endBlock.Phis()) {
+            var select = CreateSelect(phi);
             select.InsertBefore(block.Last);
 
-            if (phi.NumArgs <= 2) {
+            if (phi.NumArgs <= 2 && !keepT && !keepF) {
                 phi.ReplaceWith(select);
             } else {
-                phi.RemoveArg(br.Then, removeTrivialPhi: false);
-                phi.RemoveArg(br.Else, removeTrivialPhi: false);
+                if (br.Then != endBlock && !keepT) phi.RemoveArg(br.Then);
+                if (br.Else != endBlock && !keepF) phi.RemoveArg(br.Else);
+                if (succT == null || succF == null) phi.RemoveArg(block);
                 phi.AddArg(block, select);
             }
         }
         return true;
 
-        static bool CanFlattenBranch(BasicBlock block)
+        static BasicBlock? GetUniqueSuccWithPhis(BasicBlock block)
         {
-            if (block.NumPreds >= 2 || block.HasHeader) return false;
+            return block.Last is BranchInst { IsJump: true, Then: var succ } && succ.Phis().Any() ? succ : null;
+        }
+        static bool CanSpeculate(BasicBlock block)
+        {
+            if ((block.NumPreds >= 2 && block.First is not BranchInst { IsJump: true }) || block.HasPhisOrGuards) return false;
 
-            int cost = 0;
+            int budget = 40;
 
             foreach (var inst in block) {
                 if (inst == block.Last) break;
 
-                if (inst.HasSideEffects || ++cost > 2) {
+                int cost = inst switch {
+                    BinaryInst { Op: BinaryOp.Add or BinaryOp.Sub } => +10,
+                    BinaryInst { Op: BinaryOp.And or BinaryOp.Or or BinaryOp.Xor } => +10,
+                    BinaryInst { Op: BinaryOp.Mul } => +25,
+                    CompareInst => +15,
+                    SelectInst => +15,
+                    _ => 1_000_000
+                };
+                if ((budget -= cost) < 0) {
                     return false;
                 }
             }
             return true;
         }
-        static Instruction CreateSelect(BranchInst br, PhiInst phi)
+        void Speculate(BasicBlock sideBlock, BasicBlock endBlock)
         {
-            var valT = phi.GetValue(br.Then);
-            var valF = phi.GetValue(br.Else!);
+            if (sideBlock != endBlock) {
+                if (sideBlock.First is not BranchInst) {
+                    Debug.Assert(sideBlock.NumPreds == 1);
+                    sideBlock.MergeInto(block, redirectSuccPhis: false);
+                } else if (sideBlock.NumPreds == 1) {
+                    sideBlock.Remove();
+                }
+            }
+        }
+        Instruction CreateSelect(PhiInst phi)
+        {
+            var valT = phi.GetValue(succT == null ? block : br.Then);
+            var valF = phi.GetValue(succF == null ? block : br.Else!);
 
             if (br.Cond is CompareInst cond) {
                 //select x ? 0 : y  ->  !x & y
@@ -149,8 +179,8 @@ public class SimplifyCFG : IMethodPass
         }
     }
 
-    //Redirect all blocks ending with a `ret x` to a unique exit point
-    private static bool UnifyReturns(MethodBody method)
+    //Redirect all blocks ending with a `ret x` to a unique exit point, also collapse simple jump threads.
+    private static bool SinkReturnsAndJumpThreads(Compilation comp, MethodBody method)
     {
         //There can't be multiple rets in methods with less than 3 blocks
         if (method.ReturnType == PrimType.Void || method.NumBlocks < 3) return false;
@@ -158,10 +188,10 @@ public class SimplifyCFG : IMethodPass
         var exitBlocks = new List<BasicBlock>();
 
         foreach (var block in method) {
-            if (SimpleJumpThread(block)) continue;
-            
             if (block.Last is ReturnInst) {
                 exitBlocks.Add(block);
+            } else {
+                SimpleJumpThread(block);
             }
         }
 
@@ -169,29 +199,34 @@ public class SimplifyCFG : IMethodPass
 
         var singleExit = method.CreateBlock().SetName("CanonExit");
         var phi = singleExit.InsertPhi(method.ReturnType);
+        singleExit.SetBranch(new ReturnInst(phi));
 
         foreach (var block in exitBlocks) {
             var value = ((ReturnInst)block.Last).Value!;
             phi.AddArg(block, value);
             block.SetBranch(singleExit);
+
+            SimpleJumpThread(block);
         }
-        singleExit.SetBranch(new ReturnInst(phi));
         return true;
     }
 
-    //Colapse simple jump threads. On return `block` will have been removed.
+    //Collapse simple jump threads. On return `block` may have been removed.
     //  BB_01: goto BB_02;
     //  BB_02: goto BB_03;
     //  ----
     //  BB_01: goto BB_03;
     private static bool SimpleJumpThread(BasicBlock block)
     {
-        if (block.First is not BranchInst { IsJump: true, Then: var succ } br) return false;
+        //Not the entry block, first inst is a jump
+        if (block is not { NumPreds: > 0, First: BranchInst { IsJump: true, Then: var succ } br }) return false;
 
-        //Only transform if we don't need to change phis, and the block is not the method entry.
-        if (!succ.HasHeader && block.NumPreds > 0) {
+        //Only transform if we don't need to change phis too much
+        //Also avoid removing gotos for handler entry blocks because handlers they can't have guards.
+        if (!succ.HasPhisOrGuards || (block.NumPreds == 1 && !block.Preds.First().IsUsedByPhis && !block.IsHandlerEntry)) {
             foreach (var pred in block.Preds) {
                 pred.RedirectSucc(block, succ);
+                succ.RedirectPhis(block, pred);
             }
             block.Remove();
             return true;
@@ -216,10 +251,18 @@ public class SimplifyCFG : IMethodPass
 
         //Check that all targets have no other preds and a single jump to the same final block
         foreach (var caseBlock in sw.GetUniqueTargets()) {
-            if (caseBlock is not { First: BranchInst { IsJump: true } br }) return false;
-            if (!(caseBlock.NumUses < 2 || caseBlock.Preds.All(pred => pred == block))) return false;
-            if (br.Then != (finalBlock ??= br.Then)) return false;
+            var succBlock = default(BasicBlock);
 
+            if (caseBlock is { First: BranchInst { IsJump: true } br }) {
+                if (!(caseBlock.NumUses < 2 || caseBlock.Preds.All(pred => pred == block))) return false;
+                succBlock = br.Then;
+            } else if (caseBlock is { First: PhiInst }) {
+                succBlock = caseBlock;
+            } else {
+                return false;
+            }
+            if (succBlock != (finalBlock ??= succBlock)) return false;
+            
             numUniqueTargets++;
         }
         //Final block must have no preds other than switch targets, and phis must have all const args
@@ -236,7 +279,8 @@ public class SimplifyCFG : IMethodPass
             for (int i = -1; i < sw.NumTargets; i++) {
                 //Encoding the default case value in the last slot saves a bounds check
                 int offset = (i < 0 ? sw.NumTargets : i) * stride;
-                var value = phi.GetValue(sw.GetTarget(i));
+                var target = sw.GetTarget(i);
+                var value = phi.GetValue(target == finalBlock ? block : target);
 
                 //Write value in little-endian order
                 long bits = value switch {
@@ -278,6 +322,8 @@ public class SimplifyCFG : IMethodPass
 
         //Also remove unreachable blocks
         foreach (var target in sw.GetUniqueTargets()) {
+            if (target == finalBlock) continue;
+            
             Debug.Assert(target.NumPreds == 0);
             target.Remove();
         }

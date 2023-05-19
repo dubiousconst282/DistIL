@@ -22,8 +22,6 @@ public abstract class Instruction : TrackedValue
     public virtual bool IsBranch => false;
     /// <summary> Whether this instruction can be safely removed if it has no uses. </summary>
     public virtual bool SafeToRemove => !HasSideEffects;
-    /// <summary> Whether this instruction must be on the start of a block (it's a PhiInst or GuardInst). </summary>
-    public virtual bool IsHeader => false;
     /// <summary> Whether this instruction may write to a memory location (variables, arrays, fields, pointers). </summary>
     public virtual bool MayWriteToMemory => false;
 

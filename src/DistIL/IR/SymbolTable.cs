@@ -61,7 +61,6 @@ public class SymbolTable
     }
     private void AssignInitialNames()
     {
-        int currId = 1;
         foreach (var block in _method!) {
             AddNext(block);
 
@@ -72,9 +71,8 @@ public class SymbolTable
         void AddNext(TrackedValue value)
         {
             if (!HasCustomName(value)) {
-                _tags.AddOrUpdate(value, currId);
+                _tags.AddOrUpdate(value, _nextId++);
             }
-            currId++;
         }
     }
 }

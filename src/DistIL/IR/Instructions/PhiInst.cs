@@ -8,7 +8,6 @@ public class PhiInst : Instruction
 {
     public int NumArgs => _operands.Length / 2;
     public override string InstName => "phi";
-    public override bool IsHeader => true;
 
     public PhiInst(TypeDesc type)
     {
@@ -79,7 +78,7 @@ public class PhiInst : Instruction
         RemoveOperands(index * 2, 2);
     }
 
-    public void RemoveArg(BasicBlock block, bool removeTrivialPhi) 
+    public void RemoveArg(BasicBlock block, bool removeTrivialPhi = false) 
         => RemoveArg(FindArgIndex(block), removeTrivialPhi);
 
     public void RedirectArg(BasicBlock oldBlock, BasicBlock newBlock, Value? newValue = null)

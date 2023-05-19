@@ -6,12 +6,12 @@ namespace DistIL.IR;
 /// </summary>
 public class GuardInst : Instruction
 {
-    /// <summary> The first handler block. </summary>
+    /// <summary> The handler entry block. </summary>
     public BasicBlock HandlerBlock {
         get => (BasicBlock)Operands[0];
         set => ReplaceOperand(0, value);
     }
-    /// <summary> The first filter block. </summary>
+    /// <summary> The filter entry block. </summary>
     public BasicBlock? FilterBlock {
         get => HasFilter ? (BasicBlock)Operands[1] : null;
         set {
@@ -27,7 +27,6 @@ public class GuardInst : Instruction
 
     public override string InstName => "try";
     public override bool SafeToRemove => false;
-    public override bool IsHeader => true;
 
     public GuardInst(GuardKind kind, BasicBlock handlerBlock, TypeDesc? catchType = null, BasicBlock? filterBlock = null)
         : base(filterBlock == null ? new Value[] { handlerBlock } : new Value[] { handlerBlock, filterBlock })

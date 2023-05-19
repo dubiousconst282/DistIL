@@ -59,7 +59,13 @@ public class BasicBlock : TrackedValue
     public Instruction? LastNonBranch => Last is { IsBranch: true } ? Last.Prev : Last;
 
     /// <summary> Whether the block starts with a <see cref="PhiInst"/> or <see cref="GuardInst"/>. </summary>
-    public bool HasHeader => First != null && First.IsHeader;
+    public bool HasPhisOrGuards => First is PhiInst or GuardInst;
+
+    /// <summary> Checks if this block is the entry handler/filter block of a protected region. </summary>
+    public bool IsHandlerEntry => Users().Any(u => u is GuardInst);
+
+    /// <summary> Checks if this block is used as the incomming block by any phi instruction. </summary>
+    public bool IsUsedByPhis => Users().Any(u => u is PhiInst);
 
     internal BasicBlock(MethodBody method)
     {
@@ -126,7 +132,7 @@ public class BasicBlock : TrackedValue
     /// <summary> Moves all instructions in this block to the end of <paramref name="block"/>, then removes it from the parent method. </summary>
     public void MergeInto(BasicBlock block, bool replaceBranch = false, bool redirectSuccPhis = true)
     {
-        Ensure.That(!HasHeader, "Cannot move code from block with header instructions");
+        Ensure.That(!HasPhisOrGuards, "Cannot move code from block with header instructions");
 
         if (redirectSuccPhis) {
             RedirectSuccPhis(block);
@@ -138,7 +144,6 @@ public class BasicBlock : TrackedValue
             MoveRange(block, block.LastNonBranch, First, LastNonBranch);
         }
         Remove();
-        
     }
 
     /// <summary> Detaches <paramref name="inst"/> from this block. </summary>
@@ -182,7 +187,7 @@ public class BasicBlock : TrackedValue
     /// <remarks> Note that <paramref name="pos"/> cannot be a PhiInst/GuardInst and it must be in this block. </remarks>
     public BasicBlock Split(Instruction pos, BasicBlock? branchTo = null)
     {
-        Ensure.That(pos.Block == this && !pos.IsHeader);
+        Ensure.That(pos.Block == this && pos is not (PhiInst or GuardInst));
 
         var newBlock = Method.CreateBlock(insertAfter: this);
         RedirectSuccPhis(newBlock);

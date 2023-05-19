@@ -79,7 +79,7 @@ public class IRPrinter
             {
                 tw.Write($"{indent}subgraph cluster_{++clusterId} {{\n{indent}  ");
                 if (region != regionAnalysis.Root) {
-                    bool isHandler = region.StartBlock.Users().Any(u => u is GuardInst);
+                    bool isHandler = region.StartBlock.IsHandlerEntry;
                     tw.Write($"bgcolor=\"{(isHandler ? "#0000FF08" : "#00FF000A")}\" ");
                     tw.Write($"style=\"{(isHandler ? "dashed" : "solid")}\"\n");
                 } else {

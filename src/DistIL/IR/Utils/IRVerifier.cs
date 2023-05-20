@@ -187,7 +187,7 @@ public class IRVerifier
                         if (!IsDominatedByDef(domTree, def, user)) {
                             verifier.Error(user, $"Using non-dominating instruction '{def}'");
                         }
-                        if (def is not GuardInst && def.Block != user.Block && defRegion.FindBlockParent(user.Block) == null) {
+                        if (def is not GuardInst && def.Block != user.Block && defRegion.FindInnermostParent(user.Block) == null) {
                             verifier.Error(user, $"Using instruction defined inside a child region '{def}'");
                         }
                     }

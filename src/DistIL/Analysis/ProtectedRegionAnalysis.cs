@@ -6,42 +6,52 @@ public class ProtectedRegionAnalysis : IMethodAnalysis
 
     public ProtectedRegionAnalysis(MethodBody method)
     {
+        Root = new ProtectedRegion() { StartBlock = method.EntryBlock };
+
         var visited = new RefSet<BasicBlock>();
+        var worklist = new ArrayStack<(BasicBlock Block, ProtectedRegion Region)>();
 
-        Root = Recurse(method.EntryBlock, null!);
-        
-        ProtectedRegion Recurse(BasicBlock entry, ArrayStack<BasicBlock> parentWorklist)
-        {
-            var region = new ProtectedRegion() { StartBlock = entry };
-            var worklist = new ArrayStack<BasicBlock>();
-            worklist.Push(entry);
-            visited.Add(entry);
+        worklist.Push((method.EntryBlock, Root));
+        visited.Add(method.EntryBlock);
 
-            while (worklist.TryPop(out var block)) {
-                //Recurse into new regions
-                if (block != entry && block.Guards().Any()) {
-                    int childIdx = region.AllocChild();
+        while (worklist.TryPop(out var node)) {
+            var (block, region) = node;
 
-                    foreach (var guard in block.Guards()) {
-                        if (guard.HasFilter) {
-                            region.AddChild(Recurse(guard.FilterBlock, worklist));
-                        }
-                        region.AddChild(Recurse(guard.HandlerBlock, worklist));
+            //Push sub regions
+            //Note that handler/filters can't have guards, the second condition is fine.
+            if (block.Guards().Any() && block != region.StartBlock) {
+                visited.Remove(block);
+                PushChild(block);
+
+                foreach (var guard in block.Guards()) {
+                    if (guard.HasFilter) {
+                        PushChild(guard.FilterBlock);
                     }
-                    region.AddChild(Recurse(block, worklist), childIdx);
-                    continue;
+                    PushChild(guard.HandlerBlock);
                 }
-                region.Blocks.Add(block);
+                continue;
+            }
+            region.Blocks.Add(block);
 
-                //Add succs into worklist (parent's if the block is leaving the current region)
-                var destList = block.Last is LeaveInst ? parentWorklist : worklist;
-                foreach (var succ in block.Succs) {
-                    if (visited.Add(succ)) {
-                        destList.Push(succ);
-                    }
+            //Add succs to worklist
+            var succRegion = block.Last is LeaveInst ? region.Parent! : region;
+            foreach (var succ in block.Succs) {
+                if (visited.Add(succ)) {
+                    worklist.Push((succ, succRegion));
                 }
             }
-            return region;
+
+            void PushChild(BasicBlock entry)
+            {
+                if (!visited.Add(entry)) return;
+
+                var child = new ProtectedRegion() {
+                    StartBlock = entry,
+                    Parent = region
+                };
+                region.Children.Add(child);
+                worklist.Push((entry, child));
+            }
         }
     }
 
@@ -49,7 +59,7 @@ public class ProtectedRegionAnalysis : IMethodAnalysis
         => new ProtectedRegionAnalysis(mgr.Method);
 
     public ProtectedRegion GetBlockRegion(BasicBlock block)
-        => Root.FindBlockParent(block)
+        => Root.FindInnermostParent(block)
             ?? throw new InvalidOperationException("Block is not a child of any region (is it a new block?)");
 }
 public class ProtectedRegion
@@ -57,9 +67,9 @@ public class ProtectedRegion
     public RefSet<BasicBlock> Blocks { get; } = new();
     /// <remarks> Guaranteed to be ordered as: [protectedRegion, filterRegion?, handlerRegion] pairs/triples for each guard in <see cref="StartBlock"/>. </remarks>
     public List<ProtectedRegion> Children { get; } = new();
-    public ProtectedRegion? Parent { get; private set; }
+    public ProtectedRegion? Parent { get; set; }
 
-    public BasicBlock StartBlock { get; init; } = null!;
+    public BasicBlock StartBlock { get; set; } = null!;
 
     public IEnumerable<BasicBlock> GetExitBlocks()
     {
@@ -70,32 +80,16 @@ public class ProtectedRegion
         }
     }
 
-    public ProtectedRegion? FindBlockParent(BasicBlock block)
+    public ProtectedRegion? FindInnermostParent(BasicBlock block)
     {
         if (Blocks.Contains(block)) {
             return this;
         }
         foreach (var child in Children) {
-            if (child.FindBlockParent(block) is { } region) {
+            if (child.FindInnermostParent(block) is { } region) {
                 return region;
             }
         }
         return null;
-    }
-
-    internal void AddChild(ProtectedRegion child, int index = -1)
-    {
-        child.Parent = this;
-
-        if (index < 0) {
-            Children.Add(child);
-        } else {
-            Children[index] = child;
-        }
-    }
-    internal int AllocChild()
-    {
-        Children.Add(null!);
-        return Children.Count - 1;
     }
 }

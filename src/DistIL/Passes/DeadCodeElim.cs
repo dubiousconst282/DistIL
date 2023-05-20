@@ -1,5 +1,7 @@
 namespace DistIL.Passes;
 
+using DistIL.Analysis;
+
 public class DeadCodeElim : IMethodPass
 {
     public MethodPassResult Run(MethodTransformContext ctx)
@@ -28,6 +30,16 @@ public class DeadCodeElim : IMethodPass
                 blockF.RedirectPhis(block, newPred: null);
                 block.SetBranch(blockT);
                 changed = true;
+            }
+
+            //Remove empty try-finally regions
+            if (block.First is GuardInst { Kind: GuardKind.Finally, Next: not GuardInst, HandlerBlock.First: ResumeInst } guard) {
+                var regionAnalysis = new ProtectedRegionAnalysis(method); //this is not ideal but this transform should be quite rare
+
+                foreach (var exitBlock in regionAnalysis.GetBlockRegion(block).GetExitBlocks()) {
+                    exitBlock.SetBranch(exitBlock.Succs.First());
+                }
+                guard.Remove();
             }
             
             foreach (var succ in block.Succs) {

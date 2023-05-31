@@ -65,7 +65,7 @@ partial class SimplifyInsts
             } else if (method.IsInstance) {
                 call.Method = method;
                 //Create a new load before call to assert dominance
-                if (Match.StaticFieldLoad(instanceObj, out var field)) {
+                if (IRMatcher.StaticFieldLoad(instanceObj, out var field)) {
                     var fieldAddr = new FieldAddrInst(field);
                     var newLoad = new LoadInst(fieldAddr);
                     fieldAddr.InsertBefore(call);
@@ -90,7 +90,7 @@ partial class SimplifyInsts
                     condCache == cacheLoad &&
                 //BB_CacheLoad must store to the cache field
                 allocInst.NumUses == 2 && //phi and next store
-                Match.StaticFieldLoad(cacheLoad, out var cacheField) &&
+                IRMatcher.StaticFieldLoad(cacheLoad, out var cacheField) &&
                 allocInst.Next?.Next is StoreInst cacheStore && 
                 (cacheStore.Address as FieldAddrInst)?.Field == cacheField &&
                 cacheField.DeclaringType is TypeDefOrSpec declType && 

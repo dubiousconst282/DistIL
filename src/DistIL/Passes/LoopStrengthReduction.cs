@@ -1,7 +1,6 @@
 namespace DistIL.Passes;
 
 using DistIL.Analysis;
-using DistIL.IR.Intrinsics;
 using DistIL.IR.Utils;
 
 /// <summary> Replaces array indexing inside for-loops with pointer-based loops. </summary>
@@ -138,8 +137,8 @@ public class LoopStrengthReduction : IMethodPass
         //exitCond is cmp.slt ($index, $array.Length)
         return exitCond.Op is CompareOp.Slt &&
                exitCond.Left == addr.Index &&
-               exitCond.Right is ConvertInst { Value: IntrinsicInst bound, ResultType.Kind: TypeKind.Int32 } &&
-               bound.Intrinsic == CilIntrinsic.ArrayLen && bound.Args[0] == addr.Array;
+               exitCond.Right is ConvertInst { Value: CilIntrinsic.ArrayLen bound, ResultType.Kind: TypeKind.Int32 } &&
+               bound.Args[0] == addr.Array;
     }
     private static bool IsBoundedBySpanLen(CallInst getItemCall, CompareInst exitCond)
     {

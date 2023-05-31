@@ -1,7 +1,5 @@
 namespace DistIL.Frontend;
 
-using DistIL.IR.Intrinsics;
-
 internal class BlockState
 {
     readonly ILImporter _importer;
@@ -430,38 +428,46 @@ internal class BlockState
 
                 #region Intrinsics
                 case ILCode.Newarr:
-                    ImportGenericUnaryIntrinsic(CilIntrinsic.NewArray, inst.Operand);
+                    Push(new CilIntrinsic.NewArray((TypeDesc)inst.Operand!, Pop()));
                     break;
                 case ILCode.Castclass:
-                    ImportGenericUnaryIntrinsic(CilIntrinsic.CastClass, inst.Operand);
+                    Push(new CilIntrinsic.CastClass((TypeDesc)inst.Operand!, Pop()));
                     break;
                 case ILCode.Isinst:
-                    ImportGenericUnaryIntrinsic(CilIntrinsic.AsInstance, inst.Operand);
+                    Push(new CilIntrinsic.AsInstance((TypeDesc)inst.Operand!, Pop()));
                     break;
                 case ILCode.Box:
-                    ImportGenericUnaryIntrinsic(CilIntrinsic.Box, inst.Operand);
+                    Push(new CilIntrinsic.Box((TypeDesc)inst.Operand!, Pop()));
                     break;
                 case ILCode.Unbox:
-                    ImportGenericUnaryIntrinsic(CilIntrinsic.UnboxRef, inst.Operand);
+                    Push(new CilIntrinsic.UnboxRef((TypeDesc)inst.Operand!, Pop()));
                     break;
                 case ILCode.Unbox_Any:
-                    ImportGenericUnaryIntrinsic(CilIntrinsic.UnboxObj, inst.Operand);
+                    Push(new CilIntrinsic.UnboxObj((TypeDesc)inst.Operand!, Pop()));
                     break;
-                case ILCode.Ldtoken: {
-                    var entity = (EntityDesc)inst.Operand!;
-                    Push(new IntrinsicInst(CilIntrinsic.LoadHandle(_mod.Resolver, entity), entity));
+                case ILCode.Ldtoken:
+                    Push(new CilIntrinsic.LoadHandle(_mod.Resolver, (EntityDesc)inst.Operand!));
                     break;
-                }
                 case ILCode.Initobj:
-                    //TODO: support volatile/unaligned in InitObj
-                    Debug.Assert(PopPointerFlags() == 0);
-                    ImportGenericUnaryIntrinsic(CilIntrinsic.InitObj, inst.Operand);
+                    Emit(new CilIntrinsic.MemSet(Pop(), (TypeDesc)inst.Operand!, PopPointerFlags()));
+                    break;
+                case ILCode.Initblk:
+                    Emit(new CilIntrinsic.MemSet(numBytes: Pop(), value: Pop(), destPtr: Pop(), flags: PopPointerFlags()));
+                    break;
+                case ILCode.Cpobj:
+                    Emit(new CilIntrinsic.MemCopy(srcPtr: Pop(), destPtr: Pop(), type: (TypeDesc)inst.Operand!, flags: PopPointerFlags()));
+                    break;
+                case ILCode.Cpblk:
+                    Emit(new CilIntrinsic.MemCopy(numBytes: Pop(), srcPtr: Pop(), destPtr: Pop(), flags: PopPointerFlags()));
                     break;
                 case ILCode.Sizeof:
-                    Push(new IntrinsicInst(CilIntrinsic.SizeOf, (TypeDesc)inst.Operand!));
+                    Push(new CilIntrinsic.SizeOf((TypeDesc)inst.Operand!));
                     break;
                 case ILCode.Localloc:
-                    Push(new IntrinsicInst(CilIntrinsic.Alloca, Pop()));
+                    Push(new CilIntrinsic.Alloca(Pop()));
+                    break;
+                case ILCode.Ckfinite:
+                    Push(new CilIntrinsic.CheckFinite(value: Pop()));
                     break;
                 #endregion
 
@@ -635,7 +641,7 @@ internal class BlockState
     private void ImportLoadLen()
     {
         var array = Pop();
-        Push(new IntrinsicInst(CilIntrinsic.ArrayLen, array));
+        Push(new CilIntrinsic.ArrayLen(array));
     }
     private void ImportLoadElem(TypeDesc? elemType)
     {
@@ -776,12 +782,6 @@ internal class BlockState
     {
         var exception = isRethrow ? null : Pop();
         TerminateBlock(new ThrowInst(exception), clearStack: true);
-    }
-
-    private void ImportGenericUnaryIntrinsic(CilIntrinsic intrinsic, object? typeArg)
-    {
-        Debug.Assert(intrinsic.ParamTypes is [GenericParamType, _]);
-        Push(new IntrinsicInst(intrinsic, (TypeDesc)typeArg!, Pop()));
     }
 
     private Exception Error(string? msg = null)

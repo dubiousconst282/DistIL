@@ -1,48 +1,48 @@
 namespace DistIL.IR;
 
-using DistIL.IR.Intrinsics;
-using DistIL.IR.Utils;
-
-public class IntrinsicInst : Instruction
+/// <summary> Represents a </summary>
+public abstract class IntrinsicInst : Instruction
 {
-    public IntrinsicDesc Intrinsic { get; }
-    public ReadOnlySpan<Value> Args => Operands;
+    public ReadOnlySpan<Value> Args => _operands;
 
-    public override bool HasSideEffects => true;
-    public override bool MayThrow => true;
-    public override string InstName => "intrinsic";
+    public sealed override string InstName => "intrinsic";
 
-    public IntrinsicInst(IntrinsicDesc intrinsic, params Value[] args)
+    public abstract string Namespace { get; }
+    public abstract string Name { get; }
+
+    protected IntrinsicInst(TypeDesc resultType, Value[] args)
         : base(args)
     {
-        Intrinsic = intrinsic;
-        ResultType = intrinsic.GetResultType(args);
-
-        Ensure.That(intrinsic.ParamTypes.Length == args.Length);
-
-        for (int i = 0; i < args.Length; i++) {
-            Ensure.That(intrinsic.IsAcceptableArgument(args, i));
-        }
+        ResultType = resultType;
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
-    public override void Print(PrintContext ctx)
+    /// <summary> Creates a new instance of this intrinsic with the given <see cref="Value.ResultType"/> and <see cref="Instruction.Operands"/> properties. </summary>
+    /// <remarks> This method is meant to be used internally by <see cref="Utils.IRCloner"/>. The ownership of <paramref name="args"/> is given to the new instruction. </remarks> 
+    internal IntrinsicInst CloneWith(TypeDesc resultType, Value[] args)
     {
-        if (this.Is(IRIntrinsicId.Marker) && Operands is [ConstString str]) {
-            ctx.Print("//" + str.Value, PrintToner.Comment);
-        } else {
-            base.Print(ctx);
+        Debug.Assert(args.Length == _operands.Length);
+
+        //MemberwiseClone() is only ~10-20% slower than actual ctors based on my tests (~30ms for 100k calls).
+        //If it becomes a problem we could make this method abstract and use a T4 template/source generator to implement the boilerplate.
+        var copy = (IntrinsicInst)MemberwiseDetachedClone();
+        copy.Block = null!;
+        copy.Prev = copy.Next = null;
+        
+        copy.ResultType = resultType;
+        copy._operands = args;
+        copy._useDefs = new UseDef[args.Length];
+
+        for (int i = 0; i < args.Length; i++) {
+            args[i].AddUse(copy, i);
         }
+        return copy;
     }
 
     protected override void PrintOperands(PrintContext ctx)
     {
-        ctx.Print($" {PrintToner.MemberName}{Intrinsic.Namespace}::{PrintToner.MethodName}{Intrinsic.Name}(");
-        for (int i = 0; i < _operands.Length; i++) {
-            if (i > 0) ctx.Print(", ");
-            ctx.PrintAsOperand(_operands[i]);
-        }
-        ctx.Print(")");
+        ctx.Print($" {PrintToner.MemberName}{Namespace}::{PrintToner.MethodName}{Name}");
+        ctx.PrintSequence("(", ")", _operands, ctx.PrintAsOperand);
     }
 }

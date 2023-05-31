@@ -1,6 +1,5 @@
 namespace DistIL.Passes.Linq;
 
-using DistIL.IR.Intrinsics;
 using DistIL.IR.Utils;
 
 internal class SelectStage : LinqStageNode
@@ -43,13 +42,13 @@ internal class OfTypeStage : LinqStageNode
         var destType = SubjectCall!.Method.GenericParams[0];
 
         if (currItem.ResultType.IsValueType) {
-            currItem = builder.CreateIntrinsic(CilIntrinsic.Box, currItem.ResultType, currItem);
+            currItem = builder.CreateBox(currItem.ResultType, currItem);
         }
-        currItem = builder.CreateIntrinsic(CilIntrinsic.AsInstance, destType, currItem);
+        currItem = builder.CreateAsInstance(destType, currItem);
         builder.Fork(currItem, loopData.SkipBlock);
 
         if (destType.IsValueType) {
-            currItem = builder.CreateIntrinsic(CilIntrinsic.UnboxObj, destType, currItem);
+            currItem = builder.CreateUnboxObj(destType, currItem);
         }
         Drain.EmitBody(builder, currItem, loopData);
     }
@@ -64,9 +63,9 @@ internal class CastStage : LinqStageNode
         var destType = SubjectCall!.Method.GenericParams[0];
 
         if (currItem.ResultType.IsValueType) {
-            currItem = builder.CreateIntrinsic(CilIntrinsic.Box, currItem.ResultType, currItem);
+            currItem = builder.CreateBox(currItem.ResultType, currItem);
         }
-        currItem = builder.CreateIntrinsic(CilIntrinsic.CastClass, destType, currItem);
+        currItem = builder.CreateCastClass(destType, currItem);
 
         Drain.EmitBody(builder, currItem, loopData);
     }

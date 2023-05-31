@@ -1,6 +1,5 @@
 namespace DistIL.Passes;
 
-using DistIL.IR.Intrinsics;
 using DistIL.IR.Utils;
 
 using Bin = IR.BinaryOp;
@@ -28,7 +27,7 @@ public partial class SimplifyInsts : IMethodPass
                 CompareInst c   => SimplifyCompare(c),
                 UnaryInst c     => SimplifyUnary(c),
                 ConvertInst c   => SimplifyConvert(c),
-                CallInst c      => SimplifyCall(ctx, c),
+                CallInst c      => SimplifyCall(c),
                 IntrinsicInst c => SimplifyIntrinsic(c),
                 _ => null
             };
@@ -40,7 +39,7 @@ public partial class SimplifyInsts : IMethodPass
         return MethodInvalidations.DataFlow;
     }
 
-    private Value? SimplifyCall(MethodTransformContext ctx, CallInst call)
+    private Value? SimplifyCall(CallInst call)
     {
         var method = call.Method;
         var declType = method.DeclaringType;
@@ -58,9 +57,9 @@ public partial class SimplifyInsts : IMethodPass
         return changed ? null : ConstFolding.FoldCall(call.Method, call.Args);
     }
 
-    private Value? SimplifyIntrinsic(IntrinsicInst c)
+    private Value? SimplifyIntrinsic(IntrinsicInst inst)
     {
-        return ConstFolding.FoldIntrinsic(c.Intrinsic, c.Args);
+        return ConstFolding.FoldIntrinsic(inst);
     }
 
     private Value? SimplifyBinary(BinaryInst inst)
@@ -141,12 +140,12 @@ public partial class SimplifyInsts : IMethodPass
     // -> lea basePtr + r18 * stride
     private static Value? SimplifyAddress(BinaryInst? inst)
     {
-        if (!Match.Add(inst, out var basePtr, out var disp)) return null;
+        if (!IRMatcher.Add(inst, out var basePtr, out var disp)) return null;
 
         if (disp is ConvertInst { ResultType.StackType: StackType.NInt } conv1) {
             disp = conv1.Value;
         }
-        if (!Match.Mul(disp, out var index, out var stride)) {
+        if (!IRMatcher.Mul(disp, out var index, out var stride)) {
             //Byte addressing
             return new PtrOffsetInst(basePtr, disp, stride: 1);
         }
@@ -155,8 +154,8 @@ public partial class SimplifyInsts : IMethodPass
             index = conv2.Value;
         }
 
-        if (stride.Is(CilIntrinsicId.SizeOf, out var sizeIntrin)) {
-            return new PtrOffsetInst(basePtr, index, (TypeDesc)sizeIntrin.Args[0]);
+        if (stride is CilIntrinsic.SizeOf sz) {
+            return new PtrOffsetInst(basePtr, index, sz.ObjType);
         } else if (stride is ConstInt cstride) {
             return new PtrOffsetInst(basePtr, index, (int)cstride.Value);
         }

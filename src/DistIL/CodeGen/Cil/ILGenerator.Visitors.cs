@@ -1,7 +1,5 @@
 namespace DistIL.CodeGen.Cil;
 
-using DistIL.IR.Intrinsics;
-
 partial class ILGenerator
 {
     public void Visit(BinaryInst inst)
@@ -68,8 +66,7 @@ partial class ILGenerator
     }
     private void EmitLoadOrStorePtr(MemoryInst inst, bool isLoad)
     {
-        if (inst.IsUnaligned) _asm.Emit(ILCode.Unaligned_, 1); //TODO: keep alignment in IR
-        if (inst.IsVolatile) _asm.Emit(ILCode.Volatile_);
+        EmitMemPrefix(inst.Flags);
 
         var addrType = inst.Address.ResultType;
         var interpType = inst.ElemType;
@@ -80,6 +77,15 @@ partial class ILGenerator
             _asm.Emit(code, oper);
         } else {
             _asm.Emit(isLoad ? ILCode.Ldind_Ref : ILCode.Stind_Ref);
+        }
+    }
+    private void EmitMemPrefix(PointerFlags flags)
+    {
+        if (flags.HasFlag(PointerFlags.Unaligned)) {
+            _asm.Emit(ILCode.Unaligned_, 1);
+        }
+        if (flags.HasFlag(PointerFlags.Volatile)) {
+            _asm.Emit(ILCode.Volatile_);
         }
     }
     private void EmitLoadOrStoreLocal(LocalSlot slot, Value? valToStore)
@@ -184,50 +190,82 @@ partial class ILGenerator
     }
     public void Visit(IntrinsicInst inst)
     {
-        if (inst.Intrinsic == IRIntrinsic.Marker) return;
-
-        var intrinsic = (inst.Intrinsic as CilIntrinsic) ?? 
+        if (inst is not CilIntrinsic {  Opcode: var op }) {
             throw new InvalidOperationException("Only CilIntrinsic`s can be called during codegen");
-
-        switch (intrinsic.Id) {
-            case CilIntrinsicId.NewArray:
-            case CilIntrinsicId.CastClass:
-            case CilIntrinsicId.AsInstance:
-            case CilIntrinsicId.Box:
-            case CilIntrinsicId.UnboxObj:
-            case CilIntrinsicId.UnboxRef:
-            case CilIntrinsicId.LoadHandle:
-            case CilIntrinsicId.InitObj:
-            case CilIntrinsicId.SizeOf: {
-                if (inst.Args.Length >= 2) {
-                    Push(inst.Args[1]);
-                }
-                _asm.Emit(intrinsic.Opcode, inst.Args[0]);
-                break;
-            }
-            case CilIntrinsicId.ArrayLen:
-            case CilIntrinsicId.Alloca: {
+        }
+        
+        switch (op) {
+            case ILCode.Newarr: {
                 Push(inst.Args[0]);
-                _asm.Emit(intrinsic.Opcode);
+                _asm.Emit(ILCode.Newarr, inst.ResultType.ElemType);
                 break;
             }
-            default: throw new NotSupportedException($"Intrinsic {intrinsic}");
+            case ILCode.Isinst:
+            case ILCode.Box: {
+                Push(inst.Args[1]);
+                _asm.Emit(op, (TypeDesc)inst.Args[0]);
+                break;
+            }
+            case ILCode.Castclass:
+            case ILCode.Unbox_Any:
+            case ILCode.Unbox: {
+                Push(inst.Args[0]);
+                _asm.Emit(op, op == ILCode.Unbox ? inst.ResultType.ElemType! : inst.ResultType);
+                break;
+            }
+            case ILCode.Ldtoken:
+            case ILCode.Sizeof: {
+                _asm.Emit(op, inst.Args[0]);
+                break;
+            }
+            case ILCode.Ldlen:
+            case ILCode.Localloc:
+            case ILCode.Ckfinite: {
+                Push(inst.Args[0]);
+                _asm.Emit(op);
+                break;
+            }
+            case ILCode.Cpblk:
+            case ILCode.Cpobj: {
+                var mc = (CilIntrinsic.MemCopy)inst;
+                var type = default(TypeDesc);
+                Push(mc.Args[0]);
+                Push(mc.Args[1]);
+
+                if (op == ILCode.Cpblk) {
+                    Push(mc.Args[2]);
+                } else {
+                    type = (TypeDesc)mc.Args[2];
+                }
+                EmitMemPrefix(mc.Flags);
+                _asm.Emit(op, type);
+                break;
+            }
+            case ILCode.Initblk:
+            case ILCode.Initobj: {
+                var mc = (CilIntrinsic.MemSet)inst;
+                var type = default(TypeDesc);
+                Push(mc.Args[0]);
+
+                if (op == ILCode.Initblk) {
+                    Push(mc.Args[1]);
+                    Push(mc.Args[2]);
+                } else {
+                    EmitMemPrefix(mc.Flags);
+                    type = (TypeDesc)mc.Args[1];
+                }
+                EmitMemPrefix(mc.Flags);
+                _asm.Emit(op, type);
+                break;
+            }
+            default: throw new NotSupportedException($"Intrinsic '{inst}'");
         }
     }
     public void Visit(SelectInst inst)
     {
         //TODO: Consider merging adjacent selects into a single branch
 
-        //We must be careful about push order and register live ranges.
-        //We can only store to `resultReg` after all operands have been emitted,
-        //because we don't know if it's live before.
-        //  if (cond) push(ifTrue)
-        //  else      push(ifFalse)
-
-        //Neither sides can have side effects
-        Debug.Assert(inst.IfTrue is not Instruction instT || !_forest.IsLeaf(instT));
-        Debug.Assert(inst.IfFalse is not Instruction instF || !_forest.IsLeaf(instF));
-
+        //This assumes that both operands have no side-effects. ForestAnalysis will special cases SelectInst operands.
         var labelEnd = _asm.DefineLabel();
         var labelFalse = _asm.DefineLabel();
 

@@ -1,7 +1,5 @@
 namespace DistIL.IR.Utils;
 
-using DistIL.IR.Intrinsics;
-
 /// <summary> Helper for folding instructions with constant operands. </summary>
 public class ConstFolding
 {
@@ -13,7 +11,7 @@ public class ConstFolding
             ConvertInst c   => FoldConvert(c.Value, c.ResultType, c.CheckOverflow, c.SrcUnsigned),
             CompareInst c   => FoldCompare(c.Op, c.Left, c.Right),
             CallInst c      => FoldCall(c.Method, c.Args),
-            IntrinsicInst c => FoldIntrinsic(c.Intrinsic, c.Args),
+            IntrinsicInst c => FoldIntrinsic(c),
             _ => null
         };
     }
@@ -194,22 +192,12 @@ public class ConstFolding
         return null;
     }
 
-    public static Value? FoldIntrinsic(IntrinsicDesc intrinsic, ReadOnlySpan<Value> args)
+    public static Value? FoldIntrinsic(IntrinsicInst intrin)
     {
-        return intrinsic switch {
-            CilIntrinsic c => FoldCilIntrinsic(c, args),
-            _ => null
-        };
-    }
-
-    private static Value? FoldCilIntrinsic(CilIntrinsic intrinsic, ReadOnlySpan<Value> args)
-    {
-        return intrinsic.Id switch {
-            CilIntrinsicId.SizeOf 
-                when args is [TypeDesc { Kind: >= TypeKind.Bool and <= TypeKind.Double } type] 
-                => ConstInt.CreateI(type.Kind.BitSize() / 8),
-            _ => null
-        };
+        if (intrin is CilIntrinsic.SizeOf { ObjType.Kind: >= TypeKind.Bool and <= TypeKind.Double and var type }) {
+            return ConstInt.CreateI(type.BitSize() / 8);
+        }
+        return null;
     }
 
     private static object? FoldMathCall(MethodDef method, Value[] args)

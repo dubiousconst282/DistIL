@@ -1,7 +1,5 @@
 namespace DistIL.IR.Utils;
 
-using DistIL.IR.Intrinsics;
-
 /// <summary> Helper for building a sequence of intructions. </summary>
 public class IRBuilder
 {
@@ -181,9 +179,6 @@ public class IRBuilder
     public NewObjInst CreateNewObj(MethodDesc ctor, params Value[] args)
         => Emit(new NewObjInst(ctor, args));
 
-    public IntrinsicInst CreateIntrinsic(IntrinsicDesc intrinsic, params Value[] args)
-        => Emit(new IntrinsicInst(intrinsic, args));
-
 
     public LoadInst CreateFieldLoad(FieldDesc field, Value? obj = null, bool inBounds = false)
         => CreateLoad(CreateFieldAddr(field, obj, inBounds));
@@ -202,10 +197,10 @@ public class IRBuilder
         => CreateFieldStore(GetInstanceType(obj).FindField(fieldName), obj, value);
 
     public IntrinsicInst CreateNewArray(TypeDesc elemType, Value length)
-        => Emit(new IntrinsicInst(CilIntrinsic.NewArray, elemType, length));
+        => Emit(new CilIntrinsic.NewArray(elemType, length));
 
     public IntrinsicInst CreateArrayLen(Value array)
-        => Emit(new IntrinsicInst(CilIntrinsic.ArrayLen, array));
+        => Emit(new CilIntrinsic.ArrayLen(array));
 
     public LoadInst CreateArrayLoad(Value array, Value index, TypeDesc? elemType = null, bool inBounds = false)
     {
@@ -245,20 +240,28 @@ public class IRBuilder
         return CreatePtrOffset(addr, ConstInt.CreateI(1), elemType);
     }
 
-
-    public void CreateMarker(string text)
-        => Emit(new IntrinsicInst(IRIntrinsic.Marker, ConstString.Create(text)));
-
     /// <summary> Creates the <see langword="default"/> value for the given type. </summary>
     public Value CreateDefaultOf(TypeDesc type)
     {
         if (type.Kind == TypeKind.Struct) {
             var slot = new LocalSlot(type, "tmpZeroInit");
-            CreateIntrinsic(CilIntrinsic.InitObj, type, slot);
+            Emit(new CilIntrinsic.MemSet(slot, type));
             return CreateLoad(slot);
         }
         return Const.CreateZero(type);
     }
+
+    public IntrinsicInst CreateBox(TypeDesc valueType, Value val)
+        => Emit(new CilIntrinsic.Box(valueType, val));
+    public IntrinsicInst CreateUnboxObj(TypeDesc valueType, Value val)
+        => Emit(new CilIntrinsic.UnboxObj(valueType, val));
+    public IntrinsicInst CreateUnboxRef(TypeDesc valueType, Value val)
+        => Emit(new CilIntrinsic.UnboxRef(valueType, val));
+
+    public IntrinsicInst CreateCastClass(TypeDesc destType, Value obj)
+        => Emit(new CilIntrinsic.CastClass(destType, obj));
+    public IntrinsicInst CreateAsInstance(TypeDesc destType, Value obj)
+        => Emit(new CilIntrinsic.AsInstance(destType, obj));
 
     /// <summary> Adds the specified instruction at the current position. </summary>
     public TInst Emit<TInst>(TInst inst) where TInst : Instruction

@@ -157,7 +157,7 @@ public class IRCloner
         public void Visit(CallInst inst) => Out(new CallInst(Remap(inst.Method), RemapArgs(inst.Args), inst.IsVirtual, inst.Constraint == null ? null : Remap(inst.Constraint)));
         public void Visit(NewObjInst inst) => Out(new NewObjInst(Remap(inst.Constructor), RemapArgs(inst.Args)));
         public void Visit(FuncAddrInst inst) => Out(new FuncAddrInst(Remap(inst.Method), inst.IsVirtual ? Remap(inst.Object) : null));
-        public void Visit(IntrinsicInst inst) => Out(new IntrinsicInst(inst.Intrinsic, RemapArgs(inst.Args)));
+        public void Visit(IntrinsicInst inst) => Out(inst.CloneWith(Remap(inst.ResultType), RemapArgs(inst.Args)));
         public void Visit(SelectInst inst) => Out(new SelectInst(Remap(inst.Cond), Remap(inst.IfTrue), Remap(inst.IfFalse), Remap(inst.ResultType)));
 
         public void Visit(ReturnInst inst) => Out(new ReturnInst(inst.HasValue ? Remap(inst.Value) : null));

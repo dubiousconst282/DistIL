@@ -1,6 +1,5 @@
 namespace DistIL.Passes.Linq;
 
-using DistIL.IR.Intrinsics;
 using DistIL.IR.Utils;
 
 /// <summary> Source based on a continuous memory location: Array, List&lt;T>, or string. </summary>
@@ -45,24 +44,15 @@ internal class EnumeratorSource : LinqSourceNode
     protected override void EmitHead(LoopBuilder loop, out Value? length, ref LinqStageNode firstStage)
     {
         var builder = loop.PreHeader;
-        var source = PhysicalSource.Operand;
-        var sourceType = source.ResultType;
 
-        //TODO: This can still potentially change behavior (if the box is used somewhere else and GetEnumerator() mutates)
-        if (source.Is(CilIntrinsicId.Box, out var boxed)) {
-            sourceType = (TypeDesc)boxed.Args[0];
-            source = builder.CreateIntrinsic(CilIntrinsic.UnboxRef, sourceType, boxed);
-        }
-        var method = sourceType.FindMethod("GetEnumerator", searchBaseAndItfs: true);
-        _enumerator = builder.CreateCallVirt(method, source);
-
-        //If the enumerator itself is a struct, we need to copy it to a new variable and use its address instead
-        if (_enumerator.ResultType.IsValueType) {
-            var slot = new LocalSlot(_enumerator.ResultType, "lq_EnumerSrcTmp");
-            builder.CreateStore(slot, _enumerator);
-            _enumerator = slot;
-        }
+        //Extract the instantiated `IEnumerable<T>` type from call arg because
+        //the actual operand could have been boxed and lost its real type.
+        var sourceCall = (CallInst)PhysicalSource.Parent;
+        var enumerableType = sourceCall.Method.ParamSig[PhysicalSource.OperIndex].Type;
+        _enumerator = builder.CreateCallVirt(enumerableType.FindMethod("GetEnumerator"), PhysicalSource.Operand);
         length = null;
+
+        Debug.Assert(!_enumerator.ResultType.IsValueType);
     }
     protected override Value EmitMoveNext(IRBuilder builder)
         => builder.CreateCallVirt("MoveNext", _enumerator!);

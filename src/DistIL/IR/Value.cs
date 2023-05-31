@@ -25,8 +25,9 @@ public abstract class Value
 /// <summary> The base class for a value that tracks it uses. </summary>
 public abstract class TrackedValue : Value
 {
-    //The value use chain is represented by a doubly-linked list, node pointers are represented
-    //as (Inst Owner, int Index), and next/prev links are keept in `Instruction._useDefs`.
+    //In order to minimize GC stress and memory overhead, the value use-chain is implemented by a special
+    //doubly-linked list using pointers represented as UseRef, a tuple of (Instruction Parent, int OperIndex).
+    //The previous and next links are keept in `Instruction._useDefs`.
     UseRef _firstUse;
 
     /// <summary> The number of (operand) uses this value have. </summary>
@@ -101,6 +102,14 @@ public abstract class TrackedValue : Value
         }
     }
 
+    protected TrackedValue MemberwiseDetachedClone()
+    {
+        var val = (TrackedValue)MemberwiseClone();
+        val._firstUse = default;
+        val.NumUses = 0;
+        return val;
+    }
+
     /// <summary> Returns an iterator of instructions using this value. Neither order nor uniqueness is guaranteed. </summary>
     public ValueUserIterator Users() => new() { _use = _firstUse };
     /// <summary> Returns an iterator of operands using this value. </summary>
@@ -168,6 +177,7 @@ public readonly struct UseRef
 
     public override string ToString() => Parent == null ? "null" : $"[{OperIndex}] at '{Parent}'";
 }
+/// <summary> Represents the "definition" of a value use. Contents should only be modified by <see cref="TrackedValue" />. </summary>
 internal struct UseDef
 {
     public UseRef Prev, Next;

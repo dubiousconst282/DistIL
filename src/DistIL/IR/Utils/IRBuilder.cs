@@ -59,8 +59,12 @@ public class IRBuilder
     public PhiInst CreatePhi(TypeDesc type, params PhiArg[] args)
         => _block.InsertPhi(new PhiInst(type, args));
 
-    public void SetBranch(BasicBlock target) 
-        => _block.SetBranch(target);
+    public void SetBranch(BasicBlock target, bool replace = true) 
+    {
+        if (replace || _block.Last == null || !_block.Last.IsBranch) {
+            _block.SetBranch(target);
+        }
+    }
 
     public void SetBranch(Value cond, BasicBlock then, BasicBlock else_) 
         => _block.SetBranch(new BranchInst(cond, then, else_));
@@ -120,6 +124,12 @@ public class IRBuilder
     public Value CreateUgt(Value left, Value right) => CreateCmp(CompareOp.Ugt, left, right);
     public Value CreateUle(Value left, Value right) => CreateCmp(CompareOp.Ule, left, right);
     public Value CreateUge(Value left, Value right) => CreateCmp(CompareOp.Uge, left, right);
+
+    public Value CreateNot(Value val)
+    {
+        return ConstFolding.FoldUnary(UnaryOp.Not, val) ??
+               Emit(new UnaryInst(UnaryOp.Not, val));
+    }
 
     public Value CreateSelect(Value cond, Value ifTrue, Value ifFalse, TypeDesc? resultType = null)
     {

@@ -138,7 +138,9 @@ public class BasicBlock : TrackedValue
             RedirectSuccPhis(block);
         }
         if (replaceBranch) {
-            block.Last.Remove();
+            if (block.Last.IsBranch) {
+                block.Last.Remove();
+            }
             MoveRange(block, block.Last, First, Last);
         } else if (LastNonBranch != null) {
             MoveRange(block, block.LastNonBranch, First, LastNonBranch);

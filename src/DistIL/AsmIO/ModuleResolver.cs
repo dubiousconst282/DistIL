@@ -139,7 +139,7 @@ public class ModuleResolver
     }
     public ModuleDef Load(PEReader reader)
     {
-        var module = new ModuleDef() { Resolver = this };
+        var module = new ModuleDef(this);
         var loader = new ModuleLoader(reader, this, module);
 
         _cache.Add(module.AsmName.Name!, module); //AsmName is loaded by ModuleLoader ctor
@@ -147,6 +147,20 @@ public class ModuleResolver
 
         loader.Load();
 
+        return module;
+    }
+
+    public ModuleDef Create(string asmName, Version? ver = null)
+    {
+        var module = new ModuleDef(this) {
+            AsmName = new AssemblyName() {
+                Name = asmName,
+                Version = ver ?? new Version(1, 0, 0, 0),
+            },
+            ModName = asmName + ".dll"
+        };
+        module.CreateType(null, "<Module>", TypeAttributes.NotPublic); //global type required by the writer
+        _cache.Add(asmName, module);
         return module;
     }
 }

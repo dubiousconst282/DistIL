@@ -159,7 +159,7 @@ public class TypeDef : TypeDefOrSpec
         var existingType = FindNestedType(name);
         Ensure.That(existingType == null, "A nested type with the same name already exists");
 
-        var newAccess = attribs switch {
+        var newAccess = (attribs & TypeAttributes.VisibilityMask) switch {
             TypeAttributes.NotPublic => TypeAttributes.NestedPrivate,
             TypeAttributes.Public => TypeAttributes.NestedPublic,
             _ => attribs

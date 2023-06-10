@@ -19,12 +19,17 @@ public class ModuleDef : Entity
     /// <summary> All types exported by this module (incl. nested). </summary>
     public IReadOnlyCollection<TypeDef> ExportedTypes => _exportedTypes;
 
-    public ModuleResolver Resolver { get; init; } = null!;
+    public ModuleResolver Resolver { get; }
 
     internal TypeList _typeDefs = new(), _exportedTypes = new();
 
     internal Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); //root assemblies for references of forwarded types
     internal List<CustomAttrib> _asmCustomAttribs = new(), _modCustomAttribs = new();
+
+    internal ModuleDef(ModuleResolver resolver)
+    {
+        Resolver = resolver;
+    }
 
     public TypeDef? FindType(string? ns, string name, bool includeExports = true, [DoesNotReturnIf(true)] bool throwIfNotFound = false)
     {

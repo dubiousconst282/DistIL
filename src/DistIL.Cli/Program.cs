@@ -57,8 +57,7 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
 {
     var manager = new PassManager() {
         Compilation = comp,
-        TrackAndLogStats = true,
-        PassCandidateFilter = options.FilterPassCandidates
+        TrackAndLogStats = true
     };
 
     manager.AddPasses()
@@ -106,7 +105,9 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
         });
     }
 
-    manager.Run();
+    var methods = PassManager.GetCandidateMethodsFromIL(comp.Module);
+    options.FilterPassCandidates(methods);
+    manager.Run(methods);
 }
 static void AddIgnoreAccessAttrib(ModuleDef module, IEnumerable<string> assemblyNames)
 {

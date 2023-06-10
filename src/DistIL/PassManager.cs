@@ -7,15 +7,7 @@ using DistIL.Passes;
 public class PassManager
 {
     public required Compilation Compilation { get; init; }
-
-    /// <summary> Filters whether the IL code of a method should be parsed into a CFG. </summary>
-    public Predicate<MethodDef>? ImportFilter { get; init; }
-
-    /// <summary> Filters a list of candidate methods, leaving only methods which passes should be applied . </summary>
-    public Action<List<MethodDef>>? PassCandidateFilter { get; init; }
-
     public List<PipelineSegment> Pipeline { get; } = new();
-
     public bool TrackAndLogStats { get; init; }
 
     readonly Dictionary<Type, (int NumChanges, TimeSpan TimeTaken)> _stats = new();
@@ -29,44 +21,52 @@ public class PassManager
         return pipe;
     }
 
-    public void Run()
+    public void Run(IReadOnlyCollection<MethodDef> methods)
     {
-        var candidates = FindCandidateMethods();
-
-        ImportOrGenerateIL(candidates, import: true);
-
-        //Clear out invalid transform candidates
-        candidates.RemoveAll(m => m.Body == null);
-        PassCandidateFilter?.Invoke(candidates);
-
-        ApplyPasses(candidates);
-
-        ImportOrGenerateIL(candidates, import: false);
+        ImportIL(methods);
+        ApplyPasses(methods);
+        GenerateIL(methods);
 
         LogStats();
     }
 
-    private void ImportOrGenerateIL(List<MethodDef> candidates, bool import)
+    private void ImportIL(IReadOnlyCollection<MethodDef> candidates)
     {
+        long startTs = Stopwatch.GetTimestamp();
+        int count = 0;
+
         foreach (var method in candidates) {
             try {
-                long startTs = Stopwatch.GetTimestamp();
-
-                if (import) {
+                if (method.ILBody != null && method.Body == null) {
                     method.Body = ILImporter.ParseCode(method);
-                    IncrementStat(typeof(ILImporter), startTs, true);
-                } else {
-                    method.ILBody = ILGenerator.GenerateCode(method.Body!);
-                    IncrementStat(typeof(ILGenerator), startTs, true);
+                    count++;
                 }
             } catch (Exception ex) {
-                string action = import ? "import" : "generate code for";
-                Compilation.Logger.Error($"Failed to {action} '{method}'", ex);
+                Compilation.Logger.Error($"Failed to import code from '{method}'", ex);
             }
         }
+        IncrementStat(typeof(ILImporter), startTs, count);
     }
 
-    private void ApplyPasses(List<MethodDef> candidates)
+    private void GenerateIL(IReadOnlyCollection<MethodDef> candidates)
+    {
+        long startTs = Stopwatch.GetTimestamp();
+        int count = 0;
+
+        foreach (var method in candidates) {
+            try {
+                if (method.Body != null) {
+                    method.ILBody = ILGenerator.GenerateCode(method.Body);
+                    count++;
+                }
+            } catch (Exception ex) {
+                Compilation.Logger.Error($"Failed to generate code for '{method}'", ex);
+            }
+        }
+        IncrementStat(typeof(ILGenerator), startTs, count);
+    }
+
+    private void ApplyPasses(IReadOnlyCollection<MethodDef> candidates)
     {
         for (int i = 0; i < Pipeline.Count;) {
             int j = i + 1;
@@ -91,16 +91,16 @@ public class PassManager
         }
     }
 
-    internal void IncrementStat(Type passType, long startTs, bool madeChanges)
+    internal void IncrementStat(Type passType, long startTs, int numChanges)
     {
         if (!TrackAndLogStats) return;
 
         ref var stat = ref _stats.GetOrAddRef(passType);
         stat.TimeTaken += Stopwatch.GetElapsedTime(startTs);
-        stat.NumChanges += madeChanges ? 1 : 0;
+        stat.NumChanges += numChanges;
     }
 
-    internal void LogStats()
+    private void LogStats()
     {
         if (!TrackAndLogStats) return;
 
@@ -118,9 +118,11 @@ public class PassManager
         s_ApplyScope = new("DistIL.PassManager.Apply"),
         s_StatsScope = new("DistIL.PassManager.ResultStats");
 
-    //Searches for methods candidate for transformations and their dependencies via IL scan.
-    //The returned list is ordered such that called methods appear before callers, if statically known.
-    private List<MethodDef> FindCandidateMethods()
+    /// <summary>
+    /// Searches for candidate transform methods and their dependencies via IL scan. <br/>
+    /// The returned list is ordered such that called methods appear before callers, if statically known.
+    /// </summary>
+    public static List<MethodDef> GetCandidateMethodsFromIL(ModuleDef module, Predicate<MethodDef>? filter = null)
     {
         var candidates = new List<MethodDef>();
 
@@ -128,7 +130,7 @@ public class PassManager
         var visited = new RefSet<MethodDef>();
 
         //Perform DFS on each defined method
-        foreach (var seedMethod in Compilation.Module.MethodDefs()) {
+        foreach (var seedMethod in module.MethodDefs()) {
             Push(seedMethod);
 
             while (!worklist.IsEmpty) {
@@ -159,9 +161,9 @@ public class PassManager
         }
         bool IsCandidate(MethodDef method)
         {
-            return method.ILBody != null && 
-                   method.Module == Compilation.Module && 
-                   (ImportFilter == null || ImportFilter.Invoke(method));
+            return method.ILBody != null &&
+                   method.Module == module && 
+                   (filter == null || filter.Invoke(method));
         }
     }
 
@@ -200,7 +202,7 @@ public class PassManager
 
                     ctx.Logger.Trace($"{pass.GetType().Name} changed {result.Changes}");
                 }
-                _manager.IncrementStat(pass.GetType(), startTs, result.Changes != 0);
+                _manager.IncrementStat(pass.GetType(), startTs, result.Changes != 0 ? 1 : 0);
             }
             return changed;
         }

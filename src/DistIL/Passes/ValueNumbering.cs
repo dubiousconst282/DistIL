@@ -124,6 +124,10 @@ public class ValueNumbering : IMethodPass
             CompareFn = (a, b) => a.BasePtr == b.BasePtr && a.Index.Equals(b.Index) && (a.KnownStride ? a.Stride == b.Stride : a.ElemType == b.ElemType),
             HashFn = (inst) => HashCode.Combine(inst.BasePtr, inst.Index, inst.Stride)
         });
+        Reg<ExtractFieldInst>(new() {
+            CompareFn = (a, b) => a.Field == b.Field && a.Obj == b.Obj,
+            HashFn = (inst) => HashCode.Combine(inst.Field, inst.Obj, 2345)
+        });
 
         var memTagger = new MemoryTagger();
         s_Taggers.Add(typeof(LoadInst), memTagger);

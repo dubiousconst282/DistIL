@@ -77,11 +77,11 @@ public class FieldAddrInst : AddressInst
         : base(obj == null ? Array.Empty<Value>() : new[] { obj })
     {
         Ensure.That(field.IsInstance == (obj != null));
-        Ensure.That(obj == null || obj.ResultType.StackType is StackType.NInt or StackType.ByRef or StackType.Object or StackType.Struct);
+        Ensure.That(obj == null || obj.ResultType.IsPointerOrObject());
 
         ResultType = field.Type.CreateByref();
         Field = field;
-        InBounds = inBounds || obj is LocalSlot or Instruction { ResultType.StackType: StackType.Struct };
+        InBounds = inBounds || obj is LocalSlot;
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);

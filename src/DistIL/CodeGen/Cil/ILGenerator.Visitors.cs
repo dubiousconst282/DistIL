@@ -46,6 +46,12 @@ partial class ILGenerator
         Push(inst.Value);
         EmitLoadOrStorePtr(inst, isLoad: false);
     }
+    public void Visit(ExtractFieldInst inst)
+    {
+        Push(inst.Obj);
+        _asm.Emit(ILCode.Ldfld, inst.Field);
+    }
+
     private bool EmitContainedLoadOrStore(MemoryInst inst, Value? valToStore)
     {
         if (inst.Address is AddressInst addr && addr.ElemType == inst.ElemType && _forest.IsLeaf(addr)) {
@@ -265,7 +271,7 @@ partial class ILGenerator
     {
         //TODO: Consider merging adjacent selects into a single branch
 
-        //This assumes that both operands have no side-effects. ForestAnalysis will special cases SelectInst operands.
+        //This assumes that neither values have side effects. ForestAnalysis has code to account for SelectInst.
         var labelEnd = _asm.DefineLabel();
         var labelFalse = _asm.DefineLabel();
 

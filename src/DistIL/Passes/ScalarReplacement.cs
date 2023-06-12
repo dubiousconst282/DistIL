@@ -11,7 +11,7 @@ public class ScalarReplacement : IMethodPass
         
         //Find non-escaping object allocations
         foreach (var inst in ctx.Method.Instructions()) {
-            if (inst is NewObjInst alloc && IsSimpleCtor(alloc) && !Escapes(alloc)) {
+            if (inst is NewObjInst alloc && !alloc.ResultType.IsValueType && IsSimpleCtor(alloc) && !Escapes(alloc)) {
                 allocs.Add(alloc);
             }
         }

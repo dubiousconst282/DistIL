@@ -695,7 +695,18 @@ internal class BlockState
 
     private void ImportLoadField(FieldDesc field, bool isStatic)
     {
-        var addr = EmitFieldAddr(field, isStatic);
+        var obj = isStatic ? null : Pop();
+
+        if (obj != null && obj.ResultType.IsValueType) {
+            if (obj is LoadInst load) {
+                obj = load.Address;
+            } else {
+                Push(new ExtractFieldInst(field, obj));
+                return;
+            }
+        }
+        var addr = new FieldAddrInst(field, obj);
+        Emit(addr);
         Push(new LoadInst(addr, flags: PopPointerFlags()));
     }
     private void ImportStoreField(FieldDesc field, bool isStatic)

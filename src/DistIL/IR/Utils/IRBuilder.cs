@@ -180,8 +180,13 @@ public class IRBuilder
         => Emit(new NewObjInst(ctor, args));
 
 
-    public LoadInst CreateFieldLoad(FieldDesc field, Value? obj = null, bool inBounds = false)
-        => CreateLoad(CreateFieldAddr(field, obj, inBounds));
+    public Instruction CreateFieldLoad(FieldDesc field, Value? obj = null, bool inBounds = false)
+    {
+        if (obj != null && obj.ResultType.IsValueType) {
+            return Emit(new ExtractFieldInst(field, obj));
+        }
+        return CreateLoad(CreateFieldAddr(field, obj, inBounds));
+    }
 
     public StoreInst CreateFieldStore(FieldDesc field, Value? obj, Value value, bool inBounds = false)
         => CreateStore(CreateFieldAddr(field, obj, inBounds), value);
@@ -190,7 +195,7 @@ public class IRBuilder
         => Emit(new FieldAddrInst(field, obj, inBounds));
 
 
-    public LoadInst CreateFieldLoad(string fieldName, Value obj)
+    public Instruction CreateFieldLoad(string fieldName, Value obj)
         => CreateFieldLoad(GetInstanceType(obj).FindField(fieldName), obj);
         
     public StoreInst CreateFieldStore(string fieldName, Value obj, Value value)

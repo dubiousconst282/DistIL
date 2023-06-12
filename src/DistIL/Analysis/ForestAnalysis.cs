@@ -37,7 +37,6 @@ public class ForestAnalysis : IMethodAnalysis
     /// <summary> Returns whether the specified instruction is a leaf or branch (i.e. can be inlined into an operand). </summary>
     public bool IsLeaf(Instruction inst) => _leafs.Contains(inst);
 
-
     private static bool IsAlwaysRooted(Instruction inst)
     {
         if (!inst.HasResult || inst.NumUses is 0 or >= 2 || inst is PhiInst or GuardInst) {
@@ -46,15 +45,31 @@ public class ForestAnalysis : IMethodAnalysis
         var (user, useIdx) = inst.Uses().First();
 
         return user.Block != inst.Block ||
+               //Codegen does not support phis with inlined defs, they must have their own live-range.
                user is PhiInst ||
-               (user is SelectInst && useIdx != 0); //ILGenerator depends on select values being roots, for simplicity reaon
+               //ILGenerator depends on select values being roots, for simplicity.
+               (user is SelectInst && useIdx != 0);
     }
 
+    //Cheaper to rematerialize
     private static bool IsAlwaysLeaf(Instruction inst)
     {
-        //Cheaper to rematerialize
-        return (inst is CilIntrinsic.SizeOf or CilIntrinsic.ArrayLen) ||
-               (inst is FieldAddrInst fa && fa.Obj is null or LocalSlot or Argument or Instruction { NumUses: >= 2 });
+        if (inst is FieldAddrInst or ExtractFieldInst or CilIntrinsic.ArrayLen or CilIntrinsic.SizeOf) {
+            if (inst.Operands.Length > 0 && !IsSafeToRematerialize(inst.Operands[0])) {
+                return false;
+            }
+            if (inst.Users().Any(u => u is PhiInst)) {
+                return false;
+            }
+            return true;
+        }
+        return false;
+
+        static bool IsSafeToRematerialize(Value val)
+        {
+            //return val is LocalSlot or Argument or Const || (val is Instruction inst && IsAlwaysRooted(inst));
+            return val is not Instruction inst || IsAlwaysRooted(inst);
+        }
     }
 
     class BlockInterfs
@@ -92,8 +107,7 @@ public class ForestAnalysis : IMethodAnalysis
             int defIdx = _indices[def] + 1; //offset by one to ignore def when checking for interferences
             int useIdx = GetLastSafeUsePoint(def);
 
-            //Like exposed variables, these can be aliased globally and we need
-            //something like alias analysis for precise results.
+            //Without alias analysis, we'll just assume that everything is aliased.
             if (def is LoadInst) {
                 return _memInterfs.ContainsRange(defIdx, useIdx);
             }

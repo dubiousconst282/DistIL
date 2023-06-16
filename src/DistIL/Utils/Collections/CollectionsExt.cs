@@ -70,6 +70,10 @@ public static class CollectionsExt
         return false;
     }
 
+
+    public static Span<T> Slice<T>(this Span<T> span, AbsRange range) => span.Slice(range.Start, range.Length);
+    public static ReadOnlySpan<T> Slice<T>(this ReadOnlySpan<T> span, AbsRange range) => span.Slice(range.Start, range.Length);
+
     /// <summary> 
     /// Extracts the internal array as an <see cref="ImmutableArray{T}"/> and resets the builder
     /// if the capacity matches the count; otherwise, creates a copy and keep the builder unchanged. 

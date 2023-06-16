@@ -1,9 +1,14 @@
 namespace DistIL.Util;
 
-public record struct AbsRange(int Start, int End)
+/// <summary> Represents an absolute index range, [start, end) </summary>
+/// <param name="Start"> Start index (inclusive). </param>
+/// <param name="End"> End index (exclusive). </param>
+public readonly record struct AbsRange(int Start, int End)
 {
     public int Length => End - Start;
     public bool IsEmpty => Start == End;
+
+    public static AbsRange FromSlice(int start, int length) => new(start, start + length);
 
     public bool Contains(int index) => index >= Start && index < End;
 

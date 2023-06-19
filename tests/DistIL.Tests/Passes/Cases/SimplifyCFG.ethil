@@ -1,0 +1,100 @@
+static Self::IfConvert_If_TF_M(#x: int, #y: int) -> int {
+BB_01:
+  r1 = icmp.slt #x, #y -> bool
+  goto r1 ? BB_T : BB_F
+BB_T: goto BB_Merge
+BB_F: goto BB_Merge
+BB_Merge:
+  r2 = phi [BB_T: #x], [BB_F: #y] -> int
+  ret r2
+
+//CHECK: IfConvert_If_TF_M
+//CHECK: select r1, #x, #y
+//CHECK: ret
+}
+
+public static Self::IfConvert_RangeCond1(#x: int) -> bool {
+BB_01:
+  r2 = icmp.slt #x, 10 -> bool
+  goto r2 ? BB_07 : BB_04
+BB_04:
+  r5 = icmp.sle #x, 20 -> bool
+  ret r5
+BB_07:
+  ret 0
+
+//CHECK: IfConvert_RangeCond1
+//CHECK: and r1, r2
+//CHECK: ret
+}
+
+private static Self::SwitchToLut_SmallInts_MultiRet(#x: int) -> int {
+BB_01:
+  switch #x, [
+    _: BB_03,
+    0: BB_05,
+    1: BB_07,
+    2: BB_09,
+    3: BB_11,
+    4: BB_13,
+    5: BB_15,
+    6: BB_17,
+    7: BB_19,
+    8: BB_21
+  ]
+BB_03:
+  goto BB_23
+BB_05:
+  ret 20
+BB_07:
+  ret 10
+BB_09:
+  ret 8
+BB_11:
+  ret 6
+BB_13:
+  ret 5
+BB_15:
+  ret 3
+BB_17:
+  ret 2
+BB_19:
+  ret 5
+BB_21:
+  ret -5
+BB_23:
+  ret -1
+
+//CHECK: SwitchToLut_SmallInts_MultiRet
+//CHECK-NOT: switch
+//CHECK: fldaddr
+//CHECK: ret
+}
+
+public static Self::SwitchToLut_Bool_BitTest(#x: int) -> bool {
+BB_01:
+  switch #x, [
+    _: BB_05,
+    0: BB_03,
+    1: BB_05,
+    2: BB_05,
+    3: BB_03,
+    4: BB_03,
+    5: BB_05,
+    6: BB_03,
+    7: BB_05,
+    8: BB_03
+  ]
+BB_03:
+  goto BB_07
+BB_05:
+  goto BB_07
+BB_07:
+  r8 = phi [BB_03: 1], [BB_05: 0] -> bool
+  ret r8
+
+//CHECK: SwitchToLut_Bool_BitTest
+//CHECK-NOT: switch
+//CHECK: shrl
+//CHECK: ret
+}

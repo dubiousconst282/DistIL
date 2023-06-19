@@ -24,15 +24,6 @@ class Utils
         var method = new MethodDef(type, retType, paramSig, name ?? "DummyMethod", attribs);
         return new MethodBody(method);
     }
-
-    public static Dictionary<string, MethodBody> ParseMethodDecls(string filename, ModuleResolver resolver)
-    {
-        var source = File.ReadAllText(filename);
-        var ctx = new FakeParserContext(source, resolver);
-        new IRParser(ctx).ParseUnit();
-
-        return ctx.DeclaredMethods.ToDictionary(e => e.Definition.Name);
-    }
 }
 
 class FakeTrackedValue : TrackedValue

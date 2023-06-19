@@ -1,4 +1,4 @@
-import @ from TestAsm.IL
+import $Root from TestAsm.IL
 
 public static ImporterCases::PinnedVar1.expected(#x: int&) -> void {
 $Locals:

@@ -6,7 +6,7 @@ internal enum Opcode
 {
     Unknown,
 
-    Goto, Ret, Phi,
+    Goto, Switch, Ret, Phi,
     Call, CallVirt, NewObj,
     Intrinsic,
     Lea,
@@ -60,6 +60,7 @@ internal static class Opcodes
     {
         var op = str switch {
             "goto"      => Opcode.Goto,
+            "switch"    => Opcode.Switch,
             "ret"       => Opcode.Ret,
             "phi"       => Opcode.Phi,
 

@@ -17,7 +17,7 @@ public class ParseError
     {
         var (line, col) = GetLinePos();
         var contextLines = GetSourceContext(SourceCode, Position.Start, Position.End);
-        return $"{Message}\non line {line}, column {col}:\n\n{contextLines}";
+        return $"{Message} on line {line}, column {col}:\n\n{contextLines}";
     }
 
     public (int Line, int Column) GetLinePos()

@@ -49,4 +49,13 @@ public class ParserContext
         Errors.Add(error);
         return new FormatException(error.GetDetailedMessage());
     }
+
+    public void ThrowIfError()
+    {
+        if (HasErrors) {
+            string errors = string.Join("\n\n", Errors.Take(5).Select(r => r.GetDetailedMessage()));
+            string msg = $"Failed to parse IR ({Errors.Count} errors)\n\n{errors}";
+            throw new FormatException(msg);
+        }
+    }
 }

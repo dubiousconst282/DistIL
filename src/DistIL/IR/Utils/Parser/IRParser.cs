@@ -5,7 +5,7 @@ using DistIL.IR.Utils.Parser;
 using MethodAttribs = System.Reflection.MethodAttributes;
 
 //Unit      := Import*  Method*
-//Import    := "import" Seq{Id} "from" Id
+//Import    := "import" ( Seq{Id} "from" Id  |  Id "=" Type )
 //Method    := MethodAcc  Type "::" Identifier "(" Seq{Param} ")" [ResultType] "{"  VarDeclBlock?  Block*  "}"
 //MethodAcc := ("public" | "internal"| "protected" | "private")? "static"? "special"?
 //Param     := "this" | (#Id: Type)
@@ -36,6 +36,7 @@ public partial class IRParser
     readonly Lexer _lexer;
     readonly ParserContext _ctx;
     readonly List<(ModuleDef Mod, string? Ns)> _imports = new();
+    readonly Dictionary<string, TypeDesc> _typeAliases = new();
     readonly Dictionary<string, Value> _identifiers = new();
     readonly HashSet<PendingInst> _pendingInsts = new();
 
@@ -79,13 +80,21 @@ public partial class IRParser
             var namespaces = new List<string?>();
             do {
                 string ns = _lexer.ExpectId();
-                namespaces.Add(ns == "@" ? null : ns);
+                namespaces.Add(ns == "$Root" ? null : ns);
             } while (_lexer.Match(TokenType.Comma));
 
-            _lexer.ExpectId("from");
+            if (_lexer.MatchKeyword("from")) {
+                var module = _ctx.ImportModule(_lexer.ExpectId());
+                _imports.AddRange(namespaces.Select(ns => (module, ns))!);
+            } else {
+                if (namespaces is not [string]) {
+                    _lexer.Error("Expected import alias name");
+                }
+                _lexer.Expect(TokenType.Equal);
 
-            var module = _ctx.ImportModule(_lexer.ExpectId());
-            _imports.AddRange(namespaces.Select(ns => (module, ns))!);
+                var type = ParseType();
+                _typeAliases.Add(namespaces[0]!, type);
+            }
         }
     }
 
@@ -238,6 +247,10 @@ public partial class IRParser
 
     private TypeDesc? ResolveType(string name)
     {
+        if (_typeAliases.TryGetValue(name, out var aliasedType)) {
+            return aliasedType;
+        }
+
         int nsEnd = name.LastIndexOf('.');
         if (nsEnd < 0) {
             var prim = PrimType.GetFromAlias(name);
@@ -271,6 +284,7 @@ public partial class IRParser
 
         var inst = op switch {
             Opcode.Goto => ParseGoto(),
+            Opcode.Switch => ParseSwitch(),
             Opcode.Ret => ParseRet(),
             Opcode.Phi => ParsePhi(),
             Opcode.Call or Opcode.CallVirt or Opcode.NewObj => ParseCallInst(op),
@@ -278,7 +292,7 @@ public partial class IRParser
             Opcode.ArrAddr => ParseArrayAddr(mods),
             Opcode.Load or Opcode.Store => ParseMemInst(op, mods),
             Opcode.Conv => ParseConv(op, mods),
-            _ => ParseMultiOpInst(op, mods, slotToken.Position),
+            _ => ParseMultiOpInst(op, mods, opToken.Position),
         };
         if (slotToken.Type == TokenType.Identifier) {
             AssignId(slotToken, inst);
@@ -292,7 +306,6 @@ public partial class IRParser
         }
         return inst;
     }
-
     private TypeDesc ParseResultType()
     {
         _lexer.Expect(TokenType.Arrow);
@@ -337,6 +350,45 @@ public partial class IRParser
             return new BranchInst(cond, thenBlock, elseBlock);
         }
         return new BranchInst(ParseLabel());
+    }
+
+    //Switch := Value  ","  "[" Indent?  SwitchCase+  Dedent? "]"
+    //SwitchCase = ("_" | Label) ":" Label
+    private SwitchInst ParseSwitch()
+    {
+        var value = ParseValue();
+        var defaultCase = default(BasicBlock);
+        var cases = new List<BasicBlock>();
+
+        _lexer.Expect(TokenType.Comma);
+        _lexer.Expect(TokenType.LBracket);
+        bool hasIndent = _lexer.Match(TokenType.Indent);
+
+        do {
+            var caseToken = _lexer.Next();
+            _lexer.Expect(TokenType.Colon);
+            var caseTarget = ParseLabel();
+
+            if (caseToken is { Type: TokenType.Identifier, StrValue: "_" }) {
+                if (defaultCase != null) {
+                    _ctx.Error("Switch cannot have more than one default case", caseToken.Position);
+                }
+                defaultCase = caseTarget;
+            } else {
+                if (caseToken.Value is not ConstInt c || c.Value != cases.Count) {
+                    _ctx.Error("Switch case must be a sequential integer", caseToken.Position);
+                }
+                cases.Add(caseTarget);
+            }
+        } while (_lexer.Match(TokenType.Comma));
+
+        if (hasIndent) _lexer.Expect(TokenType.Dedent);
+        var lastToken = _lexer.Expect(TokenType.RBracket);
+
+        if (defaultCase == null) {
+            throw _ctx.Fatal("Switch must have a default case", lastToken.Position);
+        }
+        return new SwitchInst(value, defaultCase, cases.ToArray());
     }
 
     //Ret := Value?

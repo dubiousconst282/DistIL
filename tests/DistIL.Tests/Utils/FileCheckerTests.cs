@@ -39,25 +39,45 @@ public class FileCheckerTests
     [Fact]
     public void BasicChecks()
     {
-        string expected = """
+        Assert.True(CheckICase(
+            //Expected
+            """
             Line#1
             //CHECK: Foo
             Line#2
             //CHECK: Bar Qux
-            """;
-        string actual = """
+            """,
+
+            //Actual
+            """
             Line#1
             And then the Foo
             Line#2
             And finally, the  Bar   Qux
-            """;
-        Assert.True(CheckICase(expected, actual));
+            """));
+
+        Assert.False(CheckICase(
+            //Expected
+            """
+            //CHECK: Line#1
+            //CHECK: Line#2
+            //CHECK: Line#3
+            """,
+
+            //Actual
+            """
+            Line#1
+            Line#3
+            Line#2
+            """));
     }
 
     [Fact]
     public void CheckSamePass()
     {
-        string expected = """
+        Assert.True(CheckICase(
+            //Expected
+            """
             Line#1
             //CHECK: Foo
             Line#2
@@ -65,21 +85,25 @@ public class FileCheckerTests
             //CHECK-SAME: the
             Line#3
             //CHECK: end
-            """;
-        string actual = """
+            """,
+
+            //Actual
+            """
             Line#1
             And then the Foo
             Line#2
             And finally, the  Bar   Qux
             Line#3
             END
-            """;
-        Assert.True(CheckICase(expected, actual));
+            """
+            ));
     }
     [Fact]
     public void CheckSameFail()
     {
-        string expected = """
+        Assert.False(CheckICase(
+            //Expected
+            """
             Line#1
             //CHECK: Foo
             Line#2
@@ -87,34 +111,39 @@ public class FileCheckerTests
             //CHECK-SAME: the
             Line#3
             //CHECK: end
-            """;
-        string actual = """
+            """,
+
+            //Actual
+            """
             Line#1
             And then the Foo
             Line#2
             And finally,  Bar   Qux
             Line#3
             END
-            """;
-        Assert.False(CheckICase(expected, actual));
+            """));
     }
     [Fact]
     public void CheckNext()
     {
-        string expected = """
+        Assert.True(CheckICase(
+            //Expected
+            """
             //CHECK: foo
             //CHECK-NEXT: bar
             //CHECK-NEXT: qux
             //CHECK: end
-            """;
-        string actual = """
+            """,
+
+            //Actual
+            """
             Foo
             Bar
             Qux
             Something else
             End
-            """;
-        Assert.True(CheckICase(expected, actual));
+            """
+            ));
     }
 
 

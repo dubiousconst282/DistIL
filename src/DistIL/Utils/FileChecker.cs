@@ -64,7 +64,13 @@ public class FileChecker
 
         while (true) {
             if (currDir.Type != DirectiveType.CheckSame) {
-                if (lines.EOF) break;
+                if (lines.EOF) {
+                    //Only trailing CHECK-NOTs succeed on EOF
+                    if (currDir.Type == DirectiveType.CheckNot) {
+                        return FileCheckResult.Success;
+                    }
+                    goto Fail;
+                }
                 currLine = lines.Next();
             }
 
@@ -92,11 +98,10 @@ public class FileChecker
             }
 
             //There is a match, skip to the next directive.
-            //If there are no more and the last is not CHECK-AND, end the loop.
-            if (!AdvanceDir() && notDirStartPos == NullPos) break;
-        }
-        if (lines.EOF || !AdvanceDir()) {
-            return FileCheckResult.Success;
+            //If there are no more, end the loop unless there's an active CHECK-NOT
+            if (!AdvanceDir() && notDirStartPos == NullPos) {
+                return FileCheckResult.Success;
+            }
         }
     Fail:
         int lineEnd = lines.Pos - 1;

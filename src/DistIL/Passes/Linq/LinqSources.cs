@@ -59,6 +59,28 @@ internal class EnumeratorSource : LinqSourceNode
 
     protected override Value EmitCurrent(IRBuilder builder)
         => builder.CreateCallVirt("get_Current", _enumerator!);
+
+    protected override void EmitEnd(LoopBuilder loop)
+    {
+        var exitBlock = loop.Exit.Block;
+
+        Ensure.That(loop.EntryBlock.First is not GuardInst);
+
+        if (exitBlock.Last is not BranchInst { IsJump: true, Then: var succBlock }) {
+            throw new UnreachableException();
+        }
+        exitBlock.SetBranch(new LeaveInst(succBlock));
+
+        var finallyBlock = exitBlock.Method.CreateBlock(exitBlock).SetName("LQ_Finally");
+
+        var builder = new IRBuilder(finallyBlock);
+        var enumer = builder.CreateAsInstance(builder.Resolver.Import(typeof(IDisposable)), _enumerator);
+        var isNotDisposable = builder.CreateEq(enumer, ConstNull.Create());
+        builder.Fork(isNotDisposable, (elseBuilder, newBlock) => elseBuilder.CreateCallVirt("Dispose", enumer));
+        builder.Emit(new ResumeInst());
+
+        loop.Header.Block.InsertFirst(new GuardInst(GuardKind.Finally, finallyBlock));
+    }
 }
 internal class IntRangeSource : LinqSourceNode
 {

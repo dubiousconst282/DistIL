@@ -1,0 +1,29 @@
+import System.Linq from System.Linq
+import System.Collections.Generic from System.Runtime
+
+static Self::GetStrPred() -> Func`2[string, bool] {
+BB_01:
+  ret null
+}
+
+static Self::LQ_UnknownEnumerableSource(#source: IEnumerable`1[string]) -> int {
+BB_01:
+  r1 = call Self::GetStrPred() -> Func`2[string, bool]
+  r2 = call Enumerable::Count<string>(IEnumerable`1[!!0]: #source, Func`2[!!0, bool]: r1) -> int
+  ret r2
+//CHECK: LQ_UnknownEnumerableSource
+//CHECK: try finally
+//CHECK: callvirt IDisposable::Dispose
+//CHECK: }
+}
+
+static Self::LQ_ArraySource(#source: string[]) -> int {
+BB_01:
+  r1 = call Self::GetStrPred() -> Func`2[string, bool]
+  r2 = call Enumerable::Where<string>(IEnumerable`1[!!0]: #source, Func`2[!!0, bool]: r1) -> IEnumerable`1[!!0]
+  r3 = call Enumerable::ToArray<string>(IEnumerable`1[!!0]: r2) -> !!0[]
+  ret r2
+//CHECK: LQ_ArraySource
+//CHECK: GetArrayDataReference
+//CHECK: }
+}

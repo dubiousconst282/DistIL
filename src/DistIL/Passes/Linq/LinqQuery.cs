@@ -49,7 +49,7 @@ internal abstract class LinqStageNode
     public virtual void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
         => Drain.EmitBody(builder, currItem, loopData);
 
-    public virtual void DeleteSubject()
+    protected virtual void DeleteSubject()
     {
         if (SubjectCall is { NumUses: < 2 }) {
             SubjectCall.Remove();
@@ -75,7 +75,7 @@ internal abstract class LinqSourceNode : LinqStageNode
         PhysicalSource = physicalSource;
     }
 
-    public void Emit()
+    public virtual void Emit()
     {
         var sink = GetSink();
 
@@ -94,6 +94,8 @@ internal abstract class LinqSourceNode : LinqStageNode
         if (sink is not LoopSink) {
             loop.InsertBefore(sink.SubjectCall);
         }
+        DeleteSubject();
+        EmitEnd(loop);
     }
 
     protected static void IntegrateSkipTakeRanges(IRBuilder builder, ref LinqStageNode firstStage, out Value? offset, ref Value length)
@@ -124,6 +126,7 @@ internal abstract class LinqSourceNode : LinqStageNode
     protected abstract void EmitHead(LoopBuilder loop, out Value? length, ref LinqStageNode firstStage);
     protected abstract Value EmitMoveNext(IRBuilder builder);
     protected abstract Value EmitCurrent(IRBuilder builder);
+    protected virtual void EmitEnd(LoopBuilder loop) { }
 }
 
 internal record BodyLoopData

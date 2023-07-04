@@ -12,7 +12,9 @@ using MethodAttribs = System.Reflection.MethodAttributes;
 //VarDeclBlock := "$Locals"  ":" (Indent VarDecl+ Dedent) | VarDecl+
 //VarDecl   := Seq{Id} ":" Type "^"?
 //Block     := Id  ":"  (Indent  Inst+  Dedent) | Inst
-//Type      := Id  ("+"  Id)*  ("["  Seq{Type}  "]")?  ("[]" | "*" | "&")*
+//Type      := (GenPar | NamedType)  ("[]" | "*" | "&")*
+//NamedType := ("+"  Identifier)*  ("["  Seq{Type}  "]")?
+//GenPar    := "!" "!"? Number
 //Inst      := (Id  "=")?  InstBody
 //InstBody  := 
 //    "goto"  (Label | (Value "?" Label ":" Label))
@@ -201,20 +203,34 @@ public partial class IRParser
         }
     }
 
-    //Type := Identifier  ("+"  Identifier)*  ("["  Seq{Type}  "]")?  ("[]" | "*" | "&")*
+    //Type      := (GenPar | NamedType)  ("[]" | "*" | "&")*
+    //NamedType := ("+"  Identifier)*  ("["  Seq{Type}  "]")?
+    //GenPar    := "!" "!"? Number
     //e.g. "NS.A`1+B`1[int[], int][]&"  ->  "NS.A.B<int[], int>[]&"
     //This loosely follows I.10.7.2 "Type names and arity encoding"
     public TypeDesc ParseType()
     {
         int start = _lexer.NextPos();
-        string name = _lexer.ExpectId();
-        var type = ResolveType(name);
+        TypeDesc? type = null;
 
-        //Nested types
-        while (_lexer.Match(TokenType.Plus)) {
-            string childName = _lexer.ExpectId();
-            type = (type as TypeDef)?.FindNestedType(childName);
+        if (_lexer.Match(TokenType.ExlamationMark)) {
+            bool isMethodParam = _lexer.Match(TokenType.ExlamationMark);
+            var indexToken = _lexer.Expect(TokenType.Literal);
+
+            if (indexToken.Value is ConstInt cs) {
+                type = GenericParamType.GetUnbound((int)cs.Value, isMethodParam);
+            }
+        } else {
+            string name = _lexer.ExpectId();
+            type = ResolveType(name);
+
+            //Nested types
+            while (_lexer.Match(TokenType.Plus)) {
+                string childName = _lexer.ExpectId();
+                type = (type as TypeDef)?.FindNestedType(childName);
+            }
         }
+
         if (type == null) {
             _lexer.Error("Type could not be found", start);
             return PrimType.Void;
@@ -456,6 +472,7 @@ public partial class IRParser
 
         if (genPars.Count > 0) {
             method = method.GetSpec(new GenericContext(methodArgs: genPars));
+            _parsedResultType = method.ReturnType;
         }
 
         if (op == Opcode.NewObj) {

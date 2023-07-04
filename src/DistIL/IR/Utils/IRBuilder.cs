@@ -77,6 +77,23 @@ public class IRBuilder
         SetBranch(cond, newBlock, elseBlock);
         SetPosition(newBlock);
     }
+    /// <summary>
+    /// Terminates the current block with a new branch <c>goto cond ? newBlock : elseBlock</c>,
+    /// sets the builder position to the start of the new block, and calls <paramref name="emitElse"/> to build the code for `elseBlock`.
+    /// A branch to the new block will be placed at the `elseBlock` builder if t does not already has one.
+    /// </summary>
+    public void Fork(Value cond, Action<IRBuilder, BasicBlock> emitElse)
+    {
+        var elseBlock = Method.CreateBlock(insertAfter: Block);
+        var newBlock = Method.CreateBlock(insertAfter: elseBlock);
+
+        var elseBuilder = new IRBuilder(elseBlock);
+        emitElse(elseBuilder, newBlock);
+        elseBuilder.SetBranch(newBlock, replace: false);
+
+        SetBranch(cond, newBlock, elseBlock);
+        SetPosition(newBlock);
+    }
 
     public void Fork(Action<IRBuilder, BasicBlock> emitTerminator)
     {

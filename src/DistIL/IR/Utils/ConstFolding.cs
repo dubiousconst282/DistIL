@@ -197,6 +197,12 @@ public class ConstFolding
         if (intrin is CilIntrinsic.SizeOf { ObjType.Kind: >= TypeKind.Bool and <= TypeKind.Double and var type }) {
             return ConstInt.CreateI(type.BitSize() / 8);
         }
+        if (intrin is CilIntrinsic.AsInstance asi && asi.Args[1].ResultType.Inherits(asi.DestType)) {
+            return asi.Args[1];
+        }
+        if (intrin is CilIntrinsic.CastClass cast && cast.Args[0].ResultType.Inherits(cast.DestType)) {
+            return cast.Args[0];
+        }
         return null;
     }
 

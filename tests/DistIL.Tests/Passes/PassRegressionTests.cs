@@ -25,6 +25,9 @@ public class PassRegressionTests
     [Fact]
     public void Test_SimplifyCFG() => CheckEthil("SimplifyCFG.ethil", new SimplifyCFG());
 
+    [Fact]
+    public void Test_ExpandLinq() => CheckEthil("ExpandLinq.ethil", new ExpandLinq(_modResolver));
+
     private void CheckEthil(string filename, IMethodPass pass)
     {
         var selfType = _testAsm.CreateType("RegressionTests", $"_Test_{Path.GetFileNameWithoutExtension(filename)}");

@@ -50,7 +50,7 @@ internal class LoopSink : LinqSink
         Debug.Assert(_header.NumPreds == 0);
         _header.Remove(); 
     }
-    public override void DeleteSubject()
+    protected override void DeleteSubject()
     {
         _nullCheck?.ReplaceWith(ConstInt.CreateI(0));
         _dispose?.Remove();

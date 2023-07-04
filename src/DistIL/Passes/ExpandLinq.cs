@@ -6,14 +6,14 @@ public class ExpandLinq : IMethodPass
 {
     readonly TypeDefOrSpec t_Enumerable, t_IEnumerableOfT0;
 
-    public ExpandLinq(ModuleDef mod)
+    public ExpandLinq(ModuleResolver resolver)
     {
-        t_Enumerable = mod.Resolver.Import(typeof(Enumerable));
-        t_IEnumerableOfT0 = mod.Resolver.Import(typeof(IEnumerable<>)).GetSpec(default);
+        t_Enumerable = resolver.Import(typeof(Enumerable));
+        t_IEnumerableOfT0 = resolver.Import(typeof(IEnumerable<>)).GetSpec(default);
     }
 
     static IMethodPass IMethodPass.Create<TSelf>(Compilation comp)
-        => new ExpandLinq(comp.Module);
+        => new ExpandLinq(comp.Resolver);
 
     public MethodPassResult Run(MethodTransformContext ctx)
     {
@@ -27,7 +27,6 @@ public class ExpandLinq : IMethodPass
 
         foreach (var query in queries) {
             query.Emit();
-            query.DeleteSubject();
         }
         return queries.Count > 0 ? MethodInvalidations.Loops : 0;
     }

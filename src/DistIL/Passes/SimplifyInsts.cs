@@ -146,6 +146,9 @@ public partial class SimplifyInsts : IMethodPass
             disp = conv1.Value;
         }
         if (!IRMatcher.Mul(disp, out var index, out var stride)) {
+            if (disp is ConstInt { Value: > 0 and <= 8 and var cdisp }) {
+                return new PtrOffsetInst(basePtr, ConstInt.CreateI(1), (int)cdisp);
+            }
             //Byte addressing
             return new PtrOffsetInst(basePtr, disp, stride: 1);
         }

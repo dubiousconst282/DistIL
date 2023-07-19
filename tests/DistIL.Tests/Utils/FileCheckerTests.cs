@@ -10,30 +10,55 @@ public class FileCheckerTests
         var tokens = new List<string>();
         int pos = 0;
 
-        while (FileChecker.NextToken(" Hello, World.  Lorem   ipsum, \tdolor sit amet. \r", ref pos, out var token)) {
+        while (FileChecker.NextToken(" Lorem   ipsum, \tdolor sit amet. \r", ref pos, out var token)) {
             tokens.Add(token.ToString());
         }
 
-        var expectedTokens = new[] { "Hello", ",", "World", ".", "Lorem", "ipsum", ",", "dolor", "sit", "amet", "." };
+        var expectedTokens = new[] { "Lorem", "ipsum", ",", "dolor", "sit", "amet", "." };
         Assert.Equal(expectedTokens, tokens);
     }
 
     [Fact]
-    public void MatchPatternLine()
+    public void TokenizeSymbols()
     {
-        var ignoreCase = StringComparison.OrdinalIgnoreCase;
+        var tokens = new List<string>();
+        int pos = 0;
 
-        Assert.True(FileChecker.MatchPattern("HELLO WORLD", "hello world", ignoreCase));
-        Assert.True(FileChecker.MatchPattern("HELLO WORLD", "  hello  world  ", ignoreCase));
-        Assert.True(FileChecker.MatchPattern(" HELLO  WORLD ", "   hello\t   world  ", ignoreCase));
-        Assert.False(FileChecker.MatchPattern("Hello, World", "hello world", ignoreCase));
+        while (FileChecker.NextToken(" $varA=12 {{holeA}} [[holeB:[A-Z]+]] {{badHole} [[]] end", ref pos, out var token)) {
+            tokens.Add(token.ToString());
+        }
+
+        var expectedTokens = new[] { "$", "varA", "=", "12", "{{holeA}}", "[[holeB:[A-Z]+]]", "{", "{", "badHole", "}", "[", "[", "]", "]", "end" };
+        Assert.Equal(expectedTokens, tokens);
+    }
+
+    [Fact]
+    public void MatchStaticPattern()
+    {
+        var comp = StringComparison.OrdinalIgnoreCase;
+
+        Assert.True(FileChecker.MatchPattern("HELLO WORLD", "hello world", comp, null));
+        Assert.True(FileChecker.MatchPattern("HELLO WORLD", "  hello  world  ", comp, null));
+        Assert.True(FileChecker.MatchPattern(" HELLO  WORLD ", "   hello\t   world  ", comp, null));
+        Assert.False(FileChecker.MatchPattern("Hello, World", "hello world", comp, null));
         
-        Assert.True(FileChecker.MatchPattern("Hello, World.  Lorem \t ipsum,  dolor sit amet.", "lorem ipsum", ignoreCase));
-        Assert.False(FileChecker.MatchPattern("lorem ipsum", "lorem ipsum dolor", ignoreCase));
+        Assert.True(FileChecker.MatchPattern("Hello, World.  Lorem \t ipsum,  dolor sit amet.", "lorem ipsum", comp, null));
+        Assert.False(FileChecker.MatchPattern("lorem ipsum", "lorem ipsum dolor", comp, null));
 
-        Assert.False(FileChecker.MatchPattern("pineapple", "apple", ignoreCase));
-        Assert.False(FileChecker.MatchPattern("applenut", "apple", ignoreCase));
-        Assert.True(FileChecker.MatchPattern("banana", "banana", ignoreCase));
+        Assert.False(FileChecker.MatchPattern("pineapple", "apple", comp, null));
+        Assert.False(FileChecker.MatchPattern("applenut", "apple", comp, null));
+        Assert.True(FileChecker.MatchPattern("banana", "banana", comp, null));
+    }
+
+    [Fact]
+    public void MatchDynamicPattern()
+    {
+        var comp = StringComparison.OrdinalIgnoreCase;
+        var dynEval = new FileChecker.DynamicPatternEvaluator();
+
+        Assert.True(FileChecker.MatchPattern("r1 = call DateTime::get_Now() eol", @"call [[method:\w+::\w+\(\)]] eol", comp, dynEval));
+        Assert.False(FileChecker.MatchPattern("r2 = call DateTime::get_UtcNow()", @"call [[method]]", comp, dynEval));
+        Assert.True(FileChecker.MatchPattern("r2 = call DateTime::get_Now()eol", @"call [[method]]eol", comp, dynEval));
     }
 
     [Fact]
@@ -207,6 +232,60 @@ public class FileCheckerTests
                 r1 = load #ptr -> int
                 r2 = add r1, 1 -> int
                 store #ptr, r2
+                ret
+            }
+            """;
+        Assert.True(CheckICase(expected, actualPass));
+        Assert.False(CheckICase(expected, actualFail));
+    }
+
+    [Fact]
+    public void CheckRegexHole()
+    {
+        string expected = """
+            // CHECK: func1
+            // CHECK: add {{\w+}}, {{\d+}}
+            // CHECK: ret
+            """;
+        string actualPass = """
+            int func1(int x) {
+                r1 = call Math::Abs(int: #x) -> int
+                r2 = add r1, 123 -> int
+                ret r2
+            }
+            """;
+        string actualFail = """
+            int func1(int x) {
+                r1 = call Math::Abs(int: #x) -> int
+                r2 = add r1, r1 -> int
+                ret r2
+            }
+            """;
+        Assert.True(CheckICase(expected, actualPass));
+        Assert.False(CheckICase(expected, actualFail));
+    }
+
+    [Fact]
+    public void CheckSubstHole()
+    {
+        string expected = """
+            // CHECK: func1
+            // CHECK: load [[addr:#\w+]]
+            // CHECK: store [[addr]]
+            // CHECK: ret
+            """;
+        string actualPass = """
+            void func1(int* ptr) {
+                r1 = load #ptr -> int
+                r2 = add r1, 1 -> int
+                store #ptr, r2
+                ret
+            }
+            """;
+        string actualFail = """
+            void func1(int* src, int* dest) {
+                r1 = load #src -> int
+                store #dest, r1
                 ret
             }
             """;

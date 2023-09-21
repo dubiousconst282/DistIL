@@ -2,15 +2,14 @@
 ![GitHub](https://img.shields.io/github/license/dubiousconst282/DistIL)
 [![Nuget](https://img.shields.io/nuget/v/DistIL.OptimizerTask)](https://www.nuget.org/packages/DistIL.OptimizerTask)
 
-Post-build IL optimizer and intermediate representation for .NET programs.
+Post-build IL optimizer and intermediate representation for .NET programs (experimental).
 
-# Installation and Usage
-The optimizer is distributed as a MSBuild task via NuGet, [DistIL.OptimizerTask](https://www.nuget.org/packages/DistIL.OptimizerTask). It only targets .NET 7+ projects.
+# Usage
+Preview versions of the optimizer can be used by installing the [DistIL.OptimizerTask](https://www.nuget.org/packages/DistIL.OptimizerTask) NuGet package. It contains a MSBuild task which will automatically invoke the optimizer on the target when building in _Release_ mode.
 
-By default, it will only be invoked in _Release_ mode and transform methods and classes annotated with `[Optimize]`.  
-It can be enabled globally by setting the `DistilAllMethods` project property to `true`, but be aware that doing so may break code or lead to unexpected behavior changes.
+By default, only methods and classes annotated with `[Optimize]` will be transformed, in order to reduce the chances of things breaking unexpectedly. This can be changed by setting the `DistilAllMethods` project property to `true`.
 
-The IR and infrastructure are provided separately as a standalone library, [DistIL.Core](https://www.nuget.org/packages/DistIL.Core). See the [API walkthrough](./docs/api-walkthrough.md) for details.
+The IR and infrastructure are available as a standalone library, [DistIL.Core](https://www.nuget.org/packages/DistIL.Core). See the [API walkthrough](./docs/api-walkthrough.md) for details.
 
 # Notable Features
 - SSA-based Intermediate Representation
@@ -20,10 +19,11 @@ The IR and infrastructure are provided separately as a standalone library, [Dist
 - Method Inlining
 - Scalar Replacement of Aggregates
 
-## Linq Expansion
-Opportunistically rewrites Linq queries into imperative code in bottom-up order. This transform works by pattern matching and can only recognize a predefined set of known calls, which are listed below.
+## Transforms
+### Linq Expansion
+Rewrites Linq queries into imperative code in bottom-up order. This transform works via pattern matching and can only recognize a predefined set of known calls, which are listed below.
 
-For [typical queries](./tests/Benchmarks/LinqBenchs.cs), speed-ups range between 2-10x:
+For [typical queries](./tests/Benchmarks/LinqBenchs.cs), it yields speed-ups ranging between 2-10x:
 |         Method |         Toolchain |          Mean |       Error |      StdDev | Ratio | RatioSD |
 |--------------- |------------------ |--------------:|------------:|------------:|------:|--------:|
 |  FilterObjects |          .NET 7.0 |     25.789 μs |   0.9277 μs |   1.0684 μs |  1.00 |    0.00 |
@@ -60,14 +60,12 @@ For [typical queries](./tests/Benchmarks/LinqBenchs.cs), speed-ups range between
   - Loop enumeration
 
 **Caveats**
-  - `Dispose()` is never called for IEnumerable sources _(not implemented)_
-    - Result may leak memory for sources such as `File.ReadLines()`.  
   - Null argument checks are removed
     - Result may throw `NullReferenceException` instead of `ArgumentNullException`.
   - `List<T>` version checks are bypassed
     - Result will never throw `InvalidOperationException` for concurrent modifications. In the worst case where lists are mutated by different threads, this could lead to buffer over-reads and access violations.
 
-### Example
+#### Example
 ```cs
 //Original code
 [Optimize]
@@ -98,9 +96,9 @@ public float Aggregate()
 }
 ```
 
-# Loop Vectorization
-Prototype loop vectorizer which works on simple for-loops, having no complex branches or instructions.  
-It is not enabled by default and requires explicit opt-in via `[Optimize(TryVectorize = true)]`.
+### Loop Vectorization
+Basic loop vectorizer which works on simple for-loops having no complex branches or instructions.  
+This transform is currently unstable and will only be applied to methods annotated with `[Optimize(TryVectorize = true)]`.
 
 The impact for [trivial cases](./tests/Benchmarks/AutoVecBenchs.cs) is considerable, and it can even exceed an order of magnitude:
 |          Method |         Toolchain |        Mean |       Error |      StdDev | Ratio | Code Size |
@@ -137,7 +135,7 @@ The impact for [trivial cases](./tests/Benchmarks/AutoVecBenchs.cs) is considera
   - NaNs not propagated in `Min`, `Max`
   - Int `Abs` won't throw on overflow
 
-### Examples
+#### Examples
 ```cs
 //Original
 [Optimize(TryVectorize = true)]
@@ -201,16 +199,16 @@ public static void GenerateInts(Span<int> dest, int x)
 }
 ```
 
-## Method Inlining
+### Method Inlining
 Aggressively inline calls for any non-virtual method defined in the same assembly and originally smaller than 32 IL instructions. Recursive inlines are not currently accounted for, and so this may significantly increase the output assembly size and possibly cause performance regressions if the optimizer is enabled globally.
 
 Inlining of methods accessing private members is supported by disabling runtime access checks via `IgnoresAccessChecksToAttribute`, which is undocumented but supported since _.NET Core 1.0_ and by newer versions of _Mono_.
 
-## Scalar Replacement
+### Scalar Replacement
 Removes simple non-escaping object allocations by inlining constituent fields into local variables.  
 An object allocation is considered to be non-escaping if all uses throughout the method are from field related instructions.
 
-### Example
+#### Example
 ```cs
 //Original code
 [Optimize]

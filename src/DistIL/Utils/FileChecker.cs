@@ -51,200 +51,266 @@ public class FileChecker
         }
     }
 
-    public static FileCheckResult Check(string source, ReadOnlySpan<char> target, StringComparison compMode)
+    public static FileCheckResult Check(string source, string target, StringComparison compMode)
     {
         return new FileChecker(source).Check(target, compMode);
     }
 
-    public FileCheckResult Check(ReadOnlySpan<char> text, StringComparison compMode)
+    public FileCheckResult Check(string text, StringComparison compMode)
     {
-        return Check(new LineReader() { Text = text, Pos = 0 }, compMode);
+        var sc = new CheckScanner() {
+            Reader = new LineReader() { Text = text, Pos = 0 },
+            Dirs = _directives.AsSpan(),
+            Source = _source,
+            CompMode = compMode,
+            DynEval = _hasDynamicPatterns ? new() : null,
+        };
+        return sc.CheckInput();
     }
 
-    private FileCheckResult Check(LineReader lines, StringComparison compMode)
+    ref struct CheckScanner
     {
         const int NullPos = int.MaxValue;
-        var dirs = _directives;
-        var dynEval = _hasDynamicPatterns ? new DynamicPatternEvaluator() : null;
-        int pos = 0, notDirStartPos = NullPos;
-        var currDir = default(Directive);
+        public required LineReader Reader;
+        public required ReadOnlySpan<Directive> Dirs;
+        public required string Source;
+        public required StringComparison CompMode;
+        public required DynamicPatternEvaluator? DynEval;
 
-        Advance();
+        int _dirPos = 0, _notDirStartPos = NullPos;
+        Directive _currDir;
+        List<FileCheckFailure>? _failures;
 
-        while (true) {
-            if (lines.EOF || currDir.Type == DirectiveType.Invalid) {
-                //Only succeed if there are no more directives or the last one is CHECK-NOT
-                if (currDir.Type is DirectiveType.Invalid or DirectiveType.CheckNot) {
-                    return FileCheckResult.Success;
-                }
-                goto Fail;
-            }
-            Debug.Assert(currDir.Type is DirectiveType.Check or DirectiveType.CheckNot);
+        public CheckScanner() {}
 
-            var currLine = lines.Next();
-            if (MatchExclusions(currLine)) goto Fail;
-
-            if (currDir.Type == DirectiveType.Check) {
-                if (!Match(currLine, checkExclusions: false)) continue;
-
-                while (currDir.Type == DirectiveType.CheckSame) {
-                    if (!Match(currLine)) goto Fail;
-                }
-                while (currDir.Type == DirectiveType.CheckNext) {
-                    if (lines.EOF || !Match(lines.Next())) goto Fail;
-                }
-            }
-        }
-    Fail:
-        int lineEnd = lines.Pos - 1;
-        int lineStart = lines.Text.Slice(0, lineEnd).LastIndexOf('\n') + 1;
-        return new FileCheckResult(new AbsRange(lineStart, lineEnd), pos - 1);
-
-        bool Match(ReadOnlySpan<char> line, bool checkExclusions = true)
+        public FileCheckResult CheckInput()
         {
-            if (checkExclusions && MatchExclusions(line)) {
+            Advance();
+
+            while (true) {
+                if (Reader.EOF || _currDir.Type == DirectiveType.Invalid) {
+                    //Only succeed if there are no more directives or the last one is CHECK-NOT
+                    if (_failures == null && _currDir.Type is DirectiveType.Invalid or DirectiveType.CheckNot) {
+                        return FileCheckResult.Success;
+                    }
+                    if (_currDir.Type != DirectiveType.Invalid) {
+                        AddFailure(_currDir);
+                    }
+                    goto Fail;
+                }
+                Debug.Assert(_currDir.Type is DirectiveType.Check or DirectiveType.CheckNot);
+
+                var currLine = Reader.Next();
+                if (MatchExclusions(currLine)) goto Fail;
+
+                if (_currDir.Type == DirectiveType.Check) {
+                    if (!Match(currLine, isForPlainCheck: true)) continue;
+
+                    while (_currDir.Type == DirectiveType.CheckSame) {
+                        if (!Match(currLine)) goto Fail;
+                    }
+                    while (_currDir.Type == DirectiveType.CheckNext) {
+                        if (Reader.EOF || !Match(Reader.Next())) goto Fail;
+                    }
+                }
+            }
+        Fail:
+            Debug.Assert(_failures != null);
+            return new FileCheckResult(_failures);
+        }
+
+        private bool Match(ReadOnlySpan<char> line, bool isForPlainCheck = false)
+        {
+            if (!isForPlainCheck && MatchExclusions(line)) {
                 return false;
             }
-            if (MatchDir(line, currDir)) {
+            if (MatchDir(line, _currDir)) {
                 Advance();
                 return true;
+            }
+            if (!isForPlainCheck) {
+                AddFailure(_currDir);
             }
             return false;
         }
         //Checks if line matches any of the preceeding CHECK-NOT directives, if any
-        bool MatchExclusions(ReadOnlySpan<char> line)
+        private bool MatchExclusions(ReadOnlySpan<char> line)
         {
-            bool trail = currDir.Type == DirectiveType.CheckNot; //last directive is CHECK-NOT
+            bool trail = _currDir.Type == DirectiveType.CheckNot; //last directive is CHECK-NOT
 
-            for (int i = notDirStartPos; i < pos - (trail ? 0 : 1); i++) {
-                Debug.Assert(dirs[i].Type == DirectiveType.CheckNot);
-                if (MatchDir(line, dirs[i])) return true;
+            for (int i = _notDirStartPos; i < _dirPos - (trail ? 0 : 1); i++) {
+                Debug.Assert(Dirs[i].Type == DirectiveType.CheckNot);
+                if (MatchDir(line, Dirs[i])) {
+                    AddFailure(Dirs[i]);
+                    return true;
+                }
             }
             return false;
         }
-        bool MatchDir(ReadOnlySpan<char> line, in Directive dir)
+        private bool MatchDir(ReadOnlySpan<char> line, in Directive dir)
         {
-            var pattern = _source.AsSpan().Slice(dir.PatternRange);
-            return MatchPattern(line, pattern, compMode, dynEval);
+            var pattern = Source.AsSpan().Slice(dir.PatternRange);
+            return MatchPattern(line, pattern, CompMode, DynEval);
         }
-        void Advance()
+        private void Advance()
         {
-            notDirStartPos = NullPos;
-            currDir.Type = DirectiveType.Invalid;
+            _notDirStartPos = NullPos;
+            _currDir.Type = DirectiveType.Invalid;
 
-            while (pos < dirs.Count) {
-                currDir = dirs[pos++];
+            while (_dirPos < Dirs.Length) {
+                _currDir = Dirs[_dirPos++];
 
-                if (currDir.Type != DirectiveType.CheckNot) break;
-                notDirStartPos = Math.Min(notDirStartPos, pos - 1);
+                if (_currDir.Type != DirectiveType.CheckNot) break;
+                _notDirStartPos = Math.Min(_notDirStartPos, _dirPos - 1);
             }
         }
-    }
+        private void AddFailure(in Directive dir)
+        {
+            var sb = new StringBuilder();
 
-    //TODO: this looks more complicated than it needs to be
+            sb.Append(dir.Type == DirectiveType.CheckNot ? "Found unexpected match" : "No match found");
+            sb.Append($" for '{dir.Type}: {Source.AsSpan().Slice(dir.PatternRange)}' directive, near input lines\n\n");
+
+            var inputRange = Reader.GetCurrentRange();
+            int startLine = StringExt.GetLinePos(Reader.Text, inputRange.Start).Line;
+
+            sb.Append($"  {startLine}. ");
+
+            if (inputRange.Length > 120) {
+                var truncRange = AbsRange.FromSlice(inputRange.Start, 120);
+                sb.Append(Reader.Text.Slice(truncRange)).Append("...");
+            } else {
+                sb.Append(Reader.Text.Slice(inputRange));
+            }
+            
+            _failures ??= new();
+            _failures.Add(new FileCheckFailure() {
+                DirectivePos = dir.PatternRange,
+                InputPos = inputRange,
+                Message = sb.ToString()
+            });
+        }
+    }
 
     /// <summary> Checks if <paramref name="text"/> matches the given pattern. </summary>
     public static bool MatchPattern(ReadOnlySpan<char> text, ReadOnlySpan<char> pattern, StringComparison compMode, DynamicPatternEvaluator? dynEval)
     {
         int textWinPos = 0, patternStartPos = 0;
-        NextToken(pattern, ref patternStartPos, out var firstToken);
-        Debug.Assert(firstToken.Length > 0, "Pattern cannot be empty");
-        Debug.Assert(!IsHoleToken(firstToken)); //FIXME
+        var firstToken = NextToken(pattern, ref patternStartPos);
+        Ensure.That(firstToken.Type != TokenType.EOF, "Pattern cannot be empty");
+
+        if (firstToken.Type != TokenType.Literal) {
+            patternStartPos = 0;
+        }
 
         while (true) {
-            //Use a fast IndexOf() to find the start of a possible match
-            int firstTokenOffset = IndexOfToken(text, firstToken, textWinPos, compMode);
-            if (firstTokenOffset < 0) return false;
+            if (firstToken.Type == TokenType.Literal) {
+                //Quickly find the start of a possible literal match.
+                int firstMatchOffset = IndexOfLiteral(text, firstToken.Text, textWinPos, compMode);
+                if (firstMatchOffset < 0) return false;
 
-            textWinPos = firstTokenOffset + firstToken.Length;
+                textWinPos = firstMatchOffset + firstToken.Text.Length;
+            }
             int textPos = textWinPos;
             int patternPos = patternStartPos;
 
             //Check for matching tokens
             while (true) {
-                bool gotA = NextToken(pattern, ref patternPos, out var tokenA);
+                var token = NextToken(pattern, ref patternPos);
 
-                //Handle regex/substitution holes
-                if (gotA && IsHoleToken(tokenA) && dynEval != null) {
-                    var prefix = text.Slice(textPos).TrimStart();
-                    var matchSubRange = dynEval.Match(tokenA, prefix, compMode);
-                    if (matchSubRange.IsEmpty) break;
+                if (token.Type is TokenType.RegexHole or TokenType.SubstHole && dynEval != null) {
+                    var prefix = text[textPos..].TrimStart();
+                    var matchSubRange = dynEval.Match(token, prefix, compMode);
+                    if (matchSubRange.IsEmpty) return false;
 
                     int trimLen = text.Length - textPos - prefix.Length;
                     textPos += matchSubRange.End + trimLen;
-                    continue;
-                }
-                bool gotB = NextToken(text, ref textPos, out var tokenB);
+                } else {
+                    var textToken = NextToken(text, ref textPos, literalOnly: true);
 
-                if (!gotA || !gotB) {
-                    //Consider a match only if we have no more pattern tokens.
-                    return !gotA;
-                }
-                if (!tokenA.Equals(tokenB, compMode)) {
-                    //No more matches, try again on next window alignment.
-                    break;
+                    if (token.Type == TokenType.EOF || textToken.Type == TokenType.EOF) {
+                        //Consider a match only if we have no more pattern tokens.
+                        return token.Type == TokenType.EOF;
+                    }
+                    Debug.Assert(token.Type == TokenType.Literal);
+
+                    if (!token.Text.Equals(textToken.Text, compMode)) {
+                        //No more matches, try again on next window alignment.
+                        break;
+                    }
                 }
             }
         }
     }
 
-    private static int IndexOfToken(ReadOnlySpan<char> text, ReadOnlySpan<char> token, int startOffset, StringComparison compMode)
+    private static int IndexOfLiteral(ReadOnlySpan<char> text, ReadOnlySpan<char> lit, int startOffset, StringComparison compMode)
     {
+        // Quick path for literals
         while (true) {
-            int offset = startOffset + text.Slice(startOffset).IndexOf(token, compMode);
+            int offset = startOffset + text[startOffset..].IndexOf(lit, compMode);
 
             if (offset < startOffset) {
                 return -1;
             }
             //Make sure that's a full token, not just an affix
-            if ((offset <= 0 || IsTokenSeparator(text[offset - 1])) &&
-                (offset + token.Length >= text.Length || IsTokenSeparator(text[offset + token.Length]))
+            if ((offset <= 0 || Token.IsSeparator(text[offset - 1])) &&
+                (offset + lit.Length >= text.Length || Token.IsSeparator(text[offset + lit.Length]))
             ) {
                 return offset;
             }
-            startOffset = offset + token.Length;
+            startOffset = offset + lit.Length;
         }
     }
 
-    internal static bool NextToken(ReadOnlySpan<char> text, scoped ref int pos, out ReadOnlySpan<char> token)
+    internal static Token NextToken(ReadOnlySpan<char> text, scoped ref int pos, bool literalOnly = false)
     {
-        int start = pos;
-        while (start < text.Length && char.IsWhiteSpace(text[start])) start++;
+        //Skip whitespace
+        while (pos < text.Length && char.IsWhiteSpace(text[pos])) pos++;
 
-        int end = start;
+        int start = pos;
 
         //Holes: {{regex}} or [[var]]
-        if (start + 1 < text.Length && text[start] is '{' or '[' && text[start] == text[start + 1]) {
+        if (!literalOnly && start + 1 < text.Length && text[start] is '{' or '[' && text[start] == text[start + 1]) {
             string closer = text[start] == '{' ? "}}" : "]]";
             int closerDist = text.Slice(start + 2).IndexOf(closer, StringComparison.Ordinal);
 
             if (closerDist > 0) {
-                end += closerDist + 4;
-                goto Found;
+                pos = start + closerDist + 4;
+
+                return new Token() {
+                    Type = text[start] == '{' ? TokenType.RegexHole : TokenType.SubstHole,
+                    Text = text[(start + 2)..(pos - 2)]
+                };
             }
-            //Backtrack if terminator is not found
-            end = start;
         }
 
         //Normal token: [A-Z0-9_]+|.
-        while (end < text.Length && !IsTokenSeparator(text[end])) end++;
+        while (pos < text.Length && !Token.IsSeparator(text[pos])) pos++;
 
-        //Ensure we never output empty tokens; unknown chars are individual tokens.
-        if (start == end && end < text.Length) end++;
+        //Ensure we never output empty tokens; treat unknown chars as individual tokens.
+        if (pos == start && pos < text.Length) pos++;
 
-    Found:
-        token = text[start..end];
-        pos = end;
-
-        return start != end;
+        return new Token() {
+            Type = pos == start ? TokenType.EOF : TokenType.Literal,
+            Text = text[start..pos]
+        };
     }
 
-    private static bool IsTokenSeparator(char ch) => !char.IsAsciiLetterOrDigit(ch) && ch != '_';
-
-    private static bool IsHoleToken(ReadOnlySpan<char> str)
+    internal ref struct Token
     {
-        return str is ['{', '{', .., '}', '}'] or
-                      ['[', '[', .., ']', ']'];
+        public ReadOnlySpan<char> Text;
+        public TokenType Type;
+
+        public static bool IsSeparator(char ch) => !char.IsAsciiLetterOrDigit(ch) && ch != '_';
+
+        public override string ToString() => $"{Type}: '{Text}'";
+    }
+    internal enum TokenType
+    {
+        EOF,
+        Literal,        // text
+        RegexHole,      // {{text}}
+        SubstHole,      // [[text]]
     }
 
     public class DynamicPatternEvaluator
@@ -252,27 +318,27 @@ public class FileChecker
         readonly Dictionary<string, Regex> _regexCache = new();
         readonly Dictionary<string, string> _substMap = new();
 
-        public AbsRange Match(ReadOnlySpan<char> hole, ReadOnlySpan<char> text, StringComparison compMode)
+        internal AbsRange Match(Token hole, ReadOnlySpan<char> text, StringComparison compMode)
         {
-            if (hole[0] == '{') {
-                return MatchRegex(hole[2..^2], text, compMode);
+            if (hole.Type == TokenType.RegexHole) {
+                return MatchRegex(hole.Text, text, compMode);
             }
             //Substitution hole
-            Debug.Assert(hole[0] == '[');
-            int colonIdx = hole.IndexOf(':');
+            Debug.Assert(hole.Type == TokenType.SubstHole);
+            int colonIdx = hole.Text.IndexOf(':');
 
             if (colonIdx < 0) {
                 //Use: [[key]]  
                 //TODO: this should probably match tokens instead of substr via MatchPattern()
-                string key = hole[2..^2].ToString();
+                string key = hole.Text.ToString();
 
                 return _substMap.TryGetValue(key, out string? val) && text.StartsWith(val, compMode) 
                         ? new AbsRange(0, text.Length - text.Length + val.Length) : default;
             } else {
                 //Assignment: [[key:pattern]]
-                var range = MatchRegex(hole[(colonIdx + 1)..^2], text, compMode);
+                var range = MatchRegex(hole.Text[(colonIdx + 1)..], text, compMode);
                 if (!range.IsEmpty) {
-                    string key = hole[2..colonIdx].ToString();
+                    string key = hole.Text[0..colonIdx].ToString();
                     _substMap[key] = text.Slice(range).ToString();
                 }
                 return range;
@@ -331,27 +397,33 @@ public class FileChecker
 
             return Text.Slice(start, len);
         }
+
+        // Returns the range of the previously returned line
+        public AbsRange GetCurrentRange()
+        {
+            int start = Text[0..(Pos - 1)].LastIndexOf('\n') + 1;
+            return new AbsRange(start, Pos - 1);
+        }
     }
 }
-public readonly struct FileCheckResult
+public class FileCheckResult
 {
-    public static FileCheckResult Success => new(default, -1);
+    public static FileCheckResult Success => new();
 
-    /// <summary> Approximate position of the text that didn't match the directive. </summary>
-    public AbsRange TextRange { get; }
+    public IReadOnlyList<FileCheckFailure> Failures { get; }
 
-    /// <summary> Offset of the directive in the source string. </summary>
-    public int DirectivePos { get; }
+    public bool IsSuccess => Failures.Count == 0;
 
-    public bool IsSuccess => DirectivePos < 0;
-
-    public FileCheckResult(AbsRange textRange, int directivePos)
+    public FileCheckResult(IReadOnlyList<FileCheckFailure>? fails = null)
     {
-        TextRange = textRange;
-        DirectivePos = directivePos;
+        Failures = fails ?? Array.Empty<FileCheckFailure>();
     }
 
-    public override string ToString() => IsSuccess ? "Success" : $"Fail #{DirectivePos} at {TextRange}";
-
-    public enum ErrorReason { }
+    public override string ToString() => IsSuccess ? "Success" : $"{Failures.Count} failures";
+}
+public readonly struct FileCheckFailure
+{
+    public AbsRange InputPos { get; init; }
+    public AbsRange DirectivePos { get; init; }
+    public string Message { get; init; }
 }

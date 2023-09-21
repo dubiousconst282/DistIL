@@ -50,8 +50,9 @@ public class PassRegressionTests
         }
 
         var result = FileChecker.Check(source, sw.ToString(), StringComparison.Ordinal);
-        Assert.True(result.IsSuccess);
-        //TODO: stringify errors and give context
+        if (!result.IsSuccess) {
+            Assert.True(result.IsSuccess, result.Failures[0].Message);
+        }
     }
 
     //TODO: Fix importer cases

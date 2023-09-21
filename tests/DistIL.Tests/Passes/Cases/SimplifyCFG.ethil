@@ -9,7 +9,7 @@ BB_Merge:
   ret r2
 
 //CHECK: IfConvert_If_TF_M
-//CHECK: select r1, #x, #y
+//CHECK: select r1 ? #x : #y
 //CHECK: ret
 }
 

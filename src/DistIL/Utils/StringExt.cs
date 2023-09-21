@@ -38,4 +38,19 @@ public static class StringExt
         }
         sb.Append(postfix);
     }
+
+    public static (int Line, int Column) GetLinePos(ReadOnlySpan<char> text, int offset)
+    {
+        int ln = 1, col = 1;
+        
+        for (int i = 0; i < offset; i++) {
+            if (text[i] == '\n') {
+                ln++;
+                col = 1;
+            } else {
+                col++;
+            }
+        }
+        return (ln, col);
+    }
 }

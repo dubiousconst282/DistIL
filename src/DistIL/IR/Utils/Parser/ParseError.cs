@@ -22,16 +22,7 @@ public class ParseError
 
     public (int Line, int Column) GetLinePos()
     {
-        int ln = 1, col = 1;
-        for (int i = 0; i < Position.Start; i++) {
-            if (SourceCode[i] == '\n') {
-                ln++;
-                col = 1;
-            } else {
-                col++;
-            }
-        }
-        return (ln, col);
+        return StringExt.GetLinePos(SourceCode, Position.Start);
     }
     private static string GetSourceContext(string str, int start, int end)
     {

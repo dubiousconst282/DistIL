@@ -7,29 +7,32 @@ public class FileCheckerTests
     [Fact]
     public void Tokenize()
     {
-        var tokens = new List<string>();
-        int pos = 0;
-
-        while (FileChecker.NextToken(" Lorem   ipsum, \tdolor sit amet. \r", ref pos, out var token)) {
-            tokens.Add(token.ToString());
-        }
-
+        var tokens = SplitTokens(" Lorem   ipsum, \tdolor sit amet. \r");
         var expectedTokens = new[] { "Lorem", "ipsum", ",", "dolor", "sit", "amet", "." };
+
         Assert.Equal(expectedTokens, tokens);
     }
 
     [Fact]
     public void TokenizeSymbols()
     {
+        var tokens = SplitTokens(" $varA=12 {{holeA}} [[holeB:[A-Z]+]] {{badHole} [[]] end");
+        var expectedTokens = new[] { "$", "varA", "=", "12", "holeA", "holeB:[A-Z]+", "{", "{", "badHole", "}", "[", "[", "]", "]", "end" };
+        Assert.Equal(expectedTokens, tokens);
+    }
+
+    private static List<string> SplitTokens(string str)
+    {
         var tokens = new List<string>();
         int pos = 0;
 
-        while (FileChecker.NextToken(" $varA=12 {{holeA}} [[holeB:[A-Z]+]] {{badHole} [[]] end", ref pos, out var token)) {
-            tokens.Add(token.ToString());
-        }
+        while (true) {
+            var token = FileChecker.NextToken(str, ref pos);
+            if (token.Type == FileChecker.TokenType.EOF) break;
 
-        var expectedTokens = new[] { "$", "varA", "=", "12", "{{holeA}}", "[[holeB:[A-Z]+]]", "{", "{", "badHole", "}", "[", "[", "]", "]", "end" };
-        Assert.Equal(expectedTokens, tokens);
+            tokens.Add(token.Text.ToString());
+        }
+        return tokens;
     }
 
     [Fact]
@@ -59,6 +62,8 @@ public class FileCheckerTests
         Assert.True(FileChecker.MatchPattern("r1 = call DateTime::get_Now() eol", @"call [[method:\w+::\w+\(\)]] eol", comp, dynEval));
         Assert.False(FileChecker.MatchPattern("r2 = call DateTime::get_UtcNow()", @"call [[method]]", comp, dynEval));
         Assert.True(FileChecker.MatchPattern("r2 = call DateTime::get_Now()eol", @"call [[method]]eol", comp, dynEval));
+        Assert.True(FileChecker.MatchPattern("r3 = add 1, 2", @"{{r\d+}} = add", comp, dynEval));
+        Assert.False(FileChecker.MatchPattern("r3 = add 1, 2", @"{{\d+}} = add", comp, dynEval));
     }
 
     [Fact]

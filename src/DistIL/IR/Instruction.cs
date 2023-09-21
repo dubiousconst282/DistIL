@@ -55,11 +55,13 @@ public abstract class Instruction : TrackedValue
     /// in the same place as this instruction.
     /// </summary>
     /// <remarks> 
-    /// Once this method returns, this instruction should be considered invalid and should not be added in a block again.
+    /// Once this method returns, this instruction should be considered invalid and must not be added in a block again.
     /// The <see cref="Operands"/> array is left unmodified, but uses are removed.
     /// </remarks>
     public void ReplaceWith(Value newValue, bool insertIfInst = false)
     {
+        Debug.Assert(newValue != this);
+        
         if (insertIfInst && newValue is Instruction newInst && newInst.Block == null) {
             Block.InsertAfter(this, newInst);
         }

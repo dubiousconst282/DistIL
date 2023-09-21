@@ -29,6 +29,7 @@ public partial class SimplifyInsts : IMethodPass
                 ConvertInst c   => SimplifyConvert(c),
                 CallInst c      => SimplifyCall(c),
                 IntrinsicInst c => SimplifyIntrinsic(c),
+                SelectInst c    => SimplifySelect(c),
                 _ => null
             };
             if (newValue != null) {
@@ -132,6 +133,18 @@ public partial class SimplifyInsts : IMethodPass
     {
         return ConstFolding.FoldConvert(inst.Value, inst.ResultType, inst.CheckOverflow, inst.SrcUnsigned);
     }
+
+    private Value? SimplifySelect(SelectInst inst)
+    {
+        if (inst.Cond is ConstInt c) {
+            return c.Value != 0 ? inst.IfTrue : inst.IfFalse;
+        }
+        if (inst.IfTrue.Equals(inst.IfFalse)) {
+            return inst.IfTrue;
+        }
+        return null;
+    }
+
     //r5 = conv r18 -> long         (?)
     //r6 = mul r5, stride -> long
     //r7 = conv r6 -> nint          (?)

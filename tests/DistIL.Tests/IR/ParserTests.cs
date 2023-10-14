@@ -201,6 +201,8 @@ Entry:
     b = load.un.volatile #ptr -> int
     store #ptr, 123 as int
     store.un.volatile #ptr, 123 as byte
+    offsA = lea #ptr + 123 -> int*
+    offsB = lea #ptr + 456 * 8 -> int*
     ret
 }
 ";
@@ -212,6 +214,9 @@ Entry:
 
         Assert.True(insts[2] is StoreInst { IsVolatile: false, IsUnaligned: false, Address: Argument } st1 && st1.ElemType == PrimType.Int32);
         Assert.True(insts[3] is StoreInst { IsVolatile: true, IsUnaligned: true, Address: Argument } st2 && st2.ElemType == PrimType.Byte);
+
+        Assert.True(insts[4] is PtrOffsetInst { BasePtr: Argument, Index: ConstInt { Value: 123 }, Stride: 4 } lea1 && lea1.ResultType == PrimType.Int32.CreatePointer());
+        Assert.True(insts[5] is PtrOffsetInst { BasePtr: Argument, Index: ConstInt { Value: 456 }, Stride: 8 } lea2 && lea2.ResultType == PrimType.Int32.CreatePointer());
     }
 
     [Fact]

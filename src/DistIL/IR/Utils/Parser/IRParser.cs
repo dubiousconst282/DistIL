@@ -308,6 +308,7 @@ public partial class IRParser
             Opcode.ArrAddr => ParseArrayAddr(mods),
             Opcode.Load or Opcode.Store => ParseMemInst(op, mods),
             Opcode.Conv => ParseConv(op, mods),
+            Opcode.Lea => ParseLea(),
             _ => ParseMultiOpInst(op, mods, opToken.Position),
         };
         if (slotToken.Type == TokenType.Identifier) {
@@ -542,6 +543,35 @@ public partial class IRParser
             inBounds: mods.HasFlag(OpcodeModifiers.InBounds),
             readOnly: mods.HasFlag(OpcodeModifiers.ReadOnly));
     }
+
+    private Instruction ParseLea()
+    {
+        // lea basePtr + index * stride -> basePtr.type
+        // lea basePtr + index -> ptrType
+        var basePtr = ParseValue();
+        _lexer.Expect(TokenType.Plus);
+        var index = ParseValue();
+        int stride = 0;
+
+        if (_lexer.Match(TokenType.Asterisk)) {
+            var token = _lexer.Expect(TokenType.Literal);
+
+            if (token.Value is ConstInt cs && cs.Value > 0) {
+                stride = (int)cs.Value;
+            } else {
+                _lexer.Error("Expected positive integer literal");
+            }
+            return new PtrOffsetInst(basePtr, index, stride);
+        } else {
+            var type = (ParseResultType() as PointerType)?.ElemType;
+            if (type == null) {
+                type = PrimType.Void;
+                _lexer.Error("Expected pointer type");
+            }
+            return new PtrOffsetInst(basePtr, index, type);
+        }
+    }
+
 
     private BasicBlock ParseLabel()
     {

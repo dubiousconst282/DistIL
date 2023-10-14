@@ -9,12 +9,59 @@ public class LoopStrengthReduction : IMethodPass
     public MethodPassResult Run(MethodTransformContext ctx)
     {
         var loopAnalysis = ctx.GetAnalysis<LoopAnalysis>(preserve: true);
+        var domTree = ctx.GetAnalysis<DominatorTree>(preserve: true);
         int numChanges = 0;
 
         foreach (var loop in loopAnalysis.Loops) {
+            numChanges += RemoveDuplicatedCounters(loop, domTree);
             numChanges += ReduceLoop(loop);
         }
         return numChanges > 0 ? MethodInvalidations.DataFlow : 0;
+    }
+
+    // TODO: maybe move this out to a separate pass
+    
+    // Dumb duplicate IV elimination, if that's a thing.
+    private int RemoveDuplicatedCounters(LoopInfo loop, DominatorTree domTree)
+    {
+        var preheader = loop.GetPreheader();
+        var latch = loop.GetLatch();
+
+        //Check for canonical loop
+        if (preheader == null || latch == null) return 0;
+
+        var phis = new List<(PhiInst Phi, Value StartVal, BinaryInst UpdatedVal)>();
+
+        foreach (var phi in loop.Header.Phis()) {
+            var startVal = phi.GetValue(preheader);
+            var updatedVal = phi.GetValue(latch);
+
+            if (phi.NumArgs == 2 && updatedVal is BinaryInst { Op: BinaryOp.Add } updatedValI && updatedValI.Left == phi) {
+                phis.Add((phi, startVal, updatedValI));
+            }
+        }
+
+        // The loops below are quadratic, bail out if there are too many phis.
+        if (phis.Count > 12) return 0;
+        int numChanges = 0;
+
+        for (int i = 0; i < phis.Count; i++) {
+            for (int j = 0; j < phis.Count; j++) {
+                var (a, b) = (phis[i], phis[j]);
+                if (i == j || a.Phi.ResultType != b.Phi.ResultType) continue;
+                if (!a.StartVal.Equals(b.StartVal)) continue;
+                if (!a.UpdatedVal.Right.Equals(b.UpdatedVal.Right)) continue;
+
+                if (domTree.Dominates(b.UpdatedVal, a.UpdatedVal)) {
+                    a.Phi.ReplaceWith(b.Phi);
+                    phis.RemoveAt(i--);
+                    numChanges++;
+                    break;
+                }
+            }
+        }
+
+        return numChanges;
     }
 
     private int ReduceLoop(LoopInfo loop)
@@ -115,11 +162,12 @@ public class LoopStrengthReduction : IMethodPass
                 }
 
                 //Hoist array/span length access
-                var oldBound = (Instruction)exitCond.Right;
-                oldBound.MoveBefore(preheader.Last);
+                if (exitCond.Right is Instruction oldBound) {
+                    oldBound.MoveBefore(preheader.Last);
 
-                if (oldBound is ConvertInst { Value: IntrinsicInst oldLen }) {
-                    oldLen.MoveBefore(oldBound);
+                    if (oldBound is ConvertInst { Value: IntrinsicInst oldLen }) {
+                        oldLen.MoveBefore(oldBound);
+                    }
                 }
             }
         }

@@ -28,6 +28,9 @@ public class PassRegressionTests
     [Fact]
     public void Test_ExpandLinq() => CheckEthil("ExpandLinq.ethil", new ExpandLinq(_modResolver));
 
+    [Fact]
+    public void Test_LoopStrengthReduction() => CheckEthil("LoopStrengthReduction.ethil", new LoopStrengthReduction());
+
     private void CheckEthil(string filename, IMethodPass pass)
     {
         var selfType = _testAsm.CreateType("RegressionTests", $"_Test_{Path.GetFileNameWithoutExtension(filename)}");

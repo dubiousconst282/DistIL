@@ -40,6 +40,19 @@ public class DominatorTree : IMethodAnalysis
                childNode.PostIndex <= parentNode.PostIndex;
     }
 
+    /// <summary> Checks if <paramref name="prev"/> is available when <paramref name="next"/> executes. </summary>
+    public bool Dominates(Instruction prev, Instruction next)
+    {
+        if (prev.Block != next.Block) {
+            return Dominates(prev.Block, next.Block);
+        }
+        // TODO: investigate if it's worth keeping instruction indices for fast intra-block dominance checks
+        for (var inst = next; inst != null; inst = inst.Prev) {
+            if (inst == prev) return true;
+        }
+        return false;
+    }
+
     /// <summary> Same as <see cref="Dominates(BasicBlock, BasicBlock)"/>, but returns false if <paramref name="parent"/> and <paramref name="child"/> are the same block. </summary>
     public bool StrictlyDominates(BasicBlock parent, BasicBlock child)
     {

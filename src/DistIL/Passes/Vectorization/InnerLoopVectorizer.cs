@@ -166,6 +166,7 @@ internal class InnerLoopVectorizer
     {
         var newLoop = new LoopBuilder(_predBlock, "Vec_");
         var steppedCounter = _counter.GetValue(_bodyBlock);
+        int stepSize = steppedCounter is PtrOffsetInst lea ? _width * lea.Stride : _width;
 
         _newCounter = newLoop.CreateAccum(
             seed: _counter.GetValue(_predBlock),
@@ -186,9 +187,9 @@ internal class InnerLoopVectorizer
         //Emit loop and widen instructions
         newLoop.Build(
             emitCond: builder => {
-                if (steppedCounter is PtrOffsetInst lea) {
+                if (steppedCounter is PtrOffsetInst) {
                     var remBytes = builder.CreateSub(_exitCond.Right, _newCounter);
-                    return builder.CreateSge(remBytes, ConstInt.CreateI(_width * lea.Stride));
+                    return builder.CreateSge(remBytes, ConstInt.CreateI(stepSize));
                 }
                 var newBound = newLoop.PreHeader.CreateSub(_exitCond.Right, ConstInt.CreateI(_width - 1)).SetName("v_bound");
                 return builder.CreateSlt(_newCounter, newBound);
@@ -219,6 +220,12 @@ internal class InnerLoopVectorizer
 
         _predBlock.SetBranch(newLoop.EntryBlock);
         _counter.RedirectArg(_predBlock, newLoop.Exit.Block, _newCounter);
+
+        // If the number of iterations is a constant multiple of vector width,
+        // kill the old loop by setting its exit cond to false and leave it for DCE.
+        if (_exitCond.Right is ConstInt constBound && constBound.Value % stepSize == 0) {
+            _exitCond.ReplaceWith(ConstInt.CreateI(0));
+        }
     }
 
     private Value VectorizeInst(LoopBuilder newLoop, Instruction inst, ref InstMapping mapping)

@@ -58,7 +58,8 @@ public class ExpandLinq : IMethodPass
         // - https://github.com/dubiousconst282/DistIL/issues/25
         // - https://github.com/dotnet/runtime/pull/87992
         if (source is IntRangeSource && source.Drain == sink) {
-            return sink is not ListOrArraySink;
+            return sink is not ListOrArraySink ||
+                   (source.SubjectCall.Args is [ConstInt start, ConstInt end] && end.Value - start.Value < 64);
         }
         return true;
     }

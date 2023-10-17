@@ -16,8 +16,15 @@ public class PrintContext
         SymTable = symTable;
     }
 
-    public virtual void Print(Value value) => value.Print(this);
-    public virtual void PrintAsOperand(Value value) => value.PrintAsOperand(this);
+    public static string ToString(IPrintable obj, SymbolTable? symTable = null)
+    {
+        var sw = new StringWriter();
+        obj.Print(new PrintContext(sw, symTable ?? SymbolTable.Empty));
+        return sw.ToString();
+    }
+
+    public virtual void Print(IPrintable value) => value.Print(this);
+    public virtual void PrintAsOperand(IPrintable value) => value.PrintAsOperand(this);
 
     public virtual void Print(string str, PrintToner toner = default) => Output.Write(str);
 
@@ -80,7 +87,7 @@ public class PrintContext
         public void AppendFormatted<T>(T value) where T : IFormattable
             => Print(value.ToString(null, CultureInfo.InvariantCulture));
 
-        public void AppendFormatted(Value value)
+        public void AppendFormatted(IPrintable value)
         {
             if (value is Instruction) {
                 _ctx.PrintAsOperand(value);
@@ -90,7 +97,7 @@ public class PrintContext
             _nextToner = default;
         }
 
-        public void AppendFormatted(IEnumerable<Value> values, string format)
+        public void AppendFormatted(IEnumerable<IPrintable> values, string format)
         {
             //Trailing whitespace is not allowed in interpolated strings,
             //so we use '$' as a backward escaping character instead.
@@ -116,6 +123,13 @@ public class PrintContext
         }
     }
 }
+
+public interface IPrintable
+{
+    void Print(PrintContext ctx);
+    void PrintAsOperand(PrintContext ctx);
+}
+
 public enum PrintToner
 {
     Default,

@@ -8,6 +8,7 @@ public abstract class CilIntrinsic : IntrinsicInst
     public override string Name => GetType().Name;
 
     protected CilIntrinsic(TypeDesc resultType, params Value[] args) : base(resultType, args) { }
+    protected CilIntrinsic(TypeDesc resultType, EntityDesc[] staticArgs, Value[] args) : base(resultType, staticArgs, args) { }
 
     /// <summary> T[] NewArray&lt;T&gt;(nint length) </summary>
     public class NewArray : CilIntrinsic
@@ -42,18 +43,19 @@ public abstract class CilIntrinsic : IntrinsicInst
     public class AsInstance : CilIntrinsic
     {
         public override ILCode Opcode => ILCode.Isinst;
-        public TypeDesc DestType => (TypeDesc)_operands[0];
+        public TypeDesc DestType => (TypeDesc)StaticArgs[0];
 
-        public AsInstance(TypeDesc destType, Value obj) : base(destType.IsValueType ? PrimType.Object : destType, destType, obj) { }
+        public AsInstance(TypeDesc destType, Value obj)
+            : base(destType.IsValueType ? PrimType.Object : destType, new[] { destType }, new[] { obj }) { }
     }
 
     /// <summary> (object)T Box&lt;T&gt;(T val) </summary>
     public class Box : CilIntrinsic
     {
         public override ILCode Opcode => ILCode.Box;
-        public TypeDesc SourceType => (TypeDesc)_operands[0];
+        public TypeDesc SourceType => (TypeDesc)StaticArgs[0];
 
-        public Box(TypeDesc type, Value val) : base(PrimType.Object, type, val) { }
+        public Box(TypeDesc type, Value val) : base(PrimType.Object, new[] { type }, new[] { val }) { }
     }
 
     /// <summary> T UnboxObj&lt;T&gt;(object obj) </summary>
@@ -82,7 +84,7 @@ public abstract class CilIntrinsic : IntrinsicInst
     /// </summary>
     public class MemCopy : CilIntrinsic
     {
-        public override ILCode Opcode => _operands[2] is TypeDesc ? ILCode.Cpobj : ILCode.Cpblk;
+        public override ILCode Opcode => StaticArgs.Length > 0 ? ILCode.Cpobj : ILCode.Cpblk;
         public PointerFlags Flags { get; set; }
 
         public override bool MayThrow => true;
@@ -92,7 +94,7 @@ public abstract class CilIntrinsic : IntrinsicInst
             : base(PrimType.Void, destPtr, srcPtr, numBytes) { Flags = flags; }
 
         public MemCopy(Value destPtr, Value srcPtr, TypeDesc type, PointerFlags flags = 0)
-            : base(PrimType.Void, destPtr, srcPtr, type) { Flags = flags; }
+            : base(PrimType.Void, new[] { type }, new[] { destPtr, srcPtr }) { Flags = flags; }
     }
 
     /// <summary>
@@ -101,7 +103,7 @@ public abstract class CilIntrinsic : IntrinsicInst
     /// </summary>
     public class MemSet : CilIntrinsic
     {
-        public override ILCode Opcode => _operands.Length == 2 ? ILCode.Initobj : ILCode.Initblk;
+        public override ILCode Opcode => StaticArgs.Length > 0 ? ILCode.Initobj : ILCode.Initblk;
         public PointerFlags Flags { get; set; }
 
         public override bool MayThrow => true;
@@ -111,16 +113,16 @@ public abstract class CilIntrinsic : IntrinsicInst
             : base(PrimType.Void, destPtr, value, numBytes) { Flags = flags; }
 
         public MemSet(Value destPtr, TypeDesc type, PointerFlags flags = 0)
-            : base(PrimType.Void, destPtr, type) { Flags = flags; }
+            : base(PrimType.Void, new[] { type }, new[] { destPtr }) { Flags = flags; }
     }
 
     /// <summary> int SizeOf&lt;T&gt;() </summary>
     public class SizeOf : CilIntrinsic
     {
         public override ILCode Opcode => ILCode.Sizeof;
-        public TypeDesc ObjType => (TypeDesc)_operands[0];
+        public TypeDesc ObjType => (TypeDesc)StaticArgs[0];
 
-        public SizeOf(TypeDesc type) : base(PrimType.Int32, type) { }
+        public SizeOf(TypeDesc type) : base(PrimType.Int32, new[] { type }, Array.Empty<Value>()) { }
     }
 
     /// <summary> void* Alloca(nuint numBytes) </summary>
@@ -140,10 +142,10 @@ public abstract class CilIntrinsic : IntrinsicInst
     public class LoadHandle : CilIntrinsic
     {
         public override ILCode Opcode => ILCode.Ldtoken;
-        public EntityDesc Entity => (EntityDesc)_operands[0];
+        public EntityDesc Entity => StaticArgs[0];
 
         public LoadHandle(ModuleResolver resolver, EntityDesc entity)
-            : base(PrimType.Void, entity)
+            : base(PrimType.Void, new[] { entity }, Array.Empty<Value>())
         {
             var sys = resolver.SysTypes;
             ResultType = entity switch {

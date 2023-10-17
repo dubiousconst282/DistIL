@@ -4,6 +4,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
+// TODO: Consider loading entities and metadata lazily - full module loading takes a *long* time
 internal class ModuleLoader
 {
     public readonly PEReader _pe;
@@ -219,7 +220,7 @@ internal class ModuleLoader
         return new FuncPtrType(new SignatureDecoder(this, info.Signature).DecodeMethodSig());
     }
 
-    public Entity GetEntity(EntityHandle handle) => _entities.Get(handle);
+    public EntityDesc GetEntity(EntityHandle handle) => _entities.Get(handle);
     public TypeDef GetType(TypeDefinitionHandle handle) => (TypeDef)GetEntity(handle);
     public FieldDef GetField(FieldDefinitionHandle handle) => (FieldDef)GetEntity(handle);
     public MethodDef GetMethod(MethodDefinitionHandle handle) => (MethodDef)GetEntity(handle);
@@ -234,18 +235,18 @@ internal class ModuleLoader
             TableIndex.MethodDef, TableIndex.MethodSpec
         };
         readonly MetadataReader _reader;
-        readonly Entity[] _entities; //entities laid out linearly
+        readonly EntityDesc[] _entities; //entities laid out linearly
         readonly AbsRange[] _ranges; //inclusive range in _entities for each TableIndex
         int _index; //current index in _entities for Create()
 
         public EntityList(MetadataReader reader)
         {
             _reader = reader;
-            _entities = new Entity[s_Tables.Sum(reader.GetTableRowCount)];
+            _entities = new EntityDesc[s_Tables.Sum(reader.GetTableRowCount)];
             _ranges = new AbsRange[s_Tables.Max(v => (int)v) + 1];
         }
 
-        public void Create<TInfo>(Func<TInfo, Entity> factory)
+        public void Create<TInfo>(Func<TInfo, EntityDesc> factory)
         {
             var table = GetTable<TInfo>();
             int numRows = _reader.GetTableRowCount(table);
@@ -257,7 +258,7 @@ internal class ModuleLoader
                 _entities[start + i] = factory(GetInfo<TInfo>(_reader, i + 1));
             }
         }
-        public Entity Get(EntityHandle handle)
+        public EntityDesc Get(EntityHandle handle)
         {
             var tableIdx = (int)handle.Kind;
             Debug.Assert(Array.IndexOf(s_Tables, (TableIndex)tableIdx) >= 0);
@@ -344,7 +345,9 @@ internal class ModuleLoader
     }
 }
 
-internal class ModifiedTypeSpecTableWrapper_ : Entity
+internal class ModifiedTypeSpecTableWrapper_ : EntityDesc
 {
     public TypeSig Sig = null!;
+
+    public override void Print(PrintContext ctx) => throw new UnreachableException();
 }

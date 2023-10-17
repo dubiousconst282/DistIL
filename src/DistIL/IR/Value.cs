@@ -1,8 +1,6 @@
 namespace DistIL.IR;
 
-using System.IO;
-
-public abstract class Value
+public abstract class Value : IPrintable
 {
     public TypeDesc ResultType { get; protected set; } = PrimType.Void;
     /// <summary> Whether this value's result type is not void. </summary>
@@ -10,13 +8,7 @@ public abstract class Value
 
     public abstract void Print(PrintContext ctx);
     public virtual void PrintAsOperand(PrintContext ctx) => Print(ctx);
-
-    public override string ToString()
-    {
-        var sw = new StringWriter();
-        Print(new PrintContext(sw, (this as TrackedValue)?.GetSymbolTable() ?? SymbolTable.Detached));
-        return sw.ToString();
-    }
+    public override string ToString() => PrintContext.ToString(this, (this as TrackedValue)?.GetSymbolTable());
 
     internal virtual void AddUse(Instruction user, int operIdx) { }
     internal virtual void RemoveUse(Instruction user, int operIdx) { }

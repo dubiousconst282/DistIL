@@ -208,8 +208,8 @@ partial class ILGenerator
             }
             case ILCode.Isinst:
             case ILCode.Box: {
-                Push(inst.Args[1]);
-                _asm.Emit(op, (TypeDesc)inst.Args[0]);
+                Push(inst.Args[0]);
+                _asm.Emit(op, (TypeDesc)inst.StaticArgs[0]);
                 break;
             }
             case ILCode.Castclass:
@@ -221,7 +221,7 @@ partial class ILGenerator
             }
             case ILCode.Ldtoken:
             case ILCode.Sizeof: {
-                _asm.Emit(op, inst.Args[0]);
+                _asm.Emit(op, inst.StaticArgs[0]);
                 break;
             }
             case ILCode.Ldlen:
@@ -241,7 +241,7 @@ partial class ILGenerator
                 if (op == ILCode.Cpblk) {
                     Push(mc.Args[2]);
                 } else {
-                    type = (TypeDesc)mc.Args[2];
+                    type = (TypeDesc)mc.StaticArgs[0];
                 }
                 EmitMemPrefix(mc.Flags);
                 _asm.Emit(op, type);
@@ -257,8 +257,7 @@ partial class ILGenerator
                     Push(mc.Args[1]);
                     Push(mc.Args[2]);
                 } else {
-                    EmitMemPrefix(mc.Flags);
-                    type = (TypeDesc)mc.Args[1];
+                    type = (TypeDesc)mc.StaticArgs[0];
                 }
                 EmitMemPrefix(mc.Flags);
                 _asm.Emit(op, type);

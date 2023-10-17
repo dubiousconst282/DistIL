@@ -1,11 +1,12 @@
 ﻿namespace DistIL.AsmIO;
 
-/// <summary> The base class of all types. </summary>
+/// <summary> Describes a type declaration. </summary>
 public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
 {
     public abstract TypeKind Kind { get; }
     public abstract StackType StackType { get; }
 
+    public abstract string Name { get; }
     public abstract string? Namespace { get; }
 
     public abstract TypeDesc? BaseType { get; }

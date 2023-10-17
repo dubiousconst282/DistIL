@@ -12,7 +12,7 @@ internal partial class ModuleWriter
     readonly MethodBodyStreamEncoder _bodyEncoder;
     private BlobBuilder? _fieldDataStream;
 
-    readonly Dictionary<Entity, EntityHandle> _handleMap = new();
+    readonly Dictionary<EntityDesc, EntityHandle> _handleMap = new();
     //Generic parameters must be sorted based on the coded parent entity handle, we do that in a later pass.
     readonly List<EntityDesc> _genericDefs = new();
 

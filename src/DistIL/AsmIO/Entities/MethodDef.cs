@@ -18,6 +18,7 @@ public abstract class MethodDesc : MemberDesc
     public bool IsStatic => (Attribs & MethodAttributes.Static) != 0;
     public bool IsInstance => !IsStatic;
     public bool IsGeneric => GenericParams.Count > 0;
+    public bool IsPublic => (Attribs & MethodAttributes.MemberAccessMask) == MethodAttributes.Public;
 
     public TypeDesc ReturnType => ReturnSig.Type;
 

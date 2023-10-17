@@ -75,7 +75,7 @@ partial class ModuleWriter
             case ILOperandType.Field:
             case ILOperandType.Method:
             case ILOperandType.Tok: {
-                var handle = GetHandle((Entity)inst.Operand!);
+                var handle = GetHandle((EntityDesc)inst.Operand!);
                 bw.WriteInt32(MetadataTokens.GetToken(handle));
                 break;
             }

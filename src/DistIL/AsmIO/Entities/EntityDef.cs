@@ -1,10 +1,13 @@
 namespace DistIL.AsmIO;
 
-public interface Entity
+public abstract class EntityDesc : IPrintable
 {
+    public abstract void Print(PrintContext ctx);
+    public virtual void PrintAsOperand(PrintContext ctx) => Print(ctx);
+    public override string ToString() => PrintContext.ToString(this);
 }
 /// <summary> Represents an entity defined in a module. </summary>
-public interface ModuleEntity : Entity
+public interface ModuleEntity
 {
     ModuleDef Module { get; }
 
@@ -12,19 +15,9 @@ public interface ModuleEntity : Entity
     /// <param name="readOnly">When true, the returned list may be read-only. If you intend to add or remove attributes, set this to false. </param>
     IList<CustomAttrib> GetCustomAttribs(bool readOnly = true);
 }
-/// <summary> Represents an entity referenced or defined in a module. </summary>
-public abstract class EntityDesc : Value, Entity
-{
-    public abstract string Name { get; }
-
-    [Obsolete("This property always returns `PrimType.Void` for `EntityDesc` objects, and can be confused with `MethodDesc.ReturnType`.")]
-    public new TypeDesc ResultType => base.ResultType;
-
-    [Obsolete("This property always returns `false` for `EntityDesc` objects.")]
-    public new bool HasResult => base.HasResult;
-}
 
 public abstract class MemberDesc : EntityDesc
 {
+    public abstract string Name { get; }
     public abstract TypeDesc DeclaringType { get; }
 }

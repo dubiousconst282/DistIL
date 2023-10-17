@@ -29,11 +29,11 @@ partial class ModuleWriter
     }
 
     //Add reference to an entity defined in another module
-    private EntityHandle CreateHandle(Entity entity)
+    private EntityHandle CreateHandle(EntityDesc entity)
     {
         switch (entity) {
             case TypeDef type: {
-                var scope = (Entity?)type.DeclaringType ?? _mod._typeRefRoots.GetValueOrDefault(type, type.Module);
+                var scope = (EntityDesc?)type.DeclaringType ?? _mod._typeRefRoots.GetValueOrDefault(type, type.Module);
                 return _builder.AddTypeReference(
                     GetHandle(scope),
                     AddString(type.Namespace),
@@ -43,13 +43,6 @@ partial class ModuleWriter
             case TypeDesc type: {
                 return _builder.AddTypeSpecification(
                     EncodeSig(b => EncodeType(b.TypeSpecificationSignature(), type))
-                );
-            }
-            case TypeSig sig: {
-                Debug.Assert(sig.HasCustomMods);
-
-                return _builder.AddTypeSpecification(
-                    EncodeSig(b => EncodeType(b.TypeSpecificationSignature(), sig))
                 );
             }
             case MethodDesc method: {
@@ -84,7 +77,7 @@ partial class ModuleWriter
         }
     }
 
-    private EntityHandle GetHandle(Entity entity)
+    private EntityHandle GetHandle(EntityDesc entity)
     {
         if (entity is PrimType primType) {
             entity = primType.GetDefinition(_mod.Resolver);
@@ -97,7 +90,11 @@ partial class ModuleWriter
 
     private EntityHandle GetSigHandle(TypeSig sig)
     {
-        //Avoid boxing if the sig has no custom mods
-        return sig.HasCustomMods ? GetHandle((Entity)sig) : GetHandle(sig.Type);
+        if (!sig.HasCustomMods) {
+            return GetHandle(sig.Type);
+        }
+        return _builder.AddTypeSpecification(
+            EncodeSig(b => EncodeType(b.TypeSpecificationSignature(), sig))
+        );
     }
 }

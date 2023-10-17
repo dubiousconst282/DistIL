@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 public class SymbolTable
 {
     /// <summary> A read-only symbol table which is not attached to any method, and only provides a static dummy name. </summary>
-    public static SymbolTable Detached { get; } = new();
+    public static SymbolTable Empty { get; } = new();
 
     readonly MethodBody? _method;
 
@@ -21,7 +21,7 @@ public class SymbolTable
 
     public void SetName(TrackedValue value, string name)
     {
-        Ensure.That(this != Detached);
+        Ensure.That(this != Empty);
 
         //Pick an unique name
         string origName = name;
@@ -44,7 +44,7 @@ public class SymbolTable
 
     private string GetName(TrackedValue value, string format)
     {
-        if (this == Detached) {
+        if (this == Empty) {
             return string.Format(format, 0);
         }
         if (!_tags.TryGetValue(value, out var tag)) {

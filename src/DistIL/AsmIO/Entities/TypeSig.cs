@@ -3,7 +3,7 @@ namespace DistIL.AsmIO;
 using System.Runtime.CompilerServices;
 
 /// <summary> Represents a type used by a signature, which may contain custom modifiers. </summary>
-public readonly struct TypeSig : IEquatable<TypeSig>, Entity
+public readonly struct TypeSig : IEquatable<TypeSig>, IPrintable
 {
     //Modified types are quite rare. We can save a little bit of memory by heap allocating
     //them into a wrapper class instead of always having a field for the modifier array.
@@ -41,11 +41,13 @@ public readonly struct TypeSig : IEquatable<TypeSig>, Entity
             ctx.Print(")");
         }
     }
+    void IPrintable.Print(PrintContext ctx) => Print(ctx, false);
+    void IPrintable.PrintAsOperand(PrintContext ctx) => Print(ctx, false);
 
     public override string ToString()
     {
         var sw = new StringWriter();
-        Print(new PrintContext(sw, SymbolTable.Detached));
+        Print(new PrintContext(sw, SymbolTable.Empty));
         return sw.ToString();
     }
 

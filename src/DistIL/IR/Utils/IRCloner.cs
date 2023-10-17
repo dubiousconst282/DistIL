@@ -73,24 +73,28 @@ public class IRCloner
             return newValue;
         }
         if (value is LocalSlot var) {
-            var newType = Remap(var.Type) as TypeDesc ?? throw new InvalidOperationException();
+            var newType = (TypeDesc)Remap(var.Type);
             newValue = new LocalSlot(newType, pinned: var.IsPinned);
             _mappings.Add(value, newValue);
             return newValue;
         }
-        if (value is Const or EntityDesc or Undef) {
-            if (!_genericContext.IsNull && value is EntityDesc) {
-                return _mappings[value] = value switch {
-                    TypeDesc c => c.GetSpec(_genericContext),
-                    MethodDesc c => c.GetSpec(_genericContext),
-                    FieldDesc c => c.GetSpec(_genericContext)
-                };
-            }
+        if (value is Const or Undef) {
             return value;
         }
         //At this point, all non TrackedValue`s, must have been handled
         _pendingValues.Add((TrackedValue)value); 
         return null;
+    }
+    private EntityDesc Remap(EntityDesc entity)
+    {
+        if (_genericContext.IsNull) {
+            return entity;
+        }
+        return entity switch {
+            TypeDesc c => c.GetSpec(_genericContext),
+            MethodDesc c => c.GetSpec(_genericContext),
+            FieldDesc c => c.GetSpec(_genericContext)
+        };
     }
 
     class InstCloner : InstVisitor
@@ -111,11 +115,23 @@ public class IRCloner
         private V Remap<V>(V val) where V : Value
             => (V)(_ctx.Remap(val) ?? val);
 
+        private TypeDesc Remap(TypeDesc val) => (TypeDesc)_ctx.Remap(val);
+        private MethodDesc Remap(MethodDesc val) => (MethodDesc)_ctx.Remap(val);
+        private FieldDesc Remap(FieldDesc val) => (FieldDesc)_ctx.Remap(val);
+
         private Value[] RemapArgs(ReadOnlySpan<Value> args)
         {
             var newArgs = new Value[args.Length];
             for (int i = 0; i < args.Length; i++) {
                 newArgs[i] = Remap(args[i]);
+            }
+            return newArgs;
+        }
+        private EntityDesc[] RemapEntities(ReadOnlySpan<EntityDesc> args)
+        {
+            var newArgs = new EntityDesc[args.Length];
+            for (int i = 0; i < args.Length; i++) {
+                newArgs[i] = _ctx.Remap(args[i]);
             }
             return newArgs;
         }
@@ -158,7 +174,7 @@ public class IRCloner
         public void Visit(CallInst inst) => Out(new CallInst(Remap(inst.Method), RemapArgs(inst.Args), inst.IsVirtual, inst.Constraint == null ? null : Remap(inst.Constraint)));
         public void Visit(NewObjInst inst) => Out(new NewObjInst(Remap(inst.Constructor), RemapArgs(inst.Args)));
         public void Visit(FuncAddrInst inst) => Out(new FuncAddrInst(Remap(inst.Method), inst.IsVirtual ? Remap(inst.Object) : null));
-        public void Visit(IntrinsicInst inst) => Out(inst.CloneWith(Remap(inst.ResultType), RemapArgs(inst.Args)));
+        public void Visit(IntrinsicInst inst) => Out(inst.CloneWith(Remap(inst.ResultType), RemapEntities(inst.StaticArgs), RemapArgs(inst.Args)));
         public void Visit(SelectInst inst) => Out(new SelectInst(Remap(inst.Cond), Remap(inst.IfTrue), Remap(inst.IfFalse), Remap(inst.ResultType)));
 
         public void Visit(ReturnInst inst) => Out(new ReturnInst(inst.HasValue ? Remap(inst.Value) : null));

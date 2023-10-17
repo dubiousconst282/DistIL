@@ -295,7 +295,7 @@ public class IRPrinter
             _forest = forest;
         }
 
-        public override void PrintAsOperand(Value value)
+        public override void PrintAsOperand(IPrintable value)
         {
             if (value is Instruction inst && _forest.IsLeaf(inst)) {
                 Print("(");

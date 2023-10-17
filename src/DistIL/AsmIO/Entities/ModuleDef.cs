@@ -5,7 +5,7 @@ using System.IO;
 using System.Reflection;
 using System.Reflection.Metadata;
 
-public class ModuleDef : Entity
+public class ModuleDef : EntityDesc
 {
     public string ModName { get; set; } = null!;
     public AssemblyName AsmName { get; set; } = null!;
@@ -81,6 +81,9 @@ public class ModuleDef : Entity
 
     public override string ToString()
         => AsmName.ToString();
+
+    public override void Print(PrintContext ctx)
+        => ctx.Print(AsmName.ToString());
 
     internal class TypeList : IReadOnlyCollection<TypeDef>
     {

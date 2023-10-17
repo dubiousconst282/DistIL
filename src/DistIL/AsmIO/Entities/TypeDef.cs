@@ -79,7 +79,7 @@ public class TypeDef : TypeDefOrSpec
     private Dictionary<MethodDesc, MethodDef>? _itfMethodImpls;
 
     private IList<CustomAttrib>? _customAttribs;
-    private Dictionary<(Entity, Entity?), IList<CustomAttrib>>? _itfCustomAttribs;
+    private Dictionary<(EntityDesc, EntityDesc?), IList<CustomAttrib>>? _itfCustomAttribs;
 
     private SpecCache? _specCache;
 
@@ -188,14 +188,14 @@ public class TypeDef : TypeDefOrSpec
         return GetItfCustomAttribs((impl, decl), readOnly);
     }
 
-    private IList<CustomAttrib> GetItfCustomAttribs((Entity, Entity?) key, bool readOnly)
+    private IList<CustomAttrib> GetItfCustomAttribs((EntityDesc, EntityDesc?) key, bool readOnly)
     {
         return readOnly
             ? _itfCustomAttribs?.GetValueOrDefault(key) ?? Array.Empty<CustomAttrib>()
             : CustomAttribExt.GetOrInitList(ref (_itfCustomAttribs ??= new()).GetOrAddRef(key), readOnly);
     }
 
-    private void SetItfCustomAttribs((Entity, Entity?) key, IList<CustomAttrib>? list)
+    private void SetItfCustomAttribs((EntityDesc, EntityDesc?) key, IList<CustomAttrib>? list)
     {
         if (list != null) {
             (_itfCustomAttribs ??= new()).Add(key, list);

@@ -113,6 +113,7 @@ public class LoopStrengthReduction : IMethodPass
 
         foreach (var (source, (addrs, boundsLoop, isSpan)) in indexedAccs) {
             if (isSpan && !IsSpanLive(source, loop)) continue;
+            if (!loop.IsInvariant(source)) continue;
             //Preheader:
             //  ...
             //  T& basePtr = call MemoryMarshal::GetArrayDataReference<T>(T[]: array)
@@ -138,9 +139,11 @@ public class LoopStrengthReduction : IMethodPass
 
                     //Delete old bound access
                     var oldBound = (Instruction)exitCond.Right;
-                    oldBound.Remove();
+                    if (oldBound.NumUses == 0) {
+                        oldBound.Remove();
+                    }
 
-                    if (oldBound is ConvertInst { Value: IntrinsicInst oldLen }) {
+                    if (oldBound is ConvertInst { Value: IntrinsicInst { NumUses: 0 } oldLen }) {
                         oldLen.Remove();
                     }
                 }
@@ -162,11 +165,15 @@ public class LoopStrengthReduction : IMethodPass
                 }
 
                 //Hoist array/span length access
-                if (exitCond.Right is Instruction oldBound) {
-                    oldBound.MoveBefore(preheader.Last);
-
+                if (exitCond.Right is Instruction oldBound && !loop.IsInvariant(oldBound)) {
                     if (oldBound is ConvertInst { Value: IntrinsicInst oldLen }) {
-                        oldLen.MoveBefore(oldBound);
+                        // conv(arrlen)
+                        if (oldBound.Prev == oldLen) {
+                            oldBound.MoveBefore(preheader.Last);
+                            oldLen.MoveBefore(oldBound);
+                        }
+                    } else {
+                        oldBound.MoveBefore(preheader.Last);
                     }
                 }
             }

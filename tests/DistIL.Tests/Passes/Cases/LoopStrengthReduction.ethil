@@ -44,6 +44,35 @@ L_Exit:
 //CHECK: ret
 }
 
+static Self::StrengthReduceSpan_NoHoist(#data: Span`1[float]) -> float {
+$Locals:
+  loc2: Span`1[float]
+BB_01:
+  store $loc2, #data
+  len = call Span`1[!0]::get_Length(this: $loc2) -> int
+  lenUse = xor len, 123 -> int
+  goto L_Header
+L_Body:
+  r5 = call Span`1[!0]::get_Item(this: $loc2, int: r12) -> !0&
+  r6 = load r5 -> float
+  r7 = fadd r11, r6 -> float
+  r8 = add r12, 1 -> int
+  goto L_Header
+L_Header:
+  r11 = phi [BB_01: 0.0f], [L_Body: r7] -> float
+  r12 = phi [BB_01: 0], [L_Body: r8] -> int
+  r14 = icmp.slt r12, len -> bool
+  goto r14 ? L_Body : L_Exit
+L_Exit:
+  lenUse2 = conv lenUse -> ulong
+  ret r11
+//CHECK: StrengthReduceSpan_NoHoist
+//CHECK: get_Length
+//CHECK-NEXT: xor
+//CHECK-NOT: get_Item
+//CHECK: ret
+}
+
 static Self::RemoveDuplicatedCounters(#buffer: int&, #count: int) -> void {
 BB_01:
   goto L_Header

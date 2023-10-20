@@ -67,7 +67,7 @@ public class LoopInfo
     /// <summary> Checks if the specified value is defined outside the loop. </summary>
     public bool IsInvariant(Value val)
     {
-        return val is Argument or Const || (val is Instruction inst && !Contains(inst.Block));
+        return !(val is Instruction inst && Contains(inst.Block));
     }
 
     public BasicBlock? GetPreheader() => GetPredecessor() is { NumSuccs: 1 } bb ? bb : null;

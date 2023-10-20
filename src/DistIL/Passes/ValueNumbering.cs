@@ -1,71 +1,135 @@
 namespace DistIL.Passes;
 
+using DistIL.Analysis;
+
+// TODO: consider implementing https://gcc.gnu.org/wiki/GVN-PRE
 public class ValueNumbering : IMethodPass
 {
     public MethodPassResult Run(MethodTransformContext ctx)
     {
-        var map = new VNMap();
+        var table = new ValueTable() {
+            DomTree = ctx.GetAnalysis<DominatorTree>()
+        };
+        bool madeChanges = false;
 
-        foreach (var block in ctx.Method) {
+        // Generate list of blocks in reverse post order, so that we visit most predecessors first.
+        // (index will be > 0 at the end if there are unreachable blocks.)
+        var blocks = new BasicBlock[ctx.Method.NumBlocks];
+        int index = blocks.Length;
+        ctx.Method.TraverseDepthFirst(postVisit: block => blocks[--index] = block);
+
+        // Perform GVN
+        foreach (var block in blocks.AsSpan(index)) {
             foreach (var inst in block) {
-                if (s_Taggers.TryGetValue(inst.GetType(), out var tagger)) {
-                    tagger.Update(map, inst);
-                }
+                madeChanges |= table.Process(inst);
             }
-            map.Clear();
         }
-        return map.MadeChanges ? MethodInvalidations.DataFlow : 0;
+
+        return madeChanges ? MethodInvalidations.DataFlow : 0;
     }
 
-    class VNMap
+    class ValueTable
     {
-        readonly Dictionary<Instruction, Value> _map = new(VNComparer.Instance);
-        public bool MadeChanges = false;
+        readonly Dictionary<Instruction, List<Instruction>> _availMap = new(VNComparer.Instance);
+        public required DominatorTree DomTree;
 
-        //Memoize inst result, or replace it with a memoized equivalent value.
-        public void MemoizeOrReplace(Instruction inst)
+        public bool Process(Instruction inst)
         {
-            if (_map.TryGetValue(inst, out var memoized)) {
-                inst.ReplaceWith(memoized);
-                MadeChanges = true;
-            } else {
-                Replace(inst, inst);
-            }
-        }
-        public void Replace(Instruction inst, Value value)
-        {
-            _map[inst] = value;
-        }
-        public void Invalidate(Instruction inst)
-        {
-            _map.Remove(inst);
-        }
-        
-        public void InvalidateAccesses<TInst>(TInst inst, Func<TInst, MemoryInst, bool> mayAlias)
-        {
-            //Load/Store insts are used interchangeably as location keys
-            foreach (var access in _map.Keys.OfType<MemoryInst>()) {
-                if (mayAlias(inst, access)) {
-                    Invalidate(access);
+            if (!s_Taggers.ContainsKey(inst.GetType())) return false;
+            if (inst is MemoryInst { IsVolatile: true } || inst is StoreInst { IsCasting: true }) return false;
+
+            var availDefs = _availMap.GetOrAddRef(inst) ??= new();
+
+            // Check if there's another available def for this instruction
+            if (inst is not StoreInst) {
+                foreach (var otherDef in availDefs) {
+                    if (!CheckAvail(otherDef, inst)) continue;
+
+                    var repl = otherDef is StoreInst store ? store.Value : otherDef;
+                    Debug.Assert(repl.ResultType.IsStackAssignableTo(inst.ResultType));
+                    inst.ReplaceWith(repl);
+                    return true;
                 }
             }
-        }
-        public void InvalidateCalls(Func<CallInst, bool> mayAlias)
-        {
-            //Load/Store insts are used interchangeably as location keys
-            foreach (var call in _map.Keys.OfType<CallInst>()) {
-                if (mayAlias(call)) {
-                    Invalidate(call);
-                }
+
+            // Add inst to the available set
+            if (availDefs.Count > 0 && availDefs[^1] is Instruction prev && prev.Block == inst.Block) {
+                availDefs.RemoveAt(availDefs.Count - 1);
             }
+            availDefs.Add(inst);
+            return false;
         }
 
-        public void Clear()
+        // Checks if `def` is available at `user` by walking backwards over the CFG until its definition.
+        public bool CheckAvail(Instruction def, Instruction user)
         {
-            _map.Clear();
+            // Trivial reject
+            if (!DomTree.Dominates(def.Block, user.Block)) return false;
+
+            // Trivial accept instructions that don't access memory or are pure
+            if (!(def is MemoryInst or CallInst)) return true;
+
+            if (def is CallInst call) {
+                var effect = GetFuncSideEffect(call.Method);
+
+                if (effect == FuncSideEffect.Pure) return true;
+                if (effect == FuncSideEffect.MayWrite) return false;
+                // if effect == MayRead, check for clobbers
+            }
+
+            // Scan CFG backwards to find memory clobbers
+            // TODO: cache results or mark something on the avail list to avoid re-scans
+            var worklist = new DiscreteStack<BasicBlock>(user.Block);
+
+            while (worklist.TryPop(out var block)) {
+                var inst = block == user.Block ? user : block.Last;
+                var firstInst = block == def.Block ? def.Next : null;
+
+                for (; inst != firstInst; inst = inst.Prev!) {
+                    if (MayClobberDef(def, inst)) {
+                        return false;
+                    }
+                }
+
+                if (block == def.Block) continue; // stop when reaching def's block
+
+                foreach (var pred in block.Preds) {
+                    worklist.Push(pred);
+                }
+            }
+
+            return true;
         }
     }
 
+
+    // Checks if `inst` may clobber the result value of `def`.
+    private static bool MayClobberDef(Instruction def, Instruction inst)
+    {
+        if (inst is StoreInst store) {
+            if (def is LoadInst load) {
+                return MayAlias(load.Address, store.Address);
+            }
+            return true;
+        }
+        if (inst is CallInst call) {
+            return GetFuncSideEffect(call.Method) == FuncSideEffect.MayWrite;
+        }
+        return inst.MayWriteToMemory;
+    }
+
+    // High tech, state of the art alias analysis. :)
+    private static bool MayAlias(Value addr1, Value addr2)
+    {
+        return (addr1, addr2) switch {
+            //Different fields will never alias unless they're in an struct with explicit layout; but we don't care for now
+            (FieldAddrInst f1, FieldAddrInst f2) => f1.Field == f2.Field,
+            (LocalSlot l1, LocalSlot l2) => l1 == l2,
+            _ => true 
+        };
+    }
+
+    #region Instruction Hashing/Equality
     //Note: methods of this class will only be called for instructions with a registered tagger.
     class VNComparer : IEqualityComparer<Instruction>
     {
@@ -80,13 +144,13 @@ public class ValueNumbering : IMethodPass
                 if (!(x is MemoryInst && y is MemoryInst)) {
                     return false;
                 }
-                type = typeof(LoadInst);
+                type = typeof(MemoryInst);
             }
-            return s_Taggers[type].Compare(x, y);
+            return s_Taggers[type].CompareFn(x, y);
         }
         public int GetHashCode(Instruction inst)
         {
-            return s_Taggers[inst.GetType()].Hash(inst);
+            return s_Taggers[inst.GetType()].HashFn(inst);
         }
     }
 
@@ -94,197 +158,135 @@ public class ValueNumbering : IMethodPass
 
     static ValueNumbering()
     {
-        //value.Equals() must be used in some places becase e.g. Const values may have different instances.
-        Reg<BinaryInst>(new() {
-            CompareFn = (a, b) => a.Op == b.Op && a.Left.Equals(b.Left) && a.Right.Equals(b.Right),
-            HashFn = (inst) => HashCode.Combine((int)inst.Op | 0x10000, inst.Left, inst.Right)
-        });
-        Reg<UnaryInst>(new() {
-            CompareFn = (a, b) => a.Op == b.Op && a.Value.Equals(b.Value),
-            HashFn = (inst) => HashCode.Combine((int)inst.Op | 0x20000, inst.Value)
-        });
-        Reg<CompareInst>(new() {
-            CompareFn = (a, b) => a.Op == b.Op && a.Left.Equals(b.Left) && a.Right.Equals(b.Right),
-            HashFn = (inst) => HashCode.Combine((int)inst.Op | 0x30000, inst.Left, inst.Right)
-        });
-        Reg<ConvertInst>(new() {
-            CompareFn = (a, b) => a.ResultType == b.ResultType && a.Value.Equals(b.Value) && a.CheckOverflow == b.CheckOverflow && a.SrcUnsigned == b.SrcUnsigned,
-            HashFn = (inst) => HashCode.Combine(inst.ResultType, inst.Value)
-        });
-        
-        Reg<FieldAddrInst>(new() {
-            CompareFn = (a, b) => a.Field == b.Field && a.Obj == b.Obj,
-            HashFn = (inst) => HashCode.Combine(inst.Field, inst.Obj, 1234)
-        });
-        Reg<ArrayAddrInst>(new() {
-            CompareFn = (a, b) => a.Array.Equals(b.Array) && a.Index.Equals(b.Index) && a.ElemType == b.ElemType && a.InBounds == b.InBounds && a.IsReadOnly == b.IsReadOnly,
-            HashFn = (inst) => HashCode.Combine(inst.Array, inst.Index, 1234)
-        });
-        Reg<PtrOffsetInst>(new() {
-            CompareFn = (a, b) => a.BasePtr == b.BasePtr && a.Index.Equals(b.Index) && (a.KnownStride ? a.Stride == b.Stride : a.ElemType == b.ElemType),
-            HashFn = (inst) => HashCode.Combine(inst.BasePtr, inst.Index, inst.Stride)
-        });
-        Reg<ExtractFieldInst>(new() {
-            CompareFn = (a, b) => a.Field == b.Field && a.Obj == b.Obj,
-            HashFn = (inst) => HashCode.Combine(inst.Field, inst.Obj, 2345)
-        });
+        // TODO: this looks overly complicated, maybe just use a switch expr?
 
-        var memTagger = new MemoryTagger();
-        s_Taggers.Add(typeof(LoadInst), memTagger);
-        s_Taggers.Add(typeof(StoreInst), memTagger);
+        // NOTE: value.Equals() are used in some places becase Const values may have different instances.
+        Reg<BinaryInst>(
+            comp: (a, b) => a.Op == b.Op && a.Left.Equals(b.Left) && a.Right.Equals(b.Right),
+            hash: (inst) => HashCode.Combine((int)inst.Op | 0x10000, inst.Left, inst.Right)
+        );
+        Reg<UnaryInst>(
+            comp: (a, b) => a.Op == b.Op && a.Value.Equals(b.Value),
+            hash: (inst) => HashCode.Combine((int)inst.Op | 0x20000, inst.Value)
+        );
+        Reg<CompareInst>(
+            comp: (a, b) => a.Op == b.Op && a.Left.Equals(b.Left) && a.Right.Equals(b.Right),
+            hash: (inst) => HashCode.Combine((int)inst.Op | 0x30000, inst.Left, inst.Right)
+        );
+        Reg<ConvertInst>(
+            comp: (a, b) => a.ResultType == b.ResultType && a.Value.Equals(b.Value) && 
+                            a.CheckOverflow == b.CheckOverflow && a.SrcUnsigned == b.SrcUnsigned,
+            hash: (inst) => HashCode.Combine(inst.ResultType, inst.Value)
+        );
+        Reg<ExtractFieldInst>(
+            comp: (a, b) => a.Field == b.Field && a.Obj == b.Obj,
+            hash: (inst) => HashCode.Combine(inst.Field, inst.Obj, 2345)
+        );
 
-        s_Taggers.Add(typeof(CallInst), new CallTagger());
-        //FIXME: tag invalidators for NewObj and Intrinsic insts
+        Reg<FieldAddrInst>(
+            comp: (a, b) => a.Field == b.Field && a.Obj == b.Obj && a.InBounds == b.InBounds,
+            hash: (inst) => HashCode.Combine(inst.Field, inst.Obj, 1234)
+        );
+        Reg<ArrayAddrInst>(
+            comp: (a, b) => a.Array.Equals(b.Array) && a.Index.Equals(b.Index) && a.ElemType == b.ElemType && 
+                            a.InBounds == b.InBounds && a.IsReadOnly == b.IsReadOnly,
+            hash: (inst) => HashCode.Combine(inst.Array, inst.Index, 1234)
+        );
+        Reg<PtrOffsetInst>(
+            comp: (a, b) => a.BasePtr == b.BasePtr && a.Index.Equals(b.Index) && 
+                            (a.KnownStride ? a.Stride == b.Stride : a.ElemType == b.ElemType),
+            hash: (inst) => HashCode.Combine(inst.BasePtr, inst.Index, inst.Stride)
+        );
 
-        static void Reg<TInst>(LambdaTagger<TInst> tagger)
-            where TInst : Instruction
-        {
-            s_Taggers.Add(typeof(TInst), tagger);
-        }
-    }
+        Reg<CilIntrinsic.ArrayLen>(
+            comp: (a, b) => a.Args[0] == b.Args[0],
+            hash: (inst) => HashCode.Combine(inst.Args[0])
+        );
+        Reg<CilIntrinsic.CastClass>(
+            comp: (a, b) => a.Args[0] == b.Args[0] && a.DestType == b.DestType,
+            hash: (inst) => HashCode.Combine(inst.DestType, inst.Args[0])
+        );
+        Reg<CilIntrinsic.AsInstance>(
+            comp: (a, b) => a.Args[0] == b.Args[0] && a.DestType == b.DestType,
+            hash: (inst) => HashCode.Combine(inst.DestType, inst.Args[0])
+        );
 
-    abstract class InstTagger
-    {
-        public abstract bool Compare(Instruction a, Instruction b);
-        public abstract int Hash(Instruction inst);
+        // FIXME: consider volatile accesses
+        Reg<MemoryInst>(
+            comp: (a, b) => a.Address == b.Address && a.ElemType == b.ElemType,
+            hash: (inst) => HashCode.Combine(inst.Address)
+        );
 
-        public virtual void Update(VNMap map, Instruction inst)
-        {
-            map.MemoizeOrReplace(inst);
-        }
-    }
-    class LambdaTagger<TInst> : InstTagger where TInst : Instruction
-    {
-        public Func<TInst, TInst, bool> CompareFn { get; init; } = null!;
-        public Func<TInst, int> HashFn { get; init; } = null!;
+        s_Taggers[typeof(LoadInst)] = s_Taggers[typeof(MemoryInst)];
+        s_Taggers[typeof(StoreInst)] = s_Taggers[typeof(MemoryInst)];
 
-        public override bool Compare(Instruction a, Instruction b)
-            => CompareFn.Invoke((TInst)a, (TInst)b);
-
-        public override int Hash(Instruction inst)
-            => HashFn.Invoke((TInst)inst);
-    }
-    class MemoryTagger : InstTagger
-    {
-        public override bool Compare(Instruction a, Instruction b)
-        {
-            var ma = (MemoryInst)a;
-            var mb = (MemoryInst)b;
-            return ma.Address == mb.Address && ma.ElemType == mb.ElemType;
-        }
-        public override int Hash(Instruction inst)
-        {
-            return HashCode.Combine(((MemoryInst)inst).Address);
-        }
-
-        public override void Update(VNMap map, Instruction inst)
-        {
-            if (inst is LoadInst) {
-                map.MemoizeOrReplace(inst);
-                return;
-            }
-            var store = (StoreInst)inst;
-            map.InvalidateAccesses(store, (store, otherAcc) => MayAlias(store.Address, otherAcc.Address));
-
-            if (!StoreInst.MustBeCoerced(store.ElemType, store.Value)) {
-                map.Replace(store, store.Value);
-            }
-        }
-
-        private static bool MayAlias(Value addr1, Value addr2)
-        {
-            return (addr1, addr2) switch {
-                //Different fields will never alias unless they're have explicit layout struct; but we don't care for now
-                (FieldAddrInst f1, FieldAddrInst f2) => f1.Field == f2.Field,
-                _ => true //assume the worst
-            };
-        }
-    }
-    class CallTagger : InstTagger
-    {
         //FIXME: proper equality for MethodSpec (maybe implement Equals() and GetHashCode()?)
         //       For now, reference comparation will work in most cases,
         //       since we don't always create new instances.
-        public override bool Compare(Instruction a, Instruction b)
-        {
-            var callA = (CallInst)a;
-            var callB = (CallInst)b;
-            return callA.Method == callB.Method && callA.Args.SequenceEqual(callB.Args);
-        }
-        public override int Hash(Instruction inst)
-        {
-            var call = (CallInst)inst;
-            return HashCode.Combine(call.Method, call.NumArgs > 0 ? call.Args[0] : null);
-        }
+        Reg<CallInst>(
+            comp: (a, b) => a.Method == b.Method && a.Args.SequenceEqual(b.Args),
+            hash: (inst) => HashCode.Combine(inst.Method, inst.NumArgs > 0 ? inst.Args[0] : null)
+        );
 
-        public override void Update(VNMap map, Instruction inst)
+        static void Reg<TInst>(Func<TInst, TInst, bool> comp, Func<TInst, int> hash)
+            where TInst : Instruction
         {
-            var call = (CallInst)inst;
-            switch (GetKind(call.Method)) {
-                case FuncKind.Pure or FuncKind.ObjAccessor: {
-                    map.MemoizeOrReplace(call);
-                    break;
-                }
-                case FuncKind.ObjMutator: {
-                    map.InvalidateCalls((otherCall) => GetKind(otherCall.Method) == FuncKind.ObjAccessor);
-                    break;
-                }
-                case FuncKind.Unknown: {
-                    map.InvalidateAccesses(call, MayAffectAccess);
-                    break;
-                }
+            s_Taggers.Add(typeof(TInst), new() {
+                CompareFn = (a, b) => comp((TInst)a, (TInst)b),
+                HashFn = (inst) => hash((TInst)inst)
+            });
+        }
+    }
+
+    class InstTagger
+    {
+        public required Func<Instruction, Instruction, bool> CompareFn { get; init; }
+        public required Func<Instruction, int> HashFn { get; init; }
+    }
+#endregion
+
+
+    private static FuncSideEffect GetFuncSideEffect(MethodDesc fn)
+    {
+        if (fn.DeclaringType is TypeDefOrSpec type && type.IsCorelibType()) {
+            if (IsPure(type.Namespace, type.Name, fn)) {
+                return FuncSideEffect.Pure;
+            }
+            if (type.Namespace == "System.Collections.Generic" && type.Name is "Dictionary`2" or "List`1" or "HashSet`1") {
+                bool isAccessor = fn.Name is "get_Item" or "get_Count" or "ContainsKey";
+                return isAccessor ? FuncSideEffect.MayRead : FuncSideEffect.MayWrite;
             }
         }
+        return FuncSideEffect.MayWrite;
+    }
 
-        private static bool MayAffectAccess(CallInst call, MemoryInst acc)
-        {
-            //Local vars can't be affected by a call unless they're exposed
-            return acc.Address is not LocalSlot slot || slot.IsExposed();
-        }
-
-        private static FuncKind GetKind(MethodDesc fn)
-        {
-            if (fn.DeclaringType is TypeDefOrSpec type && type.IsCorelibType()) {
-                if (IsPure(type.Namespace, type.Name, fn)) {
-                    return FuncKind.Pure;
-                }
-                if (type.Namespace == "System.Collections.Generic" && type.Name is "Dictionary`2" or "List`1" or "HashSet`1") {
-                    bool isAccessor = fn.Name is "get_Item" or "ContainsKey";
-                    return isAccessor ? FuncKind.ObjAccessor : FuncKind.ObjMutator;
-                }
-            }
-            return FuncKind.Unknown;
-        }
-
-        private static bool IsPure(string? ns, string typeName, MethodDesc fn)
-        {
-            if (ns == "System") {
-                if (typeName is "Math" or "MathF") {
-                    return true;
-                }
-                if (typeName is "Int32" or "Int64" or "Single" or "Double" or "DateTime" or "Decimal") {
-                    //ToString() et al. aren't pure because they depend on the instance reference.
-                    return fn.Name is "Parse" or "TryParse" && fn.ParamSig[0] == PrimType.String;
-                }
-                if (typeName is "String") {
-                    return fn.Name is
-                        "Compare" or "CompareTo" or "Substring" or "Concat" or
-                        "Replace" or "Contains" or "IndexOf" or "LastIndexOf" or
-                        "ToLower" or "ToUpper" or
-                        "op_Equality" or "op_Inequality" or "Equals";
-                }
-            } else if (ns == "System.Numerics" && typeName == "BitOperations") {
+    private static bool IsPure(string? ns, string typeName, MethodDesc fn)
+    {
+        if (ns == "System") {
+            if (typeName is "Math" or "MathF") {
                 return true;
             }
-            return false;
+            if (typeName is "Int32" or "Int64" or "Single" or "Double" or "DateTime" or "Decimal") {
+                //ToString() et al. aren't pure because they depend on the instance reference.
+                return fn.Name is "Parse" or "TryParse" && fn.ParamSig[0] == PrimType.String;
+            }
+            if (typeName is "String") {
+                return fn.Name is
+                    "Compare" or "CompareTo" or "Substring" or "Concat" or
+                    "Replace" or "Contains" or "IndexOf" or "LastIndexOf" or
+                    "ToLower" or "ToUpper" or
+                    "op_Equality" or "op_Inequality" or "Equals";
+            }
+        } else if (ns == "System.Numerics" && typeName == "BitOperations") {
+            return true;
         }
+        return false;
+    }
 
-        enum FuncKind
-        {
-            Unknown,        //Can't be VN
-            Pure,           //Returns the same input for a given set of arguments, without mutating memory (may still throw or cause other side effects).
-            ObjAccessor,    //Pure within an object instance (first argument).
-            ObjMutator      //Mutates an instance object, but not global memory.
-        }
+    enum FuncSideEffect
+    {
+        Pure,       // Memory is not accessed.
+        MayRead,
+        MayWrite
     }
 }

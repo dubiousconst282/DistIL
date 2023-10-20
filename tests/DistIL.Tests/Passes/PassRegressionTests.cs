@@ -31,6 +31,9 @@ public class PassRegressionTests
     [Fact]
     public void Test_LoopStrengthReduction() => CheckEthil("LoopStrengthReduction.ethil", new LoopStrengthReduction());
 
+    [Fact]
+    public void Test_ValueNumbering() => CheckEthil("ValueNumbering.ethil", new ValueNumbering());
+
     private void CheckEthil(string filename, IMethodPass pass)
     {
         var selfType = _testAsm.CreateType("RegressionTests", $"_Test_{Path.GetFileNameWithoutExtension(filename)}");
@@ -54,6 +57,9 @@ public class PassRegressionTests
 
         var result = FileChecker.Check(source, sw.ToString(), StringComparison.Ordinal);
         if (!result.IsSuccess) {
+            Directory.CreateDirectory("regress_fail");
+            File.WriteAllText($"regress_fail/{filename}.txt", sw.ToString());
+            
             Assert.True(result.IsSuccess, result.Failures[0].Message);
         }
     }

@@ -1,0 +1,93 @@
+public static Self::LVN_BasicArith_1(#x: int, #y: int) -> int {
+BB_01:
+  r2 = mul #x, 2 -> int
+  r3 = mul #x, 2 -> int
+  r4 = add r2, r3 -> int
+  r5 = add #y, r4 -> int
+  ret r5
+// CHECK: LVN_BasicArith_1
+// CHECK: mul
+// CHECK-NOT: mul
+// CHECK: ret
+}
+
+public static Self::GVN_BasicArith_2(#x: int) -> int {
+BB_01:
+  r2 = mul #x, 3 -> int
+  r3 = icmp.sgt r2, 100 -> bool
+  goto r3 ? BB_05 : BB_09
+BB_05:
+  r6 = mul #x, 3 -> int
+  r7 = sdiv r6, 5 -> int
+  goto BB_09
+BB_09:
+  r10 = phi [BB_01: r2], [BB_05: r7] -> int
+  ret r10
+// CHECK: GVN_BasicArith_2
+// CHECK: mul
+// CHECK-NOT: mul
+// CHECK: ret
+}
+
+public static Self::GVN_Call_Pure_1(#x: float) -> float {
+BB_01:
+  r2 = call MathF::Sqrt(float: #x) -> float
+  r3 = fcmp.ogt r2, 100.0f -> bool
+  goto r3 ? BB_05 : BB_09
+BB_05:
+  r6 = call MathF::Sqrt(float: #x) -> float
+  r7 = fdiv r6, 2.0f -> float
+  goto BB_09
+BB_09:
+  r10 = phi [BB_01: r2], [BB_05: r7] -> float
+  ret r10
+// CHECK: GVN_Call_Pure_1
+// CHECK: Sqrt
+// CHECK-NOT: Sqrt
+// CHECK: ret
+}
+
+static Self::Clobber(#x: float) -> float {
+BB_01:
+  ret #x
+}
+
+public static Self::LVN_Call_NonPure_2(#x: float) -> float {
+BB_01:
+  r2 = call Self::Clobber(float: #x) -> float
+  r3 = call Self::Clobber(float: #x) -> float
+  r4 = fadd r2, r3 -> float
+  ret r4
+// CHECK: LVN_Call_NonPure_2
+// CHECK: Clobber
+// CHECK: Clobber
+// CHECK: ret
+}
+
+public static Self::GVN_Memory_Store_1(#ptr: int*, #x: int) -> int {
+BB_01:
+  r2 = add #x, 2 -> int
+  r3 = sdiv r2, 3 -> int
+  r4 = mul r3, 4 -> int
+  store #ptr, r4
+  r6 = load #ptr -> int
+  r7 = icmp.sgt r6, 100 -> bool
+  goto r7 ? BB_09 : BB_14
+BB_09: //preds: BB_01
+  r10 = load #ptr -> int
+  r11 = sdiv r10, 2 -> int
+  store #ptr, r11
+  goto BB_14
+BB_14: //preds: BB_09 BB_01
+  r15 = load #ptr -> int
+  ret r15
+// CHECK: GVN_Memory_Store_1
+// CHECK: store #ptr
+// CHECK-NOT: load
+// CHECK: goto
+// CHECK-NOT: load
+// CHECK: store
+// CHECK: goto
+// CHECK: load
+// CHECK: ret
+}

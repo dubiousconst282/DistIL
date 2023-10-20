@@ -74,9 +74,7 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
         .Apply<ScalarReplacement>()
         .IfChanged(c => c.Apply<SsaPromotion>());
 
-    manager.AddPasses()
-        .Apply<ValueNumbering>();
-        
+    // TODO: this segment is quite expansive, avoid repeating it too many times
     var simplifySeg = manager.AddPasses()
         .Apply<SimplifyInsts>()
         .Apply<SimplifyCFG>()
@@ -84,6 +82,7 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
         .RepeatUntilFixedPoint(maxIters: 3);
 
     manager.AddPasses()
+        .Apply<ValueNumbering>()
         .Apply<LoopStrengthReduction>()
         .IfChanged(simplifySeg);
 

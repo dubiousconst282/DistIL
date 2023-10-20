@@ -136,13 +136,7 @@ public partial class SimplifyInsts : IMethodPass
 
     private Value? SimplifySelect(SelectInst inst)
     {
-        if (inst.Cond is ConstInt c) {
-            return c.Value != 0 ? inst.IfTrue : inst.IfFalse;
-        }
-        if (inst.IfTrue.Equals(inst.IfFalse)) {
-            return inst.IfTrue;
-        }
-        return null;
+        return ConstFolding.FoldSelect(inst.Cond, inst.IfTrue, inst.IfFalse);
     }
 
     //r5 = conv r18 -> long         (?)

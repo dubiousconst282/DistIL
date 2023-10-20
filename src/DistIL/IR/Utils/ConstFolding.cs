@@ -66,15 +66,19 @@ public class ConstFolding
                 }
                 break;
             }
-            //Identity property: x op 0, x * 1, x & ~0 = x
+            // x op 0, x * 1, x & ~0 = x
             case (_, ConstInt { Value: 0 }, BinaryOp.Add or BinaryOp.Sub or BinaryOp.Or or BinaryOp.Xor or BinaryOp.Shl or BinaryOp.Shra or BinaryOp.Shrl):
             case (_, ConstInt { Value: 1 }, BinaryOp.Mul):
             case (_, ConstInt { Value: ~0L }, BinaryOp.And): {
                 return left;
             }
-            //Multiplication property: x * 0, x & 0 = 0
+            // x * 0, x & 0 = 0
             case (_, ConstInt { Value: 0 }, BinaryOp.Mul or BinaryOp.And): {
                 return right;
+            }
+            // x - x, x ^ x = 0
+            case (_, _, BinaryOp.Sub or BinaryOp.Xor) when left.Equals(right): {
+                return ConstInt.Create(left.ResultType, 0);
             }
         }
         return null;
@@ -160,11 +164,15 @@ public class ConstFolding
                 return left;
             }
         }
-        return r == null ? null : ConstInt.CreateI(r.Value ? 1 : 0);
+        return r == null ? null : ConstInt.Create(PrimType.Bool, r.Value ? 1 : 0);
     }
 
     public static Value? FoldSelect(Value cond, Value ifTrue, Value ifFalse)
     {
+        if (ifTrue.Equals(ifFalse)) {
+            return ifTrue;
+        }
+        
         return cond switch {
             ConstInt c => c.Value != 0 ? ifTrue : ifFalse,
             ConstNull => ifFalse,

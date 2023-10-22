@@ -45,6 +45,11 @@ public static class TypeSystemExt
         return type.StackType is StackType.ByRef or StackType.NInt or StackType.Object;
     }
 
+    public static bool IsManagedObject(this TypeDesc type)
+    {
+        return type.StackType is StackType.Object;
+    }
+
     /// <summary> If this type is generic, returns an <see cref="TypeSpec"/> with all unbound parameters. Otherwise, returns the unchanged instance. </summary>
     public static TypeDesc GetUnboundSpec(this TypeDesc type)
     {

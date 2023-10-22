@@ -8,7 +8,8 @@ public class ValueNumbering : IMethodPass
     public MethodPassResult Run(MethodTransformContext ctx)
     {
         var table = new ValueTable() {
-            DomTree = ctx.GetAnalysis<DominatorTree>()
+            DomTree = ctx.GetAnalysis<DominatorTree>(),
+            AliasAnalysis = ctx.GetAnalysis<AliasAnalysis>()
         };
         bool madeChanges = false;
 
@@ -32,6 +33,7 @@ public class ValueNumbering : IMethodPass
     {
         readonly Dictionary<Instruction, List<Instruction>> _availMap = new(VNComparer.Instance);
         public required DominatorTree DomTree;
+        public required AliasAnalysis AliasAnalysis;
 
         public bool Process(Instruction inst)
         {
@@ -100,34 +102,22 @@ public class ValueNumbering : IMethodPass
 
             return true;
         }
-    }
-
-
-    // Checks if `inst` may clobber the result value of `def`.
-    private static bool MayClobberDef(Instruction def, Instruction inst)
-    {
-        if (inst is StoreInst store) {
-            if (def is LoadInst load) {
-                return MayAlias(load.Address, store.Address);
+        // Checks if `inst` may clobber the result value of `def`.
+        private bool MayClobberDef(Instruction def, Instruction inst)
+        {
+            if (inst is StoreInst store) {
+                if (def is MemoryInst access) {
+                    return AliasAnalysis.MayAlias(store.Address, access.Address);
+                }
+                return true;
             }
-            return true;
+            if (inst is CallInst call) {
+                return GetFuncSideEffect(call.Method) == FuncSideEffect.MayWrite;
+            }
+            return inst.MayWriteToMemory;
         }
-        if (inst is CallInst call) {
-            return GetFuncSideEffect(call.Method) == FuncSideEffect.MayWrite;
-        }
-        return inst.MayWriteToMemory;
     }
 
-    // High tech, state of the art alias analysis. :)
-    private static bool MayAlias(Value addr1, Value addr2)
-    {
-        return (addr1, addr2) switch {
-            //Different fields will never alias unless they're in an struct with explicit layout; but we don't care for now
-            (FieldAddrInst f1, FieldAddrInst f2) => f1.Field == f2.Field,
-            (LocalSlot l1, LocalSlot l2) => l1 == l2,
-            _ => true 
-        };
-    }
 
     #region Instruction Hashing/Equality
     //Note: methods of this class will only be called for instructions with a registered tagger.

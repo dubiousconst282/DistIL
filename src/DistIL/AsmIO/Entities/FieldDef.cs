@@ -60,6 +60,7 @@ public class FieldDef : FieldDefOrSpec
 
     /// <summary> The field layout offset (e.g. x in [FieldOffset(x)]), or -1 if not available. </summary>
     public int LayoutOffset { get; set; }
+    public bool HasLayoutOffset => (DeclaringType.Attribs & TypeAttributes.ExplicitLayout) != 0;
 
     /// <summary> Static data associated with the field. Attribs must have HasFieldRVA, and array length must be equal to the type layout size. </summary>
     public byte[]? MappedData { get; set; }
@@ -94,11 +95,14 @@ public class FieldDef : FieldDefOrSpec
 
         var type = sigDecoder.DecodeTypeSig();
 
+        bool hasDefault = (info.Attributes & FieldAttributes.HasDefault) != 0;
+        bool hasOffset = (declaringType.Attribs & TypeAttributes.ExplicitLayout) != 0;
+
         return new FieldDef(
             declaringType, type, loader._reader.GetString(info.Name),
             info.Attributes,
-            loader._reader.DecodeConst(info.GetDefaultValue()),
-            info.GetOffset()
+            hasDefault ? loader._reader.DecodeConst(info.GetDefaultValue()) : null,
+            hasOffset ? info.GetOffset() : -1
         );
     }
     internal void Load3(ModuleLoader loader, FieldDefinition info)

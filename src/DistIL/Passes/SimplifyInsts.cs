@@ -60,6 +60,18 @@ public partial class SimplifyInsts : IMethodPass
 
     private Value? SimplifyIntrinsic(IntrinsicInst inst)
     {
+        // unbox(T, box(T, value))  ->  store $tmp, value;  $tmp
+        if (inst is CilIntrinsic.UnboxObj or CilIntrinsic.UnboxRef && inst.Args[0] is CilIntrinsic.Box box && box.NumUses == 1) {
+            var unboxType = inst is CilIntrinsic.UnboxRef ? inst.ResultType.ElemType : inst.ResultType;
+
+            if (box.Args[0].ResultType == box.SourceType && box.SourceType == unboxType) {
+                var slot = new LocalSlot(box.SourceType);
+                var copy = new StoreInst(slot, box.Args[0]);
+                copy.InsertBefore(inst);
+                box.Remove();
+                return slot;
+            }
+        }
         return ConstFolding.FoldIntrinsic(inst);
     }
 

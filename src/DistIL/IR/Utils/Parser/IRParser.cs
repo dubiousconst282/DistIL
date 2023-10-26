@@ -309,6 +309,7 @@ public partial class IRParser
             Opcode.Load or Opcode.Store => ParseMemInst(op, mods),
             Opcode.Conv => ParseConv(op, mods),
             Opcode.Lea => ParseLea(),
+            Opcode.Intrinsic => ParseIntrinsic(),
             _ => ParseMultiOpInst(op, mods, opToken.Position),
         };
         if (slotToken.Type == TokenType.Identifier) {
@@ -570,6 +571,45 @@ public partial class IRParser
             }
             return new PtrOffsetInst(basePtr, index, type);
         }
+    }
+
+    private Instruction ParseIntrinsic()
+    {
+        // intrinsic NS::Name ( "<" Seq{Type|Method|Field} ">" )?  "(" Seq{Value} ")"
+
+        string ns = _lexer.ExpectId();
+        _lexer.Expect(TokenType.DoubleColon);
+        string name = _lexer.ExpectId();
+
+        var genArgs = new List<TypeDesc>();
+        var args = new List<Value>();
+
+        if (_lexer.IsNext(TokenType.LAngle)) {
+            ParseDelimSeq(TokenType.LAngle, TokenType.RAngle, () => {
+                // TODO: support parsing static intrinsic args for entities other than types
+                //       (we could use lookahead here but it might be easier to just add a prefix to the syntax)
+                genArgs.Add(ParseType());
+            });
+        }
+
+        ParseDelimSeq(TokenType.LParen, TokenType.RParen, () => {
+            args.Add(ParseValue());
+        });
+
+        var type = ParseResultType();
+
+        // TODO: design a proper registry or something to de-couple intrinsic parsing
+        // TODO: check for matching signatures
+        return (ns, name) switch {
+            ("CIL", "ArrayLen") => new CilIntrinsic.ArrayLen(args[0]),
+            ("CIL", "NewArray") => new CilIntrinsic.NewArray((type as ArrayType)!.ElemType, args[0]),
+            ("CIL", "CastClass") => new CilIntrinsic.CastClass(type, args[0]),
+            ("CIL", "AsInstance") => new CilIntrinsic.AsInstance(genArgs[0], args[0]),
+            ("CIL", "Box") => new CilIntrinsic.Box(genArgs[0], args[0]),
+            ("CIL", "UnboxObj") => new CilIntrinsic.UnboxObj(type, args[0]),
+            ("CIL", "UnboxRef") => new CilIntrinsic.UnboxRef((type as ByrefType)!.ElemType, args[0]),
+            _ => throw new NotImplementedException($"Don't know how to parse intrinsc '{ns}::{name}'")
+        };
     }
 
 

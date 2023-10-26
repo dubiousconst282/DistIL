@@ -27,3 +27,15 @@ BB_01:
 //CHECK: GetArrayDataReference
 //CHECK: }
 }
+
+static Self::LQ_StructEnumerableSource(#source: ArraySegment`1[string]) -> int {
+BB_01:
+  r1 = call Self::GetStrPred() -> Func`2[string, bool]
+  r2 = intrinsic CIL::Box<ArraySegment`1[string]>(#source) -> object
+  r3 = call Enumerable::Count<string>(IEnumerable`1[!!0]: r2, Func`2[!!0, bool]: r1) -> int
+  ret r3
+//CHECK: LQ_StructEnumerableSource
+//CHECK: ArraySegment`1+Enumerator[string]
+//CHECK: try finally
+//CHECK: }
+}

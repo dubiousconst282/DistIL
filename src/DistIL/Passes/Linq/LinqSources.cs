@@ -45,15 +45,52 @@ internal class EnumeratorSource : LinqSourceNode
     {
         var builder = loop.PreHeader;
 
-        //Extract the instantiated `IEnumerable<T>` type from call arg because
-        //the actual operand could have been boxed and lost its real type.
         var sourceCall = (CallInst)PhysicalSource.Parent;
-        var enumerableType = sourceCall.Method.ParamSig[PhysicalSource.OperIndex].Type;
-        _enumerator = builder.CreateCallVirt(enumerableType.FindMethod("GetEnumerator"), PhysicalSource.Operand);
+        var enumerableType = sourceCall.Method.ParamSig[PhysicalSource.OperIndex].Type; // IEnumerable<T> | IEnumerable
+
+        // Find struct enumerator type
+        // https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/statements/iteration-statements#the-foreach-statement
+        if (PhysicalSource.Operand is CilIntrinsic.Box box && enumerableType.IsGeneric) {
+            var getEnumer = box.SourceType.Methods.FirstOrDefault(m => m is { Name: "GetEnumerator", IsInstance: true, ParamSig.Count: 1 });
+
+            if (getEnumer != null && IsValidCustomEnumeratorType(getEnumer.ReturnType, enumerableType.GenericParams[0])) {
+                _enumerator = builder.CreateCallVirt(getEnumer, builder.CreateUnboxRef(box.SourceType, box));
+
+                if (_enumerator.ResultType.IsValueType) {
+                    var slot = new LocalSlot(_enumerator.ResultType, "lq_srcIter");
+                    builder.CreateStore(slot, _enumerator);
+                    _enumerator = slot;
+                }
+            }
+        }
+
+        if (_enumerator == null) {
+            _enumerator = builder.CreateCallVirt(enumerableType.FindMethod("GetEnumerator"), PhysicalSource.Operand);
+        }
         length = null;
 
         Debug.Assert(!_enumerator.ResultType.IsValueType);
     }
+
+    private static bool IsValidCustomEnumeratorType(TypeDesc type, TypeDesc elemType)
+    {
+        bool foundMoveNext = false, foundGetCurrent = false, foundDuplicate = false;
+
+        foreach (var method in type.Methods) {
+            bool isAccessible = method is { IsPublic: true, IsInstance: true, ParamSig.Count: 1 };
+
+            if (method.Name == "MoveNext") {
+                foundDuplicate |= foundMoveNext;
+                foundMoveNext = isAccessible && method.ReturnType == PrimType.Bool;
+            }
+            if (method.Name == "get_Current") {
+                foundDuplicate |= foundGetCurrent;
+                foundGetCurrent = isAccessible && method.ReturnType == elemType;
+            }
+        }
+        return foundMoveNext && foundGetCurrent && !foundDuplicate;
+    }
+
     protected override Value EmitMoveNext(IRBuilder builder)
         => builder.CreateCallVirt("MoveNext", _enumerator!);
 
@@ -62,6 +99,12 @@ internal class EnumeratorSource : LinqSourceNode
 
     protected override void EmitEnd(LoopBuilder loop)
     {
+        var t_IDisposable = loop.Body.Resolver.Import(typeof(IDisposable));
+
+        // Bail on non-disposable struct enumerator
+        var structEnumerType = (_enumerator.ResultType as PointerType)?.ElemType;
+        if (structEnumerType != null && !structEnumerType.Inherits(t_IDisposable)) return;
+
         var exitBlock = loop.Exit.Block;
 
         Ensure.That(loop.EntryBlock.First is not GuardInst);
@@ -74,9 +117,16 @@ internal class EnumeratorSource : LinqSourceNode
         var finallyBlock = exitBlock.Method.CreateBlock(exitBlock).SetName("LQ_Finally");
 
         var builder = new IRBuilder(finallyBlock);
-        var enumer = builder.CreateAsInstance(builder.Resolver.Import(typeof(IDisposable)), _enumerator);
-        var isNotDisposable = builder.CreateEq(enumer, ConstNull.Create());
-        builder.Fork(isNotDisposable, (elseBuilder, newBlock) => elseBuilder.CreateCallVirt("Dispose", enumer));
+
+        var disposeFn = t_IDisposable.FindMethod("Dispose");
+        
+        if (structEnumerType != null) {
+            builder.Emit(new CallInst(disposeFn, new[] { _enumerator }, isVirtual: true, constraint: structEnumerType));
+        } else {
+            var enumer = builder.CreateAsInstance(t_IDisposable, _enumerator);
+            var isNotDisposable = builder.CreateEq(enumer, ConstNull.Create());
+            builder.Fork(isNotDisposable, (elseBuilder, newBlock) => elseBuilder.CreateCallVirt(disposeFn, enumer));
+        }
         builder.Emit(new ResumeInst());
 
         loop.Header.Block.InsertFirst(new GuardInst(GuardKind.Finally, finallyBlock));

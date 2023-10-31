@@ -163,7 +163,7 @@ class OptimizerOptions
     [Option("filter", HelpText = kFilterHelp)]
     public string? MethodFilter { get; set; }
 
-    [Option("bisect", HelpText = "Limits passes to methods within a log2 range based on a string composed by `g`ood and `b`ad characters. Used to find methods with bad codegen, similarly to `git bisect`.")]
+    [Option("bisect", HelpText = "Colon-separated list of probabilities used to randomly disable optimizations from methods.")]
     public string? BisectFilter { get; set; }
 
     [Option("verbosity", HelpText = "Specifies logging verbosity.\n")]
@@ -197,14 +197,21 @@ class OptimizerOptions
             var pred = GetMethodFilter()!;
             candidates.RemoveAll(m => !pred.Invoke(m));
         }
+
+        // Fuzzy bisect will randomly filter-out methods based on a list of probabilities.
+        // Scripts can brute-force this list to easily find problematic methods.
         if (BisectFilter != null) {
-            var bisectRange = GetBisectRange(candidates.Count, BisectFilter);
-            Console.WriteLine($"Bisecting method range [{bisectRange}], ~{(int)Math.Log2(bisectRange.Length)} steps left.");
+            string[] parts = BisectFilter.Split(':');
+            int sourceCount = candidates.Count;
 
-            candidates.RemoveRange(bisectRange.End, candidates.Count - bisectRange.End);
-            candidates.RemoveRange(0, bisectRange.Start);
+            for (int i = 1; i < parts.Length; i++) {
+                var rng = new Random(123 + i * 456);
+                float prob = float.Parse(parts[i]) / 100.0f;
 
-            File.WriteAllLines("bisect_log.txt", candidates.Select((m, i) => $"{bisectRange.Start + i}: {RenderMethodSig(m)}"));
+                candidates.RemoveAll(m => rng.NextSingle() < prob);
+            }
+            Console.WriteLine($"Fuzzy bisecting methods {candidates.Count}/{sourceCount}");
+            File.WriteAllLines("bisect_log.txt", candidates.Select(RenderMethodSig));
         }
     }
 
@@ -252,21 +259,6 @@ class OptimizerOptions
         var pars = def.ParamSig.Skip(def.IsInstance ? 1 : 0);
         return $"{def.DeclaringType.Name}::{def.Name}({string.Join(',', pars.Select(p => p.Type.Name))})";
     }
-    private static AbsRange GetBisectRange(int count, string filter)
-    {
-        int start = 0, end = count;
-
-        for (int i = 0; i < filter.Length; i++) {
-            int mid = (start + end) >>> 1;
-
-            if (char.ToUpper(filter[i]) == 'B') {
-                end = mid;
-            } else {
-                start = mid;
-            }
-        }
-        return (start, end);
-    }
 }
 
 class DumpPass : IMethodPass
@@ -283,6 +275,10 @@ class DumpPass : IMethodPass
 
             //Escape all Windows forbidden characters to prevent issues with NTFS partitions on Linux
             name = Regex.Replace(name, @"[\x00-\x1F:*?\/\\""<>|]", "_");
+
+            while (File.Exists($"{BaseDir}/{name}.txt")) {
+                name += HashCode.Combine(name) % 10;
+            }
 
             if (Formats.HasFlag(DumpFormats.Graphviz)) {
                 IRPrinter.ExportDot(ctx.Method, $"{BaseDir}/{name}.dot");

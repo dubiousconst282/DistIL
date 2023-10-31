@@ -42,6 +42,7 @@ public class LoadInst : MemoryInst
     public override TypeDesc ElemType => ResultType;
 
     public override string InstName => FormatName("load");
+    public override bool MayReadFromMemory => true;
 
     public LoadInst(Value addr, TypeDesc? elemType = null, PointerFlags flags = 0)
         : base(flags, addr)

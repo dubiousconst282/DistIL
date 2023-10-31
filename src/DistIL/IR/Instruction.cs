@@ -22,8 +22,10 @@ public abstract class Instruction : TrackedValue
     public virtual bool IsBranch => false;
     /// <summary> Whether this instruction can be safely removed if it has no uses. </summary>
     public virtual bool SafeToRemove => !HasSideEffects;
-    /// <summary> Whether this instruction may write to a memory location (variables, arrays, fields, pointers). </summary>
+    /// <summary> Whether this instruction may write to any memory location. </summary>
     public virtual bool MayWriteToMemory => false;
+    /// <summary> Whether this instruction may read from a visible memory location (variable, array, field, pointer). </summary>
+    public virtual bool MayReadFromMemory => false; // TODO: should this incur HasSideEffects?
 
     protected Instruction()
     {

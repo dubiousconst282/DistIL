@@ -63,6 +63,7 @@ public abstract class CilIntrinsic : IntrinsicInst
     {
         public override ILCode Opcode => ILCode.Unbox_Any;
         public override bool MayThrow => true;
+        public override bool MayReadFromMemory => true;
         public TypeDesc DestType => ResultType;
 
         public UnboxObj(TypeDesc type, Value obj) : base(type, obj) { }
@@ -89,6 +90,7 @@ public abstract class CilIntrinsic : IntrinsicInst
 
         public override bool MayThrow => true;
         public override bool MayWriteToMemory => true;
+        public override bool MayReadFromMemory => true;
 
         public MemCopy(Value destPtr, Value srcPtr, Value numBytes, PointerFlags flags = 0)
             : base(PrimType.Void, destPtr, srcPtr, numBytes) { Flags = flags; }

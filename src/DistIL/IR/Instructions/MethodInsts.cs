@@ -15,6 +15,7 @@ public class CallInst : Instruction
     public override bool HasSideEffects => true;
     public override bool MayThrow => true;
     public override bool MayWriteToMemory => true;
+    public override bool MayReadFromMemory => true;
     public override string InstName => "call" + (IsVirtual ? "virt" : "");
 
     public CallInst(MethodDesc method, Value[] args, bool isVirtual = false, TypeDesc? constraint = null)
@@ -72,6 +73,7 @@ public class NewObjInst : Instruction
 
     public override bool HasSideEffects => true;
     public override bool MayWriteToMemory => true;
+    public override bool MayReadFromMemory => true;
     public override string InstName => "newobj";
 
     public NewObjInst(MethodDesc ctor, Value[] args)

@@ -149,7 +149,21 @@ public class IRBuilder
     public Value CreateSelect(Value cond, Value ifTrue, Value ifFalse, TypeDesc? resultType = null)
     {
         return ConstFolding.FoldSelect(cond, ifTrue, ifFalse) ??
-               Emit(new SelectInst(cond, ifTrue, ifFalse, resultType));
+               Emit(new SelectInst(cond, ifTrue, ifFalse, resultType ?? InferResultType(ifTrue.ResultType, ifFalse.ResultType)));
+
+        static TypeDesc InferResultType(TypeDesc a, TypeDesc b)
+        {
+            if (a == b) return a;
+
+            // Allow cases like `select cond, {int}, {bool}`  (and for any other smallint)
+            Ensure.That(a.StackType == b.StackType && a.StackType == StackType.Int, 
+                        "Cannot infer result type for SelectInst with differing operand types");
+
+            // Pick largest type, normalizing to signed if both have the same size.
+            int sizeA = a.Kind.Size(), sizeB = b.Kind.Size();
+            return sizeA == sizeB ? PrimType.GetFromKind(a.Kind.GetSigned()) : 
+                   sizeA > sizeB ? a : b;
+        }
     }
 
     public Value CreateMin(Value x, Value y, bool unsigned = false)

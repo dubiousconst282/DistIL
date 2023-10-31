@@ -17,11 +17,10 @@ public class SelectInst : Instruction
     }
     public override string InstName => "select";
 
-    public SelectInst(Value cond, Value ifTrue, Value ifFalse, TypeDesc? resultType = null)
+    public SelectInst(Value cond, Value ifTrue, Value ifFalse, TypeDesc resultType)
         : base(cond, ifTrue, ifFalse)
     {
-        Ensure.That(resultType != null || (ifTrue.ResultType == ifFalse.ResultType));
-        ResultType = resultType ?? ifTrue.ResultType;
+        ResultType = resultType;
     }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);

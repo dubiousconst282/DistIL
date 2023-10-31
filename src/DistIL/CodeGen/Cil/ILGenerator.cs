@@ -17,6 +17,9 @@ public partial class ILGenerator : InstVisitor
     {
         _method = method;
         _forest = new ForestAnalysis(method);
+
+        FixupIR();
+
         var interfs = new InterferenceGraph(method, new LivenessAnalysis(method), _forest);
         _regAlloc = new RegisterAllocator(method, interfs); //may split critical edges but ForestAnalysis is okay with that.
 
@@ -26,6 +29,31 @@ public partial class ILGenerator : InstVisitor
     public static ILMethodBody GenerateCode(MethodBody method)
     {
         return new ILGenerator(method).Generate();
+    }
+
+    private void FixupIR()
+    {
+        foreach (var block in _method) {
+            // Sink defs that are uniquely used by phis to make coalescing possible.
+            // Loop counters like `a[i++] = x` are one example of where this is useful.
+            foreach (var phi in block.Phis()) {
+                foreach (var (pred, value) in phi) {
+                    if (pred.NumSuccs == 1 && value is Instruction { NumUses: 1, HasSideEffects: false } def) {
+                        if (MakeSpeculatableLeaf(def) != def) {
+                            def.MoveBefore(def.Block.Last);
+                        }
+                    }
+                }
+            }
+
+            // Visit(SelectInst) requires that the two values be speculatable.
+            foreach (var inst in block.NonPhis()) {
+                if (inst is SelectInst csel) {
+                    MakeSpeculatableLeaf(csel.IfTrue);
+                    MakeSpeculatableLeaf(csel.IfFalse);
+                }
+            }
+        }
     }
 
     private ILMethodBody Generate()
@@ -49,14 +77,14 @@ public partial class ILGenerator : InstVisitor
             }
 
             //Emit code for all statements
-            foreach (var inst in _currBlock) {
-                if (!_forest.IsTreeRoot(inst) || inst is GuardInst or PhiInst) continue;
+            foreach (var inst in _currBlock.NonPhis()) {
+                if (!_forest.IsTreeRoot(inst)) continue;
 
                 inst.Accept(this);
                 StoreResult(inst);
             }
         }
-        return _asm.Seal(layout);
+        return _asm.Assemble(layout);
     }
 
     private void StoreResult(Instruction def)
@@ -171,5 +199,39 @@ public partial class ILGenerator : InstVisitor
                 _asm.EmitStore(dest);
             });
         }
+    }
+
+    // Marks any leaf with side-effects from `value` as a root, to make it safely speculatable. 
+    private Instruction? MakeSpeculatableLeaf(Value value)
+    {
+        var leaf = GetLeafWithSideEffects(value);
+        if (leaf != null) {
+            _forest.SetLeaf(leaf, markAsLeaf: false);
+        }
+        return leaf;
+    }
+    private Instruction? GetLeafWithSideEffects(Value value)
+    {
+        if (value is Instruction inst) {
+            if ((inst.HasSideEffects && !_forest.IsTreeRoot(inst)) || inst is PhiInst) {
+                return inst;
+            }
+
+            var firstSideEff = default(Instruction);
+            int numSideEff = 0;
+
+            foreach (var oper in inst.Operands) {
+                var sideEffLeaf = GetLeafWithSideEffects(oper);
+                if (sideEffLeaf != null) {
+                    firstSideEff = sideEffLeaf;
+                    numSideEff++;
+                }
+            }
+
+            if (numSideEff != 0) {
+                return numSideEff == 1 ? firstSideEff : inst;
+            }
+        }
+        return null;
     }
 }

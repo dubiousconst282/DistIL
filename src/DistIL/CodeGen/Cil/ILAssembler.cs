@@ -107,7 +107,7 @@ internal class ILAssembler
         }
     }
 
-    public ILMethodBody Seal(LayoutedCFG layout)
+    public ILMethodBody Assemble(LayoutedCFG layout)
     {
         ComputeOffsets();
         

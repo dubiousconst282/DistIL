@@ -99,6 +99,8 @@ public class BasicBlock : TrackedValue
         }
 
         if (pos != null) {
+            Ensure.That(pos != rangeFirst);
+
             rangeFirst.Prev = pos;
             rangeLast.Next = pos.Next;
 
@@ -123,6 +125,8 @@ public class BasicBlock : TrackedValue
     /// <summary> Moves a range of instructions from this block to <paramref name="newParent"/>, after <paramref name="newParentPos"/> (null means before the first instruction in <paramref name="newParent"/>). </summary>
     public void MoveRange(BasicBlock newParent, Instruction? newParentPos, Instruction first, Instruction last)
     {
+        if (newParentPos == first) return;
+
         Ensure.That(newParentPos == null || newParentPos?.Block == newParent);
         Ensure.That(first.Block == this && last.Block == this);
 

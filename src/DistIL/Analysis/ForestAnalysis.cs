@@ -3,151 +3,119 @@ namespace DistIL.Analysis;
 /// <summary> Computes information that can be used to build expression trees from the linear IR. </summary>
 public class ForestAnalysis : IMethodAnalysis
 {
-    //Note that we must track leafs rather than trees because the codegen will
-    //init the ForestAnalysis before RegisterAllocator, which may split critical edges
-    //and cause codegen to completely skip instructions in these new blocks.
+    // Loosely based on:
+    //   "Example stackify algorithm for turning SSA into WASM" - https://gist.github.com/evanw/58a8a5b8b4a1da32fcdcfbf9da87c82a
+
+    // We must track leafs rather than trees because ILGenerator will init
+    // ForestAnalysis before RegisterAllocator, which may split critical edges
+    // and cause codegen to completely skip instructions in these new blocks.
     readonly RefSet<Instruction> _leafs = new();
 
-    public ForestAnalysis(MethodBody method)
+    public ForestAnalysis(MethodBody method, AliasAnalysis? aa = null)
     {
-        //This is a simple forward use scan algorithm, perhaps a even simpler approach
-        //would be to simulate a eval stack, pushing instructions as they appear, and
-        //popping operands while "dropping" those that don't match or were interfered.
-        var interfs = new BlockInterfs();
+        aa ??= new(method);
 
         foreach (var block in method) {
-            //Update block interferences and calculate instruction indices
-            interfs.Update(block);
+            // Inline operands, traverse through non-phi instructions in reverse order
+            var first = block.FirstNonHeader.Prev;
 
-            //Find statements
-            foreach (var inst in block) {
-                if (interfs.CanBeInlinedIntoUse(inst)) {
-                    _leafs.Add(inst);
-                }
+            for (var inst = block.Last; inst != first; inst = inst.Prev!) {
+                if (_leafs.Contains(inst)) continue; // already processed
+                InlineOperands(inst, inst, aa);
             }
         }
     }
 
     static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
-        => new ForestAnalysis(mgr.Method);
+        => new ForestAnalysis(mgr.Method, mgr.GetAnalysis<AliasAnalysis>());
 
-    /// <summary> Returns whether the specified instruction is a the root of a tree/statement (i.e. must be emitted and/or assigned into a temp variable). </summary>
-    public bool IsTreeRoot(Instruction inst) => !IsLeaf(inst);
-
-    /// <summary> Returns whether the specified instruction is a leaf or branch (i.e. can be inlined into an operand). </summary>
-    public bool IsLeaf(Instruction inst) => _leafs.Contains(inst);
-
-    private static bool IsAlwaysRooted(Instruction inst)
+    private void InlineOperands(Instruction inst, Instruction root, AliasAnalysis aa)
     {
-        if (!inst.HasResult || inst.NumUses is 0 or >= 2 || inst is PhiInst or GuardInst) {
-            return true;
-        }
-        var (user, useIdx) = inst.Uses().First();
+        var opers = inst.Operands;
 
-        return user.Block != inst.Block ||
-               //Codegen does not support phis with inlined defs, they must have their own live-range.
-               user is PhiInst ||
-               //ILGenerator depends on select values being roots, for simplicity.
-               (user is SelectInst && useIdx != 0);
+        for (int i = opers.Length - 1; i >= 0; i--) {
+            // Check for single-use instruction defined in the same block
+            if (opers[i] is not Instruction oper || oper.Block != inst.Block) continue;
+            if (oper.NumUses >= 2 && !IsCheaperToRematerialize(oper)) continue;
+
+            if (oper is PhiInst || HasHazardsBetweenDefUse(oper, root, aa)) continue;
+
+            // Recursively inline defs, except when rematerializing
+            if (_leafs.Add(oper) && oper.NumUses == 1) {
+                InlineOperands(oper, root, aa);
+            }
+        }
     }
 
-    //Cheaper to rematerialize
-    private static bool IsAlwaysLeaf(Instruction inst)
+    // TODO: Consider building a dependence graph like used for instruction scheduling to better detect hazards
+    //       This will currently miss trees like `store (r2 = arraddr #arr, idx), (r1 = call ...)`
+    //       (could maybe also try to inline multiple times somehow?)
+    //       (or maybe assign DFS numbers to defs and compare with block indices?)
+
+    // Checks if `def` can be safely inlined down to a tree at `use`, skipping over leafs.
+    private bool HasHazardsBetweenDefUse(Instruction def, Instruction use, AliasAnalysis aa)
     {
-        if (inst is FieldAddrInst or ExtractFieldInst or CilIntrinsic.ArrayLen or CilIntrinsic.SizeOf) {
-            if (inst.Operands.Length > 0 && !IsSafeToRematerialize(inst.Operands[0])) {
-                return false;
+        Debug.Assert(def.Block == use.Block);
+
+        if (!def.HasSideEffects && !def.MayReadFromMemory) return false;
+
+        for (var inst = def.Next!; inst != use; inst = inst.Next!) {
+            // Assuming that instructions and their operands are inlined in reverse-order,
+            // we can safely skip over leafs because they will be evaluated later than `def`.
+            if (_leafs.Contains(inst)) continue;
+
+            if (inst.HasSideEffects && !AreInterchangeableHazards(def, inst, aa)) {
+                return true;
             }
-            if (inst.Users().Any(u => u is PhiInst)) {
-                return false;
+        }
+        return false;
+    }
+
+    // Checks if the two instructions have the same hazards and can be executed in either order.
+    // This is true if e.g. they may throw the same exception; calls and memory stores are never interchangeable.
+    // Assumes that `a` is defined before `b`.
+    private bool AreInterchangeableHazards(Instruction a, Instruction b, AliasAnalysis aa)
+    {
+        // Unrelated memory loads can be safely interchanged
+        if (b.MayWriteToMemory) {
+            if (a is LoadInst ld && b is StoreInst st) {
+                return !aa.MayAlias(ld.Address, st.Address);
             }
+            return !a.MayReadFromMemory;
+        }
+        if (IsAccess(a) && IsAccess(b)) {
             return true;
         }
         return false;
 
-        static bool IsSafeToRematerialize(Value val)
-        {
-            //return val is LocalSlot or Argument or Const || (val is Instruction inst && IsAlwaysRooted(inst));
-            return val is not Instruction inst || IsAlwaysRooted(inst);
+        // May throw one of: NullRef | IndexOutOfBounds | AccessViolation
+        // We'll assume it's fine to interchange any of these instructions.
+        // TODO: We may want to re-consider this in the future.
+        static bool IsAccess(Instruction inst)
+            => inst is ArrayAddrInst or FieldAddrInst or LoadInst;
+    }
+
+    /// <summary> Checks if the specified instruction is a the root of a tree/statement (i.e. must be emitted and/or assigned into a temp variable). </summary>
+    public bool IsTreeRoot(Instruction inst) => !IsLeaf(inst);
+
+    /// <summary> Checks if the specified instruction is a leaf or branch (i.e. can be inlined into an operand). </summary>
+    public bool IsLeaf(Instruction inst) => _leafs.Contains(inst);
+
+    /// <summary> Marks the specified instruction as a leaf or root. </summary>
+    public void SetLeaf(Instruction inst, bool markAsLeaf)
+    {
+        if (markAsLeaf) {
+            _leafs.Add(inst);
+        } else {
+            _leafs.Remove(inst);
         }
     }
 
-    class BlockInterfs
+    private static bool IsCheaperToRematerialize(Instruction inst)
     {
-        Dictionary<Instruction, int> _indices = new();
-        BitSet _memInterfs = new();
-        BitSet _sideEffects = new();
-
-        public void Update(BasicBlock block)
-        {
-            _indices.Clear();
-            _memInterfs.Clear();
-            _sideEffects.Clear();
-
-            int index = 0;
-            foreach (var inst in block) {
-                if (inst.MayWriteToMemory) {
-                    _memInterfs.Add(index);
-                }
-                if (inst.HasSideEffects) {
-                    _sideEffects.Add(index);
-                }
-                _indices[inst] = index;
-                index++;
-            }
-        }
-
-        public bool CanBeInlinedIntoUse(Instruction inst)
-        {
-            return IsAlwaysLeaf(inst) || (!IsAlwaysRooted(inst) && !IsDefInterferedBeforeUse(inst));
-        }
-
-        private bool IsDefInterferedBeforeUse(Instruction def)
-        {
-            int defIdx = _indices[def] + 1; //offset by one to ignore def when checking for interferences
-            int useIdx = GetLastSafeUsePoint(def);
-
-            //Without alias analysis, we'll just assume that everything is aliased.
-            if (def is LoadInst) {
-                return _memInterfs.ContainsRange(defIdx, useIdx);
-            }
-            //Consider:
-            //  int r1 = call Foo() //may throw
-            //  int r2 = call Bar() //can't be inlined
-            //  int r3 = add r1, r2
-            //If we inlined r1 into r3, Bar() would be called before Foo().
-            if (_sideEffects.ContainsRange(defIdx, useIdx)) {
-                return true;
-            }
-            return false;
-        }
-
-        private int GetLastSafeUsePoint(Instruction def)
-        {
-            //If `inst` operands are ordered in the same way as they are evaluated in an expression,
-            //we only need to check for side effects up to the next operand def.
-            //  int r1 = call A()
-            //  int r2 = call B()           //last safe point for r1 (if r2 can also be inlined)
-            //  int r3 = call C(r1, r2)
-            var (use, operIdx) = def.Uses().First();
-            int pos = _indices[use];
-
-            if (HasConsistentEvalOrder(use)) {
-                int minPos = _indices[def] + 1;
-
-                for (int i = operIdx + 1; i < use.Operands.Length; i++) {
-                    if (use.Operands[i] is Instruction oper && oper.Block == use.Block && _indices[oper] >= minPos) {
-                        return CanBeInlinedIntoUse(oper) ? _indices[oper] : pos;
-                    }
-                }
-            }
-            return pos;
-        }
-
-        //Returns whether the instruction operands are ordered in the same way as they would be pushed on the stack
-        private static bool HasConsistentEvalOrder(Instruction inst)
-        {
-            return inst is not (IntrinsicInst or SwitchInst);
-        }
+        // TODO: investigate if it's better to rematerialize LEAs and array accesses
+        //       (seems to be true to some extent due to speculative/parallel exec; will bottleneck on dep otherwise)
+        return inst is FieldAddrInst or ExtractFieldInst or CilIntrinsic.ArrayLen or CilIntrinsic.SizeOf &&
+               !inst.Users().Any(u => u is PhiInst); // codegen doesn't support defs inlined into phis, they *must* be rooted
     }
 }

@@ -199,26 +199,24 @@ partial class ILGenerator
         if (inst is not CilIntrinsic {  Opcode: var op }) {
             throw new InvalidOperationException("Only CilIntrinsic`s can be called during codegen");
         }
+
+        foreach (var arg in inst.Args) {
+            Push(arg);
+        }
         
         switch (op) {
             case ILCode.Newarr: {
-                Push(inst.Args[0]);
                 _asm.Emit(ILCode.Newarr, inst.ResultType.ElemType);
-                break;
-            }
-            case ILCode.Isinst:
-            case ILCode.Box: {
-                Push(inst.Args[0]);
-                _asm.Emit(op, (TypeDesc)inst.StaticArgs[0]);
                 break;
             }
             case ILCode.Castclass:
             case ILCode.Unbox_Any:
             case ILCode.Unbox: {
-                Push(inst.Args[0]);
                 _asm.Emit(op, op == ILCode.Unbox ? inst.ResultType.ElemType! : inst.ResultType);
                 break;
             }
+            case ILCode.Isinst:
+            case ILCode.Box:
             case ILCode.Ldtoken:
             case ILCode.Sizeof: {
                 _asm.Emit(op, inst.StaticArgs[0]);
@@ -227,22 +225,13 @@ partial class ILGenerator
             case ILCode.Ldlen:
             case ILCode.Localloc:
             case ILCode.Ckfinite: {
-                Push(inst.Args[0]);
                 _asm.Emit(op);
                 break;
             }
             case ILCode.Cpblk:
             case ILCode.Cpobj: {
                 var mc = (CilIntrinsic.MemCopy)inst;
-                var type = default(TypeDesc);
-                Push(mc.Args[0]);
-                Push(mc.Args[1]);
-
-                if (op == ILCode.Cpblk) {
-                    Push(mc.Args[2]);
-                } else {
-                    type = (TypeDesc)mc.StaticArgs[0];
-                }
+                var type = op == ILCode.Cpobj ? mc.StaticArgs[0] : null;
                 EmitMemPrefix(mc.Flags);
                 _asm.Emit(op, type);
                 break;
@@ -250,15 +239,7 @@ partial class ILGenerator
             case ILCode.Initblk:
             case ILCode.Initobj: {
                 var mc = (CilIntrinsic.MemSet)inst;
-                var type = default(TypeDesc);
-                Push(mc.Args[0]);
-
-                if (op == ILCode.Initblk) {
-                    Push(mc.Args[1]);
-                    Push(mc.Args[2]);
-                } else {
-                    type = (TypeDesc)mc.StaticArgs[0];
-                }
+                var type = op == ILCode.Initobj ? mc.StaticArgs[0] : null;
                 EmitMemPrefix(mc.Flags);
                 _asm.Emit(op, type);
                 break;
@@ -270,7 +251,7 @@ partial class ILGenerator
     {
         //TODO: Consider merging adjacent selects into a single branch
 
-        //This assumes that neither values have side effects. ForestAnalysis has code to account for SelectInst.
+        //This assumes that neither values have side effects. This is handled by FixupIR(). 
         var labelEnd = _asm.DefineLabel();
         var labelFalse = _asm.DefineLabel();
 

@@ -33,12 +33,25 @@ public class ForestAnalysis : IMethodAnalysis
     {
         var opers = inst.Operands;
 
-        for (int i = opers.Length - 1; i >= 0; i--) {
-            // Check for single-use instruction defined in the same block
-            if (opers[i] is not Instruction oper || oper.Block != inst.Block) continue;
-            if (oper.NumUses >= 2 && !IsCheaperToRematerialize(oper)) continue;
+        if (inst is StoreInst && opers[0] is FieldAddrInst or ArrayAddrInst) {
+            // For stores, inline the address first to hide hazards and assume they
+            // will be combined into a single CIL instruction.
+            InlineOperand(0);
+            InlineOperand(1);
+            return;
+        }
 
-            if (oper is PhiInst || HasHazardsBetweenDefUse(oper, root, aa)) continue;
+        for (int i = opers.Length - 1; i >= 0; i--) {
+            InlineOperand(i);
+        }
+
+        void InlineOperand(int i)
+        {
+            // Check for single-use instruction defined in the same block
+            if (inst.Operands[i] is not Instruction oper || oper.Block != inst.Block) return;
+            if (oper.NumUses >= 2 && !IsCheaperToRematerialize(oper)) return;
+
+            if (oper is PhiInst || HasHazardsBetweenDefUse(oper, root, aa)) return;
 
             // Recursively inline defs, except when rematerializing
             if (_leafs.Add(oper) && oper.NumUses == 1) {

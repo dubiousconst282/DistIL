@@ -4,6 +4,8 @@ using DistIL.Analysis;
 using DistIL.AsmIO;
 using DistIL.IR.Utils;
 
+using PhiCopyList = List<(PhiInst Dest, Value Src)>;
+
 /// <summary> Allocates registers for all definitions in a method. </summary>
 /// <remarks> This class only performs minimal changes to the IR, such as splitting critical edges. </remarks>
 public class RegisterAllocator : IPrintDecorator
@@ -12,7 +14,7 @@ public class RegisterAllocator : IPrintDecorator
     readonly InterferenceGraph _interfs;
 
     readonly Dictionary<(TypeDesc Type, int Color), ILVariable> _registers = new();
-    readonly Dictionary<BasicBlock, List<(PhiInst Dest, Value Src)>> _phiCopies = new();
+    readonly Dictionary<BasicBlock, PhiCopyList> _phiCopies = new();
 
     public RegisterAllocator(MethodBody method, InterferenceGraph interfs)
     {
@@ -27,6 +29,8 @@ public class RegisterAllocator : IPrintDecorator
     // Note that this may change the CFG, invalidating LivenessAnalysis.
     private void Coalesce()
     {
+        var blocksWithSplitPredCopies = new List<BasicBlock>();
+
         foreach (var block in _method) {
             foreach (var phi in block.Phis()) {
                 foreach (var (pred, value) in phi) {
@@ -49,6 +53,35 @@ public class RegisterAllocator : IPrintDecorator
                     var actualPred = pred.SplitCriticalEdge(block);
                     var copies = _phiCopies.GetOrAddRef(actualPred) ??= new();
                     copies.Add((phi, value));
+
+                    if (actualPred != block && blocksWithSplitPredCopies.LastOrDefault() != block) {
+                        blocksWithSplitPredCopies.Add(block);
+                    }
+                }
+            }
+        }
+
+        // Coalesce copies from split critical edges by merging identical predecessor blocks. See #16
+        foreach (var block in blocksWithSplitPredCopies) {
+            if (block.NumPreds < 3) continue;
+
+            var coalescedPreds = new Dictionary<PhiCopyList, List<BasicBlock>>(PhiCopyComparer.Instance);
+
+            foreach (var pred in block.Preds) {
+                if (pred.First is not BranchInst { IsJump: true }) continue;
+                if (!_phiCopies.TryGetValue(pred, out var copies)) continue;
+
+                var blockGroup = coalescedPreds.GetOrAddRef(copies) ??= new();
+                blockGroup.Add(pred);
+            }
+
+            foreach (var preds in coalescedPreds.Values) {
+                if (preds.Count < 2) continue;
+
+                for (int i = 1; i < preds.Count; i++) {
+                    block.RedirectPhis(preds[i], null, removeTrivialPhis: false); // remove extra phi args
+                    preds[i].ReplaceUses(preds[0]); // redirect branches
+                    preds[i].Remove(); // remove dead block
                 }
             }
         }
@@ -105,5 +138,15 @@ public class RegisterAllocator : IPrintDecorator
             ctx.PrintLine();
             ctx.Print($"@({copies.Select(e => e.Dest):, $}) = ({copies.Select(e => e.Value):, $})");
         }
+    }
+
+    class PhiCopyComparer : IEqualityComparer<PhiCopyList>
+    {
+        public static readonly PhiCopyComparer Instance = new();
+
+        public bool Equals(PhiCopyList? x, PhiCopyList? y)
+            => x!.Count == y!.Count && x!.Zip(y!).All(e => e.First.Equals(e.Second));
+
+        public int GetHashCode(PhiCopyList obj) => obj[0].GetHashCode();
     }
 }

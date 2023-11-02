@@ -23,7 +23,7 @@ public partial class ILGenerator : InstVisitor
         var interfs = new InterferenceGraph(method, new LivenessAnalysis(method), _forest);
         _regAlloc = new RegisterAllocator(method, interfs); //may split critical edges but ForestAnalysis is okay with that.
 
-       // DistIL.IR.Utils.IRPrinter.ExportDot(method, "code.dot", new[] { _regAlloc });
+        //DistIL.IR.Utils.IRPrinter.ExportDot(method, "code.dot", new[] { _regAlloc });
     }
 
     public static ILMethodBody GenerateCode(MethodBody method)
@@ -36,9 +36,11 @@ public partial class ILGenerator : InstVisitor
         foreach (var block in _method) {
             // Sink defs that are uniquely used by phis to make coalescing possible.
             // Loop counters like `a[i++] = x` are one example of where this is useful.
-            foreach (var phi in block.Phis()) {
-                foreach (var (pred, value) in phi) {
-                    if (pred.NumSuccs == 1 && value is Instruction { NumUses: 1, HasSideEffects: false } def) {
+            if (block.NumSuccs == 1) {
+                foreach (var phi in block.Succs.First().Phis()) {
+                    var value = phi.GetValue(block);
+
+                    if (value is Instruction { NumUses: 1, HasSideEffects: false } def) {
                         if (MakeSpeculatableLeaf(def) != def) {
                             def.MoveBefore(def.Block.Last);
                         }

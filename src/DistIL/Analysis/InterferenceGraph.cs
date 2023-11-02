@@ -5,8 +5,8 @@ public class InterferenceGraph : IMethodAnalysis
     Dictionary<Instruction, int> _defNodeIds = new();
     Node[] _nodes = new Node[16];
 
-    //The ForestAnalysis may re-order instructions beyond their original live-ranges,
-    //so we must take it in consideration when generating the interference graph.
+    // The ForestAnalysis may re-order instructions beyond their original live-ranges,
+    // so we must take it in consideration when generating the interference graph.
     public InterferenceGraph(MethodBody method, LivenessAnalysis liveness, ForestAnalysis forest)
     {
         var liveNow = new RefSet<Instruction>();
@@ -14,8 +14,7 @@ public class InterferenceGraph : IMethodAnalysis
         foreach (var block in method) {
             foreach (var def in liveness.GetLiveOut(block)) {
                 if (forest.IsLeaf(def)) {
-                    //Some instructions are always rematerialized so we need to assume that its dependencies are live.
-                    //In most cases this will not actually extend live ranges because ForestAnalysis uses a few heuristics.
+                    // Some instructions are always rematerialized so we need to ensure that their dependencies are live.
                     MarkTreeUses(def);
                     continue;
                 }
@@ -26,15 +25,15 @@ public class InterferenceGraph : IMethodAnalysis
                 if (!forest.IsTreeRoot(inst)) continue;
 
                 if (inst.HasResult) {
-                    //Definition of `inst` marks the start of its live-range
+                    // Definition of `inst` marks the start of its live-range
                     liveNow.Remove(inst);
 
-                    //All currently live defs interfere with `inst`
+                    // All currently live defs interfere with `inst`
                     foreach (var otherInst in liveNow) {
                         AddEdge(inst, otherInst);
                     }
                 }
-                //Use of a def possibly marks the end of its live-range
+                // Use of a def possibly marks the end of its live-range
                 MarkTreeUses(inst);
             }
             liveNow.Clear();
@@ -59,8 +58,8 @@ public class InterferenceGraph : IMethodAnalysis
 
     public void AddEdge(Instruction a, Instruction b)
     {
-        //Avoid creating edges for defs of different types to make the graph smaller.
-        if (!NeedsEdgeForTypes(a.ResultType, b.ResultType)) return;
+        // Avoid creating edges for defs of different types to make the graph smaller.
+        if (a.ResultType != b.ResultType) return;
         
         var na = GetOrCreateNode(a);
         var nb = GetOrCreateNode(b);
@@ -69,44 +68,39 @@ public class InterferenceGraph : IMethodAnalysis
         na.Adjacent.Add(nb.Id);
     }
 
-    public static bool NeedsEdgeForTypes(TypeDesc a, TypeDesc b)
-    {
-        return a == b;
-    }
-
     public bool HasEdge(Instruction a, Instruction b)
     {
-        if (!_defNodeIds.TryGetValue(a, out int ia) || !_defNodeIds.TryGetValue(b, out int ib)) {
+        var na = GetNode(a);
+        var nb = GetNode(b);
+
+        if (na == null || nb == null) {
             return false;
         }
-        var na = GetNode(ia);
-        var nb = GetNode(ib);
-
         Debug.Assert(na.Adjacent.Contains(nb.Id) == nb.Adjacent.Contains(na.Id));
         return na.Adjacent.Contains(nb.Id);
     }
 
+    /// <summary> Attempts to merge node <paramref name="b"/> into <paramref name="a"/> if they don't interfere. </summary>
     public bool TryMerge(Instruction a, Instruction b)
     {
         var na = GetOrCreateNode(a);
         var nb = GetOrCreateNode(b);
 
-        bool interferes = na.Adjacent.Contains(nb.Id);
-        return !interferes && MergeNodes(na, nb);
-    }
+        if (na.Adjacent.Contains(nb.Id)) {
+            return false; // interference
+        }
 
-    private bool MergeNodes(Node a, Node b)
-    {
-        if (a != b) {
-            //Replace all existing edges to B with A
-            foreach (var id in b.Adjacent) {
+        if (na != nb) {
+            // Replace all existing edges to B with A
+            foreach (int id in nb.Adjacent) {
                 var node = GetNode(id);
-                node.Adjacent.Remove(b.Id);
-                node.Adjacent.Add(a.Id);
+                node.Adjacent.Remove(nb.Id);
+                node.Adjacent.Add(na.Id);
             }
-            a.Adjacent.Union(b.Adjacent);
+            na.Adjacent.Union(nb.Adjacent);
 
-            b.MergedWith = a;
+            _nodes[nb.Id] = na;
+            _defNodeIds[b] = na.Id;
         }
         return true;
     }
@@ -125,18 +119,14 @@ public class InterferenceGraph : IMethodAnalysis
             if (id >= _nodes.Length) {
                 Array.Resize(ref _nodes, _nodes.Length * 2);
             }
-            return _nodes[id] = new Node(id);
+            return _nodes[id] = new Node(id, def.ResultType);
         }
         return GetNode(id);
     }
 
     private Node GetNode(int id)
     {
-        var node = _nodes[id];
-        while (node.MergedWith != null) {
-            node = node.MergedWith;
-        }
-        return node;
+        return _nodes[id];
     }
 
     public IEnumerable<(Instruction K, Node V)> GetNodes()
@@ -191,10 +181,8 @@ public class InterferenceGraph : IMethodAnalysis
         public readonly BitSet Adjacent = new();
         public readonly int Id;
         public int Color;
-        public ILVariable? Register;
+        public TypeDesc RegisterType;
 
-        internal Node? MergedWith;
-
-        public Node(int id) => Id = id;
+        public Node(int id, TypeDesc regType) { Id = id; RegisterType = regType; }
     }
 }

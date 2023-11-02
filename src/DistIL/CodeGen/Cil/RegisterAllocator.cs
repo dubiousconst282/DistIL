@@ -23,8 +23,8 @@ public class RegisterAllocator : IPrintDecorator
         AssignColors();
     }
 
-    //Coalesce non-interfering phi arguments and populates `_phiCopies`
-    //Note that this may change the CFG, invalidating LivenessAnalysis.
+    // Coalesce non-interfering phi arguments and populates `_phiCopies`
+    // Note that this may change the CFG, invalidating LivenessAnalysis.
     private void Coalesce()
     {
         foreach (var block in _method) {
@@ -32,32 +32,35 @@ public class RegisterAllocator : IPrintDecorator
                 foreach (var (pred, value) in phi) {
                     if (value is Undef) continue;
 
-                    //If the value is either a const or an interfering instruction,
-                    //schedule a parallel copy at the end of `pred`.
-                    //
-                    //We can't coalesce arguments that have a more concrete type than that of the phi, because
-                    //color assignment will arbitrarily pick a type from any of the coalesced defs, and it could 
-                    //cause issues with interface resolution:
-                    //  List r1 = ...
-                    //  HashSet r2 = ...
-                    //  IEnumerable r3 = phi [... -> r1], [... -> r2]
-                    if (value is not Instruction valI || !phi.ResultType.IsAssignableTo(valI.ResultType) || !_interfs.TryMerge(phi, valI)) {
-                        var actualPred = pred.SplitCriticalEdge(block);
-                        var copies = _phiCopies.GetOrAddRef(actualPred) ??= new();
-                        copies.Add((phi, value));
+                    if (value is Instruction valI) {
+                        // Avoid coalescing arguments with more concrete types if they're not exclusively
+                        // used by this phi, otherwise it could lead to problems with interface resolution:
+                        //   List r1 = ...    use(r1)
+                        //   HashSet r2 = ...   use(r2)
+                        //   IEnumerable r3 = phi [... -> r1], [... -> r2]
+                        bool canMerge = valI.NumUses < 2 || phi.ResultType.IsAssignableTo(valI.ResultType);
+
+                        if (canMerge && _interfs.TryMerge(phi, valI)) continue;
                     }
+
+                    // Once we reach here we know that `value` is either
+                    // a const or an interfering/non-merged instruction.
+                    // Schedule a parallel copy at the end of `pred`.
+                    var actualPred = pred.SplitCriticalEdge(block);
+                    var copies = _phiCopies.GetOrAddRef(actualPred) ??= new();
+                    copies.Add((phi, value));
                 }
             }
         }
     }
 
-    //Assign unique colors to each node in the interference graph
+    // Assign unique colors to each node in the interference graph
     private void AssignColors()
     {
         var usedColors = new BitSet();
 
-        //TODO: Coloring can be optimal since we're using a SSA graph (perfect elimination order)
-        //Note that our graphs are currently not chordal because nodes of different types are not connected, see NeedsEdgeForTypes().
+        // TODO: Coloring can be optimal since we're using a SSA graph (perfect elimination order)
+        // Note that our graphs are currently not chordal because nodes of different types are not connected, see AddEdge().
         foreach (var (inst, node) in _interfs.GetNodes()) {
             if (node.Color != 0) continue; //already assigned
 
@@ -67,7 +70,6 @@ public class RegisterAllocator : IPrintDecorator
                 }
             }
             node.Color = usedColors.FirstUnsetIndex() + 1;
-            node.Register = PickRegister(inst.ResultType, node.Color);
             usedColors.Clear();
         }
     }
@@ -80,8 +82,15 @@ public class RegisterAllocator : IPrintDecorator
 
     /// <summary> Returns the register assigned to <paramref name="def"/>. </summary>
     public ILVariable GetRegister(Instruction def)
-        => _interfs.GetNode(def)?.Register 
-            ?? PickRegister(def.ResultType, -1); //defs with no nodes don't interfere with anything, just give them a dummy register
+    {
+        var node = _interfs.GetNode(def);
+
+        if (node != null) {
+            return PickRegister(node.RegisterType, node.Color);
+        }
+        // Assume that defs without nodes don't interfere with anything. Give them a dummy register
+        return PickRegister(def.ResultType, -1);
+    }
 
     /// <summary> Returns a list of phi-associated parallel copies that must execute at the end of <paramref name="block"/>. </summary>
     public IReadOnlyList<(PhiInst Dest, Value Value)>? GetPhiCopies(BasicBlock block)
@@ -89,8 +98,8 @@ public class RegisterAllocator : IPrintDecorator
 
     void IPrintDecorator.DecorateInst(PrintContext ctx, Instruction inst)
     {
-        if (inst.HasResult && GetRegister(inst) is { } reg) {
-            ctx.Print(" @" + reg.Index, PrintToner.Comment);
+        if (inst.HasResult && _interfs.GetNode(inst) != null) {
+            ctx.Print(" @" + GetRegister(inst).Index, PrintToner.Comment);
         }
         if (inst.Next == null && GetPhiCopies(inst.Block) is { } copies) {
             ctx.PrintLine();

@@ -114,7 +114,7 @@ internal class ILAssembler
         return new ILMethodBody() {
             Instructions = new ArraySegment<ILInstruction>(_insts, 0, _index),
             Locals = _usedVars.ToArray(),
-            ExceptionRegions = BuildEHClauses(layout),
+            ExceptionClauses = BuildEHClauses(layout),
             MaxStack = _maxStackDepth,
             InitLocals = true //TODO: preserve InitLocals
         };
@@ -171,15 +171,15 @@ internal class ILAssembler
         }
     }
 
-    private ExceptionRegion[] BuildEHClauses(LayoutedCFG layout)
+    private ExceptionClause[] BuildEHClauses(LayoutedCFG layout)
     {
-        var clauses = new ExceptionRegion[layout.Regions.Length];
+        var clauses = new ExceptionClause[layout.Regions.Length];
 
         for (int i = 0; i < clauses.Length; i++) {
             ref var region = ref layout.Regions[i];
             var guard = region.Guard;
 
-            var clause = clauses[i] = new ExceptionRegion() {
+            var clause = clauses[i] = new ExceptionClause() {
                 Kind = guard.Kind switch {
                     GuardKind.Catch => guard.HasFilter ? EHRegionKind.Filter : EHRegionKind.Catch,
                     GuardKind.Fault => EHRegionKind.Fault,

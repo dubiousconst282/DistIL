@@ -34,6 +34,6 @@ public class LoopVectorizer : IMethodPass
     {
         return entity
             .GetCustomAttribs().Find("DistIL.Attributes", "OptimizeAttribute")
-            ?.GetNamedArg("TryVectorize")?.Value is true;
+            ?.GetProperty("TryVectorize")?.Value is true;
     }
 }

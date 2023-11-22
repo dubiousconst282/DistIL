@@ -18,6 +18,6 @@ public interface ModuleEntity
 
 public abstract class MemberDesc : EntityDesc
 {
-    public abstract string Name { get; }
     public abstract TypeDesc DeclaringType { get; }
+    public abstract string Name { get; set; }
 }

@@ -1,29 +1,28 @@
 namespace DistIL.AsmIO;
 
 using System.Reflection;
-using System.Reflection.Metadata;
 
 public class EventDef : MemberDesc, ModuleEntity
 {
     public override TypeDef DeclaringType { get; }
     public ModuleDef Module => DeclaringType.Module;
-    public override string Name { get; }
+    public override string Name { get; set; }
 
-    public EventAttributes Attribs { get; init; }
+    public EventAttributes Attribs { get; set; }
 
-    public TypeDesc Type { get; }
+    public TypeDesc Type { get; set; }
 
-    public MethodDef? Adder { get; }
-    public MethodDef? Remover { get; }
-    public MethodDef? Raiser { get; }
-    public ImmutableArray<MethodDef> OtherAccessors { get; }
+    public MethodDef? Adder { get; set; }
+    public MethodDef? Remover { get; set; }
+    public MethodDef? Raiser { get; set; }
+    public MethodDef[] OtherAccessors { get; set; }
 
-    private IList<CustomAttrib>? _customAttribs;
+    internal IList<CustomAttrib>? _customAttribs;
 
     public EventDef(
         TypeDef declaryingType, string name, TypeDesc type,
         MethodDef? adder = null, MethodDef? remover = null, MethodDef? raiser = null,
-        ImmutableArray<MethodDef> otherAccessors = default,
+        MethodDef[]? otherAccessors = null,
         EventAttributes attribs = default)
     {
         DeclaringType = declaryingType;
@@ -32,12 +31,12 @@ public class EventDef : MemberDesc, ModuleEntity
         Adder = adder;
         Remover = remover;
         Raiser = raiser;
-        OtherAccessors = otherAccessors.EmptyIfDefault();
+        OtherAccessors = otherAccessors ?? [];
         Attribs = attribs;
     }
 
     public IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
-        => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
+        => CustomAttribUtils.GetOrInitList(ref _customAttribs, readOnly);
     
     public override void Print(PrintContext ctx)
     {
@@ -46,26 +45,5 @@ public class EventDef : MemberDesc, ModuleEntity
         if (Remover != null) ctx.Print($" remove => {Remover};");
         if (Raiser != null) ctx.Print($" raise => {Raiser};");
         ctx.Print(" }");
-    }
-
-    internal static EventDef Decode3(ModuleLoader loader, EventDefinitionHandle handle, TypeDef parent)
-    {
-        var info = loader._reader.GetEventDefinition(handle);
-        var type = (TypeDesc)loader.GetEntity(info.Type);
-        var accs = info.GetAccessors();
-        var otherAccessors = accs.Others.IsEmpty
-            ? default(ImmutableArray<MethodDef>)
-            : accs.Others.Select(loader.GetMethod).ToImmutableArray();
-
-        var evt = new EventDef(
-            parent, loader._reader.GetString(info.Name), type,
-            accs.Adder.IsNil ? null : loader.GetMethod(accs.Adder),
-            accs.Remover.IsNil ? null : loader.GetMethod(accs.Remover),
-            accs.Raiser.IsNil ? null : loader.GetMethod(accs.Raiser),
-            otherAccessors,
-            info.Attributes
-        );
-        evt._customAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
-        return evt;
     }
 }

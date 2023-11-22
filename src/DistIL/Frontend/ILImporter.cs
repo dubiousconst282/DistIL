@@ -22,7 +22,7 @@ public class ILImporter
         _method = method;
         _body = new MethodBody(method);
 
-        _regionTree = RegionNode.BuildTree(_ilBody.ExceptionRegions);
+        _regionTree = RegionNode.BuildTree(_ilBody.ExceptionClauses);
 
         int numVars = _body.Args.Length + _ilBody.Locals.Length;
         _varFlags = new VarFlags[numVars];
@@ -37,7 +37,7 @@ public class ILImporter
     private MethodBody ImportCode()
     {
         var code = _ilBody.Instructions.AsSpan();
-        var ehRegions = _ilBody.ExceptionRegions;
+        var ehRegions = _ilBody.ExceptionClauses;
         var leaders = FindLeaders(code, ehRegions);
 
         AnalyseVars(code, leaders);
@@ -65,9 +65,9 @@ public class ILImporter
         }
     }
 
-    private void CreateGuards(ExceptionRegion[] clauses)
+    private void CreateGuards(ExceptionClause[] clauses)
     {
-        var mappings = new Dictionary<GuardInst, ExceptionRegion>(clauses.Length);
+        var mappings = new Dictionary<GuardInst, ExceptionClause>(clauses.Length);
 
         //I.12.4.2.5 Overview of exception handling
         foreach (var clause in clauses) {
@@ -97,7 +97,7 @@ public class ILImporter
             mappings[guard] = clause;
         }
 
-        BasicBlock GetOrSplitStartBlock(ExceptionRegion region)
+        BasicBlock GetOrSplitStartBlock(ExceptionClause region)
         {
             var state = GetBlock(region.TryStart);
 
@@ -119,7 +119,7 @@ public class ILImporter
             }
             return state.EntryBlock;
         }
-        bool IsBlockNestedBy(ExceptionRegion region, BasicBlock block)
+        bool IsBlockNestedBy(ExceptionClause region, BasicBlock block)
         {
             foreach (var guard in block.Guards()) {
                 var currRegion = mappings[guard];
@@ -225,7 +225,7 @@ public class ILImporter
     }
 
     //Returns a bitset containing all instruction offsets where a block starts (branch targets).
-    private static BitSet FindLeaders(Span<ILInstruction> code, ExceptionRegion[] ehRegions)
+    private static BitSet FindLeaders(Span<ILInstruction> code, ExceptionClause[] ehRegions)
     {
         int codeSize = code[^1].GetEndOffset();
         var leaders = new BitSet(codeSize);

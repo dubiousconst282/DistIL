@@ -121,8 +121,10 @@ public class MDArrayMethod : MethodDesc
     public override MDArrayType DeclaringType { get; }
     public OpKind Kind { get; }
 
-    public override string Name
-        => Kind <= OpKind.RangeCtor ? ".ctor" : Kind.ToString();
+    public override string Name {
+        get => Kind <= OpKind.RangeCtor ? ".ctor" : Kind.ToString();
+        set => throw new InvalidOperationException();
+    }
 
     public override MethodAttributes Attribs
         => MethodAttributes.Public | (Kind <= OpKind.RangeCtor ? MethodAttributes.SpecialName : 0);

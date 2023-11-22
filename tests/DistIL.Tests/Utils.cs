@@ -45,7 +45,7 @@ class FakeParserContext : ParserContext
     public override MethodBody DeclareMethod(
         TypeDef parentType, string name,
         TypeSig returnSig, ImmutableArray<ParamDef> paramSig,
-        ImmutableArray<GenericParamType> genParams, System.Reflection.MethodAttributes attribs)
+        GenericParamType[] genParams, System.Reflection.MethodAttributes attribs)
     {
         var body = Utils.CreateDummyMethodBody(returnSig.Type, paramSig, attribs, name, parentType.Name);
         DeclaredMethods.Add(body);

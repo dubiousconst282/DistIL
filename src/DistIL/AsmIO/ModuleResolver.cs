@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 
 public class ModuleResolver
 {
-    //FIXME: Do we need to care about FullName (public keys and versions)?
+    // TODO: Do we need to care about FullName (public keys and versions)?
     protected readonly Dictionary<string, ModuleDef> _cache = new(StringComparer.OrdinalIgnoreCase);
     private string[] _searchPaths = [];
     private readonly ICompilationLogger? _logger;
@@ -32,17 +32,17 @@ public class ModuleResolver
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        //Try to change search path for the `NETCore.App.Ref` pack to the actual implementation path.
-        //This is done for a couple reasons:
+        // Try to change search path for the `NETCore.App.Ref` pack to the actual implementation path.
+        // This is done for a couple reasons:
         // - We make the assumption that "System.Private.CoreLib" always exist, but it doesn't in ref packs.
         //   This would lead to multiple defs for e.g. "System.ValueType", which would cause issues.
         // - We want to depend on _some_ private impl details which are not shipped in ref asms. 
         //   Notably accessing private `List<T>` fields.
         static string FixRuntimePackRefPath(string path)
         {
-            //e.g. "C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\7.0.3\ref\net7.0"
+            // e.g. "C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\7.0.3\ref\net7.0"
             //                              shared                     ****      ***********
-            //(I guess this piece will be in the top 3 reasons why I'll be sent to code hell.)
+            // (I guess this piece will be in the top 3 reasons why I'll be sent to code hell.)
             string normPath = Path.GetFullPath(path).Replace('\\', '/');
             string implPath = Regex.Replace(normPath, @"(.+?\/)packs(\/Microsoft\.NETCore\.App)\.Ref(\/.+?)\/.+", "$1shared$2$3");
             return implPath != normPath && Directory.Exists(implPath) ? implPath : path;
@@ -51,7 +51,7 @@ public class ModuleResolver
 
     public void AddTrustedSearchPaths()
     {
-        //https://docs.microsoft.com/en-us/dotnet/core/dependency-loading/default-probing
+        // https://docs.microsoft.com/en-us/dotnet/core/dependency-loading/default-probing
         string searchPaths = (string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!;
         AddSearchPaths(searchPaths.Split(Path.PathSeparator).Select(Path.GetDirectoryName)!);
     }
@@ -103,7 +103,7 @@ public class ModuleResolver
 
     public ModuleDef? Resolve(string name, [DoesNotReturnIf(true)] bool throwIfNotFound = true)
     {
-        //FIXME: This is not ideal, but it should work fine the module is not saved.
+        // FIXME: This is not ideal, but it should work fine the module is not saved.
         if (name == "mscorlib") {
             name = "netstandard";
         }
@@ -134,18 +134,15 @@ public class ModuleResolver
 
     public ModuleDef Load(string path)
     {
-        using var reader = new PEReader(File.OpenRead(path), PEStreamOptions.PrefetchEntireImage);
-        return Load(reader);
-    }
-    public ModuleDef Load(PEReader reader)
-    {
         var module = new ModuleDef(this);
-        var loader = new ModuleLoader(reader, this, module);
 
-        _cache.Add(module.AsmName.Name!, module); //AsmName is loaded by ModuleLoader ctor
+        var reader = new PEReader(File.OpenRead(path), PEStreamOptions.PrefetchEntireImage);
+        module._loader = new ModuleLoader(reader, module);
+
+        _cache.Add(module.AsmName.Name!, module); // AsmName is loaded by ModuleLoader ctor
         _logger?.Debug($"Loading module '{module.AsmName.Name}, v{module.AsmName.Version}'");
 
-        loader.Load();
+        module._loader.Load();
 
         return module;
     }
@@ -159,7 +156,7 @@ public class ModuleResolver
             },
             ModName = asmName + ".dll"
         };
-        module.CreateType(null, "<Module>", TypeAttributes.NotPublic); //global type required by the writer
+        module.CreateType(null, "<Module>", TypeAttributes.NotPublic); // global type required by the writer
         _cache.Add(asmName, module);
         return module;
     }

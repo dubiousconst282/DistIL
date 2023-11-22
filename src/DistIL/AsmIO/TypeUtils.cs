@@ -1,8 +1,8 @@
 namespace DistIL.AsmIO;
 
-public static class TypeSystemExt
+public static class TypeUtils
 {
-    /// <summary> Checks if this type is declared in <c>System.Private.CoreLib</c>. </summary>
+    /// <summary> Checks if this type is defined in <c>System.Private.CoreLib</c>. </summary>
     public static bool IsCorelibType(this TypeDesc desc)
     {
         return desc is TypeDefOrSpec def && def.Module == def.Module.Resolver.CoreLib;
@@ -32,12 +32,6 @@ public static class TypeSystemExt
     public static bool IsPointerLike(this TypeDesc type)
     {
         return type.StackType is StackType.ByRef or StackType.NInt;
-    }
-
-    /// <summary> Whether this type represents an unmanaged pointer or nint. </summary>
-    public static bool IsRawPointer(this TypeDesc type)
-    {
-        return type.StackType is StackType.NInt;
     }
 
     public static bool IsPointerOrObject(this TypeDesc type)

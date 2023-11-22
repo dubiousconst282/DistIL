@@ -21,14 +21,14 @@ public class CustomAttribTests
         var attrib = type.Methods.First(m => m.Name == "DecodeCase1").GetCustomAttribs().First();
 
         Assert.Equal(type, ((TypeDef)attrib.Type).DeclaringType);
-        Assert.Equal(5, attrib.FixedArgs.Length);
-        Assert.Equal(9, attrib.NamedArgs.Length);
+        Assert.Equal(5, attrib.Args.Length);
+        Assert.Equal(9, attrib.Properties.Length);
 
-        Assert.Equal(45, attrib.FixedArgs[0]);
-        Assert.Equal("CtorStr", attrib.FixedArgs[1]);
-        Assert.Equal(sys.String, attrib.FixedArgs[2]);
-        Assert.Equal(new int[] { 1, 2, 3 }, (int[]?)attrib.FixedArgs[3]);
-        Assert.Equal(150, attrib.FixedArgs[4]);
+        Assert.Equal(45, attrib.Args[0]);
+        Assert.Equal("CtorStr", attrib.Args[1]);
+        Assert.Equal(sys.String, attrib.Args[2]);
+        Assert.Equal(new int[] { 1, 2, 3 }, (int[]?)attrib.Args[3]);
+        Assert.Equal(150, attrib.Args[4]);
 
         var listEnumeratorArray = _modResolver.Import(typeof(List<string>.Enumerator)).CreateArray();
 
@@ -44,7 +44,7 @@ public class CustomAttribTests
 
         void CheckNamed(string name, TypeDesc type, object? value)
         {
-            var prop = attrib!.GetNamedArg(name)!;
+            var prop = attrib!.GetProperty(name)!;
             Assert.Equal(name, prop.Name);
             Assert.Equal(type, prop.Type);
             Assert.Equal(value, prop.Value);

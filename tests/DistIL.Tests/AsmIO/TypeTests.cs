@@ -74,7 +74,7 @@ public class TypeTests
     public void FindMethod_InGenericHierarchy()
     {
         var t_Derived3 = _modResolver.Resolve("TestAsm").FindType("TestAsm.TypeSys.Generics", "DerivedC`1");
-        var derivedSpec = t_Derived3.GetSpec(PrimType.String);
+        var derivedSpec = t_Derived3.GetSpec([PrimType.String]);
 
         var t_TupleStrInt = _modResolver.Import(typeof(ValueTuple<string, int>));
 

@@ -2,7 +2,7 @@ namespace DistIL.AsmIO;
 
 using System.Reflection.Metadata;
 
-//II.23.2 Blobs and signatures
+// II.23.2 Blobs and signatures
 internal struct SignatureDecoder
 {
     readonly ModuleLoader _loader;
@@ -10,10 +10,13 @@ internal struct SignatureDecoder
     public BlobReader Reader;
 
     public SignatureDecoder(ModuleLoader loader, BlobHandle handle, GenericContext genCtx = default)
+        : this(loader, loader._reader.GetBlobReader(handle), genCtx) { }
+        
+    public SignatureDecoder(ModuleLoader loader, BlobReader reader, GenericContext genCtx = default)
     {
         _loader = loader;
-        Reader = loader._reader.GetBlobReader(handle);
         _genCtx = genCtx;
+        Reader = reader;
     }
 
     public TypeDesc DecodeType()
@@ -121,7 +124,7 @@ internal struct SignatureDecoder
         var vars = new ILVariable[Reader.ReadCompressedInteger()];
 
         for (int i = 0; i < vars.Length; i++) {
-            DecodeCustomMods(); //Custom modifiers on local vars are pretty useless, skip them
+            DecodeCustomMods(); // Custom modifiers on local vars are pretty useless, skip them
             bool isPinned = Reader.ReadSignatureTypeCode() == SignatureTypeCode.Pinned;
             if (!isPinned) {
                 Reader.Offset--;
@@ -146,7 +149,7 @@ internal struct SignatureDecoder
             var modifierType = (TypeDesc)_loader.GetEntity(Reader.ReadTypeHandle());
             bool isRequired = typeCode == SignatureTypeCode.RequiredModifier;
 
-            //We don't expect many custom mods, this should be fine in most cases; otherwise, surprise O(n^2) slowdown!
+            // We don't expect many custom mods, this should be fine in most cases; otherwise, surprise O(n^2) slowdown!
             modifiers = modifiers.Add(new(modifierType.GetSpec(_genCtx), isRequired));
         }
     }

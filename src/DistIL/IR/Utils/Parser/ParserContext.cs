@@ -27,7 +27,7 @@ public class ParserContext
     public virtual MethodBody DeclareMethod(
         TypeDef parentType, string name,
         TypeSig returnSig, ImmutableArray<ParamDef> paramSig,
-        ImmutableArray<GenericParamType> genParams, MethodAttribs attribs)
+        GenericParamType[] genParams, MethodAttribs attribs)
     {
         var def = parentType.CreateMethod(name, returnSig, paramSig, attribs, genParams);
         var body = def.Body = new MethodBody(def);

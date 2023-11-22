@@ -26,7 +26,7 @@ partial class CustomAttrib
     {
         int count = Constructor.ParamSig.Count;
         if (count < 2) {
-            return ValueArray.Empty;
+            return [];
         }
 
         var builder = ImmutableArray.CreateBuilder<object?>(count - 1);
@@ -40,7 +40,7 @@ partial class CustomAttrib
     {
         int count = reader.ReadUInt16();
         if (count == 0) {
-            return PropArray.Empty;
+            return [];
         }
 
         var builder = ImmutableArray.CreateBuilder<CustomAttribProp>(count);

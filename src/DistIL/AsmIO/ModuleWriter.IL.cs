@@ -13,15 +13,15 @@ partial class ModuleWriter
         var enc = _bodyEncoder.AddMethodBody(
             codeSize: body.Instructions[^1].GetEndOffset(),
             body.MaxStack,
-            body.ExceptionRegions.Length,
-            hasSmallExceptionRegions: false, //TODO
+            body.ExceptionClauses.Length,
+            hasSmallExceptionRegions: false, // TODO
             localVariablesSignature: EncodeLocalVars(body.Locals),
             attributes: body.InitLocals ? MethodBodyAttributes.InitLocals : 0
         );
         EncodeInsts(body, new BlobWriter(enc.Instructions));
 
-        //Add exception regions
-        foreach (var ehr in body.ExceptionRegions) {
+        // Add exception regions
+        foreach (var ehr in body.ExceptionClauses) {
             enc.ExceptionRegions.Add(
                 kind: ehr.Kind,
                 tryOffset: ehr.TryStart,

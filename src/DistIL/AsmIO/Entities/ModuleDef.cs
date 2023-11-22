@@ -9,7 +9,6 @@ public class ModuleDef : EntityDesc
 {
     public string ModName { get; set; } = null!;
     public AssemblyName AsmName { get; set; } = null!;
-    public AssemblyFlags AsmFlags { get; set; }
 
     public MethodDef? EntryPoint { get; set; }
 
@@ -25,6 +24,8 @@ public class ModuleDef : EntityDesc
 
     internal Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); //root assemblies for references of forwarded types
     internal List<CustomAttrib> _asmCustomAttribs = new(), _modCustomAttribs = new();
+
+    internal ModuleLoader? _loader;
 
     internal ModuleDef(ModuleResolver resolver)
     {
@@ -48,13 +49,13 @@ public class ModuleDef : EntityDesc
         string? ns, string name, 
         TypeAttributes attrs = TypeAttributes.Public,
         TypeDefOrSpec? baseType = null,
-        ImmutableArray<GenericParamType> genericParams = default)
+        GenericParamType[]? genericParams = null)
     {
         if (FindType(ns, name) != null) {
             throw new InvalidOperationException("A type with the same name already exists");
         }
         var type = new TypeDef(
-            this, ns, name, attrs, genericParams,
+            this, ns, name, attrs, genericParams ?? [],
             baseType ?? Resolver.SysTypes.Object
         );
         _typeDefs.Add(type);

@@ -125,7 +125,7 @@ public partial class IRParser
         });
         var returnType = _lexer.Match(TokenType.Arrow) ? ParseType() : PrimType.Void;
 
-        var body = _ctx.DeclareMethod(parentType, name, returnType, paramSig.ToImmutable(), default, access);
+        var body = _ctx.DeclareMethod(parentType, name, returnType, paramSig.ToImmutable(), [], access);
 
         SetCurrentMethod(body);
         

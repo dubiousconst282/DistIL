@@ -21,7 +21,6 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
             return (BaseType == sys.ValueType && this != sys.Enum) || BaseType == sys.Enum;
         }
     }
-    public override bool IsEnum => BaseType == Module.Resolver.SysTypes.Enum;
     public override bool IsInterface => (Attribs & TypeAttributes.Interface) != 0;
 
     public override abstract TypeDefOrSpec GetSpec(GenericContext context);
@@ -37,12 +36,34 @@ public class TypeDef : TypeDefOrSpec
     public override ModuleDef Module { get; }
     public override TypeDef Definition => this;
 
-    public override TypeKind Kind => _kind;
+    TypeKind _kind = (TypeKind)(-1);
+    public override TypeKind Kind {
+        get {
+            if (_kind == (TypeKind)(-1)) {
+                _kind = IsEnum ? UnderlyingEnumType.Kind :
+                        PrimType.GetFromDefinition(this)?.Kind ??
+                        (IsValueType ? TypeKind.Struct : TypeKind.Object);
+            }
+            return _kind;
+        }
+    }
     public override StackType StackType => _kind.ToStackType();
     public override TypeAttributes Attribs { get; }
 
-    public override TypeDefOrSpec? BaseType => _baseType;
-    public override IReadOnlyList<GenericParamType> GenericParams { get; }
+    private TypeDefOrSpec? _baseType;
+    public override TypeDefOrSpec? BaseType => _baseType ??= _loader?.GetBaseType(_handle);
+
+    GenericParamType[]? _genericParams;
+    public override GenericParamType[] GenericParams {
+        get {
+            if (_genericParams == null) {
+                _loader?.LoadGenericParams(_handle, out _genericParams);
+                _genericParams ??= [];
+            }
+            return _genericParams;
+        }
+        //set => _genericParams = value;
+    }
 
     public override string? Namespace { get; }
     public override string Name { get; }
@@ -55,58 +76,65 @@ public class TypeDef : TypeDefOrSpec
 
     public override TypeDesc? UnderlyingEnumType => IsEnum ? Fields.First(f => f.IsInstance).Type : null;
 
+    [MemberNotNullWhen(true, nameof(UnderlyingEnumType))]
+    public override bool IsEnum => BaseType == Module.Resolver.SysTypes.Enum;
+
     public int LayoutSize { get; set; }
     public int LayoutPack { get; set; }
-    public bool HasCustomLayout => LayoutSize != 0 || LayoutPack != 0;
+    public bool HasCustomLayout => (Attribs & TypeAttributes.ExplicitLayout) != 0;
 
-    public override IReadOnlyList<TypeDesc> Interfaces => EmptyIfNull(_interfaces);
-    public override IReadOnlyList<FieldDef> Fields => _fields;
-    public override IReadOnlyList<MethodDef> Methods => _methods;
-    public IReadOnlyList<PropertyDef> Properties => EmptyIfNull(_properties);
-    public IReadOnlyList<EventDef> Events => EmptyIfNull(_events);
-    public IReadOnlyList<TypeDef> NestedTypes => EmptyIfNull(_nestedTypes);
-    public IReadOnlyDictionary<MethodDesc, MethodDef> InterfaceMethodImpls => _itfMethodImpls ?? s_EmptyItfMethodImpls;
+    List<FieldDef>? _fields;
+    public override List<FieldDef> Fields => _fields ??= (_loader?.LoadFields(this) ?? new());
 
-    private TypeKind _kind;
-    private TypeDefOrSpec? _baseType;
-    private List<FieldDef> _fields = new();
-    private List<MethodDef> _methods = new();
+    List<MethodDef>? _methods;
+    public override List<MethodDef> Methods => _methods ??= (_loader?.LoadMethods(this) ?? new());
+    
+    List<PropertyDef>? _properties;
+    public List<PropertyDef> Properties => _properties ??= (_loader?.LoadProperties(this) ?? new());
 
-    private List<TypeDesc>? _interfaces;
-    private List<PropertyDef>? _properties;
-    private List<EventDef>? _events;
-    private List<TypeDef>? _nestedTypes;
-    private Dictionary<MethodDesc, MethodDef>? _itfMethodImpls;
+    List<EventDef>? _events;
+    public List<EventDef> Events => _events ??= (_loader?.LoadEvents(this) ?? new());
 
-    private IList<CustomAttrib>? _customAttribs;
-    private Dictionary<(EntityDesc, EntityDesc?), IList<CustomAttrib>>? _itfCustomAttribs;
+    public List<TypeDef> NestedTypes { get; } = new();
+
+    List<TypeDesc>? _interfaces;
+    public override List<TypeDesc> Interfaces => _interfaces ??= (_loader?.LoadInterfaces(this) ?? new());
+
+    Dictionary<MethodDesc, MethodDef>? _methodImpls;
+    public Dictionary<MethodDesc, MethodDef> MethodImpls => _methodImpls ??= (_loader?.LoadMethodImpls(this) ?? new());
+
+    internal IList<CustomAttrib>? _customAttribs;
+
+    // Custom attributes for interfaces and methodImpls, where key is:
+    // - Interface: (TypeDef, null) 
+    // - MethodImpl: (MethodDesc Decl, MethodDef Impl)
+    Dictionary<(EntityDesc, EntityDesc?), IList<CustomAttrib>>? _implCustomAttribs;
 
     private SpecCache? _specCache;
-
-    private static readonly Dictionary<MethodDesc, MethodDef> s_EmptyItfMethodImpls = new();
-    private static IReadOnlyList<T> EmptyIfNull<T>(List<T>? list) => list ?? (IReadOnlyList<T>)Array.Empty<T>();
+    internal TypeDefinitionHandle _handle;
+    private ModuleLoader? _loader => _handle.IsNil ? null : Module._loader;
 
     internal TypeDef(
-        ModuleDef mod, string? ns, string name, 
+        ModuleDef mod, string? ns, string name,
         TypeAttributes attribs = default,
-        ImmutableArray<GenericParamType> genericParams = default,
+        GenericParamType[]? genericParams = null,
         TypeDefOrSpec? baseType = null)
     {
         Module = mod;
         Namespace = ns;
         Name = name;
         Attribs = attribs;
-        GenericParams = genericParams.EmptyIfDefault();
+        _genericParams = genericParams;
         _baseType = baseType;
     }
-
+    
     public override TypeDefOrSpec GetSpec(GenericContext context)
     {
         return IsGeneric ? GetCachedSpec(GenericParams, context) : this;
     }
     public TypeSpec GetSpec(ImmutableArray<TypeDesc> genArgs)
     {
-        Ensure.That(IsGeneric && genArgs.Length == GenericParams.Count);
+        Ensure.That(IsGeneric && genArgs.Length == GenericParams.Length);
         return GetCachedSpec(genArgs, default);
     }
 
@@ -119,19 +147,19 @@ public class TypeDef : TypeDefOrSpec
 
     public TypeDef? FindNestedType(string name)
     {
-        return _nestedTypes?.Find(e => e.Name == name);
+        return NestedTypes.Find(e => e.Name == name);
     }
 
     public MethodDef CreateMethod(
         string name, TypeSig retSig, ImmutableArray<ParamDef> paramSig, 
         MethodAttributes attribs = MethodAttributes.Public | MethodAttributes.HideBySig,
-        ImmutableArray<GenericParamType> genericPars = default)
+        GenericParamType[]? genericPars = null)
     {
         var existingMethod = FindMethod(name, new MethodSig(retSig, paramSig.Select(p => p.Sig).ToList()), throwIfNotFound: false);
         Ensure.That(existingMethod == null, "A method with the same signature already exists");
 
         var method = new MethodDef(this, retSig, paramSig, name, attribs, MethodImplAttributes.IL, genericPars);
-        _methods.Add(method);
+        Methods.Add(method);
         return method;
     }
 
@@ -143,13 +171,13 @@ public class TypeDef : TypeDefOrSpec
         Ensure.That(existingField == null, "A field with the same name already exists");
 
         var field = new FieldDef(this, sig, name, attribs, defaultValue, layoutOffset, mappedData);
-        _fields.Add(field);
+        Fields.Add(field);
         return field;
     }
 
     public TypeDef CreateNestedType(
         string name, TypeAttributes attribs = TypeAttributes.Public,
-        ImmutableArray<GenericParamType> genericParams = default,
+        GenericParamType[]? genericParams = null,
         TypeDefOrSpec? baseType = null)
     {
         var existingType = FindNestedType(name);
@@ -162,46 +190,46 @@ public class TypeDef : TypeDefOrSpec
         };
         attribs = (attribs & ~TypeAttributes.VisibilityMask) | newAccess;
 
-        var childType = new TypeDef(Module, null, name, attribs, genericParams, baseType);
+        var childType = new TypeDef(Module, null, name, attribs, genericParams ?? [], baseType);
         childType.SetDeclaringType(this);
         Module._typeDefs.Add(childType);
         return childType;
     }
 
     public override IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
-        => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
+        => CustomAttribUtils.GetOrInitList(ref _customAttribs, readOnly);
 
-    /// <summary> Returns the list of custom attributes applied to an interface implementation, <paramref name="interface_"/>. </summary>
-    public IList<CustomAttrib> GetCustomAttribs(TypeDesc interface_, bool readOnly = true)
-        => GetItfCustomAttribs((interface_, null), readOnly);
+    /// <summary> Returns the list of custom attributes applied to an interface implementation, <paramref name="interfaceType"/>. </summary>
+    public IList<CustomAttrib> GetCustomAttribs(TypeDesc interfaceType, bool readOnly = true)
+        => GetImplCustomAttribs((interfaceType, null), readOnly);
 
     /// <summary> Returns the list of custom attributes applied to an interface method implementation. </summary>
     /// <param name="impl">The method declared in this class for which to override <paramref name="decl"/>. </param>
     /// <param name="decl">The interface method declaration.</param>
-    public IList<CustomAttrib> GetCustomAttribs(MethodDef impl, MethodDesc decl, bool readOnly = true)
+    public IList<CustomAttrib> GetCustomAttribs(MethodDesc decl, MethodDef impl, bool readOnly = true)
     {
         Ensure.That(impl.DeclaringType == this);
-        return GetItfCustomAttribs((impl, decl), readOnly);
+        return GetImplCustomAttribs((decl, impl), readOnly);
     }
 
-    private IList<CustomAttrib> GetItfCustomAttribs((EntityDesc, EntityDesc?) key, bool readOnly)
+    private IList<CustomAttrib> GetImplCustomAttribs((EntityDesc, EntityDesc?) key, bool readOnly)
     {
         return readOnly
-            ? _itfCustomAttribs?.GetValueOrDefault(key) ?? Array.Empty<CustomAttrib>()
-            : CustomAttribExt.GetOrInitList(ref (_itfCustomAttribs ??= new()).GetOrAddRef(key), readOnly);
+            ? _implCustomAttribs?.GetValueOrDefault(key) ?? Array.Empty<CustomAttrib>()
+            : CustomAttribUtils.GetOrInitList(ref (_implCustomAttribs ??= new()).GetOrAddRef(key), readOnly);
     }
 
-    private void SetItfCustomAttribs((EntityDesc, EntityDesc?) key, IList<CustomAttrib>? list)
+    internal void SetImplCustomAttribs((EntityDesc, EntityDesc?) key, IList<CustomAttrib>? list)
     {
         if (list != null) {
-            (_itfCustomAttribs ??= new()).Add(key, list);
+            (_implCustomAttribs ??= new()).Add(key, list);
         }
     }
 
-    private void SetDeclaringType(TypeDef parent)
+    internal void SetDeclaringType(TypeDef parent)
     {
         DeclaringType = parent;
-        (parent._nestedTypes ??= new()).Add(this);
+        parent.NestedTypes.Add(this);
     }
 
     public override void Print(PrintContext ctx, bool includeNs = false)
@@ -215,96 +243,6 @@ public class TypeDef : TypeDefOrSpec
 
     public override bool Equals(TypeDesc? other)
         => object.ReferenceEquals(this, other) || (other is PrimType p && p.IsDefinition(this));
-
-    internal static TypeDef Decode(ModuleLoader loader, TypeDefinition info)
-    {
-        return new TypeDef(
-            loader._mod,
-            loader._reader.GetOptString(info.Namespace),
-            loader._reader.GetString(info.Name),
-            info.Attributes,
-            loader.CreateGenericParams(info.GetGenericParameters(), false)
-        );
-    }
-    internal void Load1(ModuleLoader loader, TypeDefinition info)
-    {
-        if (!info.BaseType.IsNil) {
-            _baseType = (TypeDefOrSpec)loader.GetEntity(info.BaseType);
-        }
-        if (info.IsNested) {
-            SetDeclaringType(loader.GetType(info.GetDeclaringType()));
-        }
-        var layout = info.GetLayout();
-        LayoutPack = layout.PackingSize;
-        LayoutSize = layout.Size;
-    }
-    internal void Load2(ModuleLoader loader, TypeDefinition info)
-    {
-        var fieldHandles = info.GetFields();
-        _fields.EnsureCapacity(fieldHandles.Count);
-        foreach (var handle in fieldHandles) {
-            _fields.Add(loader.GetField(handle));
-        }
-
-        var methodHandles = info.GetMethods();
-        _methods.EnsureCapacity(methodHandles.Count);
-        foreach (var handle in methodHandles) {
-            _methods.Add(loader.GetMethod(handle));
-        }
-
-        _kind = IsEnum ? UnderlyingEnumType!.Kind :
-                PrimType.GetFromDefinition(this)?.Kind ??
-                (IsValueType ? TypeKind.Struct : TypeKind.Object);
-    }
-    internal void Load3(ModuleLoader loader, TypeDefinition info)
-    {
-        var propHandles = info.GetProperties();
-        if (propHandles.Count > 0) {
-            _properties = new List<PropertyDef>(propHandles.Count);
-
-            foreach (var handle in propHandles) {
-                _properties.Add(PropertyDef.Decode3(loader, handle, this));
-            }
-        }
-
-        var evtHandles = info.GetEvents();
-        if (evtHandles.Count > 0) {
-            _events = new List<EventDef>(evtHandles.Count);
-
-            foreach (var handle in evtHandles) {
-                _events.Add(EventDef.Decode3(loader, handle, this));
-            }
-        }
-
-        var itfHandles = info.GetInterfaceImplementations();
-        if (itfHandles.Count > 0) {
-            _interfaces = new List<TypeDesc>(itfHandles.Count);
-
-            foreach (var handle in itfHandles) {
-                var itfInfo = loader._reader.GetInterfaceImplementation(handle);
-                var itfType = (TypeDesc)loader.GetEntity(itfInfo.Interface);
-                _interfaces.Add(itfType);
-                SetItfCustomAttribs((itfType, null), loader.DecodeCustomAttribs(itfInfo.GetCustomAttributes()));
-            }
-        }
-
-        var implHandles = info.GetMethodImplementations();
-        if (implHandles.Count > 0) {
-            _itfMethodImpls = new(implHandles.Count);
-
-            foreach (var handle in implHandles) {
-                var implInfo = loader._reader.GetMethodImplementation(handle);
-                var decl = (MethodDesc)loader.GetEntity(implInfo.MethodDeclaration);
-                var impl = (MethodDef)loader.GetEntity(implInfo.MethodBody);
-
-                Ensure.That(impl.DeclaringType == this);
-                _itfMethodImpls.Add(decl, impl);
-                SetItfCustomAttribs((impl, decl), loader.DecodeCustomAttribs(implInfo.GetCustomAttributes()));
-            }
-        }
-        loader.FillGenericParams(GenericParams, info.GetGenericParameters());
-        _customAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
-    }
 
     class SpecCache
     {

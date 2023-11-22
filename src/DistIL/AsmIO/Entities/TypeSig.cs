@@ -2,39 +2,41 @@ namespace DistIL.AsmIO;
 
 using System.Runtime.CompilerServices;
 
-/// <summary> Represents a type used by a signature, which may contain custom modifiers. </summary>
+// TODO: consider renaming this to SigType?
+
+/// <summary> Represents a type used by a signature, which may contain modifiers. </summary>
 public readonly struct TypeSig : IEquatable<TypeSig>, IPrintable
 {
-    //Modified types are quite rare. We can save a little bit of memory by heap allocating
-    //them into a wrapper class instead of always having a field for the modifier array.
-    readonly object _data; //TypeDesc | TypeAndMods
+    // Modified types are quite rare. We can save a little bit of memory by heap allocating
+    // them into a wrapper class instead of always having a field for the modifier array.
+    readonly object _data; // TypeDesc | TypeAndMods
 
     public TypeDesc Type
         => (_data as TypeAndMods)?.Type ?? Unsafe.As<TypeDesc>(_data);
 
-    /// <remarks> Note: generic custom modifiers are never specialized. </remarks>
-    public ImmutableArray<TypeModifier> CustomMods
+    /// <remarks> Note: generic modifiers are never specialized. </remarks>
+    public ImmutableArray<TypeModifier> Modifiers
         => (_data as TypeAndMods)?.Mods ?? ImmutableArray<TypeModifier>.Empty;
 
-    public bool HasCustomMods => _data.GetType() == typeof(TypeAndMods);
+    public bool HasModifiers => _data.GetType() == typeof(TypeAndMods);
 
-    public TypeSig(TypeDesc type, ImmutableArray<TypeModifier> customMods = default)
+    public TypeSig(TypeDesc type, ImmutableArray<TypeModifier> mods = default)
     {
-        _data = customMods.IsDefaultOrEmpty 
-            ? type 
-            : new TypeAndMods() { Type = type, Mods = customMods };
+        _data = mods.IsDefaultOrEmpty
+            ? type
+            : new TypeAndMods() { Type = type, Mods = mods };
     }
 
     public TypeSig GetSpec(GenericContext ctx)
     {
-        return new TypeSig(Type.GetSpec(ctx), CustomMods);
+        return new TypeSig(Type.GetSpec(ctx), Modifiers);
     }
 
     public void Print(PrintContext ctx, bool includeNs = false)
     {
         Type.Print(ctx, includeNs);
 
-        foreach (var (modType, isRequired) in CustomMods) {
+        foreach (var (modType, isRequired) in Modifiers) {
             ctx.Print(isRequired ? " modreq" : " modopt", PrintToner.Keyword);
             ctx.Print("(");
             modType.Print(ctx, includeNs);
@@ -53,7 +55,7 @@ public readonly struct TypeSig : IEquatable<TypeSig>, IPrintable
 
     public bool Equals(TypeSig other)
     {
-        return other.Type == Type && CustomMods.SequenceEqual(other.CustomMods);
+        return other.Type == Type && Modifiers.SequenceEqual(other.Modifiers);
     }
 
     public override bool Equals(object? obj) => obj is TypeSig sig && Equals(sig);

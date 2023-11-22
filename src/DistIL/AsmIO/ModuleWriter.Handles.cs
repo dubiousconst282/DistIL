@@ -10,7 +10,7 @@ partial class ModuleWriter
     {
         int typeIdx = 1, fieldIdx = 1, methodIdx = 1;
 
-        //Global type must be at exactly the first table entry
+        // Global type must be at exactly the first table entry
         var globalType = _mod.FindType(null, "<Module>") 
             ?? throw new InvalidOperationException("Module is missing its global type");
         _handleMap.Add(globalType, MetadataTokens.TypeDefinitionHandle(typeIdx++));
@@ -28,7 +28,7 @@ partial class ModuleWriter
         }
     }
 
-    //Add reference to an entity defined in another module
+    // Add reference to an entity defined in another module
     private EntityHandle CreateHandle(EntityDesc entity)
     {
         switch (entity) {
@@ -90,7 +90,7 @@ partial class ModuleWriter
 
     private EntityHandle GetSigHandle(TypeSig sig)
     {
-        if (!sig.HasCustomMods) {
+        if (!sig.HasModifiers) {
             return GetHandle(sig.Type);
         }
         return _builder.AddTypeSpecification(

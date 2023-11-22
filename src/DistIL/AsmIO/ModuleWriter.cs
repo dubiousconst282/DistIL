@@ -13,7 +13,8 @@ internal partial class ModuleWriter
     private BlobBuilder? _fieldDataStream;
 
     readonly Dictionary<EntityDesc, EntityHandle> _handleMap = new();
-    //Generic parameters must be sorted based on the coded parent entity handle, we do that in a later pass.
+    readonly Dictionary<string, ModuleReferenceHandle> _moduleRefs = new();
+    // Generic parameters must be sorted based on the coded parent entity handle, we do that in a later pass.
     readonly List<EntityDesc> _genericDefs = new();
 
     public ModuleWriter(ModuleDef mod)
@@ -26,7 +27,7 @@ internal partial class ModuleWriter
 
     public void Emit(BlobBuilder peBlob)
     {
-        //https://github.com/dotnet/runtime/blob/main/src/libraries/System.Reflection.Metadata/tests/PortableExecutable/PEBuilderTests.cs
+        // https:// github.com/dotnet/runtime/blob/main/src/libraries/System.Reflection.Metadata/tests/PortableExecutable/PEBuilderTests.cs
         var mainModHandle = _builder.AddModule(
             0, 
             AddString(_mod.ModName), 
@@ -92,11 +93,11 @@ internal partial class ModuleWriter
             var itfHandle = _builder.AddInterfaceImplementation(handle, GetHandle(itf));
             EmitCustomAttribs(itfHandle, type.GetCustomAttribs(itf));
         }
-        foreach (var (decl, impl) in type.InterfaceMethodImpls) {
+        foreach (var (decl, impl) in type.MethodImpls) {
             Debug.Assert(decl is not MethodSpec { IsBoundGeneric: true });
 
             var implHandle = _builder.AddMethodImplementation(handle, GetHandle(impl), GetHandle(decl));
-            EmitCustomAttribs(implHandle, type.GetCustomAttribs(impl, decl));
+            EmitCustomAttribs(implHandle, type.GetCustomAttribs(decl, impl));
         }
         
         foreach (var field in type.Fields) {
@@ -146,10 +147,10 @@ internal partial class ModuleWriter
         if (field.Attribs.HasFlag(FieldAttributes.HasFieldMarshal)) {
             _builder.AddMarshallingDescriptor(handle, _builder.GetOrAddBlob(field.MarshallingDesc!));
         }
-        if (field.Attribs.HasFlag(FieldAttributes.HasDefault)) {
+        if (field.HasDefaultValue) {
             _builder.AddConstant(handle, field.DefaultValue);
         }
-        if (field.LayoutOffset >= 0) {
+        if (field.HasLayoutOffset) {
             _builder.AddFieldLayout(handle, field.LayoutOffset);
         }
         EmitCustomAttribs(handle, field.GetCustomAttribs());
@@ -177,7 +178,19 @@ internal partial class ModuleWriter
         if (method.IsGeneric) {
             _genericDefs.Add(method);
         }
+        if (method.ImportInfo != null) {
+            var imp = method.ImportInfo;
+            _builder.AddMethodImport(handle, imp.Attribs, AddString(imp.FunctionName), GetOrAddModRef(imp.ModuleName));
+        }
         EmitCustomAttribs(handle, method.GetCustomAttribs());
+    }
+    private ModuleReferenceHandle GetOrAddModRef(string moduleName)
+    {
+        if (!_moduleRefs.TryGetValue(moduleName, out var handle)) {
+            handle = _builder.AddModuleReference(_builder.GetOrAddString(moduleName));
+            _moduleRefs.Add(moduleName, handle);
+        }
+        return handle;
     }
 
     private void EmitParam(ParamDef par, int index)
@@ -240,13 +253,13 @@ internal partial class ModuleWriter
             var handle = _handleMap[entity];
             var genPars = (entity as TypeDef)?.GenericParams ?? ((MethodDef)entity).GenericParams;
 
-            foreach (var par in genPars.Cast<GenericParamType>()) {
+            foreach (var par in genPars) {
                 var parHandle = _builder.AddGenericParameter(handle, par.Attribs, AddString(par.Name), par.Index);
-                EmitCustomAttribs(parHandle, par._customAttribs?[0]);
+                EmitCustomAttribs(parHandle, par.CustomAttribs);
 
-                for (int i = 0; i < par.Constraints.Length; i++) {
-                    var constrHandle = _builder.AddGenericParameterConstraint(parHandle, GetSigHandle(par.Constraints[i]));
-                    EmitCustomAttribs(constrHandle, par._customAttribs?.ElementAtOrDefault(i));
+                foreach (var constraint in par.Constraints) {
+                    var constrHandle = _builder.AddGenericParameterConstraint(parHandle, GetSigHandle(constraint.Sig));
+                    EmitCustomAttribs(constrHandle, constraint.CustomAttribs);
                 }
             }
         }

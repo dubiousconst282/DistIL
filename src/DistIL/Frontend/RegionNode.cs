@@ -32,7 +32,7 @@ internal class RegionNode
 
     public bool Contains(int offset) => offset >= StartOffset && offset <= EndOffset;
 
-    public static RegionNode? BuildTree(ExceptionRegion[] clauses)
+    public static RegionNode? BuildTree(ExceptionClause[] clauses)
     {
         if (clauses.Length == 0) {
             return null;

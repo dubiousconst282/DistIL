@@ -1,7 +1,6 @@
 namespace DistIL.AsmIO;
 
 using System.Reflection;
-using System.Reflection.Metadata;
 
 /// <summary> Represents a placeholder for a generic type argument. </summary>
 public class GenericParamType : TypeDesc
@@ -13,18 +12,22 @@ public class GenericParamType : TypeDesc
     public override string? Namespace => null;
     public override string Name { get; }
 
-    public ImmutableArray<TypeSig> Constraints { get; private set; }
     public GenericParameterAttributes Attribs { get; }
-
-    internal CustomAttrib[]?[]? _customAttribs; //[0]: own, [1..]: constraints
 
     public int Index { get; }
     public bool IsMethodParam { get; }
 
+    // TODO: proper immutability for these (or at least when sharing unbound instances)
+    public ImmutableArray<GenericParamConstraint> Constraints { get; set; }
+    public IList<CustomAttrib> CustomAttribs { get; set; } = Array.Empty<CustomAttrib>();
+
     public bool IsCovariant => (Attribs & GenericParameterAttributes.Covariant) != 0;
     public bool IsContravariant => (Attribs & GenericParameterAttributes.Contravariant) != 0;
 
-    public GenericParamType(int index, bool isMethodParam, string? name = null, GenericParameterAttributes attribs = 0, ImmutableArray<TypeSig> constraints = default)
+    public GenericParamType(
+        int index, bool isMethodParam, string? name = null,
+        GenericParameterAttributes attribs = 0,
+        ImmutableArray<GenericParamConstraint> constraints = default)
     {
         Index = index;
         IsMethodParam = isMethodParam;
@@ -33,7 +36,7 @@ public class GenericParamType : TypeDesc
         Constraints = constraints.EmptyIfDefault();
     }
 
-    const int kCacheSize = 8;
+    const int kCacheSize = 16;
     static readonly GenericParamType?[] s_UnboundCache = new GenericParamType?[kCacheSize * 2];
 
     /// <summary> Returns an unbound generic type parameter at <paramref name="index"/>. </summary>
@@ -51,50 +54,6 @@ public class GenericParamType : TypeDesc
         return new GenericParamType(index, isMethodParam);
     }
 
-    internal void Load3(ModuleLoader loader, GenericParameter info)
-    {
-        Constraints = DecodeConstraints(loader, info.GetConstraints());
-        AddCustomAttribs(0, loader.DecodeCustomAttribs(info.GetCustomAttributes()));
-    }
-    private ImmutableArray<TypeSig> DecodeConstraints(ModuleLoader loader, GenericParameterConstraintHandleCollection handles)
-    {
-        if (handles.Count == 0) {
-            return [];
-        }
-        var builder = ImmutableArray.CreateBuilder<TypeSig>(handles.Count);
-        foreach (var handle in handles) {
-            var info = loader._reader.GetGenericParameterConstraint(handle);
-            var constraint = loader.GetEntity(info.Type);
-            builder.Add(constraint as TypeDesc ?? ((ModifiedTypeSpecTableWrapper_)constraint).Sig);
-            AddCustomAttribs(builder.Count, loader.DecodeCustomAttribs(info.GetCustomAttributes()));
-        }
-        return builder.MoveToImmutable();
-    }
-
-    public IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
-    {
-        Ensure.That(readOnly, "Not impl");
-        
-        return _customAttribs?[0] ?? [];
-    }
-
-    public IList<CustomAttrib> GetCustomAttribs(TypeSig constraint, bool readOnly = true)
-    {
-        Ensure.That(readOnly, "Not impl");
-
-        int index = Constraints.IndexOf(constraint);
-        Ensure.That(index >= 0, "Generic parameter is not constrainted by the specified type");
-        return _customAttribs?.ElementAtOrDefault(index + 1) ?? [];
-    }
-
-    private void AddCustomAttribs(int index, CustomAttrib[]? attribs)
-    {
-        if (attribs != null) {
-            Array.Resize(ref _customAttribs, index + 1);
-            _customAttribs[index] = attribs;
-        }
-    }
-
     public override void Print(PrintContext ctx, bool includeNs = false)
     {
         ctx.Print(IsMethodParam ? "!!" : "!");
@@ -110,3 +69,6 @@ public class GenericParamType : TypeDesc
     public override int GetHashCode()
         => (Index * 2) + (IsMethodParam ? 1 : 0);
 }
+public readonly record struct GenericParamConstraint(TypeSig Sig, IList<CustomAttrib> CustomAttribs);
+
+// public enum GenericParamOwner { Type, Method }

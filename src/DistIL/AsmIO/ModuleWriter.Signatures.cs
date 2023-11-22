@@ -7,12 +7,13 @@ partial class ModuleWriter
 {
     private void EncodeType(SignatureTypeEncoder enc, TypeSig sig)
     {
-        foreach (var mod in sig.CustomMods) {
+        foreach (var mod in sig.Modifiers) {
             enc.CustomModifiers().AddModifier(GetHandle(mod.Type), !mod.IsRequired);
         }
+        
         switch (sig.Type) {
             case PrimType t: {
-                if (ReferenceEquals(t, PrimType.Array)) { //PrimTypes were a mistake...
+                if (ReferenceEquals(t, PrimType.Array)) { // PrimTypes were a mistake...
                     enc.Type(GetHandle(_mod.Resolver.SysTypes.Array), false);
                     return;
                 }

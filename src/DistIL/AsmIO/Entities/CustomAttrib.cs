@@ -1,5 +1,7 @@
 namespace DistIL.AsmIO;
 
+using System.Reflection.Metadata;
+
 using PropArray = ImmutableArray<CustomAttribProp>;
 using ValueArray = ImmutableArray<object?>;
 
@@ -8,18 +10,24 @@ public partial class CustomAttrib
     ValueArray _fixedArgs;
     PropArray _namedArgs;
     
-    byte[]? _encodedBlob; //as specified in `II.23.3 Custom attributes`
+    byte[]? _encodedBlob; // as specified in `II.23.3 Custom attributes`
     ModuleDef? _parentModule;
-    bool _decoded = false;
+    CustomAttributeHandle _handle;
 
-    public MethodDesc Constructor { get; }
-    public ValueArray FixedArgs {
+    MethodDesc? _ctor;
+    public MethodDesc Constructor {
+        get {
+            EnsureLoaded();
+            return _ctor!;
+        }
+    }
+    public ValueArray Args {
         get {
             EnsureDecoded();
             return _fixedArgs;
         }
     }
-    public PropArray NamedArgs {
+    public PropArray Properties {
         get {
             EnsureDecoded();
             return _namedArgs;
@@ -27,38 +35,50 @@ public partial class CustomAttrib
     }
     public TypeDesc Type => Constructor.DeclaringType;
 
-    public CustomAttrib(MethodDesc ctor, byte[] encodedBlob, ModuleDef parentModule)
+    // Note that this will be called while the method table is still being parsed, so the ctor may be unavailable.
+    internal CustomAttrib(ModuleDef parentModule, CustomAttributeHandle handle)
     {
-        Constructor = ctor;
-        _encodedBlob = encodedBlob;
         _parentModule = parentModule;
+        _handle = handle;
     }
     public CustomAttrib(MethodDesc ctor, ValueArray fixedArgs = default, PropArray namedArgs = default)
     {
-        Constructor = ctor;
+        _ctor = ctor;
         _fixedArgs = fixedArgs.EmptyIfDefault();
         _namedArgs = namedArgs.EmptyIfDefault();
-        _decoded = true;
 
         Ensure.That(_fixedArgs.Length == (ctor.ParamSig.Count - 1));
     }
     
-    public CustomAttribProp? GetNamedArg(string name)
+    public CustomAttribProp? GetProperty(string name)
     {
-        return NamedArgs.FirstOrDefault(a => a.Name == name);
-    }
-
-    private void EnsureDecoded()
-    {
-        if (!_decoded) {
-            DecodeBlob();
-            _decoded = true;
-        }
+        return Properties.FirstOrDefault(a => a.Name == name);
     }
 
     public byte[] GetEncodedBlob()
     {
+        EnsureLoaded();
         return _encodedBlob ??= EncodeBlob();
+    }
+
+    private void EnsureDecoded()
+    {
+        EnsureLoaded();
+
+        if (_fixedArgs.IsDefault) {
+            DecodeBlob();
+            Debug.Assert(!_fixedArgs.IsDefault);
+        }
+    }
+    private void EnsureLoaded()
+    {
+        if (_handle.IsNil || _ctor != null) return;
+
+        var reader = _parentModule!._loader!._reader;
+        var attr = reader.GetCustomAttribute(_handle);
+
+        _ctor = (MethodDesc)_parentModule._loader.GetEntity(attr.Constructor);
+        _encodedBlob = reader.GetBlobBytes(attr.Value);
     }
 }
 public class CustomAttribProp
@@ -71,7 +91,7 @@ public class CustomAttribProp
     public override string ToString() => $"{Name}: {Type} = '{Value}'";
 }
 
-public static class CustomAttribExt
+public static class CustomAttribUtils
 {
     internal static IList<CustomAttrib> GetOrInitList(ref IList<CustomAttrib>? list, bool readOnly)
     {

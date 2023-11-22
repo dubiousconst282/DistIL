@@ -8,7 +8,7 @@ public abstract class FieldDesc : MemberDesc
 {
     public TypeSig Sig { get; set; } = null!;
     public TypeDesc Type => Sig.Type;
-    public abstract FieldAttributes Attribs { get; }
+    public abstract FieldAttributes Attribs { get; set; }
 
     public bool IsStatic => (Attribs & FieldAttributes.Static) != 0;
     public bool IsInstance => !IsStatic;
@@ -51,9 +51,9 @@ public class FieldDef : FieldDefOrSpec
 {
     public override FieldDef Definition => this;
     public override TypeDef DeclaringType { get; }
-    public override string Name { get; }
+    public override string Name { get; set; }
 
-    public override FieldAttributes Attribs { get; }
+    public override FieldAttributes Attribs { get; set; }
 
     public object? DefaultValue { get; set; }
     public bool HasDefaultValue => (Attribs & FieldAttributes.HasDefault) != 0;
@@ -84,40 +84,7 @@ public class FieldDef : FieldDefOrSpec
     }
 
     public override IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
-        => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
-
-    internal static FieldDef Decode(ModuleLoader loader, FieldDefinition info)
-    {
-        var declaringType = loader.GetType(info.GetDeclaringType());
-
-        var sigDecoder = new SignatureDecoder(loader, info.Signature, new GenericContext(declaringType));
-        sigDecoder.ExpectHeader(SignatureKind.Field);
-
-        var type = sigDecoder.DecodeTypeSig();
-
-        bool hasDefault = (info.Attributes & FieldAttributes.HasDefault) != 0;
-        bool hasOffset = (declaringType.Attribs & TypeAttributes.ExplicitLayout) != 0;
-
-        return new FieldDef(
-            declaringType, type, loader._reader.GetString(info.Name),
-            info.Attributes,
-            hasDefault ? loader._reader.DecodeConst(info.GetDefaultValue()) : null,
-            hasOffset ? info.GetOffset() : -1
-        );
-    }
-    internal void Load3(ModuleLoader loader, FieldDefinition info)
-    {
-        if (Attribs.HasFlag(FieldAttributes.HasFieldRVA)) {
-            int rva = info.GetRelativeVirtualAddress();
-            var data = loader._pe.GetSectionData(rva);
-            int size = GetMappedDataSize(Type);
-            unsafe { MappedData = new Span<byte>(data.Pointer, size).ToArray(); }
-        }
-        if (Attribs.HasFlag(FieldAttributes.HasFieldMarshal)) {
-            MarshallingDesc = loader._reader.GetBlobBytes(info.GetMarshallingDescriptor());
-        }
-        _customAttribs = loader.DecodeCustomAttribs(info.GetCustomAttributes());
-    }
+        => CustomAttribUtils.GetOrInitList(ref _customAttribs, readOnly);
 
     public static int GetMappedDataSize(TypeDesc type)
     {
@@ -131,8 +98,14 @@ public class FieldSpec : FieldDefOrSpec
     public override FieldDef Definition { get; }
     public override TypeSpec DeclaringType { get; }
 
-    public override FieldAttributes Attribs => Definition.Attribs;
-    public override string Name => Definition.Name;
+    public override FieldAttributes Attribs {
+        get => Definition.Attribs;
+        set => throw new InvalidOperationException();
+    }
+    public override string Name {
+        get => Definition.Name;
+        set => throw new InvalidOperationException();
+    }
 
     internal FieldSpec(TypeSpec declaringType, FieldDef def)
     {

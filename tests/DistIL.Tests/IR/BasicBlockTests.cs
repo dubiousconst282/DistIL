@@ -14,9 +14,9 @@ public class BasicBlockTests
 
         Assert.Null(block.First);
         Assert.Null(block.Last);
-        Assert.False(block.GetEnumerator().MoveNext()); //empty
-        Assert.Empty(block.NonPhis()); //empty
-        Assert.Empty(block.Phis()); //empty
+        Assert.False(block.GetEnumerator().MoveNext()); // empty
+        Assert.Empty(block.NonPhis()); // empty
+        Assert.Empty(block.Phis()); // empty
 
         var inst1 = new BinaryInst(BinaryOp.Add, ConstInt.CreateI(123), ConstInt.CreateI(456));
         var inst2 = new BinaryInst(BinaryOp.Mul, inst1, ConstInt.CreateI(4));

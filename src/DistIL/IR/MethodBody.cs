@@ -11,7 +11,7 @@ public class MethodBody
     /// <summary> The entry block of this method. Should not have predecessors. </summary>
     public BasicBlock EntryBlock { get; private set; } = null!;
     public int NumBlocks { get; private set; } = 0;
-    private BasicBlock? _lastBlock; //Last block in the list
+    private BasicBlock? _lastBlock; // Last block in the list
 
     public MethodBody(MethodDef def)
     {
@@ -58,7 +58,7 @@ public class MethodBody
         } else {
             _lastBlock = block.Prev;
         }
-        block.Method = null!; //to ensure it can't be removed again
+        block.Method = null!; // to ensure it can't be removed again
         NumBlocks--;
         return false;
     }

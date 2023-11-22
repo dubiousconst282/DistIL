@@ -7,11 +7,11 @@ internal class Lexer
 {
     private string _str;
     private int _pos;
-    private int _startPos; //start position of the current token
-    private int _peekedLeadPos; //leading (before start, considering whitespace) position of the peeked token
+    private int _startPos; // start position of the current token
+    private int _peekedLeadPos; // leading (before start, considering whitespace) position of the peeked token
     private Token? _peeked;
 
-    private bool _predByLF = false; //found '\n' before current token?
+    private bool _predByLF = false; // found '\n' before current token?
     private int _nextLevel = 0;
     private ArrayStack<int> _indents = new();
 
@@ -26,7 +26,7 @@ internal class Lexer
             _peeked = null;
 
             while (NextIndent() != default) {
-                //Reset indent levels, discard any tokens found after the cursor being set
+                // Reset indent levels, discard any tokens found after the cursor being set
             }
         }
     }
@@ -98,7 +98,7 @@ internal class Lexer
             _peeked = null;
             return token;
         }
-        //Emit pending indent token
+        // Emit pending indent token
         var indentTok = NextIndent();
         if (indentTok != default) {
             return Tok(indentTok);
@@ -106,7 +106,7 @@ internal class Lexer
         char ch;
         _predByLF = false;
 
-        //Skip whitespace
+        // Skip whitespace
         while (true) {
             if (_pos >= _str.Length) {
                 return new Token(TokenType.EOF, _pos, _pos);
@@ -128,7 +128,7 @@ internal class Lexer
         _startPos = _pos;
         char ch2 = _pos + 1 < _str.Length ? _str[_pos + 1] : '\0';
 
-        //Match token
+        // Match token
         var sym = ch switch {
             '(' => TokenType.LParen,
             ')' => TokenType.RParen,
@@ -184,7 +184,7 @@ internal class Lexer
             }
             _nextLevel = _pos - _startPos;
         }
-        //Emit indent/dedents (based on https://stackoverflow.com/a/2742159)
+        // Emit indent/dedents (based on https://stackoverflow.com/a/2742159)
         int currLevel = _indents.IsEmpty ? 0 : _indents.Top;
         if (_nextLevel > currLevel) {
             _indents.Push(_nextLevel);
@@ -200,14 +200,14 @@ internal class Lexer
         return default;
     }
 
-    //[-] int [.fract] [E [+|-] exp] [UL|U|L|F|D]
+    // [-] int [.fract] [E [+|-] exp] [UL|U|L|F|D]
     static readonly Regex s_NumberRegex = new(@"(-?\d+(\.\d+(?:E[+-]?\d+)?)?)(UL|U|L|F|D)?", RegexOptions.IgnoreCase);
     private Value ParseNumber()
     {
         var m = s_NumberRegex.Match(_str, _pos);
         if (!m.Success) {
             Error("Malformed number");
-            _pos++; //skip at least one char to prevent infinite loop
+            _pos++; // skip at least one char to prevent infinite loop
             return ConstInt.CreateI(0);
         }
         _pos += m.Length;
@@ -217,7 +217,7 @@ internal class Lexer
         bool F = postfix.EqualsIgnoreCase("F");
         bool D = postfix.EqualsIgnoreCase("D");
 
-        if (m.Groups[2].Success || F || D) { //fraction or exponent
+        if (m.Groups[2].Success || F || D) { // fraction or exponent
             double r = double.Parse(literal, NumberStyles.Float, CultureInfo.InvariantCulture);
 
             var type = F ? PrimType.Single : PrimType.Double;
@@ -237,7 +237,7 @@ internal class Lexer
     private Value ParseString()
     {
         var sb = new StringBuilder();
-        _pos++; //skip initial quote
+        _pos++; // skip initial quote
         while (_pos < _str.Length) {
             char ch = _str[_pos++];
             if (ch == '"') break;
@@ -266,7 +266,7 @@ internal class Lexer
             char ch = _str[_pos];
             bool valid =
                 IsIdentifierChar(ch) ||
-                //Allow a few special characters if they are surrounded by normal characters
+                // Allow a few special characters if they are surrounded by normal characters
                 (ch is '.' or '-' && _pos + 1 < _str.Length && IsIdentifierChar(_str[_pos + 1]));
                 
             if (!valid) break;
@@ -285,7 +285,7 @@ internal class Lexer
 
     private bool SkipComment()
     {
-        var str = _str.AsSpan(_pos); //first character was already consumed
+        var str = _str.AsSpan(_pos); // first character was already consumed
         int len;
 
         if (str[0] == '/') {

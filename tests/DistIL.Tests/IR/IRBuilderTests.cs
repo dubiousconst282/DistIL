@@ -22,31 +22,31 @@ public class IRBuilderTests
         Assert.Equal(r1, block.First);
         Assert.Equal(r5, block.Last);
 
-        //Block case 1: start (after phis)
+        // Block case 1: start (after phis)
         builder.SetPosition(block, InsertionDir.Before);
         Assert.Equal(builder.CreateAdd(r1, r1), r2.Next);
 
-        //Block case 2: before terminator
+        // Block case 2: before terminator
         builder.SetPosition(block, InsertionDir.BeforeLast);
         Assert.Equal(builder.CreateAdd(r1, r1), block.Last.Prev);
 
-        //Block case 3: end
+        // Block case 3: end
         builder.SetPosition(block, InsertionDir.After);
         Assert.Equal(builder.CreateAdd(r1, r1), block.Last);
 
-        //Inst case 1: before (middle)
+        // Inst case 1: before (middle)
         builder.SetPosition(r3, InsertionDir.Before);
         Assert.Equal(builder.CreateAdd(r1, r1), r3.Prev);
 
-        //Inst case 2: after (middle)
+        // Inst case 2: after (middle)
         builder.SetPosition(r3, InsertionDir.After);
         Assert.Equal(builder.CreateAdd(r1, r1), r3.Next);
 
-        //Inst case 3: before start
+        // Inst case 3: before start
         builder.SetPosition(block.First, InsertionDir.Before);
         Assert.Equal(builder.CreateAdd(r1, r1), block.First);
 
-        //Inst case 4: after end
+        // Inst case 4: after end
         builder.SetPosition(block.Last, InsertionDir.After);
         Assert.Equal(builder.CreateAdd(r1, r1), block.Last);
     }

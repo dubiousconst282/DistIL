@@ -10,7 +10,7 @@ public struct JointBitSet<T> where T : notnull
         => (Palette, Entries) = (palette, entries);
 
     public bool Contains(T value)
-        => Entries.Contains(Palette.IndexOf(value)); //BitSet.Contains() allows negative indices
+        => Entries.Contains(Palette.IndexOf(value)); // BitSet.Contains() allows negative indices
 
     public bool Add(T value)
         => Entries.Add(Palette.Add(value));

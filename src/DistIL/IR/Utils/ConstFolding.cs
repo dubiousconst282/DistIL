@@ -100,7 +100,7 @@ public class ConstFolding
             return srcValue;
         }
         if (chkOverflow) {
-            return null; //TODO
+            return null; // TODO
         }
         var simpleDstType = dstType.StackType;
         if (simpleDstType == StackType.Long) {
@@ -158,8 +158,8 @@ public class ConstFolding
                 };
                 break;
             }
-            //(x != 0) -> x  where x: bool
-            //This is not valid according to ECMA, but we'll assume that all bools are 0/1. 
+            // (x != 0) -> x  where x: bool
+            // This is not valid according to ECMA, but we'll assume that all bools are 0/1. 
             case ({ ResultType.Kind: TypeKind.Bool }, ConstInt { Value: 0 }, CompareOp.Ne): {
                 return left;
             }
@@ -252,7 +252,7 @@ public class ConstFolding
             ("Round",   [ConstFloat x, ConstInt d])             => Math.Round(x.Value, (int)d.Value),
             ("Round",   [ConstFloat x, ConstInt d, ConstInt m]) => Math.Round(x.Value, (int)d.Value, (MidpointRounding)m.Value),
 
-            //Abs() throws for T.MinValue, don't fold those.
+            // Abs() throws for T.MinValue, don't fold those.
             ("Abs",     [ConstInt { Value: not (long.MinValue or int.MinValue) } x]) => Math.Abs(x.Value),
             ("Min",     [ConstInt x, ConstInt y]) => Math.Min(x.Value, y.Value),
             ("Max",     [ConstInt x, ConstInt y]) => Math.Max(x.Value, y.Value),

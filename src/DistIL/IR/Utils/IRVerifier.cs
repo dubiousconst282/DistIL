@@ -167,13 +167,13 @@ public class IRVerifier
             var actUsers = new HashSet<Instruction>();
 
             foreach (var (val, expUsers) in _expectedUsers) {
-                //Check use list correctness
+                // Check use list correctness
                 actUsers.UnionWith(val.Users().AsEnumerable());
                 actUsers.SymmetricExceptWith(expUsers);
                 verifier.Check(actUsers.Count == 0, val, "Invalid value use chain");
                 actUsers.Clear();
 
-                //Check users
+                // Check users
                 if (val is Instruction def) {
                     var defRegion = regionAnalysis.GetBlockRegion(def.Block);
                     

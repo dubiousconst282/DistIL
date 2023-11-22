@@ -30,8 +30,8 @@ public abstract class IntrinsicInst : Instruction
         Debug.Assert(args.Length == _operands.Length);
         Debug.Assert(staticArgs.Length == StaticArgs.Length);
 
-        //MemberwiseClone() is only ~10-20% slower than actual ctors based on my tests (~30ms for 100k calls).
-        //If it becomes a problem we could make this method abstract and use a T4 template/source generator to implement the boilerplate.
+        // MemberwiseClone() is only ~10-20% slower than actual ctors based on my tests (~30ms for 100k calls).
+        // If it becomes a problem we could make this method abstract and use a T4 template/source generator to implement the boilerplate.
         var copy = (IntrinsicInst)MemberwiseDetachedClone();
         copy.Block = null!;
         copy.Prev = copy.Next = null;

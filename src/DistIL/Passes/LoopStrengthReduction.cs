@@ -27,7 +27,7 @@ public class LoopStrengthReduction : IMethodPass
         var preheader = loop.GetPreheader();
         var latch = loop.GetLatch();
 
-        //Check for canonical loop
+        // Check for canonical loop
         if (preheader == null || latch == null) return 0;
 
         var phis = new List<(PhiInst Phi, Value StartVal, BinaryInst UpdatedVal)>();
@@ -70,14 +70,14 @@ public class LoopStrengthReduction : IMethodPass
         var latch = loop.GetLatch();
         var exitCond = loop.GetExitCondition();
 
-        //Check for canonical loop
+        // Check for canonical loop
         if (preheader == null || latch == null || exitCond == null) return 0;
 
         if (!(exitCond.Left is PhiInst counter && counter.Block == loop.Header)) return 0;
 
-        //Strength-reducing array indexes in backward loops is not trivial, as the GC
-        //doesn't update refs pointing outside an object when compacting the heap.
-        //Details: https://github.com/dotnet/runtime/pull/75857#discussion_r974661744
+        // Strength-reducing array indexes in backward loops is not trivial, as the GC
+        // doesn't update refs pointing outside an object when compacting the heap.
+        // Details: https://github.com/dotnet/runtime/pull/75857#discussion_r974661744
         if (!(
             exitCond.Op is CompareOp.Slt or CompareOp.Ult &&
             counter.GetValue(preheader) is ConstInt { Value: 0 } &&
@@ -114,13 +114,13 @@ public class LoopStrengthReduction : IMethodPass
         foreach (var (source, (addrs, boundsLoop, isSpan)) in indexedAccs) {
             if (isSpan && !IsSpanLive(source, loop)) continue;
             if (!loop.IsInvariant(source)) continue;
-            //Preheader:
+            // Preheader:
             //  ...
             //  T& basePtr = call MemoryMarshal::GetArrayDataReference<T>(T[]: array)
-            //  T& endPtr = add basePtr, (mul (arrlen array), sizeof(T))) //if exit cond can be replaced
+            //  T& endPtr = add basePtr, (mul (arrlen array), sizeof(T))) // if exit cond can be replaced
             //  T& startPtr = add basePtr, (mul iv.Offset, sizeof(T))
             //  goto Header
-            //Header:
+            // Header:
             //  T& currPtr = phi [Pred: startPtr], [Latch: {currPtr + iv.Scale}]
             bool mayReplaceCond = exitCond.Block != null && boundsLoop;
             bool shouldCreateIV = mayReplaceCond && indexedAccs.Count == 1 && addrs.Count == 1 && counter.NumUses == 3;
@@ -131,13 +131,13 @@ public class LoopStrengthReduction : IMethodPass
             if (shouldCreateIV) {
                 var currPtr = loop.Header.InsertPhi(startPtr.ResultType).SetName("lsr_ptr");
 
-                //Replace loop exit condition with `icmp.ult currPtr, endPtr` if not already.
+                // Replace loop exit condition with `icmp.ult currPtr, endPtr` if not already.
                 if (mayReplaceCond) {
                     var op = exitCond.Op.GetUnsigned();
                     var endPtr = builder.CreatePtrOffset(startPtr, count);
                     exitCond.ReplaceWith(new CompareInst(op, currPtr, endPtr), insertIfInst: true);
 
-                    //Delete old bound access
+                    // Delete old bound access
                     var oldBound = (Instruction)exitCond.Right;
                     if (oldBound.NumUses == 0) {
                         oldBound.Remove();
@@ -156,7 +156,7 @@ public class LoopStrengthReduction : IMethodPass
                     addr.ReplaceWith(currPtr);
                 }
             } else {
-                //Replacing complex addressings with leas is still worth, do it
+                // Replacing complex addressings with leas is still worth, do it
                 foreach (var addr in addrs) {
                     Debug.Assert(addr is ArrayAddrInst or CallInst);
 
@@ -164,7 +164,7 @@ public class LoopStrengthReduction : IMethodPass
                     addr.ReplaceWith(builder.CreatePtrOffset(startPtr, addr.Operands[1]));
                 }
 
-                //Hoist array/span length access
+                // Hoist array/span length access
                 if (exitCond.Right is Instruction oldBound && !loop.IsInvariant(oldBound)) {
                     if (oldBound is ConvertInst { Value: IntrinsicInst oldLen }) {
                         // conv(arrlen)
@@ -186,10 +186,10 @@ public class LoopStrengthReduction : IMethodPass
         return indexedAccs.Count;
     }
 
-    //TODO: Get rid of this once have range-analysis and InBounds metadata
+    // TODO: Get rid of this once have range-analysis and InBounds metadata
     private static bool IsBoundedByArrayLen(ArrayAddrInst addr, CompareInst exitCond)
     {
-        //exitCond is cmp.slt ($index, $array.Length)
+        // exitCond is cmp.slt ($index, $array.Length)
         return exitCond.Op is CompareOp.Slt &&
                exitCond.Left == addr.Index &&
                exitCond.Right is ConvertInst { Value: CilIntrinsic.ArrayLen bound, ResultType.Kind: TypeKind.Int32 } &&
@@ -197,13 +197,13 @@ public class LoopStrengthReduction : IMethodPass
     }
     private static bool IsBoundedBySpanLen(CallInst getItemCall, CompareInst exitCond)
     {
-        //exitCond is cmp.slt ($index, $span.Length)
+        // exitCond is cmp.slt ($index, $span.Length)
         return exitCond.Op is CompareOp.Slt &&
                exitCond.Left == getItemCall.Args[1] &&
                exitCond.Right is CallInst { Method.Name: "get_Length" } bound &&
                bound.Args[0] == getItemCall.Args[0] && IsSpanMethod(bound.Method);
     }
-    //Checks if the span is used by any instruction other than a instance call, indicating that it may have been reassigned.
+    // Checks if the span is used by any instruction other than a instance call, indicating that it may have been reassigned.
     private static bool IsSpanLive(Value source, LoopInfo loop)
     {
         return source is TrackedValue def &&
@@ -240,7 +240,7 @@ public class LoopStrengthReduction : IMethodPass
                 CreateGetArrayDataRef(builder, builder.CreateFieldLoad("_items", source)),
                 getCount ? builder.CreateFieldLoad("_size", source) : null
             ),
-            //TODO: check if it's ok to access span fields directly
+            // TODO: check if it's ok to access span fields directly
             PointerType { ElemType: { Name: "Span`1" or "ReadOnlySpan`1"} } => (
                 builder.CreateFieldLoad("_reference", source),
                 getCount ? builder.CreateFieldLoad("_length", source) : null

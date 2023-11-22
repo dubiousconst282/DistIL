@@ -67,7 +67,7 @@ public class Compilation
     {
         if (size <= 8) return (PrimType.UInt64, 8);
 
-        size = (size + 15) & ~15; //align to multiples of 16 bytes (for no particular reason).
+        size = (size + 15) & ~15; // align to multiples of 16 bytes (for no particular reason).
         string name = "Block" + size;
 
         var blockType = parentType.FindNestedType(name);
@@ -85,5 +85,5 @@ public class Compilation
 public class CompilationSettings
 {
     /// <summary> If set to true, the resulting module will have a fixed dependency on a little-endianess. </summary>
-    public bool AssumeLittleEndian { get; init; } = true; //TODO: add module cctor check
+    public bool AssumeLittleEndian { get; init; } = true; // TODO: add module cctor check
 }

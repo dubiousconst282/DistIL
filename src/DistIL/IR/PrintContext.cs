@@ -99,8 +99,8 @@ public class PrintContext
 
         public void AppendFormatted(IEnumerable<IPrintable> values, string format)
         {
-            //Trailing whitespace is not allowed in interpolated strings,
-            //so we use '$' as a backward escaping character instead.
+            // Trailing whitespace is not allowed in interpolated strings,
+            // so we use '$' as a backward escaping character instead.
             string separator = format.TrimEnd('$');
             int i = 0;
             foreach (var value in values) {

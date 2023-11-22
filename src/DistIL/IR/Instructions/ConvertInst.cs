@@ -38,7 +38,7 @@ public class ConvertInst : Instruction
 
     private static bool IsSizeDiffDir(TypeKind srcType, TypeKind dstType, int sign)
     {
-        //Assume that pointer size is at least 32 bits
+        // Assume that pointer size is at least 32 bits
         int srcSize = srcType.IsPointerSize() ? 32 : srcType.BitSize();
         int dstSize = dstType.IsPointerSize() ? 32 : dstType.BitSize();
 

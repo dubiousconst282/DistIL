@@ -11,12 +11,12 @@ internal enum Opcode
     Intrinsic,
     Lea,
 
-    //Has modifiers
+    // Has modifiers
     ArrAddr, FldAddr,
     Load, Store,
     Conv,
 
-    //Note: Entries must be keept in the same order as in BinaryOp
+    // Note: Entries must be keept in the same order as in BinaryOp
     _Bin_First,
     Bin_Add, Bin_Sub, Bin_Mul,
     Bin_SDiv, Bin_UDiv,
@@ -33,7 +33,7 @@ internal enum Opcode
     Bin_UAddOvf, Bin_USubOvf, Bin_UMulOvf,
     _Bin_Last,
 
-    //Note: Entries must be keept in the same order as in CompareOp
+    // Note: Entries must be keept in the same order as in CompareOp
     _Cmp_First,
     Cmp_Eq, Cmp_Ne,
     Cmp_Slt, Cmp_Sgt, Cmp_Sle, Cmp_Sge,

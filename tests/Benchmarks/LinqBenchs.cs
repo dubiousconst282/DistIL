@@ -74,7 +74,7 @@ public class LinqBenchs
         int width = (int)Math.Sqrt(_elemCount);
         int height = width;
 
-        //Render into a netpbm file
+        // Render into a netpbm file
         var header = System.Text.Encoding.UTF8.GetBytes($"P6\n{width} {height}\n255\n");
         var data = new byte[width * height * 3 + header.Length];
         header.CopyTo(data, 0);

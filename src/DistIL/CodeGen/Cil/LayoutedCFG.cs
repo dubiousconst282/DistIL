@@ -51,17 +51,17 @@ public class LayoutedCFG
             int startIdx = blockIdx;
             var regionBlockIndices = new BitSet();
 
-            //Sort region blocks to their original order
-            //Bit sets are naturally ordered and allows this to be done efficiently.
+            // Sort region blocks to their original order
+            // Bit sets are naturally ordered and allows this to be done efficiently.
             foreach (var block in node.Blocks) {
                 regionBlockIndices.Add(blockIndices[block]);
             }
 
-            //Start block must always come first
+            // Start block must always come first
             laidBlocks[blockIdx++] = node.StartBlock;
             regionBlockIndices.Remove(blockIndices[node.StartBlock]);
 
-            //Recurse into child regions and place blocks appearing before them
+            // Recurse into child regions and place blocks appearing before them
             foreach (var child in node.Children) {
                 PlaceAntecessorBlocks(child.StartBlock);
                 var range = LayoutRegion(child);
@@ -73,7 +73,7 @@ public class LayoutedCFG
             }
             PlaceAntecessorBlocks(null);
 
-            //Create region clauses
+            // Create region clauses
             foreach (var guard in node.StartBlock.Guards()) {
                 int clauseIdx = clauseIndices.Count;
                 clauseIndices.Add(guard, clauseIdx);

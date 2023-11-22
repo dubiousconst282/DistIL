@@ -13,7 +13,7 @@ internal class MemorySource : LinqSourceNode
     protected override void EmitHead(LoopBuilder loop, out Value? length, ref LinqStageNode firstStage)
     {
         var builder = loop.PreHeader;
-        //T& startPtr = call MemoryMarshal.GetArrayDataReference<T>(T[]: source)  //or akin.
+        // T& startPtr = call MemoryMarshal.GetArrayDataReference<T>(T[]: source)  // or akin.
         (_currPtr, length) = LoopStrengthReduction.CreateGetDataPtrRange(builder, PhysicalSource.Operand);
 
         IntegrateSkipTakeRanges(builder, ref firstStage, out var offset, ref length);
@@ -21,18 +21,18 @@ internal class MemorySource : LinqSourceNode
             _currPtr = builder.CreatePtrOffset(_currPtr, offset);
         }
 
-        //T& endPtr = lea startPtr + (nint)length * sizeof(T)
+        // T& endPtr = lea startPtr + (nint)length * sizeof(T)
         _endPtr = builder.CreatePtrOffset(_currPtr, length);
 
-        //T& currPtr = phi [PreHeader: startPtr], [Latch: {currPtr + sizeof(T)}]
+        // T& currPtr = phi [PreHeader: startPtr], [Latch: {currPtr + sizeof(T)}]
         _currPtr = loop.CreateAccum(_currPtr, currPtr => loop.Latch.CreatePtrIncrement(currPtr)).SetName("lq_currPtr");
     }
 
     protected override Value EmitMoveNext(IRBuilder builder)
-        => builder.CreateUlt(_currPtr!, _endPtr!); //ptr < endPtr
+        => builder.CreateUlt(_currPtr!, _endPtr!); // ptr < endPtr
 
     protected override Value EmitCurrent(IRBuilder builder)
-        => builder.CreateLoad(_currPtr!); //*ptr
+        => builder.CreateLoad(_currPtr!); // *ptr
 }
 internal class EnumeratorSource : LinqSourceNode
 {
@@ -146,7 +146,7 @@ internal class IntRangeSource : LinqSourceNode
 
         var builder = loop.PreHeader;
 
-        //if (count < 0 | (sext(start) + sext(count)) > int.MaxValue) throw;
+        // if (count < 0 | (sext(start) + sext(count)) > int.MaxValue) throw;
         builder.Throw(
             typeof(ArgumentOutOfRangeException),
             builder.CreateOr(
@@ -157,7 +157,7 @@ internal class IntRangeSource : LinqSourceNode
                         builder.CreateConvert(count, PrimType.Int64)),
                     ConstInt.CreateL(int.MaxValue))));
 
-        //int index = phi [PreHeader: start], [Latch: {index + 1}]
+        // int index = phi [PreHeader: start], [Latch: {index + 1}]
         _index = loop.CreateAccum(start, curr => loop.Latch.CreateAdd(curr, ConstInt.CreateI(1))).SetName("lq_rangeidx");
         _end = builder.CreateAdd(start, count);
     }

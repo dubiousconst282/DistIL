@@ -9,33 +9,33 @@ internal enum VectorOp
     /// <summary> Null sentinel. </summary>
     Invalid,
 
-    //Packing
+    // Packing
     Splat, Pack,
     Load, Store,
     GetLane, SetLane,
     Shuffle,
 
-    //Arithmetic
+    // Arithmetic
     Add, Sub, Mul, Div,
     And, Or, Xor,
     Shl, Shra, Shrl,
     Neg, Not,
 
-    //Math
+    // Math
     Abs, Min, Max,
     Floor, Ceil, Round,
     Sqrt, Fmadd,
     RSqrt, Recip,
 
-    //Conditional
+    // Conditional
     Select, ExtractMSB,
     CmpEq, CmpNe, CmpLt, CmpGt, CmpLe, CmpGe,
 
-    //Casting
+    // Casting
     I2F, F2I,
     SignExt, ZeroExt,
 
-    //Internal
+    // Internal
     _Sum, _PredicatedCount,
     _Bitcast0, _BitcastN = _Bitcast0 + (TypeKind.Double - TypeKind.SByte + 1),
 }
@@ -100,17 +100,17 @@ internal class VectorTranslator
 
     public Value EmitReduction(IRBuilder builder, VectorType type, VectorOp op, Value vector)
     {
-        //Summation has a dedicated helper: Vector.Sum()
+        // Summation has a dedicated helper: Vector.Sum()
         if (op == VectorOp.Add) {
             return EmitOp(builder, type, VectorOp._Sum, vector);
         }
-        //For any other op, we use a divide and conquer algo, see https://stackoverflow.com/a/35270026
-        //TODO: this is not optimal for ARM (https://stackoverflow.com/q/31197216)
+        // For any other op, we use a divide and conquer algo, see https://stackoverflow.com/a/35270026
+        // TODO: this is not optimal for ARM (https://stackoverflow.com/q/31197216)
         //
-        //256:  var t1 = Vector128.Max(x.GetLower(), x.GetUpper());                               = max([a,  b,  c, d], [e,  f,  g,  h])
-        //128:  var t2 = Vector128.Max(t1, Vector128.Shuffle(t1, Vector128.Create(2, 3, 0, 0)));  = max([ae, bf, ?, ?], [cg, dh, ?, ?])
-        //64:   var t3 = Vector128.Max(t2, Vector128.Shuffle(t2, Vector128.Create(1, 1, 0, 0)));  = max([aecg, ?, ?, ?], [bfdh, ?, ?, ?])
-        //32:   return t3.GetElement(0);
+        // 256:  var t1 = Vector128.Max(x.GetLower(), x.GetUpper());                               = max([a,  b,  c, d], [e,  f,  g,  h])
+        // 128:  var t2 = Vector128.Max(t1, Vector128.Shuffle(t1, Vector128.Create(2, 3, 0, 0)));  = max([ae, bf, ?, ?], [cg, dh, ?, ?])
+        // 64:   var t3 = Vector128.Max(t2, Vector128.Shuffle(t2, Vector128.Create(1, 1, 0, 0)));  = max([aecg, ?, ?, ?], [bfdh, ?, ?, ?])
+        // 32:   return t3.GetElement(0);
         int width = type.BitWidth;
         int scalarWidth = type.ElemKind.BitSize();
         
@@ -148,7 +148,7 @@ internal class VectorTranslator
         var m_PopCount = _resolver.Import(typeof(BitOperations))
             .FindMethod("PopCount", new MethodSig(PrimType.Int32, new TypeSig[] { PrimType.UInt32 }));
 
-        //uiCA says movmskb+popcount takes ~1c, but there's probably a better way to do this.
+        // uiCA says movmskb+popcount takes ~1c, but there's probably a better way to do this.
         var mask = EmitOp(builder,
             new VectorType(TypeKind.Byte, type.BitWidth / 8),
             VectorOp.ExtractMSB, 
@@ -216,8 +216,8 @@ internal class VectorTranslator
             BinaryOp.Add => VectorOp.Add,
             BinaryOp.Sub => VectorOp.Sub,
             BinaryOp.Mul => VectorOp.Mul,
-            //There's no HW support for integer vector division (x64/ARM),
-            //so we might as well not even bother here.
+            // There's no HW support for integer vector division (x64/ARM),
+            // so we might as well not even bother here.
 
             BinaryOp.And  => VectorOp.And,
             BinaryOp.Or   => VectorOp.Or,
@@ -230,7 +230,7 @@ internal class VectorTranslator
             BinaryOp.FSub => VectorOp.Sub,
             BinaryOp.FMul => VectorOp.Mul,
             BinaryOp.FDiv => VectorOp.Div,
-            //Also no HW support for FRem.
+            // Also no HW support for FRem.
 
             _ => default
         };
@@ -253,18 +253,18 @@ internal class VectorTranslator
             return default;
         }
         return func.Name switch {
-            //TODO: Math.Min/Max() and vector instrs are not equivalent for floats (NaNs and fp stuff)
+            // TODO: Math.Min/Max() and vector instrs are not equivalent for floats (NaNs and fp stuff)
             "Abs"       => VectorOp.Abs,
             "Min"       => VectorOp.Min,
             "Max"       => VectorOp.Max,
             "Sqrt"      => VectorOp.Sqrt,
             "Floor"     => VectorOp.Floor,
             "Ceiling"   => VectorOp.Ceil,
-            //"Round" when func.ParamSig.Count == 1
+            // "Round" when func.ParamSig.Count == 1
             //            => VectorOp.Round,
-            //"FusedMultiplyAdd"          => VectorOp.Fmadd,
-            //"ReciprocalSqrtEstimate"    => VectorOp.RSqrt, 
-            //"ReciprocalEstimate"        => VectorOp.Recip,
+            // "FusedMultiplyAdd"          => VectorOp.Fmadd,
+            // "ReciprocalSqrtEstimate"    => VectorOp.RSqrt, 
+            // "ReciprocalEstimate"        => VectorOp.Recip,
             _ => VectorOp.Invalid
         };
     }
@@ -284,8 +284,8 @@ internal class VectorTranslator
         var typeL = inst.Left.ResultType.Kind;
         var typeR = inst.Right.ResultType.Kind;
 
-        //TODO: better handling for operand signess mismatch
-        //This allows compares like (sge u16, 10), but not (uge, i32, 0)
+        // TODO: better handling for operand signess mismatch
+        // This allows compares like (sge u16, 10), but not (uge, i32, 0)
         if (typeL.IsUnsigned() && inst.Right is ConstInt c && c.FitsInType(inst.Left.ResultType)) {
             typeR = typeL;
 

@@ -54,8 +54,8 @@ public class ArrayStack<T>
 
     public void Clear()
     {
-        //Although Pop() doesn't clear refs, it might be worth doing it here
-        //since it probably means that this stack will be around for longer.
+        // Although Pop() doesn't clear refs, it might be worth doing it here
+        // since it probably means that this stack will be around for longer.
         if (RuntimeHelpers.IsReferenceOrContainsReferences<T>()) {
             Array.Clear(_arr);
         }

@@ -23,7 +23,7 @@ public class SymbolTable
     {
         Ensure.That(this != Empty);
 
-        //Pick an unique name
+        // Pick an unique name
         string origName = name;
         int counter = 2;
         while (!_usedNames.Add(name)) {

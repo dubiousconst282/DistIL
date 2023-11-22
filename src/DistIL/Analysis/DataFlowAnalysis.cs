@@ -12,24 +12,24 @@ public abstract class DataFlowAnalysis
 
         var worklist = new ArrayStack<BasicBlock>(method.NumBlocks);
 
-        //The initial propagation order has an influence over how quickly the computation will converge.
-        //In forward problems, a RPO traversal will be quicker because most predecessor blocks are filled first.
-        //Conversely for backward problems, a PO traversal visits all successors blocks first.
+        // The initial propagation order has an influence over how quickly the computation will converge.
+        // In forward problems, a RPO traversal will be quicker because most predecessor blocks are filled first.
+        // Conversely for backward problems, a PO traversal visits all successors blocks first.
         method.TraverseDepthFirst(postVisit: (block) => {
             ref var state = ref _states.GetOrAddRef(block);
             Initialize(block, out state);
 
             if (backward) {
-                //The worklist is processed in reverse order, this will place `block` at ^head
+                // The worklist is processed in reverse order, this will place `block` at ^head
                 worklist.HackyFixedUnshift(block);
             } else {
                 worklist.Push(block);
             }
             state.InWorklist = true;
         });
-        Debug.Assert(!backward || worklist.Count == method.NumBlocks); //HackUnshift() assumes that the stack will be filled to its capacity
+        Debug.Assert(!backward || worklist.Count == method.NumBlocks); // HackUnshift() assumes that the stack will be filled to its capacity
 
-        //Compute the dataflow equation until a fixed point is reached
+        // Compute the dataflow equation until a fixed point is reached
         while (worklist.TryPop(out var block)) {
             ref var state = ref _states.GetRef(block);
             state.InWorklist = false;
@@ -41,7 +41,7 @@ public abstract class DataFlowAnalysis
             }
         }
 
-        //Backward gen-kill transfer equation:
+        // Backward gen-kill transfer equation:
         //  Out[b] = ∪(s of b.Succs => In[s])
         //  In[b] = Gen[b] ∪ (Out[b] ∩ Killed[b]')
         void TransferBackward(BasicBlock block, ref BlockState state)
@@ -59,7 +59,7 @@ public abstract class DataFlowAnalysis
                 }
             }
         }
-        //Forward gen-kill transfer equation:
+        // Forward gen-kill transfer equation:
         //  In[b] = ∪(s of b.Preds => Out[s])
         //  Out[b] = Gen[b] ∪ (In[b] ∩ Killed[b]')
         void TransferForward(BasicBlock block, ref BlockState state)
@@ -151,7 +151,7 @@ public class VarLivenessAnalysis : DataFlowAnalysis, IMethodAnalysis
                     killed.Add(varId);
                 } else if (!killed.Contains(varId)) {
                     Debug.Assert(inst is LoadInst);
-                    globals.Add(varId); //used before being assigned in this block
+                    globals.Add(varId); // used before being assigned in this block
                 }
             }
         }

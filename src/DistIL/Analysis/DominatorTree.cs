@@ -4,7 +4,7 @@ public class DominatorTree : IMethodAnalysis
 {
     readonly Dictionary<BasicBlock, Node> _block2node = new();
     readonly Node _root;
-    bool _hasDfsIndices = false; //whether Node.{PreIndex, PostIndex} have been calculated
+    bool _hasDfsIndices = false; // whether Node.{PreIndex, PostIndex} have been calculated
 
     public MethodBody Method { get; }
 
@@ -109,17 +109,17 @@ public class DominatorTree : IMethodAnalysis
         return nodes;
     }
 
-    //Algorithm from the paper "A Simple, Fast Dominance Algorithm"
-    //https://www.cs.rice.edu/~keith/EMBED/dom.pdf
+    // Algorithm from the paper "A Simple, Fast Dominance Algorithm"
+    // https://www.cs.rice.edu/~keith/EMBED/dom.pdf
     private void ComputeDom(Node[] nodes)
     {
         var entry = nodes[^1];
-        entry.IDom = entry; //entry block dominates itself
+        entry.IDom = entry; // entry block dominates itself
 
         bool changed = true;
         while (changed) {
             changed = false;
-            //foreach block in reverse post order, except entry (at `len - 1`)
+            // foreach block in reverse post order, except entry (at `len - 1`)
             for (int i = nodes.Length - 2; i >= 0; i--) {
                 var node = nodes[i];
                 var block = node.Block;
@@ -155,7 +155,7 @@ public class DominatorTree : IMethodAnalysis
 
     private static void ComputeChildren(Node[] nodes)
     {
-        //Ignore entry node (^1) to avoid cycles in the children list
+        // Ignore entry node (^1) to avoid cycles in the children list
         foreach (var node in nodes.AsSpan()[..^1]) {
             var parent = node.IDom;
             if (parent.FirstChild == null) {
@@ -203,11 +203,11 @@ public class DominatorTree : IMethodAnalysis
     class Node
     {
         public Node IDom = null!;
-        public Node? FirstChild, NextChild; //Links for the children list
+        public Node? FirstChild, NextChild; // Links for the children list
         public BasicBlock Block = null!;
-        //ComputeDom() assumes that PostIndex holds the post DFS index of each block.
-        //Once dominance is computed and when _hasDfsIndices is true, these contain
-        //the DFS indices of the actual dominance tree, used for O(1) dominance checks.
+        // ComputeDom() assumes that PostIndex holds the post DFS index of each block.
+        // Once dominance is computed and when _hasDfsIndices is true, these contain
+        // the DFS indices of the actual dominance tree, used for O(1) dominance checks.
         public int PreIndex, PostIndex;
 
         public override string ToString() => $"{Block} <- {IDom?.Block.ToString() ?? "?"}";

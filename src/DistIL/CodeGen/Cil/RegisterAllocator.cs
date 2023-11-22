@@ -95,7 +95,7 @@ public class RegisterAllocator : IPrintDecorator
         // TODO: Coloring can be optimal since we're using a SSA graph (perfect elimination order)
         // Note that our graphs are currently not chordal because nodes of different types are not connected, see AddEdge().
         foreach (var (inst, node) in _interfs.GetNodes()) {
-            if (node.Color != 0) continue; //already assigned
+            if (node.Color != 0) continue; // already assigned
 
             foreach (var neighbor in _interfs.GetAdjacent(node)) {
                 if (neighbor.Color != 0) {

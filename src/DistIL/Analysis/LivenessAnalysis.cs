@@ -17,16 +17,16 @@ public class LivenessAnalysis : IMethodAnalysis, IPrintDecorator
 
     public LivenessAnalysis(MethodBody method)
     {
-        //TODO: This might be actually slower than an iterative data-flow analysis
+        // TODO: This might be actually slower than an iterative data-flow analysis
         var worklist = new ArrayStack<BasicBlock>();
 
-        //Visit all instructions defining a value
+        // Visit all instructions defining a value
         foreach (var inst in method.Instructions()) {
             if (!inst.HasResult) continue;
 
             foreach (var user in inst.Users()) {
                 if (user is PhiInst phi) {
-                    //Enqueue predecessors for source blocks of this phi
+                    // Enqueue predecessors for source blocks of this phi
                     foreach (var (pred, val) in phi) {
                         if (val == inst) {
                             worklist.Push(pred);
@@ -37,10 +37,10 @@ public class LivenessAnalysis : IMethodAnalysis, IPrintDecorator
                 } else if (user.Block != inst.Block) {
                     worklist.Push(user.Block);
                 }
-                //Traverse the CFG backwards to propagate liveness
+                // Traverse the CFG backwards to propagate liveness
                 while (worklist.TryPop(out var userBlock)) {
-                    if (inst.Block == userBlock) continue; //Reached the defining block
-                    if (!AddLiveIn(userBlock, inst)) continue; //Already propagated
+                    if (inst.Block == userBlock) continue; // Reached the defining block
+                    if (!AddLiveIn(userBlock, inst)) continue; // Already propagated
 
                     foreach (var pred in userBlock.Preds) {
                         AddLiveOut(pred, inst);
@@ -50,8 +50,8 @@ public class LivenessAnalysis : IMethodAnalysis, IPrintDecorator
             }
         }
 
-        //We could avoid set lookups by keeping the latest added block in _blockData,
-        //but that's not a huge deal.
+        // We could avoid set lookups by keeping the latest added block in _blockData,
+        // but that's not a huge deal.
         bool AddLiveIn(BasicBlock block, Instruction inst)
             => (_liveSets.GetOrAddRef(block).In ??= new()).Add(inst);
 
@@ -82,7 +82,7 @@ public class LivenessAnalysis : IMethodAnalysis, IPrintDecorator
         if (IsLiveOut(pos.Block, inst)) {
             return true;
         }
-        //If `a` is defined or liveIn in the same block as `b`, we need to check if it is used after it
+        // If `a` is defined or liveIn in the same block as `b`, we need to check if it is used after it
         if (inst.Block == pos.Block || IsLiveIn(pos.Block, inst)) {
             for (var curr = pos; (curr = curr.Next) != null;) {
                 if (curr.Operands.ContainsRef(inst)) {

@@ -7,20 +7,20 @@ internal class InnerLoopVectorizer
 {
     LoopInfo _loop = null!;
     VectorTranslator _trans = null!;
-    Dictionary<Instruction, InstMapping> _mappings = new(); //instructions to be vectorized
+    Dictionary<Instruction, InstMapping> _mappings = new(); // instructions to be vectorized
     Dictionary<PhiInst, (Value Seed, Instruction IterOut, PhiInst NewPhi, VectorOp Op)> _reductionPhis = new();
 
-    BasicBlock _predBlock = null!;  //block entering the loop
-    BasicBlock _bodyBlock = null!;  //loop body and latch
+    BasicBlock _predBlock = null!;  // block entering the loop
+    BasicBlock _bodyBlock = null!;  // loop body and latch
     CompareInst _exitCond = null!;
-    PhiInst _counter = null!;       //loop counter (index var)
+    PhiInst _counter = null!;       // loop counter (index var)
 
     Value _newCounter = null!;
     int _width = 8;
 
     public static bool TryVectorize(LoopInfo loop, VectorTranslator trans, ICompilationLogger? reportLogger)
     {
-        //Only consider loops with a single body block (the latch).
+        // Only consider loops with a single body block (the latch).
         if (loop.NumBlocks != 2) return false;
 
         var pred = loop.GetPredecessor();
@@ -31,12 +31,12 @@ internal class InnerLoopVectorizer
 
         if (!(exitCond.Left is PhiInst counter && counter.Block == loop.Header)) return false;
 
-        //Currently we only support loops in the form of:
+        // Currently we only support loops in the form of:
         //  for (int i = ...; i < bound; i++)
         //  for (ptr p = ...; p < bound; p = lea p + 1)
         if (!IsSequentialLoop()) return false;
 
-        //Everything looks right, try to build mappings and vectorize
+        // Everything looks right, try to build mappings and vectorize
         var vectorizer = new InnerLoopVectorizer() {
             _loop = loop,
             _trans = trans,
@@ -82,7 +82,7 @@ internal class InnerLoopVectorizer
         foreach (var inst in _bodyBlock) {
             switch (inst) {
                 case PtrOffsetInst addr: {
-                    //TODO: aliasing checks
+                    // TODO: aliasing checks
                     if ((!_loop.IsInvariant(addr.BasePtr) || addr.Index != _counter) && addr.BasePtr is not PhiInst) {
                         logger?.Debug($"AutoVec: unsupported pointer addressing '{addr}'");
                         return false;
@@ -102,7 +102,7 @@ internal class InnerLoopVectorizer
                     break;
                 }
                 default: {
-                    //Ignore branch or loop counter update
+                    // Ignore branch or loop counter update
                     if (inst is BranchInst || inst == _counter.GetValue(_bodyBlock)) break;
 
                     var (op, elemType) = _trans.GetVectorOp(inst);
@@ -140,8 +140,8 @@ internal class InnerLoopVectorizer
 
     private bool PickVectorWidth()
     {
-        //Check if all mappings have the same scalar width
-        //TODO: support for partial unrolling
+        // Check if all mappings have the same scalar width
+        // TODO: support for partial unrolling
         int commonElemSize = 0;
 
         foreach (var inst in _mappings.Keys) {
@@ -157,7 +157,7 @@ internal class InnerLoopVectorizer
                 return false;
             }
         }
-        //TODO: figure out when it's better to use 128-bit vectors (ARM/old CPUs)
+        // TODO: figure out when it's better to use 128-bit vectors (ARM/old CPUs)
         _width = 256 / commonElemSize;
         return true;
     }
@@ -179,12 +179,12 @@ internal class InnerLoopVectorizer
             }
         ).SetName("v_idx");
 
-        //Create reduction accumulator phis
+        // Create reduction accumulator phis
         foreach (var phi in _reductionPhis.Keys) {
             CreateReductionPhi(newLoop, phi);
         }
 
-        //Emit loop and widen instructions
+        // Emit loop and widen instructions
         newLoop.Build(
             emitCond: builder => {
                 if (steppedCounter is PtrOffsetInst) {
@@ -202,7 +202,7 @@ internal class InnerLoopVectorizer
             }
         );
 
-        //Finalize reduction phis
+        // Finalize reduction phis
         foreach (var (phi, data) in _reductionPhis) {
             Value exitValue;
 
@@ -261,13 +261,13 @@ internal class InnerLoopVectorizer
             return _reductionPhis.GetRef(phi).NewPhi;
         }
 
-        //TODO: cache and hoist invariant/constant vectors
+        // TODO: cache and hoist invariant/constant vectors
         if (scalar == _counter && scalar.ResultType.IsInt()) {
             var seqOffsets = Enumerable.Range(0, vecType.Count)
                     .Select(i => ConstInt.Create(vecType.ElemType, i))
                     .ToArray();
 
-            //v_idx = [idx, idx, ...] + [0, 1, ...]
+            // v_idx = [idx, idx, ...] + [0, 1, ...]
             return _trans.EmitOp(builder, vecType, VectorOp.Add,
                 _trans.EmitOp(builder, vecType, VectorOp.Splat, _newCounter),
                 _trans.EmitOp(builder, vecType, VectorOp.Pack, seqOffsets)
@@ -297,16 +297,16 @@ internal class InnerLoopVectorizer
         var vecType = new VectorType(phi.ResultType, _width);
 
         var seed = data.Op switch {
-            //For bool sums, it's easier to use scalar phi + movemask
+            // For bool sums, it's easier to use scalar phi + movemask
             VectorOp.Add when IsPredicatedCountStep(data.IterOut)
                 => data.Seed,
-            //Additive: [seed, 0, 0, ...]
+            // Additive: [seed, 0, 0, ...]
             VectorOp.Add or VectorOp.Or or VectorOp.Xor
                 => EmitAccumOpSeed(data.Seed, 0),
-            //Multiplicative: [seed, 1, 1, ...]
+            // Multiplicative: [seed, 1, 1, ...]
             VectorOp.Mul
                 => EmitAccumOpSeed(data.Seed, 1),
-            //Exclusive: [seed, seed, ...]
+            // Exclusive: [seed, seed, ...]
             VectorOp.And or VectorOp.Min or VectorOp.Max
                 => _trans.EmitOp(newLoop.PreHeader, vecType, VectorOp.Splat, data.Seed),
         };
@@ -325,7 +325,7 @@ internal class InnerLoopVectorizer
             return _trans.EmitOp(newLoop.PreHeader, vecType, VectorOp.Pack, args);
         }
     }
-    //Checks if we know how to vectorize a reduction with the given accum op
+    // Checks if we know how to vectorize a reduction with the given accum op
     private static bool IsSupportedReductionOp(VectorOp op)
     {
         return op is
@@ -334,10 +334,10 @@ internal class InnerLoopVectorizer
             VectorOp.Min or VectorOp.Max;
     }
 
-    //Returns the nominal element type for some conditional (e.g. `cmp i32, i32` -> i32)
+    // Returns the nominal element type for some conditional (e.g. `cmp i32, i32` -> i32)
     private TypeKind GetConditionalElemType(Instruction inst)
     {
-        //Widen conditionals like ((cmp x, y) | (cmp z, w)) to their comparand scalar widths
+        // Widen conditionals like ((cmp x, y) | (cmp z, w)) to their comparand scalar widths
         if (inst is BinaryInst or CompareInst) {
             var type = TypeKind.Void;
             if (inst.Operands[0] is Instruction lhs && _mappings.ContainsKey(lhs)) {
@@ -353,7 +353,7 @@ internal class InnerLoopVectorizer
         }
         return TypeKind.Void;
     }
-    //Checks if we know how to vectorize a conditional (inst returning bool) with the given user
+    // Checks if we know how to vectorize a conditional (inst returning bool) with the given user
     private static bool IsSupportedConditionalUse(Instruction user, TypeKind nominalElemType)
     {
         return
@@ -361,7 +361,7 @@ internal class InnerLoopVectorizer
             (user is BinaryInst { Op: BinaryOp.And or BinaryOp.Or or BinaryOp.Xor, ResultType.Kind: TypeKind.Bool }) ||
             IsPredicatedCountStep(user);
     }
-    //Checks if `inst` is an `add (int32)phi, (bool)cond`.
+    // Checks if `inst` is an `add (int32)phi, (bool)cond`.
     private static bool IsPredicatedCountStep(Instruction inst)
     {
         return inst is BinaryInst {
@@ -379,6 +379,6 @@ internal struct InstMapping
     public VectorOp TargetOp;
     public TypeKind ElemType;
 
-    //Whether this is a load/store of an small int type (byte/short), implicitly widened to a int.
+    // Whether this is a load/store of an small int type (byte/short), implicitly widened to a int.
     public bool IsWidenedMemAcc;
 }

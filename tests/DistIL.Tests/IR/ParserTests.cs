@@ -60,7 +60,7 @@ Block3:
 
 static ParserDummy::M2(#x: float) -> float {
 Entry:
-    //x^2*(3-2*x)
+    // x^2*(3-2*x)
     xsq = fmul #x, #x -> float
     t1 = fmul 2.0f, #x -> float
     t2 = fsub 3.0f, t1 -> float
@@ -265,7 +265,7 @@ Block1:
     {
         var code = """
     Identifier : ->
-    //single line comment
+    // single line comment
     /* multi line comment */
     -55 12345 123UL -12L 3.14159 0.75f
     "arbitrary string \" \n lorem ipsum"
@@ -280,7 +280,7 @@ Block1:
         AssertNext(TokenType.Identifier, "Identifier");
         AssertNext(TokenType.Colon);
         AssertNext(TokenType.Arrow);
-        //Comment should have been skipped
+        // Comment should have been skipped
         AssertNext(TokenType.Literal, ConstInt.CreateI(-55));
         AssertNext(TokenType.Literal, ConstInt.CreateI(12345));
         AssertNext(TokenType.Literal, ConstInt.Create(PrimType.UInt64, 123));

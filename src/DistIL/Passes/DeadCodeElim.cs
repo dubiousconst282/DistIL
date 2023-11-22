@@ -19,11 +19,11 @@ public class DeadCodeElim : IMethodPass
         bool changed = false;
         var worklist = new DiscreteStack<BasicBlock>();
 
-        //Mark reachable blocks with a depth first search
+        // Mark reachable blocks with a depth first search
         worklist.Push(method.EntryBlock);
 
         while (worklist.TryPop(out var block)) {
-            //(goto 1 ? T : F)  ->  (goto T)
+            // (goto 1 ? T : F)  ->  (goto T)
             if (block.Last is BranchInst { Cond: ConstInt { Value: var cond } } br) {
                 var (blockT, blockF) = cond != 0 ? (br.Then, br.Else!) : (br.Else!, br.Then);
 
@@ -32,9 +32,9 @@ public class DeadCodeElim : IMethodPass
                 changed = true;
             }
 
-            //Remove empty try-finally regions
+            // Remove empty try-finally regions
             if (block.First is GuardInst { Kind: GuardKind.Finally, Next: not GuardInst, HandlerBlock.First: ResumeInst } guard) {
-                var regionAnalysis = new ProtectedRegionAnalysis(method); //this is not ideal but this transform should be quite rare
+                var regionAnalysis = new ProtectedRegionAnalysis(method); // this is not ideal but this transform should be quite rare
 
                 foreach (var exitBlock in regionAnalysis.GetBlockRegion(block).GetExitBlocks()) {
                     exitBlock.SetBranch(exitBlock.Succs.First());
@@ -47,11 +47,11 @@ public class DeadCodeElim : IMethodPass
             }
         }
 
-        //Sweep unreachable blocks
+        // Sweep unreachable blocks
         foreach (var block in method) {
             if (worklist.WasPushed(block)) continue;
 
-            //Remove incomming args from phis in reachable blocks
+            // Remove incomming args from phis in reachable blocks
             foreach (var succ in block.Succs) {
                 if (worklist.WasPushed(succ)) {
                     succ.RedirectPhis(block, newPred: null);
@@ -67,11 +67,11 @@ public class DeadCodeElim : IMethodPass
     {
         var worklist = new DiscreteStack<Instruction>();
 
-        //Mark useful instructions
+        // Mark useful instructions
         foreach (var inst in method.Instructions()) {
             if (inst.SafeToRemove) continue;
 
-            //Mark `inst` and its entire dependency chain
+            // Mark `inst` and its entire dependency chain
             worklist.Push(inst);
 
             while (worklist.TryPop(out var chainInst)) {
@@ -83,7 +83,7 @@ public class DeadCodeElim : IMethodPass
             }
         }
 
-        //Sweep useless instructions
+        // Sweep useless instructions
         bool changed = false;
 
         foreach (var inst in method.Instructions()) {
@@ -98,7 +98,7 @@ public class DeadCodeElim : IMethodPass
         return changed;
     }
 
-    //Remove phi-webs where all arguments have the same value
+    // Remove phi-webs where all arguments have the same value
     private static void PeelTrivialPhi(PhiInst phi)
     {
         while (true) {

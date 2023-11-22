@@ -17,10 +17,10 @@ public class ConstInt : Const
         Ensure.That(type.Kind.IsInt());
         ResultType = type;
 
-        //truncate
+        // truncate
         int size = BitSize;
         value &= GetMask(size);
-        //sign extend
+        // sign extend
         if (IsSigned) {
             int shift = 64 - size;
             value = (value << shift) >> shift;

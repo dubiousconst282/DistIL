@@ -7,7 +7,7 @@ partial class CustomAttrib
     private byte[] EncodeBlob()
     {
         var writer = new BlobBuilder();
-        writer.WriteUInt16(0x0001); //prolog
+        writer.WriteUInt16(0x0001); // prolog
 
         EncodeFixedArgs(writer);
         EncodeNamedArgs(writer);
@@ -46,9 +46,9 @@ partial class CustomAttrib
             return;
         }
         else if (IsSystemType(type)) {
-            //string? typeName = reader.ReadSerializedString();
-            //return ParseSerializedType(_parentModule!, typeName!);
-            throw new NotImplementedException(); //SerializeType() is broken
+            // string? typeName = reader.ReadSerializedString();
+            // return ParseSerializedType(_parentModule!, typeName!);
+            throw new NotImplementedException(); // SerializeType() is broken
         }
 #pragma warning disable format
         else switch (type.Kind) {
@@ -65,7 +65,7 @@ partial class CustomAttrib
             case TypeKind.Single: writer.WriteSingle((float)value!); break;
             case TypeKind.Double: writer.WriteDouble((double)value!); break;
             case TypeKind.String: writer.WriteSerializedString((string?)value); break;
-            //Boxed value
+            // Boxed value
             case var _ when type == PrimType.Object:
                 throw new NotImplementedException();
 

@@ -17,8 +17,8 @@ public class ProtectedRegionAnalysis : IMethodAnalysis
         while (worklist.TryPop(out var node)) {
             var (block, region) = node;
 
-            //Push sub regions
-            //Note that handler/filters can't have guards, the second condition is fine.
+            // Push sub regions
+            // Note that handler/filters can't have guards, the second condition is fine.
             if (block.Guards().Any() && block != region.StartBlock) {
                 visited.Remove(block);
                 PushChild(block);
@@ -33,7 +33,7 @@ public class ProtectedRegionAnalysis : IMethodAnalysis
             }
             region.Blocks.Add(block);
 
-            //Add succs to worklist
+            // Add succs to worklist
             var succRegion = block.Last is LeaveInst ? region.Parent! : region;
             foreach (var succ in block.Succs) {
                 if (visited.Add(succ)) {

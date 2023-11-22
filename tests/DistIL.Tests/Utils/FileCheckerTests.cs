@@ -70,7 +70,7 @@ public class FileCheckerTests
     public void BasicChecks()
     {
         Assert.True(CheckICase(
-            //Expected
+            // Expected
             """
             Line#1
             //CHECK: Foo
@@ -78,7 +78,7 @@ public class FileCheckerTests
             //CHECK: Bar Qux
             """,
 
-            //Actual
+            // Actual
             """
             Line#1
             And then the Foo
@@ -87,14 +87,14 @@ public class FileCheckerTests
             """));
 
         Assert.False(CheckICase(
-            //Expected
+            // Expected
             """
             //CHECK: Line#1
             //CHECK: Line#2
             //CHECK: Line#3
             """,
 
-            //Actual
+            // Actual
             """
             Line#1
             Line#3
@@ -106,7 +106,7 @@ public class FileCheckerTests
     public void CheckSamePass()
     {
         Assert.True(CheckICase(
-            //Expected
+            // Expected
             """
             Line#1
             //CHECK: Foo
@@ -117,7 +117,7 @@ public class FileCheckerTests
             //CHECK: end
             """,
 
-            //Actual
+            // Actual
             """
             Line#1
             And then the Foo
@@ -132,7 +132,7 @@ public class FileCheckerTests
     public void CheckSameFail()
     {
         Assert.False(CheckICase(
-            //Expected
+            // Expected
             """
             Line#1
             //CHECK: Foo
@@ -143,7 +143,7 @@ public class FileCheckerTests
             //CHECK: end
             """,
 
-            //Actual
+            // Actual
             """
             Line#1
             And then the Foo
@@ -157,7 +157,7 @@ public class FileCheckerTests
     public void CheckNext()
     {
         Assert.True(CheckICase(
-            //Expected
+            // Expected
             """
             //CHECK: foo
             //CHECK-NEXT: bar
@@ -165,7 +165,7 @@ public class FileCheckerTests
             //CHECK: end
             """,
 
-            //Actual
+            // Actual
             """
             Foo
             Bar

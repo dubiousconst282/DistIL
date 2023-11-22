@@ -110,11 +110,11 @@ public class MDArrayMethod : MethodDesc
 {
     public enum OpKind
     {
-        SizeCtor,   //void .ctor(this, int len1, int len2, ...)
-        RangeCtor,  //void .ctor(this, int lo1, int hi1, int lo2, int hi2, ...)
-        Set,        //void   Set(this, int idx1, int idx2, T value)
-        Get,        //T      Get(this, int idx1, int idx2, ...)
-        Address,    //T& Address(this, int idx1, int idx2, ...)
+        SizeCtor,   // void .ctor(this, int len1, int len2, ...)
+        RangeCtor,  // void .ctor(this, int lo1, int hi1, int lo2, int hi2, ...)
+        Set,        // void   Set(this, int idx1, int idx2, T value)
+        Get,        // T      Get(this, int idx1, int idx2, ...)
+        Address,    // T& Address(this, int idx1, int idx2, ...)
         Count_
     }
 
@@ -165,7 +165,7 @@ public class MDArrayMethod : MethodDesc
         public TypeSig this[int index] {
             get {
                 if (index == 0) {
-                    return Method.DeclaringType; //this
+                    return Method.DeclaringType; // this
                 }
                 return Method.Kind switch {
                     OpKind.Set when index == Count - 1

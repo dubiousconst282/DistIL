@@ -49,7 +49,7 @@ public class ILImporter
 
     private void CreateBlocks(BitSet leaders)
     {
-        //Remove 0th label to avoid creating 2 blocks
+        // Remove 0th label to avoid creating 2 blocks
         bool firstHasPred = leaders.Remove(0);
         var entryBlock = firstHasPred ? _body.CreateBlock() : null!;
 
@@ -58,7 +58,7 @@ public class ILImporter
             _blocks[startOffset] = new BlockState(this, startOffset);
             startOffset = endOffset;
         }
-        //Ensure that the entry block don't have predecessors
+        // Ensure that the entry block don't have predecessors
         if (firstHasPred) {
             var firstBlock = GetBlock(0).Block;
             entryBlock.SetBranch(firstBlock);
@@ -69,7 +69,7 @@ public class ILImporter
     {
         var mappings = new Dictionary<GuardInst, ExceptionClause>(clauses.Length);
 
-        //I.12.4.2.5 Overview of exception handling
+        // I.12.4.2.5 Overview of exception handling
         foreach (var clause in clauses) {
             var kind = clause.Kind switch {
                 ExceptionRegionKind.Catch or
@@ -87,7 +87,7 @@ public class ILImporter
             var guard = new GuardInst(kind, handlerBlock.Block, clause.CatchType, filterBlock?.Block);
             startBlock.InsertAnteLast(guard);
 
-            //Push exception on handler/filter entry stack
+            // Push exception on handler/filter entry stack
             if (kind == GuardKind.Catch) {
                 handlerBlock.PushNoEmit(guard);
             }
@@ -101,12 +101,12 @@ public class ILImporter
         {
             var state = GetBlock(region.TryStart);
 
-            //Create a new dominating block for this region if it nests any other in the current block.
-            //Note that this code relies on the region table to be correctly ordered, as required by ECMA335:
+            // Create a new dominating block for this region if it nests any other in the current block.
+            // Note that this code relies on the region table to be correctly ordered, as required by ECMA335:
             //  "If handlers are nested, the most deeply nested try blocks shall come
             //  before the try blocks that enclose them."
-            //TODO: consider using the region tree for this
-            //FIXME: insert dummy jump block for regions starting in the entry block of a handler/filter
+            // TODO: consider using the region tree for this
+            // FIXME: insert dummy jump block for regions starting in the entry block of a handler/filter
             if (IsBlockNestedBy(region, state.EntryBlock)) {
                 var newBlock = _body.CreateBlock(insertAfter: state.EntryBlock.Prev);
 
@@ -135,7 +135,7 @@ public class ILImporter
     {
         var entryBlock = _body.EntryBlock ?? GetBlock(0).Block;
 
-        //Copy stored/address taken arguments to local variables
+        // Copy stored/address taken arguments to local variables
         for (int i = 0; i < _body.Args.Length; i++) {
             if (!Has(_varFlags[i], VarFlags.AddrTaken | VarFlags.Stored)) continue;
 
@@ -144,7 +144,7 @@ public class ILImporter
             entryBlock.InsertAnteLast(new StoreInst(slot, arg));
         }
 
-        //Import code
+        // Import code
         int startIndex = 0;
         foreach (int endOffset in leaders) {
             var block = GetBlock(code[startIndex].Offset);
@@ -185,13 +185,13 @@ public class ILImporter
                 }
                 lastInfo.BlockIdx = blockStartIdx + 1;
             }
-            //When loading a var, we must mark it as exposed if there are stores in:
+            // When loading a var, we must mark it as exposed if there are stores in:
             // - a neighbor region -- filter{store x}; catch{load x}
             // - a child region -- guard{store x}; load x;
-            //Only the following is allowed:
+            // Only the following is allowed:
             // - a parent region -- store x; guard{load x}; store x;
             //
-            //There's also no guarantee for block ordering, these conds must be checked on both ops.
+            // There's also no guarantee for block ordering, these conds must be checked on both ops.
             if (_regionTree != null && Has(flags, VarFlags.Stored | VarFlags.Loaded)) {
                 if (Has(flags, VarFlags.Stored)) {
                     ref int lastRegion = ref lastInfo.StoreRegionOffset;
@@ -200,7 +200,7 @@ public class ILImporter
                     if (lastRegion == 0) {
                         lastRegion = currRegion;
                     } else if (lastRegion != currRegion) {
-                        lastRegion = -1; //multiple stores in different regions
+                        lastRegion = -1; // multiple stores in different regions
                     }
                 } else {
                     lastInfo.LoadOffset = inst.Offset + 1;
@@ -214,7 +214,7 @@ public class ILImporter
         bool CrossesRegions(int storeRegionOffset, int loadOffset)
         {
             if (storeRegionOffset < 0 || (storeRegionOffset == 0 && loadOffset != 0)) {
-                return true; //multiple stores on different regions or load before store (be conservative for bad block order)
+                return true; // multiple stores on different regions or load before store (be conservative for bad block order)
             }
             if (loadOffset != 0) {
                 var storeRegion = _regionTree.FindEnclosing(storeRegionOffset - 1);
@@ -224,7 +224,7 @@ public class ILImporter
         }
     }
 
-    //Returns a bitset containing all instruction offsets where a block starts (branch targets).
+    // Returns a bitset containing all instruction offsets where a block starts (branch targets).
     private static BitSet FindLeaders(Span<ILInstruction> code, ExceptionClause[] ehRegions)
     {
         int codeSize = code[^1].GetEndOffset();
@@ -236,17 +236,17 @@ public class ILImporter
             if (inst.Operand is int targetOffset) {
                 leaders.Add(targetOffset);
             }
-            //switch
+            // switch
             else if (inst.Operand is int[] targetOffsets) {
                 foreach (int offset in targetOffsets) {
                     leaders.Add(offset);
                 }
             }
-            leaders.Add(inst.GetEndOffset()); //fallthrough
+            leaders.Add(inst.GetEndOffset()); // fallthrough
         }
 
         foreach (var region in ehRegions) {
-            //Note: end offsets must have already been marked by leave/endfinally
+            // Note: end offsets must have already been marked by leave/endfinally
             leaders.Add(region.TryStart);
 
             if (region.HandlerStart >= 0) {
@@ -259,7 +259,7 @@ public class ILImporter
         return leaders;
     }
 
-    //Binary search to find instruction index using offset
+    // Binary search to find instruction index using offset
     private static int FindIndex(Span<ILInstruction> code, int offset)
     {
         int start = 0;
@@ -275,7 +275,7 @@ public class ILImporter
                 return mid;
             }
         }
-        //Special case last instruction
+        // Special case last instruction
         if (offset >= code[^1].Offset) {
             return code.Length;
         }

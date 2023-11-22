@@ -120,7 +120,7 @@ public class ValueNumbering : IMethodPass
 
 
     #region Instruction Hashing/Equality
-    //Note: methods of this class will only be called for instructions with a registered tagger.
+    // Note: methods of this class will only be called for instructions with a registered tagger.
     class VNComparer : IEqualityComparer<Instruction>
     {
         public static readonly VNComparer Instance = new();
@@ -129,7 +129,7 @@ public class ValueNumbering : IMethodPass
         {
             var type = x!.GetType();
 
-            //Load/store instructions can have matching tags.
+            // Load/store instructions can have matching tags.
             if (y!.GetType() != type) {
                 if (!(x is MemoryInst && y is MemoryInst)) {
                     return false;
@@ -210,7 +210,7 @@ public class ValueNumbering : IMethodPass
         s_Taggers[typeof(LoadInst)] = s_Taggers[typeof(MemoryInst)];
         s_Taggers[typeof(StoreInst)] = s_Taggers[typeof(MemoryInst)];
 
-        //FIXME: proper equality for MethodSpec (maybe implement Equals() and GetHashCode()?)
+        // FIXME: proper equality for MethodSpec (maybe implement Equals() and GetHashCode()?)
         //       For now, reference comparation will work in most cases,
         //       since we don't always create new instances.
         Reg<CallInst>(
@@ -257,7 +257,7 @@ public class ValueNumbering : IMethodPass
                 return true;
             }
             if (typeName is "Int32" or "Int64" or "Single" or "Double" or "DateTime" or "Decimal") {
-                //ToString() et al. aren't pure because they depend on the instance reference.
+                // ToString() et al. aren't pure because they depend on the instance reference.
                 return fn.Name is "Parse" or "TryParse" && fn.ParamSig[0] == PrimType.String;
             }
             if (typeName is "String") {

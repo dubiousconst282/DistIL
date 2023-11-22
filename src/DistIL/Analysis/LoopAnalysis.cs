@@ -8,16 +8,16 @@ public class LoopAnalysis : IMethodAnalysis
 
     public LoopAnalysis(MethodBody method, DominatorTree domTree)
     {
-        //Based on https://pages.cs.wisc.edu/~fischer/cs701.f14/finding.loops.html
+        // Based on https://pages.cs.wisc.edu/~fischer/cs701.f14/finding.loops.html
         var worklist = new ArrayStack<BasicBlock>();
 
         foreach (var header in method) {
             foreach (var latch in header.Preds) {
-                //Check if `latch -> header` is actually a back-edge
+                // Check if `latch -> header` is actually a back-edge
                 if (!domTree.Dominates(header, latch)) continue;
 
-                //The loop body includes the header, latch, and all
-                //predecessors from the latch up to the header.
+                // The loop body includes the header, latch, and all
+                // predecessors from the latch up to the header.
                 var body = new RefSet<BasicBlock>();
                 body.Add(header);
                 worklist.Push(latch);
@@ -34,12 +34,12 @@ public class LoopAnalysis : IMethodAnalysis
                     Blocks = body
                 });
             }
-            //TODO: build loop tree
+            // TODO: build loop tree
         }
     }
 
     public IEnumerable<LoopInfo> GetInnermostLoops()
-        => Loops; //FIXME: proper impl once we have loop trees
+        => Loops; // FIXME: proper impl once we have loop trees
 
     static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
         => new LoopAnalysis(mgr.Method, mgr.GetAnalysis<DominatorTree>());
@@ -98,7 +98,7 @@ public class LoopInfo
     /// <summary> Returns the unique condition controlling the loop exit. </summary>
     public CompareInst? GetExitCondition()
     {
-        //Header: goto cmp ? Body : Exit
+        // Header: goto cmp ? Body : Exit
         var exit = GetExit();
         return exit != null && GetUniquePredAround(exit, inside: true) == Header &&
                Header.Last is BranchInst { Cond: CompareInst cmp } br &&
@@ -113,7 +113,7 @@ public class LoopInfo
         }
     }
 
-    //Returns the unique predecessor of `block` that is either inside or outside the loop.
+    // Returns the unique predecessor of `block` that is either inside or outside the loop.
     private BasicBlock? GetUniquePredAround(BasicBlock block, bool inside)
     {
         var result = default(BasicBlock);
@@ -130,7 +130,7 @@ public class LoopInfo
 
     public override string ToString()
     {
-        //Prehdr^ -> Header[B1 B2 B3 Exiting* Latch↲]
+        // Prehdr^ -> Header[B1 B2 B3 Exiting* Latch↲]
         var sb = new StringBuilder();
 
         var preds = Header.Preds.AsEnumerable().Where(b => !Contains(b));

@@ -39,7 +39,7 @@ public class DomTreeTests
                 }
                 var idom = domTree.IDom(child);
                 if (idom == child) {
-                    return false; //reached entry node
+                    return false; // reached entry node
                 }
                 child = idom;
             }
@@ -81,8 +81,8 @@ public class DomTreeTests
         var b6 = method.CreateBlock();
 
         //      /---------------\
-        //1 -> 2 -> 3 --\       |
-        //     \ -> 4 -> 5 -> 6 |
+        // 1 -> 2 -> 3 --\       |
+        //      \ -> 4 -> 5 -> 6 |
         //          \-----------/
         var cond = ConstInt.CreateI(1);
         b1.SetBranch(b2);
@@ -100,7 +100,7 @@ public class DomTreeTests
 
     private static Data GetData2()
     {
-        //Extracted from Test1::LoopBranch1()
+        // Extracted from Test1::LoopBranch1()
         var method = Utils.CreateDummyMethodBody();
         var BB_01 = method.CreateBlock();
         var BB_02 = method.CreateBlock();

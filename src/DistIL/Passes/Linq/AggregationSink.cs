@@ -17,7 +17,7 @@ internal class AggregationSink : LinqSink
     public override void EmitTail(IRBuilder builder)
     {
         if (_hasData != null) {
-            //goto hasData ? Exit : ThrowHelper
+            // goto hasData ? Exit : ThrowHelper
             builder.Throw(typeof(InvalidOperationException), builder.CreateEq(_hasData, ConstInt.CreateI(0)));
         }
         SubjectCall.ReplaceUses(MapResult(builder, _accumulator!));
@@ -37,7 +37,7 @@ internal class AggregationSink : LinqSink
             var gotData = default(Value);
 
             _accumulator = loopData.CreateAccum(_seed, emitUpdate: curr => {
-                //nextAccum = hasData ? Accum(currItem) : currItem
+                // nextAccum = hasData ? Accum(currItem) : currItem
                 var emptyCheckBlock = builder.Block;
                 var mergeBlock = builder.Method.CreateBlock(insertAfter: emptyCheckBlock).SetName("LQ_MergeAccum");
                 builder.Fork(hasData, mergeBlock);
@@ -83,14 +83,14 @@ internal class CountSink : AggregationSink
 
     protected override Value GetSeed(IRBuilder builder, EstimatedSourceLen sourceLen)
     {
-        //If `estimCount != null`, the source size is guaranteed to fit in an int32.
+        // If `estimCount != null`, the source size is guaranteed to fit in an int32.
         _mayBeLongSource = sourceLen.Length == null || sourceLen.IsUnderEstimation;
 
         return ConstInt.CreateI(0);
     }
     protected override Value Accumulate(IRBuilder builder, Value currAccum, Value currItem, BasicBlock skipBlock)
     {
-        //Assume that bools are always normalized to 0/1.
+        // Assume that bools are always normalized to 0/1.
         var inc = SubjectCall.Args.Length >= 2
             ? builder.CreateLambdaInvoke(SubjectCall.Args[1], currItem)
             : ConstInt.CreateI(1);

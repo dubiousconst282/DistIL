@@ -47,7 +47,7 @@ internal class ILAssembler
                 var method = (MethodDesc)operand!;
                 _stackDepth -= method.ParamSig.Count;
                 _stackDepth += method.ReturnType != PrimType.Void ? 1 : 0;
-                _stackDepth += (op == ILCode.Newobj) ? 2 : 0; //discount `this` parameter
+                _stackDepth += (op == ILCode.Newobj) ? 2 : 0; // discount `this` parameter
                 break;
             }
             case ILCode.Ldfld or ILCode.Ldflda or ILCode.Stfld: {
@@ -82,8 +82,8 @@ internal class ILAssembler
 
     private void EmitVarInst(ILCode code, ILVariable var)
     {
-        //ILVariable.Index above this value is reserved for the use counter
-        //This value was choosen based on the fact that encoded var indices are limited to 16-bit.
+        // ILVariable.Index above this value is reserved for the use counter
+        // This value was choosen based on the fact that encoded var indices are limited to 16-bit.
         const int kCounterStartIdx = ushort.MaxValue + 1;
 
         if (var.Index >= kCounterStartIdx) {
@@ -116,7 +116,7 @@ internal class ILAssembler
             Locals = _usedVars.ToArray(),
             ExceptionClauses = BuildEHClauses(layout),
             MaxStack = _maxStackDepth,
-            InitLocals = true //TODO: preserve InitLocals
+            InitLocals = true // TODO: preserve InitLocals
         };
     }
 
@@ -124,24 +124,24 @@ internal class ILAssembler
     {
         var insts = GetInstructions();
 
-        //Calculate initial offsets
+        // Calculate initial offsets
         int currOffset = 0;
         foreach (ref var inst in insts) {
             inst.Offset = currOffset;
             currOffset += inst.GetSize();
         }
 
-        //Early return for methods with no branches or local vars
+        // Early return for methods with no branches or local vars
         if (_labelStarts.Count == 1 && insts[^1].OpCode == ILCode.Ret && _usedVars.Count == 0) return;
 
-        //Assign smaller indices to most used variables first
+        // Assign smaller indices to most used variables first
         _usedVars.Sort((a, b) => b.Index - a.Index);
 
         for (int i = 0; i < _usedVars.Count; i++) {
             _usedVars[i].Index = i;
         }
 
-        //Optimize branches and macros using a greedly algorithm
+        // Optimize branches and macros using a greedly algorithm
         currOffset = 0;
         foreach (ref var inst in insts) {
             inst.Offset = currOffset;
@@ -161,7 +161,7 @@ internal class ILAssembler
             currOffset += inst.GetSize();
         }
 
-        //Replace label refs with actual offsets
+        // Replace label refs with actual offsets
         foreach (ref var inst in insts) {
             if (inst.Operand is ILLabel target) {
                 inst.Operand = GetLabelOffset(target);
@@ -231,7 +231,7 @@ internal class ILAssembler
 
 internal readonly struct ILLabel : IEquatable<ILLabel>
 {
-    readonly object _token; //Either<BasicBlock, int>
+    readonly object _token; // Either<BasicBlock, int>
 
     internal ILLabel(object token) => _token = token;
 

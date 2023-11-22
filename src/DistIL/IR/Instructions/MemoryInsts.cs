@@ -107,11 +107,11 @@ public class StoreInst : MemoryInst
     }
     public static bool MustBeCoerced(TypeDesc destType, TypeDesc srcType)
     {
-        //III.1.6 Implicit argument coercion
+        // III.1.6 Implicit argument coercion
 
-        //`NInt -> &` as in "Start GC Tracking" sounds particularly brittle. Not even Roslyn makes guarantees about it:
+        // `NInt -> &` as in "Start GC Tracking" sounds particularly brittle. Not even Roslyn makes guarantees about it:
         //  https://github.com/dotnet/runtime/issues/34501#issuecomment-608548207
-        //It's probably for the best if we don't support it.
+        // It's probably for the best if we don't support it.
         return
             (destType.Kind.IsSmallInt() && !srcType.Kind.IsSmallInt()) ||
             (destType.StackType == StackType.Int && srcType.StackType == StackType.NInt) ||

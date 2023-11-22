@@ -43,9 +43,9 @@ public class ParallelCopyEmitter
     {
         foreach (var dest in _dests) {
             if (Loc(dest) == null) {
-                _ready.Push(dest); //dest is unused and can be overwritten
+                _ready.Push(dest); // dest is unused and can be overwritten
             } else {
-                _pending.Push(dest); //dest may need a temp
+                _pending.Push(dest); // dest may need a temp
             }
         }
         while (true) {

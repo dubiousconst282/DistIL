@@ -25,7 +25,7 @@ internal class WhereStage : LinqStageNode
     {
         var filterLambda = SubjectCall!.Args[1];
         var cond = builder.CreateLambdaInvoke_ItemAndIndex(filterLambda, currItem, loopData.CreateAccum);
-        //if (!cond) goto SkipBlock;
+        // if (!cond) goto SkipBlock;
         builder.Fork(cond, loopData.SkipBlock);
         Drain.EmitBody(builder, currItem, loopData);
     }
@@ -79,13 +79,13 @@ internal class SkipStage : LinqStageNode
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
-        //Behavior for `count <= 0` is nop (drain all source items)
+        // Behavior for `count <= 0` is nop (drain all source items)
         var count = SubjectCall.Args[1];
 
         loopData.CreateAccum(count, emitUpdate: curr => {
-            //if (count > 0) goto DecrAndSkip;
+            // if (count > 0) goto DecrAndSkip;
             //  ...
-            //DecrAndSkip:
+            // DecrAndSkip:
             //  count--;
             //  goto Skip
             var decrAndSkip = builder.Method.CreateBlock(insertAfter: loopData.SkipBlock.Prev);
@@ -109,12 +109,12 @@ internal class TakeStage : LinqStageNode
 
     public override void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
     {
-        //Behavior for `count <= 0` is to discard all elements.
+        // Behavior for `count <= 0` is to discard all elements.
         var count = SubjectCall.Args[1];
 
         loopData.CreateAccum(count, emitUpdate: curr => {
-            //if (count <= 0) goto ExitBlock;
-            //count--;
+            // if (count <= 0) goto ExitBlock;
+            // count--;
             builder.Fork(builder.CreateSgt(curr, ConstInt.CreateI(0)), loopData.Exit.Block);
             Drain.EmitBody(builder, currItem, loopData);
             return builder.CreateSub(curr, ConstInt.CreateI(1));

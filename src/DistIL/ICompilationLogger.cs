@@ -12,7 +12,7 @@ public interface ICompilationLogger
     void Log(LogLevel level, ReadOnlySpan<char> msg, Exception? exception = null);
     bool IsEnabled(LogLevel level);
 
-    //TODO: figure out what to put on scope infos.
+    // TODO: figure out what to put on scope infos.
     LoggerScopeHandle Push(in LoggerScopeInfo info, string? msg = null);
     void Pop(in LoggerScopeHandle scope);
 

@@ -111,12 +111,12 @@ internal static class ILTables
             CompareOp.Ne    => (ILCode.Ceq,     T),
             CompareOp.Slt   => (ILCode.Clt,     F),
             CompareOp.Sgt   => (ILCode.Cgt,     F),
-            CompareOp.Sle   => (ILCode.Cgt,     T), //x <= y  ->  !(x > y)
-            CompareOp.Sge   => (ILCode.Clt,     T), //x >= y  ->  !(x < y)
+            CompareOp.Sle   => (ILCode.Cgt,     T), // x <= y  ->  !(x > y)
+            CompareOp.Sge   => (ILCode.Clt,     T), // x >= y  ->  !(x < y)
             CompareOp.Ult   => (ILCode.Clt_Un,  F),
             CompareOp.Ugt   => (ILCode.Cgt_Un,  F),
-            CompareOp.Ule   => (ILCode.Cgt_Un,  T), //x <= y  ->  !(x > y)
-            CompareOp.Uge   => (ILCode.Clt_Un,  T), //x >= y  ->  !(x < y)
+            CompareOp.Ule   => (ILCode.Cgt_Un,  T), // x <= y  ->  !(x > y)
+            CompareOp.Uge   => (ILCode.Clt_Un,  T), // x >= y  ->  !(x < y)
 
             CompareOp.FOeq  => (ILCode.Ceq,     F),
             CompareOp.FOlt  => (ILCode.Clt,     F),
@@ -129,9 +129,9 @@ internal static class ILTables
             CompareOp.FUgt  => (ILCode.Cgt_Un,  F),
             CompareOp.FUle  => (ILCode.Cgt,     T),
             CompareOp.FUge  => (ILCode.Clt,     T),
-            //FIXME: mappings for fcmp.one and fcmp.ueq
-            //one -> x < y || x > y
-            //ueq -> !one
+            // FIXME: mappings for fcmp.one and fcmp.ueq
+            // one -> x < y || x > y
+            // ueq -> !one
             _ => throw new InvalidOperationException()
         };
     }

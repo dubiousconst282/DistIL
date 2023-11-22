@@ -46,7 +46,7 @@ public class ValueTests
         Assert.Equal(value3, inst1.Left);
         Assert.Equal(value3, inst2.Right);
 
-        //Also check untracked values
+        // Also check untracked values
         value1.ReplaceUses(value4);
         CheckUses(value1);
         Assert.Equal(value4, inst1.Right);

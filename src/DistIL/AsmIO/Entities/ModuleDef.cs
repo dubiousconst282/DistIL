@@ -22,7 +22,7 @@ public class ModuleDef : EntityDesc
 
     internal TypeList _typeDefs = new(), _exportedTypes = new();
 
-    internal Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); //root assemblies for references of forwarded types
+    internal Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); // root assemblies for references of forwarded types
     internal List<CustomAttrib> _asmCustomAttribs = new(), _modCustomAttribs = new();
 
     internal ModuleLoader? _loader;

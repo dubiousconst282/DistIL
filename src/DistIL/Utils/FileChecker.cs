@@ -14,7 +14,7 @@ public class FileChecker
 {
     readonly string _source;
     readonly List<Directive> _directives = new();
-    readonly bool _hasDynamicPatterns; //whether there may be directives using regex/subst holes.
+    readonly bool _hasDynamicPatterns; // whether there may be directives using regex/subst holes.
 
     static readonly Regex s_DirectiveRegex = new(@"^\s*\/\/\s*CHECK(?:-[A-Z]+)?:.+$", RegexOptions.Multiline | RegexOptions.NonBacktracking);
     static readonly (string K, DirectiveType V)[] s_KnownDirectives = {
@@ -89,7 +89,7 @@ public class FileChecker
 
             while (true) {
                 if (Reader.EOF || _currDir.Type == DirectiveType.Invalid) {
-                    //Only succeed if there are no more directives or the last one is CHECK-NOT
+                    // Only succeed if there are no more directives or the last one is CHECK-NOT
                     if (_failures == null && _currDir.Type is DirectiveType.Invalid or DirectiveType.CheckNot) {
                         return FileCheckResult.Success;
                     }
@@ -133,10 +133,10 @@ public class FileChecker
             }
             return false;
         }
-        //Checks if line matches any of the preceeding CHECK-NOT directives, if any
+        // Checks if line matches any of the preceeding CHECK-NOT directives, if any
         private bool MatchExclusions(ReadOnlySpan<char> line)
         {
-            bool trail = _currDir.Type == DirectiveType.CheckNot; //last directive is CHECK-NOT
+            bool trail = _currDir.Type == DirectiveType.CheckNot; // last directive is CHECK-NOT
 
             for (int i = _notDirStartPos; i < _dirPos - (trail ? 0 : 1); i++) {
                 Debug.Assert(Dirs[i].Type == DirectiveType.CheckNot);
@@ -205,7 +205,7 @@ public class FileChecker
 
         while (true) {
             if (firstToken.Type == TokenType.Literal) {
-                //Quickly find the start of a possible literal match.
+                // Quickly find the start of a possible literal match.
                 int firstMatchOffset = IndexOfLiteral(text, firstToken.Text, textWinPos, compMode);
                 if (firstMatchOffset < 0) return false;
 
@@ -214,7 +214,7 @@ public class FileChecker
             int textPos = textWinPos;
             int patternPos = patternStartPos;
 
-            //Check for matching tokens
+            // Check for matching tokens
             while (true) {
                 var token = NextToken(pattern, ref patternPos);
 
@@ -229,13 +229,13 @@ public class FileChecker
                     var textToken = NextToken(text, ref textPos, literalOnly: true);
 
                     if (token.Type == TokenType.EOF || textToken.Type == TokenType.EOF) {
-                        //Consider a match only if we have no more pattern tokens.
+                        // Consider a match only if we have no more pattern tokens.
                         return token.Type == TokenType.EOF;
                     }
                     Debug.Assert(token.Type == TokenType.Literal);
 
                     if (!token.Text.Equals(textToken.Text, compMode)) {
-                        //No more matches, try again on next window alignment.
+                        // No more matches, try again on next window alignment.
                         break;
                     }
                 }
@@ -252,7 +252,7 @@ public class FileChecker
             if (offset < startOffset) {
                 return -1;
             }
-            //Make sure that's a full token, not just an affix
+            // Make sure that's a full token, not just an affix
             if ((offset <= 0 || Token.IsSeparator(text[offset - 1])) &&
                 (offset + lit.Length >= text.Length || Token.IsSeparator(text[offset + lit.Length]))
             ) {
@@ -264,12 +264,12 @@ public class FileChecker
 
     internal static Token NextToken(ReadOnlySpan<char> text, scoped ref int pos, bool literalOnly = false)
     {
-        //Skip whitespace
+        // Skip whitespace
         while (pos < text.Length && char.IsWhiteSpace(text[pos])) pos++;
 
         int start = pos;
 
-        //Holes: {{regex}} or [[var]]
+        // Holes: {{regex}} or [[var]]
         if (!literalOnly && start + 1 < text.Length && text[start] is '{' or '[' && text[start] == text[start + 1]) {
             string closer = text[start] == '{' ? "}}" : "]]";
             int closerDist = text.Slice(start + 2).IndexOf(closer, StringComparison.Ordinal);
@@ -284,10 +284,10 @@ public class FileChecker
             }
         }
 
-        //Normal token: [A-Z0-9_]+|.
+        // Normal token: [A-Z0-9_]+|.
         while (pos < text.Length && !Token.IsSeparator(text[pos])) pos++;
 
-        //Ensure we never output empty tokens; treat unknown chars as individual tokens.
+        // Ensure we never output empty tokens; treat unknown chars as individual tokens.
         if (pos == start && pos < text.Length) pos++;
 
         return new Token() {
@@ -323,19 +323,19 @@ public class FileChecker
             if (hole.Type == TokenType.RegexHole) {
                 return MatchRegex(hole.Text, text, compMode);
             }
-            //Substitution hole
+            // Substitution hole
             Debug.Assert(hole.Type == TokenType.SubstHole);
             int colonIdx = hole.Text.IndexOf(':');
 
             if (colonIdx < 0) {
-                //Use: [[key]]  
-                //TODO: this should probably match tokens instead of substr via MatchPattern()
+                // Use: [[key]]  
+                // TODO: this should probably match tokens instead of substr via MatchPattern()
                 string key = hole.Text.ToString();
 
                 return _substMap.TryGetValue(key, out string? val) && text.StartsWith(val, compMode) 
                         ? new AbsRange(0, text.Length - text.Length + val.Length) : default;
             } else {
-                //Assignment: [[key:pattern]]
+                // Assignment: [[key:pattern]]
                 var range = MatchRegex(hole.Text[(colonIdx + 1)..], text, compMode);
                 if (!range.IsEmpty) {
                     string key = hole.Text[0..colonIdx].ToString();
@@ -370,7 +370,7 @@ public class FileChecker
     struct Directive
     {
         public DirectiveType Type;
-        public AbsRange PatternRange; //Pattern range in source text
+        public AbsRange PatternRange; // Pattern range in source text
     }
     enum DirectiveType
     {

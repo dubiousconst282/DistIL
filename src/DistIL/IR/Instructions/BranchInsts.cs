@@ -33,8 +33,8 @@ public class BranchInst : Instruction
         : base(target) { }
 
     public BranchInst(Value cond, BasicBlock then, BasicBlock else_)
-        //Implicitly fold conditional branches with the same target, so that we can guarantee
-        //that there will be no duplicated yields when iterating block successors (except for SwitchInst).
+        // Implicitly fold conditional branches with the same target, so that we can guarantee
+        // that there will be no duplicated yields when iterating block successors (except for SwitchInst).
         : base(then == else_ ? [then] : [cond, then, else_]) { }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
@@ -81,7 +81,7 @@ public class SwitchInst : Instruction
         TargetMappings = targetMappings;
     }
 
-    //Branch instructions are required by the successor edge iterator to have no duplicate block uses.
+    // Branch instructions are required by the successor edge iterator to have no duplicate block uses.
     private static Value[] CreateOperands(Value targetIndex, BasicBlock defaultTarget, BasicBlock[] targets, out int[] mappings)
     {
         var blockMappings = new Dictionary<BasicBlock, int>(targets.Length + 1);
@@ -98,7 +98,7 @@ public class SwitchInst : Instruction
             }
             mappings[i + 1] = mappingIdx;
         }
-        return operIdx == opers.Length ? opers : opers[0..operIdx]; //slicing always creates a copy
+        return operIdx == opers.Length ? opers : opers[0..operIdx]; // slicing always creates a copy
     }
 
     /// <summary> Returns the target block for the case at <paramref name="index"/>. The default case is represented as <c>-1</c>. </summary>

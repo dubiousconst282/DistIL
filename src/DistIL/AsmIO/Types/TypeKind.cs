@@ -44,34 +44,34 @@ public enum StackType
 public static class TypeKinds
 {
     private const byte
-        Uns = 1 << 0, //Unsigned int
-        Sig = 1 << 1, //Signed int
-        Ptr = 1 << 2, //Pointer size
-        Obj = 1 << 3; //Object
+        Uns = 1 << 0, // Unsigned int
+        Sig = 1 << 1, // Signed int
+        Ptr = 1 << 2, // Pointer size
+        Obj = 1 << 3; // Object
 
     private static readonly (byte BitSize, byte Flags)[] _data = {
-        (0,    0), //Void
-        (8,  Uns), //Bool
-        (16, Uns), //Char
-        (8,  Sig), //SByte
-        (8,  Uns), //Byte
-        (16, Sig), //Int16
-        (16, Uns), //UInt16
-        (32, Sig), //Int32
-        (32, Uns), //UInt32
-        (64, Sig), //Int64
-        (64, Uns), //UInt64
-        (32,   0), //Single
-        (64,   0), //Double
-        (0,  Obj), //String
-        (0,    0), //TypedRef
-        (0,  Sig | Ptr), //IntPtr
-        (0,  Uns | Ptr), //UIntPtr
-        (0,  Ptr), //Pointer
-        (0,  Ptr), //ByRef
-        (0,  Obj), //Object
-        (0,    0), //Struct
-        (0,  Obj), //Array
+        (0,    0), // Void
+        (8,  Uns), // Bool
+        (16, Uns), // Char
+        (8,  Sig), // SByte
+        (8,  Uns), // Byte
+        (16, Sig), // Int16
+        (16, Uns), // UInt16
+        (32, Sig), // Int32
+        (32, Uns), // UInt32
+        (64, Sig), // Int64
+        (64, Uns), // UInt64
+        (32,   0), // Single
+        (64,   0), // Double
+        (0,  Obj), // String
+        (0,    0), // TypedRef
+        (0,  Sig | Ptr), // IntPtr
+        (0,  Uns | Ptr), // UIntPtr
+        (0,  Ptr), // Pointer
+        (0,  Ptr), // ByRef
+        (0,  Obj), // Object
+        (0,    0), // Struct
+        (0,  Obj), // Array
     };
 
     public static int BitSize(this TypeKind type) => _data[(int)type].BitSize;

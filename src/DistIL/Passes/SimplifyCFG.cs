@@ -8,10 +8,10 @@ public class SimplifyCFG : IMethodPass
     {
         bool everChanged = false;
 
-        //Canonicalization
+        // Canonicalization
         everChanged |= SinkReturnsAndJumpThreads(ctx.Compilation, ctx.Method);
 
-        //Simplification
+        // Simplification
         ctx.Method.TraverseDepthFirst(postVisit: block => {
             bool changed = true;
 
@@ -32,15 +32,15 @@ public class SimplifyCFG : IMethodPass
     {
         if (block.Last is not BranchInst { IsJump: true } br) return false;
 
-        //succ can't start with a phi/guard, nor loop on itself, and we must be its only predecessor
+        // succ can't start with a phi/guard, nor loop on itself, and we must be its only predecessor
         if (br.Then is not { HasPhisOrGuards: false, NumPreds: 1 } succ || succ == block) return false;
 
         succ.MergeInto(block, replaceBranch: true);
         return true;
     }
 
-    //goto x == 0 ? T : F  ->  goto x ? F : T
-    //goto x != 0 ? T : F  ->  goto x ? T : F
+    // goto x == 0 ? T : F  ->  goto x ? F : T
+    // goto x != 0 ? T : F  ->  goto x ? T : F
     private static bool InvertCond(BasicBlock block)
     {
         if (block.Last is not BranchInst { IsConditional: true } br) return false;
@@ -72,29 +72,29 @@ public class SimplifyCFG : IMethodPass
 
         var succT = GetUniqueSuccWithPhis(br.Then);
         var succF = GetUniqueSuccWithPhis(br.Else);
-        //If-Then must have at least one end block
+        // If-Then must have at least one end block
         if ((succT == null && br.Then != succF) || (succF == null && br.Else != succT)) return false;
-        //If-Then-Else must have the same end block
+        // If-Then-Else must have the same end block
         if (succT != null && succF != null && succT != succF) return false;
 
-        //Limit to a single select per branch to avoid pessimizing the code
+        // Limit to a single select per branch to avoid pessimizing the code
         var endBlock = succT ?? succF;
         if (endBlock == null || endBlock.Phis().Count() is not 1) return false;
 
-        //Check if we can execute both branches (they have no side-effects and it's cheap to do so)
+        // Check if we can execute both branches (they have no side-effects and it's cheap to do so)
         if (succT != null && !CanSpeculate(br.Then)) return false;
         if (succF != null && !CanSpeculate(br.Else)) return false;
 
-        //Merge branches to the end of `block`
+        // Merge branches to the end of `block`
         Speculate(br.Then, endBlock);
         Speculate(br.Else, endBlock);
         block.SetBranch(endBlock);
 
-        //We need to preserve phi args if branches are reachable from somewhere else
+        // We need to preserve phi args if branches are reachable from somewhere else
         bool keepT = br.Then.NumPreds > 0;
         bool keepF = br.Else.NumPreds > 0;
 
-        //Rewrite phis with selects
+        // Rewrite phis with selects
         foreach (var phi in endBlock.Phis()) {
             var select = CreateSelect(phi);
             select.InsertBefore(block.Last);
@@ -154,10 +154,10 @@ public class SimplifyCFG : IMethodPass
             var valF = phi.GetValue(succF == null ? block : br.Else!);
 
             if (br.Cond is CompareInst cond) {
-                //select x ? 0 : y  ->  !x & y
-                //select x ? 1 : y  ->   x | y
-                //select x ? y : 0  ->   x & y
-                //select x ? y : 1  ->  !x | y
+                // select x ? 0 : y  ->  !x & y
+                // select x ? 1 : y  ->   x | y
+                // select x ? y : 0  ->   x & y
+                // select x ? y : 1  ->  !x | y
                 var (x, y) = (valT, valF) switch {
                     (ConstInt c, _) => (c, valF),
                     (_, ConstInt c) => (c, valT),
@@ -179,10 +179,10 @@ public class SimplifyCFG : IMethodPass
         }
     }
 
-    //Redirect all blocks ending with a `ret x` to a unique exit point, also collapse simple jump threads.
+    // Redirect all blocks ending with a `ret x` to a unique exit point, also collapse simple jump threads.
     private static bool SinkReturnsAndJumpThreads(Compilation comp, MethodBody method)
     {
-        //There can't be multiple rets in methods with less than 3 blocks
+        // There can't be multiple rets in methods with less than 3 blocks
         if (method.ReturnType == PrimType.Void || method.NumBlocks < 3) return false;
 
         var exitBlocks = new List<BasicBlock>();
@@ -211,18 +211,18 @@ public class SimplifyCFG : IMethodPass
         return true;
     }
 
-    //Collapse simple jump threads. On return `block` may have been removed.
+    // Collapse simple jump threads. On return `block` may have been removed.
     //  BB_01: goto BB_02;
     //  BB_02: goto BB_03;
     //  ----
     //  BB_01: goto BB_03;
     private static bool SimpleJumpThread(BasicBlock block)
     {
-        //Not the entry block, first inst is a jump
+        // Not the entry block, first inst is a jump
         if (block is not { NumPreds: > 0, First: BranchInst { IsJump: true, Then: var succ } br }) return false;
 
-        //Only transform if we don't need to change phis too much
-        //Also avoid removing gotos for handler entry blocks because handlers they can't have guards.
+        // Only transform if we don't need to change phis too much
+        // Also avoid removing gotos for handler entry blocks because handlers they can't have guards.
         if (!succ.HasPhisOrGuards || (block.NumPreds == 1 && !block.Preds.First().IsUsedByPhis && !block.IsHandlerEntry)) {
             foreach (var pred in block.Preds) {
                 pred.RedirectSucc(block, succ);
@@ -234,13 +234,13 @@ public class SimplifyCFG : IMethodPass
         return false;
     }
 
-    //Convert a integer based switch into a lookup table (RVA)
+    // Convert a integer based switch into a lookup table (RVA)
     //  BB_Switch: switch x, [* => *SwitchSucc { goto End; }]
     //  BB_Merge: int r = phi [*SwitchSucc: y]
     //  ----
     //  BB_Merge: int r = load &s_RVA + (x < lim ? x : lim)
     //
-    //This may also generate a bitmask test if possible:
+    // This may also generate a bitmask test if possible:
     //  int result = (0b01010101 >> x) & 1;
     private static bool ConvertSwitchToLut(Compilation comp, BasicBlock block)
     {
@@ -249,7 +249,7 @@ public class SimplifyCFG : IMethodPass
         var finalBlock = default(BasicBlock);
         int numUniqueTargets = 0;
 
-        //Check that all targets have no other preds and a single jump to the same final block
+        // Check that all targets have no other preds and a single jump to the same final block
         foreach (var caseBlock in sw.GetUniqueTargets()) {
             var succBlock = default(BasicBlock);
 
@@ -265,7 +265,7 @@ public class SimplifyCFG : IMethodPass
             
             numUniqueTargets++;
         }
-        //Final block must have no preds other than switch targets, and phis must have all const args
+        // Final block must have no preds other than switch targets, and phis must have all const args
         if (finalBlock == null || finalBlock.NumPreds > numUniqueTargets) return false;
         if (!finalBlock.Phis().All(IsPhiWithConstArgs)) return false;
 
@@ -277,12 +277,12 @@ public class SimplifyCFG : IMethodPass
             var data = new byte[(sw.NumTargets + 1) * stride];
 
             for (int i = -1; i < sw.NumTargets; i++) {
-                //Encoding the default case value in the last slot saves a bounds check
+                // Encoding the default case value in the last slot saves a bounds check
                 int offset = (i < 0 ? sw.NumTargets : i) * stride;
                 var target = sw.GetTarget(i);
                 var value = phi.GetValue(target == finalBlock ? block : target);
 
-                //Write value in little-endian order
+                // Write value in little-endian order
                 long bits = value switch {
                     ConstInt c => c.Value,
                     ConstFloat c => BitConverter.DoubleToInt64Bits(c.Value)
@@ -317,10 +317,10 @@ public class SimplifyCFG : IMethodPass
             phi.ReplaceWith(result);
         }
 
-        //Lastly, replace the switch with a jump to the final block
+        // Lastly, replace the switch with a jump to the final block
         sw.ReplaceWith(new BranchInst(finalBlock), insertIfInst: true);
 
-        //Also remove unreachable blocks
+        // Also remove unreachable blocks
         foreach (var target in sw.GetUniqueTargets()) {
             if (target == finalBlock) continue;
             

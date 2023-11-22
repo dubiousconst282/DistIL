@@ -6,9 +6,9 @@ using DistIL.IR.Utils;
 
 partial class SimplifyInsts
 {
-    //Directize delegate invokes if target is known:
+    // Directize delegate invokes if target is known:
     //
-    //Func = Func`2[int, bool]
+    // Func = Func`2[int, bool]
     //  BB_Header:
     //    r2 = ldfld Data::LambdaCache1 -> Func
     //    r3 = cmp.ne r2, null -> bool
@@ -23,7 +23,7 @@ partial class SimplifyInsts
     //    r9 = phi [BB_Header: r2], [BB_CacheLoad: r7] -> Func
     //    ...
     //    r25 = callvirt Func::Invoke(this: r9, int: r24) -> bool
-    //->
+    // ->
     //  BB_Result:
     //    r5 = ldfld Data::Instance -> Data
     //    r25 = call Data::Lambda1(Data: r5, int: r24) -> bool
@@ -39,7 +39,7 @@ partial class SimplifyInsts
 
             if (allocInst == null || cacheLoad == null || !DevirtWithCtorArgs(call, allocInst)) return false;
 
-            //Last lambda to be inlined is responsible for cleanup
+            // Last lambda to be inlined is responsible for cleanup
             if (phi.NumUses == 0) {
                 DeleteCache(phi, allocInst, cacheLoad);
             }
@@ -64,7 +64,7 @@ partial class SimplifyInsts
                 return true;
             } else if (method.IsInstance) {
                 call.Method = method;
-                //Create a new load before call to assert dominance
+                // Create a new load before call to assert dominance
                 if (IRMatcher.StaticFieldLoad(instanceObj, out var field)) {
                     var fieldAddr = new FieldAddrInst(field);
                     var newLoad = new LoadInst(fieldAddr);
@@ -82,14 +82,14 @@ partial class SimplifyInsts
             var condBlock = cacheLoad.Block;
 
             if (!(
-                //First load block's must end with "goto cache == null ? BB_CacheLoad : BB_Result"
+                // First load block's must end with "goto cache == null ? BB_CacheLoad : BB_Result"
                 condBlock.Last is
                     BranchInst { Cond: CompareInst { Op: CompareOp.Ne, Left: var condCache, Right: ConstNull } } br &&
                     br.Then == phi.Block &&
                     br.Else == allocInst.Block &&
                     condCache == cacheLoad &&
-                //BB_CacheLoad must store to the cache field
-                allocInst.NumUses == 2 && //phi and next store
+                // BB_CacheLoad must store to the cache field
+                allocInst.NumUses == 2 && // phi and next store
                 IRMatcher.StaticFieldLoad(cacheLoad, out var cacheField) &&
                 allocInst.Next?.Next is StoreInst cacheStore && 
                 (cacheStore.Address as FieldAddrInst)?.Field == cacheField &&
@@ -97,7 +97,7 @@ partial class SimplifyInsts
                 declType.Definition.HasCustomAttrib(typeof(CompilerGeneratedAttribute))
             )) return false;
 
-            br.Cond = ConstInt.CreateI(0); //We can't change the CFG, leave this for DCE.
+            br.Cond = ConstInt.CreateI(0); // We can't change the CFG, leave this for DCE.
             phi.Remove();
             cacheStore.Remove();
             allocInst.Remove();

@@ -23,12 +23,12 @@ public class BasicBlock : TrackedValue
         get {
             int count = 0;
             for (var inst = First; inst is GuardInst; inst = inst.Next) {
-                //Guard has exactly one or two blocks: [handlerBlock, filterBlock?]
+                // Guard has exactly one or two blocks: [handlerBlock, filterBlock?]
                 count += inst.Operands.Length;
             }
             if (IsBranchWithSuccEdges(Last)) {
-                //Unconditional branches only have one operand, cond and switches have at least 2.
-                //See comment in SuccIterator for details.
+                // Unconditional branches only have one operand, cond and switches have at least 2.
+                // See comment in SuccIterator for details.
                 int numOpers = Last.Operands.Length;
                 count += numOpers - (numOpers >= 2 ? 1 : 0);
             }
@@ -88,10 +88,10 @@ public class BasicBlock : TrackedValue
     public void InsertAnteLast(Instruction newInst)
         => InsertRange(LastNonBranch, newInst, newInst);
 
-    //Inserts a range of instructions into this block after `pos` (null means before the first instruction).
+    // Inserts a range of instructions into this block after `pos` (null means before the first instruction).
     internal void InsertRange(Instruction? pos, Instruction rangeFirst, Instruction rangeLast, bool transfering = false)
     {
-        //Set parent block for range
+        // Set parent block for range
         for (var inst = rangeFirst; true; inst = inst.Next!) {
             Ensure.That(inst.Block == null || transfering);
             inst.Block = this;
@@ -156,7 +156,7 @@ public class BasicBlock : TrackedValue
     internal void Remove(Instruction inst)
     {
         Ensure.That(inst.Block == this);
-        inst.Block = null!; //prevent inst from being removed again
+        inst.Block = null!; // prevent inst from being removed again
 
         UnlinkRange(inst, inst);
     }
@@ -177,7 +177,7 @@ public class BasicBlock : TrackedValue
 
     public PhiInst InsertPhi(PhiInst phi)
     {
-        if (FirstNonHeader is { } pos) { //ensure insertion order is respected
+        if (FirstNonHeader is { } pos) { // ensure insertion order is respected
             InsertBefore(pos, phi);
         } else {
             InsertLast(phi);
@@ -214,7 +214,7 @@ public class BasicBlock : TrackedValue
         var intermBlock = Method.CreateBlock(insertAfter: succ.Prev).SetName("CritEdge");
         intermBlock.SetBranch(succ);
 
-        //Redirect branches/phis to the intermediate block
+        // Redirect branches/phis to the intermediate block
         RedirectSucc(succ, intermBlock);
         succ.RedirectPhis(this, intermBlock);
 
@@ -237,14 +237,14 @@ public class BasicBlock : TrackedValue
             }
         }
 
-        //Branch instructions cannot have duplicate block uses.
-        //This case should only be reachable from conditional branches and switches .
+        // Branch instructions cannot have duplicate block uses.
+        // This case should only be reachable from conditional branches and switches .
         if (hasOldSucc && hasNewSucc) {
             if (Last is BranchInst br) {
                 Debug.Assert(br.IsConditional);
                 SetBranch(newSucc);
             } else if (Last is SwitchInst sw) {
-                //Recreating the switch is kinda wasteful but this should be a relatively cold path.
+                // Recreating the switch is kinda wasteful but this should be a relatively cold path.
                 var targets = Enumerable.Range(0, sw.NumTargets).Select(sw.GetTarget).ToArray();
                 SetBranch(new SwitchInst(sw.TargetIndex, sw.DefaultTarget, targets));
             } else {
@@ -348,9 +348,9 @@ public class BasicBlock : TrackedValue
     private static bool IsBranchWithSuccEdges(Instruction? inst)
         => inst is BranchInst or SwitchInst or LeaveInst;
 
-    //Enumerating block users (ignoring phis) will lead directly to predecessors.
-    //GuardInst`s will not yield duplicates because handler blocks can only have one predecessor guard.
-    //SwitchInst has a special representation to avoid duplicated block use edges.
+    // Enumerating block users (ignoring phis) will lead directly to predecessors.
+    // GuardInst`s will not yield duplicates because handler blocks can only have one predecessor guard.
+    // SwitchInst has a special representation to avoid duplicated block use edges.
     public struct PredIterator : Iterator<BasicBlock>
     {
         ValueUserIterator _users;
@@ -372,7 +372,7 @@ public class BasicBlock : TrackedValue
 
         public override string ToString() => "[" + string.Join(", ", this.AsEnumerable()) + "]";
     }
-    //Enumerating guard and branch instruction operands will directly lead to successors.
+    // Enumerating guard and branch instruction operands will directly lead to successors.
     public struct SuccIterator : Iterator<BasicBlock>
     {
         Instruction? _currInst;
@@ -385,7 +385,7 @@ public class BasicBlock : TrackedValue
             _currInst = block.Last;
 
             if (IsBranchWithSuccEdges(_currInst)) {
-                //Unconditional branches only have one operand, cond and switches have at least 2.
+                // Unconditional branches only have one operand, cond and switches have at least 2.
                 //  Branch: [thenBlock]
                 //  CondBr: [cond, thenBlock, elseBlock]
                 //  Switch: [value, targetBlock0, targetBlock1, ...]  (targets are never duplicated)
@@ -395,7 +395,7 @@ public class BasicBlock : TrackedValue
                 _operIdx = opers.Length >= 2 && _currInst is not GuardInst ? 1 : 0;
             } else {
                 _currInst = block.First as GuardInst;
-                Ensure.That(block.Last is not GuardInst); //prevents an infinite loop in MoveNext()
+                Ensure.That(block.Last is not GuardInst); // prevents an infinite loop in MoveNext()
             }
         }
 
@@ -409,7 +409,7 @@ public class BasicBlock : TrackedValue
                     Current = (BasicBlock)opers[_operIdx++];
                     return true;
                 }
-                //If `_currInst` is the terminator (next == null), go back and start looking at guards
+                // If `_currInst` is the terminator (next == null), go back and start looking at guards
                 _currInst = (_currInst.Next ?? _currInst.Block.First) as GuardInst;
                 _operIdx = 0;
             }

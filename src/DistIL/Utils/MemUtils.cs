@@ -33,8 +33,8 @@ public unsafe class MemUtils
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WriteInvariant<T>(T?[] array, int index, T? value) where T : class
     {
-        //Based on https://github.com/dotnet/coreclr/pull/23571
-        //This is probably not very portable, but worth the risk.
+        // Based on https://github.com/dotnet/coreclr/pull/23571
+        // This is probably not very portable, but worth the risk.
         Debug.Assert(typeof(T[]) == array.GetType());
         Unsafe.As<ObjWrapper[]>(array)[index].Value = value;
     }

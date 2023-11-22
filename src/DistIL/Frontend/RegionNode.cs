@@ -13,18 +13,18 @@ internal class RegionNode
     public RegionNode FindEnclosing(int start, int end)
     {
         foreach (var child in Children) {
-            //use <= for end-offset comparisons because both end and EndOffset are exclusive
+            // use <= for end-offset comparisons because both end and EndOffset are exclusive
             if (start >= child.StartOffset && end <= child.EndOffset) {
                 return child.FindEnclosing(start, end);
             } else if (!(child.EndOffset <= start || end <= child.StartOffset)) {
-                //child overlaps with arguments
+                // child overlaps with arguments
                 if (!(start <= child.StartOffset && child.EndOffset <= end)) {
-                    //Invalid nesting, can't build a tree.
+                    // Invalid nesting, can't build a tree.
                     throw new InvalidOperationException("Invalid region nesting");
                 }
             }
         }
-        Debug.Assert(start >= StartOffset && end <= EndOffset); //should be the root node
+        Debug.Assert(start >= StartOffset && end <= EndOffset); // should be the root node
         return this;
     }
 
@@ -62,7 +62,7 @@ internal class RegionNode
         var newNode = new RegionNode() { Kind = kind, StartOffset = start, EndOffset = end };
         var enclosedChildren = enclosingNode.Children;
 
-        //Move existing children to `newNode` if it encloses them
+        // Move existing children to `newNode` if it encloses them
         for (int i = 0; i < enclosedChildren.Count; i++) {
             var child = enclosedChildren[i];
             if (child.StartOffset >= start && child.EndOffset <= end) {

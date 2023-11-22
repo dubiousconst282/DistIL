@@ -6,7 +6,7 @@ public class LoopBuilder
     public readonly IRBuilder PreHeader, Header, Latch, Exit;
     public readonly IRBuilder Body;
 
-    public readonly BasicBlock EntryBlock; //PreHeader may be forked and so we need to keep track of the actual entry block
+    public readonly BasicBlock EntryBlock; // PreHeader may be forked and so we need to keep track of the actual entry block
     readonly List<(PhiInst HeadPhi, Instruction Next)> _pendingAccums = new();
 
     public LoopBuilder(BasicBlock blockInsertPos, string blockNamePrefix = "l_")
@@ -26,20 +26,20 @@ public class LoopBuilder
         }
     }
 
-    //PreHeader:
+    // PreHeader:
     //  ...
     //  goto Header
-    //Header:
+    // Header:
     //  var accumN = phi [PreHeader -> accumN_Seed, Latch -> accumN_Next]
     //  bool hasNext = ${emitBound()}
     //  goto hasNext ? Body : Exit
-    //Body:
+    // Body:
     //  ${emitBody()}
     //  goto Latch
-    //Latch:
+    // Latch:
     //  var accumN_Next = update(accumN)
     //  goto Header
-    //Exit:
+    // Exit:
     //  ...
     public void Build(
         Func<IRBuilder, Value> emitCond,
@@ -61,7 +61,7 @@ public class LoopBuilder
         Latch.SetBranch(Header.Block);
     }
 
-    //Naive algorithm that inserts phis for each predecessor to form strict SSA (def dominates all uses).
+    // Naive algorithm that inserts phis for each predecessor to form strict SSA (def dominates all uses).
     private Value InsertAccumPhis(BasicBlock block, Instruction def, Instruction dom)
     {
         if (block == def.Block) {

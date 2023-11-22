@@ -17,7 +17,7 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
     public override bool IsValueType {
         get {
             var sys = Module.Resolver.SysTypes;
-            //System.Enum weirdly extends ValueType, but it's not actually one
+            // System.Enum weirdly extends ValueType, but it's not actually one
             return (BaseType == sys.ValueType && this != sys.Enum) || BaseType == sys.Enum;
         }
     }
@@ -62,7 +62,7 @@ public class TypeDef : TypeDefOrSpec
             }
             return _genericParams;
         }
-        //set => _genericParams = value;
+        // set => _genericParams = value;
     }
 
     public override string? Namespace { get; }
@@ -246,7 +246,7 @@ public class TypeDef : TypeDefOrSpec
 
     class SpecCache
     {
-        //TODO: experiment with WeakRefs/ConditionalWeakTable
+        // TODO: experiment with WeakRefs/ConditionalWeakTable
         readonly Dictionary<SpecKey, TypeSpec> _entries = new();
 
         public ref TypeSpec? Get(IReadOnlyList<TypeDesc> pars, GenericContext ctx, out ImmutableArray<TypeDesc> filledArgs)
@@ -259,7 +259,7 @@ public class TypeDef : TypeDefOrSpec
 
         struct SpecKey : IEquatable<SpecKey>
         {
-            readonly object _data; //Either<TypeDesc, TypeDesc[]>
+            readonly object _data; // Either<TypeDesc, TypeDesc[]>
 
             public SpecKey(IReadOnlyList<TypeDesc> pars, GenericContext ctx)
             {
@@ -267,7 +267,7 @@ public class TypeDef : TypeDefOrSpec
                     _data = pars[0].GetSpec(ctx);
                 } else {
                     var args = ctx.FillParams(pars);
-                    //take the internal array directly to avoid boxing
+                    // take the internal array directly to avoid boxing
                     _data = Unsafe.As<ImmutableArray<TypeDesc>, TypeDesc[]>(ref args);
                 }
             }
@@ -284,7 +284,7 @@ public class TypeDef : TypeDefOrSpec
                 if (_data is TypeDesc[] sig) {
                     return other._data is TypeDesc[] otherSig && sig.AsSpan().SequenceEqual(otherSig);
                 }
-                return _data.Equals(other._data); //TypeDesc
+                return _data.Equals(other._data); // TypeDesc
             }
 
             public override int GetHashCode()

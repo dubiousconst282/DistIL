@@ -4,7 +4,7 @@ using DistIL.IR.Utils;
 
 internal static class IRBuilderExt
 {
-    //Note: this assumes that lambda types are all System.Func<>
+    // Note: this assumes that lambda types are all System.Func<>
     public static Value CreateLambdaInvoke(this IRBuilder ib, Value lambda, params Value[] args)
     {
         return ib.CreateCallVirt("Invoke", args.Prepend(lambda).ToArray());

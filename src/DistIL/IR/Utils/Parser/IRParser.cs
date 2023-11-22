@@ -62,7 +62,7 @@ public partial class IRParser
         try {
             new IRParser(ctx).ParseUnit();
         } catch (FormatException) {
-            //Preserve context and let caller handle errors
+            // Preserve context and let caller handle errors
         }
         return ctx;
     }
@@ -102,8 +102,8 @@ public partial class IRParser
 
     public MethodBody ParseMethod()
     {
-        //Method    := MethodAcc Type  Type "::" Identifier "("  Seq{Param}  ")"  "{"  Block*  "}"
-        //MethodAcc := ("public" | "internal"| "protected" | "private")? "static"? "special"?
+        // Method    := MethodAcc Type  Type "::" Identifier "("  Seq{Param}  ")"  "{"  Block*  "}"
+        // MethodAcc := ("public" | "internal"| "protected" | "private")? "static"? "special"?
 
         var access = ParseMethodAcc();
 
@@ -116,7 +116,7 @@ public partial class IRParser
         if ((access & MethodAttribs.Static) == 0) {
             paramSig.Add(new ParamDef(parentType, "this"));
         }
-        //Param := "#" Id ":" Type
+        // Param := "#" Id ":" Type
         ParseDelimSeq(TokenType.LParen, TokenType.RParen, () => {
             string name = _lexer.ExpectId().TrimStart('#');
             _lexer.Expect(TokenType.Colon);
@@ -158,7 +158,7 @@ public partial class IRParser
         _method = method;
     }
 
-    //Block := Id  ":"  (Indent  Inst+  Dedent) | Inst
+    // Block := Id  ":"  (Indent  Inst+  Dedent) | Inst
     public BasicBlock ParseBlock()
     {
         var block = ParseLabel();
@@ -174,7 +174,7 @@ public partial class IRParser
         _lexer.Expect(TokenType.Colon);
 
         ParseIndentedBlock(() => {
-            //VarDecl  :=  Seq{Id} ":" Type "^"?
+            // VarDecl  :=  Seq{Id} ":" Type "^"?
             var tokens = new List<Token>();
             do {
                 tokens.Add(_lexer.Expect(TokenType.Identifier));
@@ -203,11 +203,11 @@ public partial class IRParser
         }
     }
 
-    //Type      := (GenPar | NamedType)  ("[]" | "*" | "&")*
-    //NamedType := ("+"  Identifier)*  ("["  Seq{Type}  "]")?
-    //GenPar    := "!" "!"? Number
-    //e.g. "NS.A`1+B`1[int[], int][]&"  ->  "NS.A.B<int[], int>[]&"
-    //This loosely follows I.10.7.2 "Type names and arity encoding"
+    // Type      := (GenPar | NamedType)  ("[]" | "*" | "&")*
+    // NamedType := ("+"  Identifier)*  ("["  Seq{Type}  "]")?
+    // GenPar    := "!" "!"? Number
+    // e.g. "NS.A`1+B`1[int[], int][]&"  ->  "NS.A.B<int[], int>[]&"
+    // This loosely follows I.10.7.2 "Type names and arity encoding"
     public TypeDesc ParseType()
     {
         int start = _lexer.NextPos();
@@ -224,7 +224,7 @@ public partial class IRParser
             string name = _lexer.ExpectId();
             type = ResolveType(name);
 
-            //Nested types
+            // Nested types
             while (_lexer.Match(TokenType.Plus)) {
                 string childName = _lexer.ExpectId();
                 type = (type as TypeDef)?.FindNestedType(childName);
@@ -235,7 +235,7 @@ public partial class IRParser
             _lexer.Error("Type could not be found", start);
             return PrimType.Void;
         }
-        //Generic arguments
+        // Generic arguments
         if (type.IsGeneric && _lexer.IsNext(TokenType.LBracket)) {
             var args = ImmutableArray.CreateBuilder<TypeDesc>();
             ParseDelimSeq(TokenType.LBracket, TokenType.RBracket, () => {
@@ -243,10 +243,10 @@ public partial class IRParser
             });
             type = ((TypeDef)type).GetSpec(args.DrainToImmutable());
         }
-        //Compound types (array, pointer, byref)
+        // Compound types (array, pointer, byref)
         while (true) {
             if (_lexer.Match(TokenType.LBracket)) {
-                //TODO: multi dim arrays
+                // TODO: multi dim arrays
                 _lexer.Expect(TokenType.RBracket);
                 type = type.CreateArray();
             }//
@@ -340,8 +340,8 @@ public partial class IRParser
         }
         throw _ctx.Fatal("Unknown instruction", pos);
 
-        //Some insts have dynamic result types and depend on the real value type,
-        //once they're found, we'll materialize them.
+        // Some insts have dynamic result types and depend on the real value type,
+        // once they're found, we'll materialize them.
         Instruction Schedule(PendingInst.Kind kind, int op)
         {
             var left = ParseValue();
@@ -358,7 +358,7 @@ public partial class IRParser
         }
     }
 
-    //Goto := Label | (Value "?" Label ":" Label)
+    // Goto := Label | (Value "?" Label ":" Label)
     private BranchInst ParseGoto()
     {
         if (LookaheadValue(TokenType.QuestionMark, out var cond)) {
@@ -370,8 +370,8 @@ public partial class IRParser
         return new BranchInst(ParseLabel());
     }
 
-    //Switch := Value  ","  "[" Indent?  SwitchCase+  Dedent? "]"
-    //SwitchCase = ("_" | Label) ":" Label
+    // Switch := Value  ","  "[" Indent?  SwitchCase+  Dedent? "]"
+    // SwitchCase = ("_" | Label) ":" Label
     private SwitchInst ParseSwitch()
     {
         var value = ParseValue();
@@ -409,15 +409,15 @@ public partial class IRParser
         return new SwitchInst(value, defaultCase, cases.ToArray());
     }
 
-    //Ret := Value?
+    // Ret := Value?
     private ReturnInst ParseRet()
     {
         var value = _lexer.IsNextOnNewLine() ? null : ParseValue();
         return new ReturnInst(value);
     }
 
-    //Phi := Seq{"["  Label  ":"  Value  "]"} ResultType
-    //e.g. "[Label -> Value], ..."
+    // Phi := Seq{"["  Label  ":"  Value  "]"} ResultType
+    // e.g. "[Label -> Value], ..."
     private PhiInst ParsePhi()
     {
         var args = new List<Value>();
@@ -438,21 +438,21 @@ public partial class IRParser
 
     private Instruction ParseCallInst(Opcode op)
     {
-        //Method := Type  "::"  Id  GenArgs  Call  ResultType
+        // Method := Type  "::"  Id  GenArgs  Call  ResultType
         int start = _lexer.Peek().Position.Start;
         var ownerType = ParseType();
         _lexer.Expect(TokenType.DoubleColon);
         var name = _lexer.ExpectId();
 
-        //GenArgs := ("<" Seq{Type} ">")?
+        // GenArgs := ("<" Seq{Type} ">")?
         var genPars = new List<TypeDesc>();
         if (_lexer.IsNext(TokenType.LAngle)) {
             ParseDelimSeq(TokenType.LAngle, TokenType.RAngle, () => {
                 genPars.Add(ParseType());
             });
         }
-        //Call    := "(" Seq{CallArg}? ")"
-        //CallArg := ("this" | Type)  ":"  Value
+        // Call    := "(" Seq{CallArg}? ")"
+        // CallArg := ("this" | Type)  ":"  Value
         var pars = new List<TypeSig>();
         var opers = new List<Value>();
         bool isInstance = false;
@@ -702,8 +702,8 @@ public partial class IRParser
         slot = value;
     }
 
-    //DelimSeq{T} := Start  Seq{T}?  End
-    //Seq{T}      := T  (","  T)*
+    // DelimSeq{T} := Start  Seq{T}?  End
+    // Seq{T}      := T  (","  T)*
     private void ParseDelimSeq(TokenType start, TokenType end, Action parseElem)
     {
         _lexer.Expect(start);

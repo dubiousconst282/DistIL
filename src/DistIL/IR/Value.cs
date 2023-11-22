@@ -17,9 +17,9 @@ public abstract class Value : IPrintable
 /// <summary> The base class for a value that tracks it uses. </summary>
 public abstract class TrackedValue : Value
 {
-    //In order to minimize GC stress and memory overhead, the value use-chain is implemented by a special
-    //doubly-linked list using pointers represented as UseRef, a tuple of (Instruction Parent, int OperIndex).
-    //The previous and next links are keept in `Instruction._useDefs`.
+    // In order to minimize GC stress and memory overhead, the value use-chain is implemented by a special
+    // doubly-linked list using pointers represented as UseRef, a tuple of (Instruction Parent, int OperIndex).
+    // The previous and next links are keept in `Instruction._useDefs`.
     UseRef _firstUse;
 
     /// <summary> The number of (operand) uses this value have. </summary>
@@ -74,7 +74,7 @@ public abstract class TrackedValue : Value
             node.OperandRef = dest;
             lastNode = node;
         }
-        //Append the uselist from the newValue at the end of this one, and transfer ownership
+        // Append the uselist from the newValue at the end of this one, and transfer ownership
         if (dest._firstUse.Exists) {
             Debug.Assert(!dest._firstUse.Prev.Exists);
 
@@ -89,7 +89,7 @@ public abstract class TrackedValue : Value
         for (var node = _firstUse; node.Exists; ) {
             var next = node.Next;
             node.OperandRef = dest;
-            node.Def = default; //erase node slot to prevent "ghost" links
+            node.Def = default; // erase node slot to prevent "ghost" links
             node = next;
         }
     }

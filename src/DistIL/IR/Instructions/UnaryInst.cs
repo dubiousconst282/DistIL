@@ -21,7 +21,7 @@ public class UnaryInst : Instruction
 }
 public enum UnaryOp
 {
-    Neg, //int/long/nint
-    Not, //int/long/nint
-    FNeg //float/double
+    Neg, // int/long/nint
+    Not, // int/long/nint
+    FNeg // float/double
 }

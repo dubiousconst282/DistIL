@@ -35,7 +35,7 @@ public class ConstTests
             Assert.Equal(max, ci.Value);
             Assert.Equal((ulong)max, ci.UValue);
         }
-        unchecked { //I swear this is the most annoying and useless feature of C#
+        unchecked {
             Check(PrimType.Byte, Byte.MinValue, Byte.MaxValue, Byte.MinValue);
             Check(PrimType.SByte, SByte.MinValue, SByte.MaxValue, (byte)SByte.MinValue);
             Check(PrimType.Int16, Int16.MinValue, Int16.MaxValue, (ushort)Int16.MinValue);

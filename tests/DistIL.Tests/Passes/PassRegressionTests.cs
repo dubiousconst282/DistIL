@@ -17,7 +17,7 @@ public class PassRegressionTests
         _testAsm = _modResolver.Resolve("TestAsm");
     }
 
-    //TODO: these should ideally be theories for each decl (+ fixture for parsed sources) to make debugging easier
+    // TODO: these should ideally be theories for each decl (+ fixture for parsed sources) to make debugging easier
 
     [Fact]
     public void Test_SimplifyInsts() => CheckEthil("SimplifyInsts.ethil", new SimplifyInsts(_modResolver));
@@ -64,5 +64,5 @@ public class PassRegressionTests
         }
     }
 
-    //TODO: Fix importer cases
+    // TODO: Fix importer cases
 }

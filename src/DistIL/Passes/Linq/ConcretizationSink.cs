@@ -30,7 +30,7 @@ internal abstract class ConcretizationSink : LinqSink
         => builder.CreateCallVirt("Add", container, currItem);
     protected virtual Value WrapContainer(IRBuilder builder, Value container) => container;
 
-    //Allocatess a new List/HashSet/Dictionary as dictated by `type`
+    // Allocatess a new List/HashSet/Dictionary as dictated by `type`
     protected Value AllocKnownCollection(IRBuilder builder, EstimatedSourceLen estimLen, TypeDesc type)
     {
         Debug.Assert(type.Name is "List`1" or "HashSet`1" or "Dictionary`2");
@@ -112,7 +112,7 @@ internal class DictionarySink : ConcretizationSink
     {
         var key = builder.CreateLambdaInvoke(SubjectCall.Args[1], currItem);
         var value = currItem;
-        //Signature: ToDictionary(source, keySelector, [elementSelector], [comparer])
+        // Signature: ToDictionary(source, keySelector, [elementSelector], [comparer])
         if (SubjectCall.Args is [_, _, { ResultType.Name: not "IEqualityComparer`1" }, ..]) {
             value = builder.CreateLambdaInvoke(SubjectCall.Args[2], currItem);
         }

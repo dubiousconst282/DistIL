@@ -33,13 +33,13 @@ public class CompareInst : Instruction
 
     private static void CheckOperandTypes(CompareOp op, StackType typeL, StackType typeR)
     {
-        //Sort types to reduce number of permutations
+        // Sort types to reduce number of permutations
         if (typeL > typeR) {
             (typeL, typeR) = (typeR, typeL);
         }
-        //ECMA allows comparisons between Int and NInt
+        // ECMA allows comparisons between Int and NInt
         Ensure.That(typeL == typeR || (typeL == StackType.Int && typeR == StackType.NInt));
-        //Float comparison ops don't exist in CIL, but we want to enforce typing
+        // Float comparison ops don't exist in CIL, but we want to enforce typing
         Ensure.That((typeL != StackType.Float && typeR != StackType.Float) || op.IsFloat());
     }
 
@@ -66,15 +66,15 @@ public class CompareInst : Instruction
 /// </summary>
 public enum CompareOp
 {
-    Eq, Ne,                 //int, ref, obj
-    //<     >       <=      >=
-    Slt,    Sgt,    Sle,    Sge,    //signed int
-    Ult,    Ugt,    Ule,    Uge,    //unsigned int
+    Eq, Ne,                 // int, ref, obj
+    // <     >       <=      >=
+    Slt,    Sgt,    Sle,    Sge,    // signed int
+    Ult,    Ugt,    Ule,    Uge,    // unsigned int
 
-    FOlt,   FOgt,   FOle,   FOge, FOeq,   FOne, //float ordered
-    FUlt,   FUgt,   FUle,   FUge, FUeq,   FUne, //float unordered
+    FOlt,   FOgt,   FOle,   FOge, FOeq,   FOne, // float ordered
+    FUlt,   FUgt,   FUle,   FUge, FUeq,   FUne, // float unordered
 
-    //TODO: Maybe remove FOne/FUeq since they don't exist in CIL and don't seem to be used very often.
+    // TODO: Maybe remove FOne/FUeq since they don't exist in CIL and don't seem to be used very often.
 }
 public static class CompareOps
 {

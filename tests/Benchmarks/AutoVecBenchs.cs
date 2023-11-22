@@ -15,7 +15,7 @@ public class AutoVecBenchs
 
             _elemCount = value;
             _sourceText = RandStr(value);
-            //Allocating arrays is surprisingly expansive, do it once here
+            // Allocating arrays is surprisingly expansive, do it once here
             _floatsIn = new float[value];
             _floatsOut = new float[value];
             _intsOut = new int[value];

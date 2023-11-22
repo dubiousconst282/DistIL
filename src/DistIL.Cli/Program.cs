@@ -64,9 +64,9 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
         .Apply<SimplifyCFG>()
         .Apply<SsaPromotion>()
         .Apply<ExpandLinq>()
-        .Apply<SimplifyInsts>(); //lambdas and devirtualization
+        .Apply<SimplifyInsts>(); // lambdas and devirtualization
 
-    manager.AddPasses(applyIndependently: true) //this is so that e.g. all callees are in SSA before inlining.
+    manager.AddPasses(applyIndependently: true) // this is so that e.g. all callees are in SSA before inlining.
         .Apply<InlineMethods>()
         .IfChanged(c => c.Apply<SimplifyInsts>());
 
@@ -227,7 +227,7 @@ class OptimizerOptions
     {
         pattern = pattern.TrimStart('!');
         
-        //Pattern :=  (ClassName  "::")? MethodName ( "(" Seq{TypeName} ")" )?  ("|" Pattern)?
+        // Pattern :=  (ClassName  "::")? MethodName ( "(" Seq{TypeName} ")" )?  ("|" Pattern)?
         pattern = string.Join("|", pattern.Split('|').Select(part => {
             var tokens = Regex.Match(part, @"^(?:(.+)::)?(.+?)(?:\((.+)\))?$");
 
@@ -246,7 +246,7 @@ class OptimizerOptions
             if (string.IsNullOrWhiteSpace(value)) {
                 return ".*";
             }
-            //Based on https://stackoverflow.com/a/30300521
+            // Based on https://stackoverflow.com/a/30300521
             if (normalizeSeq) {
                 value = Regex.Replace(value, @"\s*,\s*", ",");
             }
@@ -273,7 +273,7 @@ class DumpPass : IMethodPass
             var def = ctx.Method.Definition;
             string name = $"{def.DeclaringType.Name}::{def.Name}";
 
-            //Escape all Windows forbidden characters to prevent issues with NTFS partitions on Linux
+            // Escape all Windows forbidden characters to prevent issues with NTFS partitions on Linux
             name = Regex.Replace(name, @"[\x00-\x1F:*?\/\\""<>|]", "_");
 
             while (File.Exists($"{BaseDir}/{name}.txt")) {

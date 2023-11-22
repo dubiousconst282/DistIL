@@ -71,7 +71,7 @@ public class PassManager
         for (int i = 0; i < Pipeline.Count;) {
             int j = i + 1;
 
-            //Group all serial segments
+            // Group all serial segments
             if (!Pipeline[i]._applyIndependently) {
                 while (j < Pipeline.Count && !Pipeline[j]._applyIndependently) {
                     j++;
@@ -129,7 +129,7 @@ public class PassManager
         var worklist = new ArrayStack<(MethodDef Method, bool Entered)>();
         var visited = new RefSet<MethodDef>();
 
-        //Perform DFS on each defined method
+        // Perform DFS on each defined method
         foreach (var seedMethod in module.MethodDefs()) {
             Push(seedMethod);
 
@@ -139,7 +139,7 @@ public class PassManager
                 if (!entered) {
                     worklist.Top.Entered = true;
 
-                    //Enqueue called methods
+                    // Enqueue called methods
                     foreach (ref var inst in method.ILBody!.Instructions.AsSpan()) {
                         if (inst.Operand is MethodDefOrSpec { Definition: var callee }) {
                             Push(callee);

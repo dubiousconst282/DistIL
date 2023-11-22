@@ -15,11 +15,11 @@ public interface IMethodPass
 public readonly struct MethodPassResult
 {
     public MethodInvalidations Changes { get; init; }
-    //public IMethodAnalysis[] PreservedAnalyses { get; init; }
+    // public IMethodAnalysis[] PreservedAnalyses { get; init; }
 
     public void InvalidateAffectedAnalyses(MethodTransformContext ctx)
     {
-        //TODO: proper abstractions (IMethodAnalysis.AffectedByInvalidations?)
+        // TODO: proper abstractions (IMethodAnalysis.AffectedByInvalidations?)
         if (Changes.HasFlag(MethodInvalidations.ControlFlow)) {
             ctx.Invalidate<DominatorTree>();
             ctx.Invalidate<DominanceFrontier>();
@@ -45,8 +45,8 @@ public enum MethodInvalidations
 
     DataFlow            = 1 << 0,
     ControlFlow         = (1 << 1) | DataFlow,
-    Loops               = (1 << 2) | ControlFlow,  //ControlFlow changes may imply loop changes, this is mostly for granularity. 
-    ExceptionRegions    = (1 << 3) | ControlFlow,  //Likewise, ControlFlow changes may imply EHReg changes.
+    Loops               = (1 << 2) | ControlFlow,  // ControlFlow changes may imply loop changes, this is mostly for granularity. 
+    ExceptionRegions    = (1 << 3) | ControlFlow,  // Likewise, ControlFlow changes may imply EHReg changes.
 }
 
 public class MethodTransformContext : IMethodAnalysisManager

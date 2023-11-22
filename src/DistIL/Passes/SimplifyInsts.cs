@@ -36,7 +36,7 @@ public partial class SimplifyInsts : IMethodPass
                 inst.ReplaceWith(newValue, insertIfInst: true);
             }
         }
-        //TODO: track invalidations precisely
+        // TODO: track invalidations precisely
         return MethodInvalidations.DataFlow;
     }
 
@@ -77,11 +77,11 @@ public partial class SimplifyInsts : IMethodPass
 
     private Value? SimplifyBinary(BinaryInst inst)
     {
-        //(const op x)  ->  (x op const), if op is commutative
+        // (const op x)  ->  (x op const), if op is commutative
         if (inst is { Left: Const, Right: not Const, IsCommutative: true } b) {
             (b.Left, b.Right) = (b.Right, b.Left);
         }
-        //((x op const) op const)  ->  (x op (const op const)), if op is associative
+        // ((x op const) op const)  ->  (x op (const op const)), if op is associative
         if (inst is {
             Left: BinaryInst { Left: not Const, Right: Const } l_nc_c,
             Right: Const,
@@ -101,16 +101,16 @@ public partial class SimplifyInsts : IMethodPass
 
     private Value? SimplifyCompare(CompareInst inst)
     {
-        //(const op x)  ->  (x swapped_op const)
-        //(x op cmp)    ->  (cmp op x)
+        // (const op x)  ->  (x swapped_op const)
+        // (x op cmp)    ->  (cmp op x)
         if (inst is { Left: Const, Right: not Const } or { Left: not CompareInst, Right: CompareInst }) {
             inst.Op = inst.Op.GetSwapped();
             (inst.Left, inst.Right) = (inst.Right, inst.Left);
         }
-        //((x op y) == 0)  ->  (x !op y)
-        //((x op y) != 0)  ->  (x op y)
-        //((x op y) == 1)  ->  (x op y)
-        //((x op y) != 1)  ->  (x !op y)
+        // ((x op y) == 0)  ->  (x !op y)
+        // ((x op y) != 0)  ->  (x op y)
+        // ((x op y) == 1)  ->  (x op y)
+        // ((x op y) != 1)  ->  (x !op y)
         if (inst is {
             Op: Cmp.Eq or Cmp.Ne,
             Left: CompareInst { NumUses: 1 } lhs,
@@ -151,10 +151,10 @@ public partial class SimplifyInsts : IMethodPass
         return ConstFolding.FoldSelect(inst.Cond, inst.IfTrue, inst.IfFalse);
     }
 
-    //r5 = conv r18 -> long         (?)
-    //r6 = mul r5, stride -> long
-    //r7 = conv r6 -> nint          (?)
-    //r8 = add basePtr, r7 -> nint
+    // r5 = conv r18 -> long         (?)
+    // r6 = mul r5, stride -> long
+    // r7 = conv r6 -> nint          (?)
+    // r8 = add basePtr, r7 -> nint
     //
     // -> lea basePtr + r18 * stride
     private static Value? SimplifyAddress(BinaryInst? inst)
@@ -168,7 +168,7 @@ public partial class SimplifyInsts : IMethodPass
             if (disp is ConstInt { Value: > 0 and <= 8 and var cdisp }) {
                 return new PtrOffsetInst(basePtr, ConstInt.CreateI(1), (int)cdisp);
             }
-            //Byte addressing
+            // Byte addressing
             return new PtrOffsetInst(basePtr, disp, stride: 1);
         }
 

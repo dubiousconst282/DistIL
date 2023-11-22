@@ -15,7 +15,7 @@ public class BinaryInst : Instruction
     public override string InstName => Op.ToString().ToLower().Replace("ovf", ".ovf");
 
     public override bool MayThrow =>
-        //(x / 0) or (x / -1, when x == INT_MIN) may throw
+        // (x / 0) or (x / -1, when x == INT_MIN) may throw
         (Op is >= BinaryOp.SDiv and <= BinaryOp.URem && Right is not ConstInt { Value: not (0 or -1) }) ||
         ChecksOverflow;
 
@@ -33,12 +33,12 @@ public class BinaryInst : Instruction
 
     private static TypeDesc? GetResultType(BinaryOp op, TypeDesc a, TypeDesc b)
     {
-        //Return original type for bit ops that never overflow (useful for bools)
+        // Return original type for bit ops that never overflow (useful for bools)
         if (op is BinaryOp.And or BinaryOp.Or or BinaryOp.Xor && a == b) {
             return a;
         }
 
-        //ECMA335 III.1.5
+        // ECMA335 III.1.5
         var sa = a.StackType;
         var sb = b.StackType;
 
@@ -47,33 +47,33 @@ public class BinaryInst : Instruction
                 StackType.Int or StackType.Long
                     => sa.GetPrimType(a.Kind.IsSigned() || b.Kind.IsSigned()),
                 StackType.Float
-                    => a == PrimType.Double ? a : b, //pick double over float
+                    => a == PrimType.Double ? a : b, // pick double over float
                 StackType.NInt
-                    => a is PointerType ? a : PrimType.IntPtr, //pick pointer over nint
+                    => a is PointerType ? a : PrimType.IntPtr, // pick pointer over nint
                 StackType.ByRef when op == BinaryOp.Sub
                     => PrimType.IntPtr,
                 _ => null
             };
         }
 
-        //Bit shift ops allows any combination of (i4/i8/nint op i4/nint)
+        // Bit shift ops allows any combination of (i4/i8/nint op i4/nint)
         if (op is BinaryOp.Shl or BinaryOp.Shra or BinaryOp.Shrl &&
             sa is StackType.Int or StackType.Long or StackType.NInt &&
             sb is StackType.Int or StackType.NInt
         ) {
-            //Type must be normalized to stack type, otherwise we'd endup with non-sense:
+            // Type must be normalized to stack type, otherwise we'd endup with non-sense:
             //  byte r1 = shl #byte_x, 8
             return sa.GetPrimType(a.Kind.IsSigned());
         }
 
-        //Sort (a, b) to reduce number of cases, such that sa <= sb
-        //in respect to declaration order: [int long nint float nint byref]
+        // Sort (a, b) to reduce number of cases, such that sa <= sb
+        // in respect to declaration order: [int long nint float nint byref]
         if (sa > sb) { (sa, sb, a, b) = (sb, sa, b, a); }
 
         return (sa, sb, op) switch {
             (StackType.Int, StackType.NInt, _)
                 => b is PointerType ? b : sb.GetPrimType(b.Kind.IsSigned()),
-            //int/nint + & = &
+            // int/nint + & = &
             (StackType.Int or StackType.NInt, StackType.ByRef, BinaryOp.Add or BinaryOp.AddOvf)
                 => b,
             _ => null
@@ -84,7 +84,7 @@ public class BinaryInst : Instruction
 }
 public enum BinaryOp
 {
-    //Int
+    // Int
     Add, Sub, Mul,
     SDiv, UDiv,
     SRem, URem,

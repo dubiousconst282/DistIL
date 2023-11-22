@@ -142,7 +142,7 @@ public abstract class Instruction : TrackedValue
         var oldOpers = _operands;
         var oldUses = _useDefs;
 
-        //Remove uses from middle and postfix, relocate them later
+        // Remove uses from middle and postfix, relocate them later
         for (int i = startIndex; i < oldOpers.Length; i++) {
             oldOpers[i].RemoveUse(this, i);
         }
@@ -150,16 +150,16 @@ public abstract class Instruction : TrackedValue
         var newOpers = _operands = new Value[oldOpers.Length - count];
         var newUses = _useDefs = new UseDef[newOpers.Length];
 
-        //Copy prefix
+        // Copy prefix
         for (int i = 0; i < startIndex; i++) {
             newOpers[i] = oldOpers[i];
             newUses[i] = oldUses[i];
         }
-        //Shift postfix
+        // Shift postfix
         for (int i = startIndex + count; i < oldOpers.Length; i++) {
             int j = i - count;
             newOpers[j] = oldOpers[i];
-            newOpers[j].AddUse(this, j); //Relocate use
+            newOpers[j].AddUse(this, j); // Relocate use
         }
     }
 

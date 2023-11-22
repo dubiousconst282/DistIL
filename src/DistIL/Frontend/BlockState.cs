@@ -9,7 +9,7 @@ internal class BlockState
     private ModuleDef _mod => _body.Definition.Module;
 
     public readonly BasicBlock Block;
-    //A parent block that enters this one. Currently used to handle nested exception regions.
+    // A parent block that enters this one. Currently used to handle nested exception regions.
     public BasicBlock EntryBlock;
 
     readonly ArrayStack<Value> _stack;
@@ -66,7 +66,7 @@ internal class BlockState
         succ._preds.Add(this);
         return succ.EntryBlock;
     }
-    //Adds the last instruction in the block (a branch).
+    // Adds the last instruction in the block (a branch).
     private void TerminateBlock(Instruction branch, bool clearStack = false)
     {
         Emit(branch);
@@ -80,7 +80,7 @@ internal class BlockState
     {
         if (_preds.Count == 0) return;
 
-        //Phis are not necessary if there's only one pred
+        // Phis are not necessary if there's only one pred
         if (_preds.Count == 1) {
             foreach (var value in _preds[0]._stack) {
                 _stack.Push(value);
@@ -89,7 +89,7 @@ internal class BlockState
         }
         int maxDepth = _preds[0]._stack.Count;
 
-        //We don't make any guarantees for invalid IL, this is just for good measure.
+        // We don't make any guarantees for invalid IL, this is just for good measure.
         Debug.Assert(_preds.All(b => b._stack.Count == maxDepth));
 
         if (maxDepth == 0) return;
@@ -111,7 +111,7 @@ internal class BlockState
                 }
                 allSameArg &= argIdx < 2 || args[argIdx - 2].Value.Equals(value);
             }
-            type ??= PrimType.Object; //all args were ConstNull`s
+            type ??= PrimType.Object; // all args were ConstNull`s
 
             var result = allSameArg
                 ? args[0].Value
@@ -125,7 +125,7 @@ internal class BlockState
 
     private TypeDesc? GetMergedStackType(TypeDesc? currType, TypeDesc newType)
     {
-        //III.1.8.1.3
+        // III.1.8.1.3
         if (currType == null) {
             return newType;
         }
@@ -482,7 +482,7 @@ internal class BlockState
                 default: throw new NotImplementedException("Opcode " + opcode);
             }
             #pragma warning restore format
-            //Update prefix
+            // Update prefix
             if (prefix != InstFlags.None) {
                 _prefixFlags |= prefix;
             } else {
@@ -490,7 +490,7 @@ internal class BlockState
                 _callConstraint = null;
             }
         }
-        //Fallthrough the next block
+        // Fallthrough the next block
         if (!code[^1].OpCode.IsTerminator()) {
             var succ = AddSucc(code[^1].GetEndOffset());
             TerminateBlock(new BranchInst(succ));
@@ -518,7 +518,7 @@ internal class BlockState
         var (op, index) = ILImporter.GetVarInstOp(inst.OpCode, inst.Operand);
         var (slot, flags, isBlockLocal) = _importer.GetVarSlot(op, index);
 
-        //Arguments that are only ever loaded don't need variables
+        // Arguments that are only ever loaded don't need variables
         if (!isBlockLocal && slot is Argument) {
             Debug.Assert((flags | op) == (VarFlags.IsArg | VarFlags.Loaded));
             Push(slot);
@@ -772,9 +772,9 @@ internal class BlockState
         var currRegion = _importer._regionTree!.FindEnclosing(_startOffset).Parent!;
         var parentRegion = _importer._regionTree!.FindEnclosing(targetOffset);
 
-        //Create a chain of blocks leaving all nested regions until target (in reverse order)
+        // Create a chain of blocks leaving all nested regions until target (in reverse order)
         while (currRegion != parentRegion) {
-            //TODO: avoid creating new blocks (can't use preds as they may be in another region)
+            // TODO: avoid creating new blocks (can't use preds as they may be in another region)
             var nextBlock = _body.CreateBlock(insertAfter: Block);
             nextBlock.InsertLast(new LeaveInst(chainBlock!));
 
@@ -812,7 +812,7 @@ internal enum InstFlags
     Constrained     = 1 << 3,
     Readonly        = 1 << 4,
 
-    //Bits [16..23] are reserved for `no.` prefix
+    // Bits [16..23] are reserved for `no.` prefix
     NoPrefixShift_  = 16,
     NoTypeCheck     = 1 << 16,
     NoRangeCheck    = 1 << 17,
@@ -822,7 +822,7 @@ internal enum InstFlags
 internal enum VarFlags
 {
     None        = 0,
-    //Should not be combined
+    // Should not be combined
     IsArg       = 1 << 0,
     IsLocal     = 1 << 1,
 

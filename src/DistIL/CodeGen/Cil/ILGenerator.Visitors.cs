@@ -25,7 +25,7 @@ partial class ILGenerator
 
         var (code, inv) = ILTables.GetCompareCode(inst.Op);
         _asm.Emit(code);
-        if (inv) { //!cond
+        if (inv) { // !cond
             _asm.Emit(ILCode.Ldc_I4_0);
             _asm.Emit(ILCode.Ceq);
         }
@@ -150,7 +150,7 @@ partial class ILGenerator
     }
     public void Visit(PtrOffsetInst inst)
     {
-        //Emit (add addr, (mul (conv.i index), sizeof elemType)
+        // Emit (add addr, (mul (conv.i index), sizeof elemType)
         Push(inst.BasePtr);
         Push(inst.Index);
 
@@ -249,9 +249,9 @@ partial class ILGenerator
     }
     public void Visit(SelectInst inst)
     {
-        //TODO: Consider merging adjacent selects into a single branch
+        // TODO: Consider merging adjacent selects into a single branch
 
-        //This assumes that neither values have side effects. This is handled by FixupIR(). 
+        // This assumes that neither values have side effects. This is handled by FixupIR(). 
         var labelEnd = _asm.DefineLabel();
         var labelFalse = _asm.DefineLabel();
 
@@ -271,7 +271,7 @@ partial class ILGenerator
             EmitFallthrough(ILCode.Br, inst.Then);
             return;
         }
-        //Negate condition if we can fallthrough the true branch
+        // Negate condition if we can fallthrough the true branch
         bool negate = _nextBlock == inst.Then;
         var (thenBlock, elseBlock) = negate ? (inst.Else, inst.Then) : (inst.Then, inst.Else);
         var brCode = GetBranchCodeAndPushCond(inst.Cond, negate);
@@ -280,16 +280,16 @@ partial class ILGenerator
 
     private ILCode GetBranchCodeAndPushCond(Value cond, bool negate)
     {
-        //`br cmp.op(x, y), @then;`  ->  `br.op x, y, @then;`
+        // `br cmp.op(x, y), @then;`  ->  `br.op x, y, @then;`
         if (cond is CompareInst cmp && _forest.IsLeaf(cmp)) {
             var op = negate ? cmp.Op.GetNegated() : cmp.Op;
 
-            //`x eq|ne [0|null]`  ->  `brfalse/brtrue`
+            // `x eq|ne [0|null]`  ->  `brfalse/brtrue`
             if (op is CompareOp.Eq or CompareOp.Ne && cmp.Right is ConstInt { Value: 0 } or ConstNull) {
                 Push(cmp.Left);
                 return (op == CompareOp.Eq) ? ILCode.Brfalse : ILCode.Brtrue;
             }
-            //Use macro for branch with compare
+            // Use macro for branch with compare
             if (ILTables.GetBranchCode(op) is var code && code != ILCode.Nop) {
                 Push(cmp.Left);
                 Push(cmp.Right);
@@ -330,8 +330,8 @@ partial class ILGenerator
 
     public void Visit(GuardInst inst)
     {
-        //Guards are purely metadata and don't do anything.
-        //See ILGenerator.Generate() for how they're actually emitted.
+        // Guards are purely metadata and don't do anything.
+        // See ILGenerator.Generate() for how they're actually emitted.
     }
     public void Visit(LeaveInst inst)
     {
@@ -349,7 +349,7 @@ partial class ILGenerator
 
     public void Visit(PhiInst inst)
     {
-        //Copying of phi arguments is done before the block terminator is emitted.
+        // Copying of phi arguments is done before the block terminator is emitted.
         throw new UnreachableException();
     }
 }

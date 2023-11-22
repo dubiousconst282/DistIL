@@ -43,18 +43,18 @@ public class ExpandLinq : IMethodPass
 
     private static bool IsProfitableToExpand(LinqSourceNode source, LinqSink sink)
     {
-        //Unfiltered Count()/Any() is not profitable because we always scan over
-        //the entire source, and LINQ specializes over collections and such. 
+        // Unfiltered Count()/Any() is not profitable because we always scan over
+        // the entire source, and LINQ specializes over collections and such. 
         if (sink.SubjectCall is { NumArgs: 1, Method.Name: "Count" or "Any" }) {
             return false;
         }
-        //Expanding enumerator sources may not be profitable because 
-        //Linq can special-case source types and defer to e.g. Array.Copy().
-        //Similarly, expanding an enumerator source to a loop sink is an expansive no-op.
+        // Expanding enumerator sources may not be profitable because 
+        // Linq can special-case source types and defer to e.g. Array.Copy().
+        // Similarly, expanding an enumerator source to a loop sink is an expansive no-op.
         if (source is EnumeratorSource && source.Drain == sink) {
             return sink is not (ConcretizationSink or LoopSink);
         }
-        //Range().ToArray() and ToList() are already special-cased by LINQ, and vectorized in .NET 8.
+        // Range().ToArray() and ToList() are already special-cased by LINQ, and vectorized in .NET 8.
         // - https://github.com/dubiousconst282/DistIL/issues/25
         // - https://github.com/dotnet/runtime/pull/87992
         if (source is IntRangeSource && source.Drain == sink) {
@@ -91,7 +91,7 @@ public class ExpandLinq : IMethodPass
         return null;
     }
 
-    //UseRefs allows for overlapping queries to be expanded with no specific order.
+    // UseRefs allows for overlapping queries to be expanded with no specific order.
     private LinqSourceNode CreateStage(UseRef sourceRef, LinqStageNode drain)
     {
         var source = sourceRef.Operand;

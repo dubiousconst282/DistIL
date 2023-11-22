@@ -28,7 +28,7 @@ public class ParseError
     {
         const int kMaxLen = 60;
         int tokenLen = end - start;
-        int wstart = start, wend = end; //context window pos
+        int wstart = start, wend = end; // context window pos
 
         while (wstart > 0 && (start - wstart) < kMaxLen) {
             if (str[wstart - 1] == '\n') break;

@@ -9,9 +9,9 @@ public class RefSet<T> where T : class
 {
     T?[] _slots;
     int _count;
-    //Used to invalidate the enumerator when the set is changed.
-    //Add()/Remove() will set it to true, and GetEnumerator() to false.
-    //This approach could fail if GetEnumerator() is called on multiple threads, but we don't care about that.
+    // Used to invalidate the enumerator when the set is changed.
+    // Add()/Remove() will set it to true, and GetEnumerator() to false.
+    // This approach could fail if GetEnumerator() is called on multiple threads, but we don't care about that.
     bool _changed;
 
     public int Count => _count;
@@ -22,7 +22,7 @@ public class RefSet<T> where T : class
     }
     public RefSet(int initialCapacity)
     {
-        //The initial capacity cannot be less than the load factor
+        // The initial capacity cannot be less than the load factor
         _slots = new T[Math.Max(4, BitOperations.RoundUpToPowerOf2((uint)initialCapacity))];
     }
 
@@ -39,8 +39,8 @@ public class RefSet<T> where T : class
             if (slot == null) {
                 MemUtils.WriteInvariant(slots, index, value);
                 _count++;
-                //Expand when load factor reaches 3/4
-                //Casting to uint avoids extra sign calcs in the resulting asm.
+                // Expand when load factor reaches 3/4
+                // Casting to uint avoids extra sign calcs in the resulting asm.
                 if ((uint)_count >= (uint)slots.Length * 3 / 4) {
                     Expand();
                 }
@@ -90,7 +90,7 @@ public class RefSet<T> where T : class
 
     private void RemoveEntryAndShiftCluster(int i)
     {
-        //https://en.wikipedia.org/wiki/Open_addressing
+        // https://en.wikipedia.org/wiki/Open_addressing
         var slots = _slots;
         int j = i;
         while (true) {
@@ -101,7 +101,7 @@ public class RefSet<T> where T : class
                 if (slots[j] == null) return;
 
                 int k = Hash(slots[j]!) & (slots.Length - 1);
-                //determine if k lies cyclically outside (i,j]
+                // determine if k lies cyclically outside (i,j]
                 // |    i.k.j |
                 // |....j i.k.| or  |.k..j i...|
                 if (i <= j ? (i >= k || k > j) : (i >= k && k > j)) break;
@@ -131,7 +131,7 @@ public class RefSet<T> where T : class
                     MemUtils.WriteInvariant(newSlots, index, value);
                     break;
                 }
-                Debug.Assert(newSlots[index] != value); //slots shouldn't have dupes
+                Debug.Assert(newSlots[index] != value); // slots shouldn't have dupes
             }
         }
     }

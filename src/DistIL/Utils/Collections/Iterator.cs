@@ -15,9 +15,9 @@ public static class Iterators
     public static Itr GetEnumerator<Itr>(this Itr itr) where Itr : Iterator => itr;
     public static EnumerableAdapter<T> AsEnumerable<T>(this Iterator<T> itr) => new(itr);
 
-    //We don't use a generic param for `Iterator<T>` because the language can't infer generic arguments for uses.
-    //Maybe we should apply AggressiveInlining in all funcs so the JIT can devirt and avoid boxing,
-    //but I don't feel like this matters much just yet.
+    // We don't use a generic param for `Iterator<T>` because the language can't infer generic arguments for uses.
+    // Maybe we should apply AggressiveInlining in all funcs so the JIT can devirt and avoid boxing,
+    // but I don't feel like this matters much just yet.
 
     public static bool Any<T>(this Iterator<T> itr, Func<T, bool> predicate)
     {

@@ -29,7 +29,7 @@ public class IRBuilder
             Ensure.That(block.Last.IsBranch, "Malformed block");
             SetInitialPosBefore(block.Last);
         } else {
-            //Block is either empty, or dir == After
+            // Block is either empty, or dir == After
             _initialDir = InsertionDir.After;
         }
     }

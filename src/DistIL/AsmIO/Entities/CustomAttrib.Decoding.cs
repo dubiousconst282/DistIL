@@ -13,7 +13,7 @@ partial class CustomAttrib
         fixed (byte* dataPtr = _encodedBlob) {
             var reader = new BlobReader(dataPtr, _encodedBlob!.Length);
 
-            //Prolog
+            // Prolog
             if (reader.ReadUInt16() != 0x0001) {
                 throw new BadImageFormatException();
             }
@@ -123,7 +123,7 @@ partial class CustomAttrib
             TypeKind.Single => reader.ReadSingle(),
             TypeKind.Double => reader.ReadDouble(),
             TypeKind.String => reader.ReadSerializedString(),
-            //Boxed value
+            // Boxed value
             _ when type == PrimType.Object => DecodeElement(ref reader, DecodeElementType(ref reader)),
             _ => throw new BadImageFormatException()
         };

@@ -30,21 +30,21 @@ internal abstract class LinqStageNode
     protected LinqStageNode(CallInst call, LinqStageNode drain)
         => (SubjectCall, Drain) = (call, drain);
 
-    //Queries are expanded from front-to-back, for example:
-    //  Source()                //Front
-    //    .Select(MapFn)        //Drain #1
-    //    .Where(FilterFn)      //Drain #2
-    //    .ToArray();           //Sink
+    // Queries are expanded from front-to-back, for example:
+    //  Source()                // Front
+    //    .Select(MapFn)        // Drain #1
+    //    .Where(FilterFn)      // Drain #2
+    //    .ToArray();           // Sink
     //
-    //Will be rewritten in this way:
+    // Will be rewritten in this way:
     //  Head();
-    //  foreach (var item in Source()) { //Loop created by Source(), item propagated down through the chain
+    //  foreach (var item in Source()) { // Loop created by Source(), item propagated down through the chain
     //    var item2 = MapFn(item);
     //    if (!FilterFn(item2)) goto SkipBlock;
     //    Body(item2);
-    //SkipBlock:
+    // SkipBlock:
     //  }
-    //Exit:
+    // Exit:
     //  Tail();
     public virtual void EmitBody(IRBuilder builder, Value currItem, BodyLoopData loopData)
         => Drain.EmitBody(builder, currItem, loopData);
@@ -103,7 +103,7 @@ internal abstract class LinqSourceNode : LinqStageNode
         offset = null;
 
         if (firstStage is SkipStage { SubjectCall.Args: [_, var skipCount] }) {
-            //It's important to clamp skipCount both ways to avoid creating GC tracking holes.
+            // It's important to clamp skipCount both ways to avoid creating GC tracking holes.
             //  offset = clamp(skipCount, 0, (int)count)
             //  startPtr += offset
             //  count -= offset
@@ -114,7 +114,7 @@ internal abstract class LinqSourceNode : LinqStageNode
             firstStage = firstStage.Drain;
         }
         if (firstStage is TakeStage { SubjectCall.Args: [_, var takeCount] }) {
-            //Take() is easier, we can exploit twos-complement by using an unsigned min() to clamp between 0..count.
+            // Take() is easier, we can exploit twos-complement by using an unsigned min() to clamp between 0..count.
             //  count = min(count, (uint)takeCount)
             length = builder.CreateMin(
                 builder.CreateConvert(length, PrimType.Int32),

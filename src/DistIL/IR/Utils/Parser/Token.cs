@@ -20,7 +20,7 @@ internal enum TokenType
 {
     EOF,
     Identifier,
-    Literal,               //ConstInt|ConstFloat|ConstString
+    Literal,               // ConstInt|ConstFloat|ConstString
 
     Indent,
     Dedent,

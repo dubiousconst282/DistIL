@@ -115,7 +115,7 @@ public class IRPrinter
     }
     public static void ExportPlain(MethodBody method, TextWriter tw)
     {
-        var pc = tw == Console.Out //TODO: better api for this
+        var pc = tw == Console.Out // TODO: better api for this
             ? new VTAnsiPrintContext(tw, method.GetSymbolTable()) 
             : new PrintContext(tw, method.GetSymbolTable());
 
@@ -141,7 +141,7 @@ public class IRPrinter
         foreach (var block in method) {
             pc.Print($"{block}:");
             if (block.NumPreds > 0) {
-                pc.Print($" //preds: {string.Join(" ", block.Preds.AsEnumerable())}");
+                pc.Print($" // preds: {string.Join(" ", block.Preds.AsEnumerable())}");
             }
             pc.Push();
 
@@ -221,8 +221,8 @@ public class IRPrinter
                 _ => m.Value
             });
 
-            //Graphviz doesn't render spaces between font tags correctly,
-            //this workaround seem to work most of the time.
+            // Graphviz doesn't render spaces between font tags correctly,
+            // this workaround seem to work most of the time.
             int untrimmedLen = str.Length;
             str = str.TrimStart(' ');
 
@@ -241,7 +241,7 @@ public class IRPrinter
         }
 
         static readonly Dictionary<PrintToner, string> _colors = new() {
-            //VS Dark palette
+            // VS Dark palette
             { PrintToner.Keyword,    "#569cd6" },
             { PrintToner.Comment,    "#6a9955" },
             { PrintToner.VarName,    "#9cdcfe" },
@@ -269,20 +269,20 @@ public class IRPrinter
             }
             Output.Write(str);
 
-            if (color != null) Output.Write(Esc + "0m"); //reset
+            if (color != null) Output.Write(Esc + "0m"); // reset
         }
 
         static readonly Dictionary<PrintToner, string> _colors = new() {
-            { PrintToner.Keyword,    Esc + "94m" }, //Bright Blue
-            { PrintToner.Comment,    Esc + "32m" }, //Dark Green
-            { PrintToner.VarName,    Esc + "97m" }, //White
-            { PrintToner.InstName,   Esc + "95m" }, //Bright Magenta
-            { PrintToner.ClassName,  Esc + "36m" }, //Cyan
-            { PrintToner.StructName, Esc + "96m" }, //Bright Cyan
-            { PrintToner.MemberName, Esc + "37m" }, //Light Gray
-            { PrintToner.MethodName, Esc + "93m" }, //Yellow
-            { PrintToner.String,     Esc + "92m" }, //Green
-            { PrintToner.Number,     Esc + "92m" }, //Green
+            { PrintToner.Keyword,    Esc + "94m" }, // Bright Blue
+            { PrintToner.Comment,    Esc + "32m" }, // Dark Green
+            { PrintToner.VarName,    Esc + "97m" }, // White
+            { PrintToner.InstName,   Esc + "95m" }, // Bright Magenta
+            { PrintToner.ClassName,  Esc + "36m" }, // Cyan
+            { PrintToner.StructName, Esc + "96m" }, // Bright Cyan
+            { PrintToner.MemberName, Esc + "37m" }, // Light Gray
+            { PrintToner.MethodName, Esc + "93m" }, // Yellow
+            { PrintToner.String,     Esc + "92m" }, // Green
+            { PrintToner.Number,     Esc + "92m" }, // Green
         };
     }
 

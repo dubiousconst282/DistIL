@@ -29,7 +29,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     public virtual IReadOnlyList<MethodDesc> Methods { get; } = s_EmptyMethodList;
     public virtual IReadOnlyList<FieldDesc> Fields { get; } = s_EmptyFieldList;
 
-    //Cached compound types
+    // Cached compound types
     private ArrayType? _arrayType;
     private PointerType? _ptrType;
     private ByrefType? _byrefType;
@@ -80,7 +80,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
         return null;
     }
 
-    //TODO: consistency with FindMethod(), add `searchBaseAndItfs` parameter
+    // TODO: consistency with FindMethod(), add `searchBaseAndItfs` parameter
     public virtual FieldDesc? FindField(string name, [DoesNotReturnIf(true)] bool throwIfNotFound = true)
     {
         foreach (var field in Fields) {
@@ -111,8 +111,8 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
             var resolver = itf.Module.Resolver;
             type = prim.GetDefinition(resolver);
         }
-        //Arrays actually implement lots of interfaces at runtime
-        //I.8.7.1 only mentions IList, but there are many others.
+        // Arrays actually implement lots of interfaces at runtime
+        // I.8.7.1 only mentions IList, but there are many others.
         else if (type is ArrayType arr) {
             return arr.Implements(itf);
         }
@@ -126,7 +126,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
         static bool CheckCovariant(TypeDesc impl, TypeDefOrSpec itf)
         {
             var itfDef = itf.Definition;
-            //Check for the generic def, TypeDefs instances are unique.
+            // Check for the generic def, TypeDefs instances are unique.
             if (ReferenceEquals(impl, itfDef)) {
                 return true;
             }
@@ -169,7 +169,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
                     (assigneeType.IsInterface && Implements(this, (TypeDefOrSpec)assigneeType, isForAssignmentCheck: true))
                 : Inherits(assigneeType);
         }
-        return t1 != StackType.Struct; //structs of different types can't be assigned to each other
+        return t1 != StackType.Struct; // structs of different types can't be assigned to each other
     }
 
     /// <summary> Checks whether this type can be assigned to a variable of the given type, assuming they are values on the evaluation stack. </summary>
@@ -192,7 +192,7 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     }
     private static bool AreImplicitlyCompatible(StackType t1, StackType t2)
     {
-        //Allow implicit conversions: nint <-> byref, nint <-> int
+        // Allow implicit conversions: nint <-> byref, nint <-> int
         return (t1 is StackType.NInt && t2 is StackType.ByRef or StackType.Int) ||
                (t2 is StackType.NInt && t1 is StackType.ByRef or StackType.Int);
     }
@@ -200,21 +200,21 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     /// <summary> Returns the common base type of <paramref name="a"/> and <paramref name="b"/>, assuming they're both object types (not structs). </summary>
     public static TypeDesc GetCommonAncestor(TypeDesc a, TypeDesc b)
     {
-        Ensure.That(!a.IsValueType && !b.IsValueType); //Not impl, will return ValueType as lowest CA
+        Ensure.That(!a.IsValueType && !b.IsValueType); // Not impl, will return ValueType as lowest CA
 
         int depthA = GetDepth(a);
         int depthB = GetDepth(b);
 
-        //Sort `a, b` such that `a` is lower on the hierarchy
+        // Sort `a, b` such that `a` is lower on the hierarchy
         if (depthA > depthB) {
             (a, b) = (b, a);
             (depthA, depthB) = (depthB, depthA);
         }
-        //Walk down hierarchy of `b` to the same height as `a`
+        // Walk down hierarchy of `b` to the same height as `a`
         for (int i = depthB; i > depthA; i--) {
             b = b.BaseType!;
         }
-        //Check for intersecting ancestors
+        // Check for intersecting ancestors
         for (int i = depthA; i >= 0; i--) {
             if (a == b) {
                 return a;

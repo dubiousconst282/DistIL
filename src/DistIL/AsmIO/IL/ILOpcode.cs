@@ -43,7 +43,7 @@ public partial class ILCodes
     private static int GetFlag(ILCode code, int shift, int mask)
     {
         int index = GetTableIndex((int)code);
-        if (index < 0) index = 0; //use nop's flags for unknown opcodes
+        if (index < 0) index = 0; // use nop's flags for unknown opcodes
         return (_flags[index] >> shift) & mask;
     }
 

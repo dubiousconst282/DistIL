@@ -21,9 +21,9 @@ public partial class ILGenerator : InstVisitor
         FixupIR();
 
         var interfs = new InterferenceGraph(method, new LivenessAnalysis(method), _forest);
-        _regAlloc = new RegisterAllocator(method, interfs); //may split critical edges but ForestAnalysis is okay with that.
+        _regAlloc = new RegisterAllocator(method, interfs); // may split critical edges but ForestAnalysis is okay with that.
 
-        //DistIL.IR.Utils.IRPrinter.ExportDot(method, "code.dot", new[] { _regAlloc });
+        // DistIL.IR.Utils.IRPrinter.ExportDot(method, "code.dot", new[] { _regAlloc });
     }
 
     public static ILMethodBody GenerateCode(MethodBody method)
@@ -67,18 +67,18 @@ public partial class ILGenerator : InstVisitor
             _currBlock = blocks[i];
             _nextBlock = i + 1 < blocks.Length ? blocks[i + 1] : null;
 
-            //Note that ILSpy generates code with two loops for regions inside a loop. (BB_Head: guard; leave BB_Head;)
-            //Roslyn emits a nop before the head for such cases, but it does not seem to affect behavior.
-            //CoreCLR throws InvalidProgram if there's any instruction after leave/endfinally (incl. nop).
+            // Note that ILSpy generates code with two loops for regions inside a loop. (BB_Head: guard; leave BB_Head;)
+            // Roslyn emits a nop before the head for such cases, but it does not seem to affect behavior.
+            // CoreCLR throws InvalidProgram if there's any instruction after leave/endfinally (incl. nop).
             var guard = _currBlock.Users().FirstOrDefault(u => u is GuardInst { Kind: GuardKind.Catch });
             _asm.StartBlock(_currBlock, guard != null);
 
-            //If this is the entry block of a handler/filter, pop the exception to the guard variable
+            // If this is the entry block of a handler/filter, pop the exception to the guard variable
             if (guard != null) {
                 StoreResult(guard);
             }
 
-            //Emit code for all statements
+            // Emit code for all statements
             foreach (var inst in _currBlock.NonPhis()) {
                 if (!_forest.IsTreeRoot(inst)) continue;
 
@@ -95,7 +95,7 @@ public partial class ILGenerator : InstVisitor
             var reg = _regAlloc.GetRegister(def);
             _asm.EmitStore(reg);
         } else if (def.HasResult) {
-            _asm.Emit(ILCode.Pop); //unused
+            _asm.Emit(ILCode.Pop); // unused
         }
     }
 
@@ -116,7 +116,7 @@ public partial class ILGenerator : InstVisitor
                 break;
             }
             case ConstInt cons: {
-                //Emit int, or small long followed by conv.i8
+                // Emit int, or small long followed by conv.i8
                 if (cons.IsInt || (cons.Value == (int)cons.Value)) {
                     _asm.EmitLdcI4((int)cons.Value);
                     if (!cons.IsInt) _asm.Emit(ILCode.Conv_I8);
@@ -175,8 +175,8 @@ public partial class ILGenerator : InstVisitor
         }
     }
 
-    //Emits phi-related copies for outgoing values in this block.
-    //This should be called just before a branch is emitted.
+    // Emits phi-related copies for outgoing values in this block.
+    // This should be called just before a branch is emitted.
     private void EmitOutgoingPhiCopies()
     {
         var copies = _regAlloc.GetPhiCopies(_currBlock!);

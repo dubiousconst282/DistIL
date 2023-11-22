@@ -25,7 +25,7 @@ public class BitSet : IEquatable<BitSet>
             } else {
                 w &= ~mask;
             }
-            //w = (w & ~mask) | (value ? mask : 0);
+            // w = (w & ~mask) | (value ? mask : 0);
         }
     }
 
@@ -110,7 +110,7 @@ public class BitSet : IEquatable<BitSet>
         ulong changed = 0;
 
         if (wb.Length > wa.Length) {
-            //Note: passing wa by ref will prevent the JIT from enregistering it.
+            // Note: passing wa by ref will prevent the JIT from enregistering it.
             Array.Resize(ref _data, wb.Length);
             wa = _data;
         }
@@ -132,7 +132,7 @@ public class BitSet : IEquatable<BitSet>
         ulong changed = 0;
 
         if (wa.Length > dst.Length) {
-            //Note: passing dst by ref will prevent the JIT from enregistering it.
+            // Note: passing dst by ref will prevent the JIT from enregistering it.
             Array.Resize(ref _data, wa.Length);
             dst = _data;
         }
@@ -226,8 +226,8 @@ public class BitSet : IEquatable<BitSet>
             _data = data;
             _end = end;
 
-            _word = (data[start >> 6] >> start) << start; //clear bits before `start % 64`
-            _basePos = start & ~63; //floor(start / 64) * 64
+            _word = (data[start >> 6] >> start) << start; // clear bits before `start % 64`
+            _basePos = start & ~63; // floor(start / 64) * 64
         }
 
         public bool MoveNext()
@@ -235,7 +235,7 @@ public class BitSet : IEquatable<BitSet>
             while (true) {
                 if (_word != 0) {
                     Current = _basePos + BitOperations.TrailingZeroCount(_word);
-                    _word &= _word - 1; //clear lsb
+                    _word &= _word - 1; // clear lsb
                     return Current < _end;
                 }
                 _basePos += 64;

@@ -94,7 +94,7 @@ internal class VectorTranslator
         {
             string name = "As" + newElemType.ToString();
             var funcDef = (MethodDef)GetBaseType(type).FindMethod(name);
-            return funcDef.GetSpec(type.ElemType);
+            return funcDef.GetSpec([type.ElemType]);
         }
     }
 
@@ -125,7 +125,7 @@ internal class VectorTranslator
             Value EmitHalf(string name)
             {
                 var func = (MethodDef)baseType.FindMethod(name);
-                return builder.CreateCall(func.GetSpec(type.ElemType), vector);
+                return builder.CreateCall(func.GetSpec([type.ElemType]), vector);
             }
         }
         for (; width > scalarWidth; width /= 2) {
@@ -168,7 +168,7 @@ internal class VectorTranslator
 
         actualType = _resolver.CoreLib
             .FindType(ns, name, throwIfNotFound: true)
-            .GetSpec(type.ElemType);
+            .GetSpec([type.ElemType]);
 
         return _vecTypes[type] = actualType;
     }
@@ -319,12 +319,12 @@ internal class VectorTranslator
         var vecType = GetActualType(type);
         var unboundVec = vecType.GetUnboundSpec();
         var gm_Elem = GenericParamType.GetUnboundM(0);
-        var gm_Vec = vecType.Definition.GetSpec(gm_Elem);
+        var gm_Vec = vecType.Definition.GetSpec([gm_Elem]);
 
         return op switch {
             VectorOp.Splat      => FindDef("Create",        vecType,        type.ElemType),
             VectorOp.Pack       => FindDef("Create",        vecType,        Enumerable.Repeat((TypeSig)type.ElemType, type.Count).ToArray()),
-            VectorOp.Shuffle    => FindDef("Shuffle",       vecType,        vecType, vecType.Definition.GetSpec(GetShuffleIndexType(type))),
+            VectorOp.Shuffle    => FindDef("Shuffle",       vecType,        vecType, vecType.Definition.GetSpec([GetShuffleIndexType(type)])),
             VectorOp.GetLane    => FindGen("GetElement",    gm_Elem,        gm_Vec, PrimType.Int32),
             VectorOp.SetLane    => FindGen("WithElement",   gm_Vec,         gm_Vec, PrimType.Int32, gm_Elem),
 
@@ -355,8 +355,8 @@ internal class VectorTranslator
             VectorOp.Select     => FindGen("ConditionalSelect", gm_Vec, gm_Vec, gm_Vec, gm_Vec),
             VectorOp.ExtractMSB => FindGen("ExtractMostSignificantBits", PrimType.UInt32, gm_Vec),
 
-            VectorOp.F2I        => FindDef("ConvertToInt32",    vecType, vecType.Definition.GetSpec(PrimType.Single)),
-            VectorOp.I2F        => FindDef("ConvertToSingle",   vecType, vecType.Definition.GetSpec(PrimType.Int32)),
+            VectorOp.F2I        => FindDef("ConvertToInt32",    vecType, vecType.Definition.GetSpec([PrimType.Single])),
+            VectorOp.I2F        => FindDef("ConvertToSingle",   vecType, vecType.Definition.GetSpec([PrimType.Int32])),
 
             VectorOp._Sum       => FindGen("Sum",               gm_Elem, gm_Vec),
 
@@ -369,7 +369,7 @@ internal class VectorTranslator
         {
             var sig = new MethodSig(retType, parTypes, numGenPars: 1);
             var def = (MethodDef)baseType.FindMethod(funcName, sig);
-            return def.GetSpec(type.ElemType);
+            return def.GetSpec([type.ElemType]);
         }
         MethodDesc FindVOp(string funcName, bool unary = false)
         {

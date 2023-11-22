@@ -28,10 +28,10 @@ internal static class IRBuilderExt
     {
         var modResolver = ib.Method.Definition.Module.Resolver;
         var exceptCtor = modResolver.Import(exceptionType)
-            .FindMethod(".ctor", new MethodSig(PrimType.Void, Array.Empty<TypeSig>(), isInstance: true));
+            .FindMethod(".ctor", new MethodSig(PrimType.Void, [], isInstance: true));
 
         var throwHelper = ib.Method.CreateBlock().SetName("LQ_ThrowHelper");
-        var exceptObj = new NewObjInst(exceptCtor, Array.Empty<Value>());
+        var exceptObj = new NewObjInst(exceptCtor, []);
         throwHelper.InsertLast(exceptObj);
         throwHelper.InsertLast(new ThrowInst(exceptObj));
 

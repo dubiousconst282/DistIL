@@ -31,7 +31,7 @@ static void RunOptimizer(OptimizerOptions options)
     var logger = new ConsoleLogger() { MinLevel = options.Verbosity };
 
     var resolver = new ModuleResolver(logger);
-    resolver.AddSearchPaths(new[] { Path.GetDirectoryName(Path.GetFullPath(options.InputPath))! });
+    resolver.AddSearchPaths([Path.GetDirectoryName(Path.GetFullPath(options.InputPath))!]);
     resolver.AddSearchPaths(options.ResolverPaths);
 
     if (!options.NoResolverFallback) {
@@ -43,7 +43,7 @@ static void RunOptimizer(OptimizerOptions options)
     var comp = new Compilation(module, logger, new CompilationSettings());
     RunPasses(options, comp);
 
-    AddIgnoreAccessAttrib(module, new[] { module.AsmName.Name!, "System.Private.CoreLib" });
+    AddIgnoreAccessAttrib(module, [module.AsmName.Name!, "System.Private.CoreLib"]);
 
     string? outputPath = options.OutputPath;
 
@@ -120,7 +120,7 @@ static void AddIgnoreAccessAttrib(ModuleDef module, IEnumerable<string> assembly
     );
     var attribCtor = attribType.CreateMethod(
         ".ctor", PrimType.Void,
-        ImmutableArray.Create(new ParamDef(attribType, "this"), new ParamDef(PrimType.String, "assemblyName")),
+        [new ParamDef(attribType, "this"), new ParamDef(PrimType.String, "assemblyName")],
         MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig
     );
     attribCtor.ILBody = new ILMethodBody() {
@@ -129,7 +129,7 @@ static void AddIgnoreAccessAttrib(ModuleDef module, IEnumerable<string> assembly
 
     var assemblyAttribs = module.GetCustomAttribs(forAssembly: true);
     foreach (var name in assemblyNames) {
-        assemblyAttribs.Add(new CustomAttrib(attribCtor, ImmutableArray.Create<object?>(name)));
+        assemblyAttribs.Add(new CustomAttrib(attribCtor, [name]));
     }
 }
 

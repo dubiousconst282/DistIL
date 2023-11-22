@@ -10,8 +10,8 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     public abstract string? Namespace { get; }
 
     public abstract TypeDesc? BaseType { get; }
-    public virtual IReadOnlyList<TypeDesc> Interfaces => Array.Empty<TypeDesc>();
-    public virtual IReadOnlyList<TypeDesc> GenericParams { get; } = Array.Empty<TypeDesc>();
+    public virtual IReadOnlyList<TypeDesc> Interfaces => [];
+    public virtual IReadOnlyList<TypeDesc> GenericParams { get; } = [];
 
     /// <summary> Element type of the array, pointer or byref type. </summary>
     public virtual TypeDesc? ElemType => null;

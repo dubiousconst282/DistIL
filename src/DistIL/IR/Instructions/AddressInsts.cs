@@ -6,9 +6,7 @@ public abstract class AddressInst : Instruction
     public TypeDesc ElemType => ((PointerType)ResultType).ElemType;
 
     protected AddressInst(params Value[] opers)
-        : base(opers)
-    {
-    }
+        : base(opers) { }
 
     /// <summary> Returns the pointer offset factors or <see langword="default"/> if not known at compile time. </summary>
     /// <remarks> These can be used for the formula: <c>basePtr + BaseDisp + index * Stride</c> </remarks>
@@ -74,7 +72,7 @@ public class FieldAddrInst : AddressInst
     public override string InstName => "fldaddr" + (InBounds ? ".inbounds" : "");
 
     public FieldAddrInst(FieldDesc field, Value? obj = null, bool inBounds = false)
-        : base(obj == null ? Array.Empty<Value>() : new[] { obj })
+        : base(obj == null ? [] : [obj])
     {
         Ensure.That(field.IsInstance == (obj != null));
         Ensure.That(obj == null || obj.ResultType.IsPointerOrObject());

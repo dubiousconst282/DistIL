@@ -2,7 +2,7 @@ namespace DistIL.AsmIO;
 
 public readonly struct GenericContext
 {
-    public static readonly GenericContext Empty = new(Array.Empty<TypeDesc>(), Array.Empty<TypeDesc>());
+    public static readonly GenericContext Empty = new([], []);
 
     public IReadOnlyList<TypeDesc> TypeArgs { get; }
     public IReadOnlyList<TypeDesc> MethodArgs { get; }
@@ -13,13 +13,13 @@ public readonly struct GenericContext
     public GenericContext(IReadOnlyList<TypeDesc>? typeArgs = null, IReadOnlyList<TypeDesc>? methodArgs = null)
     {
         Ensure.That(typeArgs != null || methodArgs != null, "Either `typeArgs` or `methodArgs` must be non-null");
-        TypeArgs = typeArgs ?? Array.Empty<TypeDesc>();
-        MethodArgs = methodArgs ?? Array.Empty<TypeDesc>();
+        TypeArgs = typeArgs ?? [];
+        MethodArgs = methodArgs ?? [];
     }
     public GenericContext(TypeDesc genType)
     {
         TypeArgs = genType.GenericParams;
-        MethodArgs = Array.Empty<TypeDesc>();
+        MethodArgs = [];
     }
     public GenericContext(MethodDefOrSpec method)
     {

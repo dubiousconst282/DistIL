@@ -10,7 +10,7 @@ public class BranchInst : Instruction
         }
     }
     public BasicBlock Then {
-        get => (BasicBlock)(Operands[IsConditional ? 1 : 0]);
+        get => (BasicBlock)Operands[IsConditional ? 1 : 0];
         set => ReplaceOperand(IsConditional ? 1 : 0, value);
     }
     public BasicBlock? Else {
@@ -30,15 +30,12 @@ public class BranchInst : Instruction
     public override bool IsBranch => true;
 
     public BranchInst(BasicBlock target)
-        : base(target)
-    {
-    }
+        : base(target) { }
+
     public BranchInst(Value cond, BasicBlock then, BasicBlock else_)
         //Implicitly fold conditional branches with the same target, so that we can guarantee
         //that there will be no duplicated yields when iterating block successors (except for SwitchInst).
-        : base(then == else_ ? new[] { then } : new[] { cond, then, else_ })
-    {
-    }
+        : base(then == else_ ? [then] : [cond, then, else_]) { }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
@@ -155,9 +152,7 @@ public class ReturnInst : Instruction
     public override bool IsBranch => true;
 
     public ReturnInst(Value? value = null)
-        : base(value == null ? Array.Empty<Value>() : new[] { value })
-    {
-    }
+        : base(value == null ? [] : [value]) { }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }

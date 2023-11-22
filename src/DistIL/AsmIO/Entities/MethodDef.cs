@@ -103,10 +103,6 @@ public class MethodDef : MethodDefOrSpec
         Ensure.That(IsGeneric && genArgs.Length == GenericParams.Count);
         return new MethodSpec(DeclaringType, this, genArgs);
     }
-    public MethodSpec GetSpec(TypeDesc genArg1)
-    {
-        return GetSpec(ImmutableArray.Create(genArg1));
-    }
 
     public override IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
         => CustomAttribExt.GetOrInitList(ref _customAttribs, readOnly);
@@ -223,7 +219,7 @@ public class MethodSpec : MethodDefOrSpec
     private TypeSig[] GetParamsSpec(GenericContext genCtx)
     {
         if (Definition.Params.Length == 0) {
-            return Array.Empty<TypeSig>();
+            return [];
         }
         var types = new TypeSig[Definition.Params.Length];
         int index = 0;
@@ -275,8 +271,8 @@ public class ParamDef
 public class ILMethodBody
 {
     public ArraySegment<ILInstruction> Instructions { get; set; }
-    public ILVariable[] Locals { get; set; } = Array.Empty<ILVariable>();
-    public ExceptionRegion[] ExceptionRegions { get; set; } = Array.Empty<ExceptionRegion>();
+    public ILVariable[] Locals { get; set; } = [];
+    public ExceptionRegion[] ExceptionRegions { get; set; } = [];
     public int MaxStack { get; set; }
     public bool InitLocals { get; set; }
 
@@ -373,7 +369,7 @@ public class ILMethodBody
     private static ExceptionRegion[] DecodeExceptionRegions(ModuleLoader loader, MethodBodyBlock block)
     {
         if (block.ExceptionRegions.Length == 0) {
-            return Array.Empty<ExceptionRegion>();
+            return [];
         }
         var regions = new ExceptionRegion[block.ExceptionRegions.Length];
         for (int i = 0; i < regions.Length; i++) {
@@ -395,7 +391,7 @@ public class ILMethodBody
     private static ILVariable[] DecodeLocals(ModuleLoader loader, MethodBodyBlock block)
     {
         if (block.LocalSignature.IsNil) {
-            return Array.Empty<ILVariable>();
+            return [];
         }
         var info = loader._reader.GetStandaloneSignature(block.LocalSignature);
         return new SignatureDecoder(loader, info.Signature).DecodeLocals();

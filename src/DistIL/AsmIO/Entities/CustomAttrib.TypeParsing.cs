@@ -64,7 +64,7 @@ partial class CustomAttrib
                     args.Add(ParseNestedType(scope));
                 }
                 Expect(']');
-                type = ((TypeDef)type).GetSpec(args.TakeImmutable());
+                type = ((TypeDef)type).GetSpec(args.DrainToImmutable());
             }
             //Compound types (array, pointer, byref)
             while (true) {

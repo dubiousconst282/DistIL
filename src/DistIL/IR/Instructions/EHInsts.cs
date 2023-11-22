@@ -29,7 +29,7 @@ public class GuardInst : Instruction
     public override bool SafeToRemove => false;
 
     public GuardInst(GuardKind kind, BasicBlock handlerBlock, TypeDesc? catchType = null, BasicBlock? filterBlock = null)
-        : base(filterBlock == null ? new Value[] { handlerBlock } : new Value[] { handlerBlock, filterBlock })
+        : base(filterBlock == null ? [handlerBlock] : [handlerBlock, filterBlock])
     {
         Kind = kind;
         ResultType = catchType ?? (HasFilter ? PrimType.Object : PrimType.Void);
@@ -63,9 +63,7 @@ public class LeaveInst : Instruction
     public override bool IsBranch => true;
 
     public LeaveInst(BasicBlock target)
-        : base(target)
-    {
-    }
+        : base(target) { }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }
@@ -86,9 +84,7 @@ public class ResumeInst : Instruction
     public override bool IsBranch => true;
 
     public ResumeInst(Value? filterResult = null)
-        : base(filterResult == null ? Array.Empty<Value>() : new Value[] { filterResult })
-    {
-    }
+        : base(filterResult == null ? [] : [filterResult]) { }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }
@@ -111,9 +107,7 @@ public class ThrowInst : Instruction
     public override bool IsBranch => true;
 
     public ThrowInst(Value? exception = null)
-        : base(exception == null ? Array.Empty<Value>() : new Value[] { exception })
-    {
-    }
+        : base(exception == null ? [] : [exception]) { }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 }

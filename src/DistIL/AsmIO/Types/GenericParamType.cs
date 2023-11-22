@@ -59,7 +59,7 @@ public class GenericParamType : TypeDesc
     private ImmutableArray<TypeSig> DecodeConstraints(ModuleLoader loader, GenericParameterConstraintHandleCollection handles)
     {
         if (handles.Count == 0) {
-            return ImmutableArray<TypeSig>.Empty;
+            return [];
         }
         var builder = ImmutableArray.CreateBuilder<TypeSig>(handles.Count);
         foreach (var handle in handles) {
@@ -75,7 +75,7 @@ public class GenericParamType : TypeDesc
     {
         Ensure.That(readOnly, "Not impl");
         
-        return _customAttribs?[0] ?? Array.Empty<CustomAttrib>();
+        return _customAttribs?[0] ?? [];
     }
 
     public IList<CustomAttrib> GetCustomAttribs(TypeSig constraint, bool readOnly = true)
@@ -84,7 +84,7 @@ public class GenericParamType : TypeDesc
 
         int index = Constraints.IndexOf(constraint);
         Ensure.That(index >= 0, "Generic parameter is not constrainted by the specified type");
-        return _customAttribs?.ElementAtOrDefault(index + 1) ?? Array.Empty<CustomAttrib>();
+        return _customAttribs?.ElementAtOrDefault(index + 1) ?? [];
     }
 
     private void AddCustomAttribs(int index, CustomAttrib[]? attribs)

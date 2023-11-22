@@ -5,10 +5,10 @@ using DistIL.IR;
 
 public class DomTreeTests
 {
-    public static List<object[]> TestData = new() {
+    public static readonly IReadOnlyList<object[]> TestData = [
         new[] { GetData1() },
         new[] { GetData2() }
-    };
+    ];
 
     [Theory, MemberData(nameof(TestData))]
     public void TestIDom(Data item)
@@ -93,8 +93,8 @@ public class DomTreeTests
 
         return new Data() {
             Method = method,
-            Blocks = new[] { b1, b2, b3, b4, b5, b6 },
-            ExpDom = new[] { b1, b1, b2, b2, b2, b5 }
+            Blocks = [b1, b2, b3, b4, b5, b6],
+            ExpDom = [b1, b1, b2, b2, b2, b5]
         };
     }
 
@@ -128,8 +128,8 @@ public class DomTreeTests
         BB_56.SetBranch(new BranchInst(cond, BB_51, BB_62));
         return new Data() {
             Method = method,
-            Blocks = new[] { BB_01, BB_02, BB_11, BB_13, BB_15, BB_26, BB_38, BB_41, BB_47, BB_51, BB_56, BB_62 },
-            ExpDom = new[] { BB_01, BB_41, BB_02, BB_02, BB_02, BB_15, BB_15, BB_01, BB_41, BB_56, BB_47, BB_56 }
+            Blocks = [BB_01, BB_02, BB_11, BB_13, BB_15, BB_26, BB_38, BB_41, BB_47, BB_51, BB_56, BB_62],
+            ExpDom = [BB_01, BB_41, BB_02, BB_02, BB_02, BB_15, BB_15, BB_01, BB_41, BB_56, BB_47, BB_56]
         };
     }
 

@@ -8,7 +8,7 @@ public class BitSetTests
     public void Test_Everything()
     {
         var bs = new BitSet(130);
-        int[] positions = { 1, 3, 4, 8, 12, 17, 32, 55, 63, 64, 65, 100, 126 };
+        int[] positions = [1, 3, 4, 8, 12, 17, 32, 55, 63, 64, 65, 100, 126];
         foreach (int pos in positions) {
             Assert.False(bs.Contains(pos));
             Assert.True(bs.Add(pos));

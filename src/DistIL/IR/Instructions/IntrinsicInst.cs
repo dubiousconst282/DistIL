@@ -12,7 +12,7 @@ public abstract class IntrinsicInst : Instruction
     public abstract string Name { get; }
 
     protected IntrinsicInst(TypeDesc resultType, Value[] args)
-        : this(resultType, Array.Empty<EntityDesc>(), args) { }
+        : this(resultType, [], args) { }
 
     protected IntrinsicInst(TypeDesc resultType, EntityDesc[] staticArgs, Value[] args)
         : base(args)

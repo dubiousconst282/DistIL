@@ -106,7 +106,7 @@ public class FuncAddrInst : Instruction
     public override string InstName => IsVirtual ? "virtfuncaddr" : "funcaddr";
 
     public FuncAddrInst(MethodDesc method, Value? obj = null)
-        : base(obj == null ? Array.Empty<Value>() : new Value[] { obj })
+        : base(obj == null ? [] : [obj])
     {
         ResultType = PrimType.Void.CreatePointer();
         Method = method;

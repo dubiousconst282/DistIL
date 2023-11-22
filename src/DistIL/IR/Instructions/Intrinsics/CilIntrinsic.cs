@@ -7,76 +7,62 @@ public abstract class CilIntrinsic : IntrinsicInst
     public override string Namespace => "CIL";
     public override string Name => GetType().Name;
 
-    protected CilIntrinsic(TypeDesc resultType, params Value[] args) : base(resultType, args) { }
+    protected CilIntrinsic(TypeDesc resultType, Value[] args) : base(resultType, args) { }
     protected CilIntrinsic(TypeDesc resultType, EntityDesc[] staticArgs, Value[] args) : base(resultType, staticArgs, args) { }
 
     /// <summary> T[] NewArray&lt;T&gt;(nint length) </summary>
-    public class NewArray : CilIntrinsic
+    public class NewArray(TypeDesc elemType, Value length) : CilIntrinsic(elemType.CreateArray(), [length])
     {
         public override ILCode Opcode => ILCode.Newarr;
         public override bool MayThrow => true;
         public TypeDesc ElemType => ResultType.ElemType!;
-
-        public NewArray(TypeDesc elemType, Value length) : base(elemType.CreateArray(), length) { }
     }
 
     /// <summary> nuint ArrayLen(Array arr) </summary>
-    public class ArrayLen : CilIntrinsic
+    public class ArrayLen(Value array) : CilIntrinsic(PrimType.UIntPtr, [array])
     {
         public override ILCode Opcode => ILCode.Ldlen;
         public override bool MayThrow => true;
-
-        public ArrayLen(Value array) : base(PrimType.UIntPtr, array) { }
     }
-    
+
     /// <summary> T CastClass&lt;T&gt;(object obj) </summary>
-    public class CastClass : CilIntrinsic
+    public class CastClass(TypeDesc destType, Value obj) : CilIntrinsic(destType, [obj])
     {
         public override ILCode Opcode => ILCode.Castclass;
         public override bool MayThrow => true;
         public TypeDesc DestType => ResultType;
-
-        public CastClass(TypeDesc destType, Value obj) : base(destType, obj) { }
     }
 
     /// <summary> (object?)T AsInstance&lt;T&gt;(object obj) </summary>
-    public class AsInstance : CilIntrinsic
+    public class AsInstance(TypeDesc destType, Value obj)
+        : CilIntrinsic(destType.IsValueType ? PrimType.Object : destType, [destType], [obj])
     {
         public override ILCode Opcode => ILCode.Isinst;
         public TypeDesc DestType => (TypeDesc)StaticArgs[0];
-
-        public AsInstance(TypeDesc destType, Value obj)
-            : base(destType.IsValueType ? PrimType.Object : destType, new[] { destType }, new[] { obj }) { }
     }
 
     /// <summary> (object)T Box&lt;T&gt;(T val) </summary>
-    public class Box : CilIntrinsic
+    public class Box(TypeDesc type, Value val) : CilIntrinsic(PrimType.Object, [type], [val])
     {
         public override ILCode Opcode => ILCode.Box;
         public TypeDesc SourceType => (TypeDesc)StaticArgs[0];
-
-        public Box(TypeDesc type, Value val) : base(PrimType.Object, new[] { type }, new[] { val }) { }
     }
 
     /// <summary> T UnboxObj&lt;T&gt;(object obj) </summary>
-    public class UnboxObj : CilIntrinsic
+    public class UnboxObj(TypeDesc type, Value obj) : CilIntrinsic(type, [obj])
     {
         public override ILCode Opcode => ILCode.Unbox_Any;
         public override bool MayThrow => true;
         public override bool MayReadFromMemory => true;
         public TypeDesc DestType => ResultType;
-
-        public UnboxObj(TypeDesc type, Value obj) : base(type, obj) { }
     }
 
     /// <summary> T readonly&amp; UnboxRef&lt;T&gt;(object obj) </summary>
-    public class UnboxRef : CilIntrinsic
+    public class UnboxRef(TypeDesc type, Value obj) : CilIntrinsic(type.CreateByref(), [obj])
     {
         public override ILCode Opcode => ILCode.Unbox;
         public override bool MayThrow => true;
         public TypeDesc DestType => ResultType.ElemType!;
-
-        public UnboxRef(TypeDesc type, Value obj) : base(type.CreateByref(), obj) { }
     }
 
     /// <summary>
@@ -93,10 +79,10 @@ public abstract class CilIntrinsic : IntrinsicInst
         public override bool MayReadFromMemory => true;
 
         public MemCopy(Value destPtr, Value srcPtr, Value numBytes, PointerFlags flags = 0)
-            : base(PrimType.Void, destPtr, srcPtr, numBytes) { Flags = flags; }
+            : base(PrimType.Void, [destPtr, srcPtr, numBytes]) { Flags = flags; }
 
         public MemCopy(Value destPtr, Value srcPtr, TypeDesc type, PointerFlags flags = 0)
-            : base(PrimType.Void, new[] { type }, new[] { destPtr, srcPtr }) { Flags = flags; }
+            : base(PrimType.Void, [type], [destPtr, srcPtr]) { Flags = flags; }
     }
 
     /// <summary>
@@ -112,28 +98,24 @@ public abstract class CilIntrinsic : IntrinsicInst
         public override bool MayWriteToMemory => true;
 
         public MemSet(Value destPtr, Value value, Value numBytes, PointerFlags flags = 0)
-            : base(PrimType.Void, destPtr, value, numBytes) { Flags = flags; }
+            : base(PrimType.Void, [destPtr, value, numBytes]) { Flags = flags; }
 
         public MemSet(Value destPtr, TypeDesc type, PointerFlags flags = 0)
-            : base(PrimType.Void, new[] { type }, new[] { destPtr }) { Flags = flags; }
+            : base(PrimType.Void, [type], [destPtr]) { Flags = flags; }
     }
 
     /// <summary> int SizeOf&lt;T&gt;() </summary>
-    public class SizeOf : CilIntrinsic
+    public class SizeOf(TypeDesc type) : CilIntrinsic(PrimType.Int32, [type], [])
     {
         public override ILCode Opcode => ILCode.Sizeof;
         public TypeDesc ObjType => (TypeDesc)StaticArgs[0];
-
-        public SizeOf(TypeDesc type) : base(PrimType.Int32, new[] { type }, Array.Empty<Value>()) { }
     }
 
     /// <summary> void* Alloca(nuint numBytes) </summary>
-    public class Alloca : CilIntrinsic
+    public class Alloca(Value numBytes) : CilIntrinsic(PrimType.Void.CreatePointer(), [numBytes])
     {
         public override ILCode Opcode => ILCode.Localloc;
         public override bool MayThrow => true;
-
-        public Alloca(Value numBytes) : base(PrimType.Void.CreatePointer(), numBytes) { }
     }
 
     /// <summary>
@@ -147,7 +129,7 @@ public abstract class CilIntrinsic : IntrinsicInst
         public EntityDesc Entity => StaticArgs[0];
 
         public LoadHandle(ModuleResolver resolver, EntityDesc entity)
-            : base(PrimType.Void, new[] { entity }, Array.Empty<Value>())
+            : base(PrimType.Void, [entity], [])
         {
             var sys = resolver.SysTypes;
             ResultType = entity switch {
@@ -160,11 +142,9 @@ public abstract class CilIntrinsic : IntrinsicInst
     }
 
     /// <summary> float CheckFinite(float x) </summary>
-    public class CheckFinite : CilIntrinsic
+    public class CheckFinite(Value value) : CilIntrinsic(value.ResultType, [value])
     {
         public override ILCode Opcode => ILCode.Ckfinite;
         public override bool MayThrow => true;
-
-        public CheckFinite(Value value) : base(value.ResultType, value) { }
     }
 }

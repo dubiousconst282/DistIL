@@ -9,7 +9,7 @@ public class ModuleResolver
 {
     //FIXME: Do we need to care about FullName (public keys and versions)?
     protected readonly Dictionary<string, ModuleDef> _cache = new(StringComparer.OrdinalIgnoreCase);
-    private string[] _searchPaths = Array.Empty<string>();
+    private string[] _searchPaths = [];
     private readonly ICompilationLogger? _logger;
 
     /// <summary> A reference to the <c>System.Private.CoreLib</c> assembly. </summary>

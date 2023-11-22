@@ -135,13 +135,12 @@ public class MDArrayMethod : MethodDesc
         OpKind.Get     => DeclaringType.ElemType,
         OpKind.Address => DeclaringType.ElemType.CreateByref()
     };
+
+    ParamSigList? _paramSig;
     public override IReadOnlyList<TypeSig> ParamSig
         => _paramSig ??= new() { Method = this };
 
-    public override IReadOnlyList<TypeDesc> GenericParams
-        => Array.Empty<TypeDesc>();
-
-    private ParamSigList? _paramSig;
+    public override IReadOnlyList<TypeDesc> GenericParams => [];
 
     internal MDArrayMethod(MDArrayType type, OpKind kind)
     {

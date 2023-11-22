@@ -241,7 +241,7 @@ public partial class IRParser
             ParseDelimSeq(TokenType.LBracket, TokenType.RBracket, () => {
                 args.Add(ParseType());
             });
-            type = ((TypeDef)type).GetSpec(args.TakeImmutable());
+            type = ((TypeDef)type).GetSpec(args.DrainToImmutable());
         }
         //Compound types (array, pointer, byref)
         while (true) {
@@ -310,7 +310,7 @@ public partial class IRParser
             Opcode.Conv => ParseConv(op, mods),
             Opcode.Lea => ParseLea(),
             Opcode.Intrinsic => ParseIntrinsic(),
-            _ => ParseMultiOpInst(op, mods, opToken.Position),
+            _ => ParseMultiOpInst(op, opToken.Position),
         };
         if (slotToken.Type == TokenType.Identifier) {
             AssignId(slotToken, inst);
@@ -330,7 +330,7 @@ public partial class IRParser
         return _parsedResultType = ParseType();
     }
 
-    private Instruction ParseMultiOpInst(Opcode op, OpcodeModifiers mods, AbsRange pos)
+    private Instruction ParseMultiOpInst(Opcode op, AbsRange pos)
     {
         if (op is > Opcode._Bin_First and < Opcode._Bin_Last) {
             return Schedule(PendingInst.Kind.Binary, op - (Opcode._Bin_First + 1));
@@ -495,7 +495,7 @@ public partial class IRParser
 
         var obj = _lexer.Match(TokenType.Comma) ? ParseValue() : null;
 
-        return new FieldAddrInst(field, obj);
+        return new FieldAddrInst(field, obj, inBounds: (mods & OpcodeModifiers.InBounds) != 0);
     }
 
     private Instruction ParseConv(Opcode op, OpcodeModifiers mods)

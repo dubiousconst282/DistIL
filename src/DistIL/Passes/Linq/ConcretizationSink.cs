@@ -68,7 +68,7 @@ internal class ListOrArraySink : ConcretizationSink
             return builder.CreateNewArray(elemType, estimLen.Length);
         }
         var listGenType = (TypeDef)builder.Resolver.Import(typeof(List<>));
-        return base.AllocKnownCollection(builder, estimLen, listGenType.GetSpec(elemType));
+        return base.AllocKnownCollection(builder, estimLen, listGenType.GetSpec([elemType]));
     }
 
     protected override void AppendItem(IRBuilder builder, Value container, Value currItem, BodyLoopData loopData)

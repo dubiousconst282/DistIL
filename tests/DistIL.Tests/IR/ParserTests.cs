@@ -30,9 +30,7 @@ public class ParserTests
         Check(
             "System.Collections.Generic.List`1+Enumerator[string[]]&",
 
-            t_List.FindNestedType("Enumerator").GetSpec(
-                ImmutableArray.Create<TypeDesc>(PrimType.String.CreateArray())
-            ).CreateByref()
+            t_List.FindNestedType("Enumerator").GetSpec([PrimType.String.CreateArray()]).CreateByref()
         );
 
         void Check(string str, TypeDesc expType)

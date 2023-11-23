@@ -111,14 +111,15 @@ internal class TakeStage : LinqStageNode
     {
         // Behavior for `count <= 0` is to discard all elements.
         var count = SubjectCall.Args[1];
-
-        loopData.CreateAccum(count, emitUpdate: curr => {
-            // if (count <= 0) goto ExitBlock;
-            // count--;
-            builder.Fork(builder.CreateSgt(curr, ConstInt.CreateI(0)), loopData.Exit.Block);
+        var remIters = loopData.CreateAccum(count, emitUpdate: curr => {
             Drain.EmitBody(builder, currItem, loopData);
             return builder.CreateSub(curr, ConstInt.CreateI(1));
         }).SetName("lq_takeRem");
+
+        var header = loopData.Header;
+        var loopBranch = (BranchInst)header.Block.Last;
+        Debug.Assert(loopBranch.IsConditional && loopBranch.Cond.ResultType == PrimType.Bool);
+        loopBranch.Cond = header.CreateAnd(loopBranch.Cond, header.CreateSgt(remIters, ConstInt.CreateI(0)));
     }
 }
 internal class FlattenStage : LinqStageNode

@@ -328,8 +328,8 @@ internal class BlockState
                 case ILCode.Ldelem_R4:  ImportLoadElem(PrimType.Single); break;
                 case ILCode.Ldelem_R8:  ImportLoadElem(PrimType.Double); break;
                 case ILCode.Ldelem_I:   ImportLoadElem(PrimType.IntPtr); break;
-                case ILCode.Ldelem:     ImportLoadElem(null); break;
-                case ILCode.Ldelem_Ref: ImportLoadElem((TypeDesc)inst.Operand!); break;
+                case ILCode.Ldelem_Ref: ImportLoadElem(null); break;
+                case ILCode.Ldelem:     ImportLoadElem((TypeDesc)inst.Operand!); break;
 
                 case ILCode.Stelem_I1:  ImportStoreElem(PrimType.SByte); break;
                 case ILCode.Stelem_I2:  ImportStoreElem(PrimType.Int16); break;
@@ -665,7 +665,7 @@ internal class BlockState
         var array = Pop();
 
         var inst = new ArrayAddrInst(
-            array, index, elemType,
+            array, index, NormalizeStorageType(elemType, array.ResultType),
             inBounds: HasPrefix(InstFlags.NoRangeCheck | InstFlags.NoNullCheck),
             readOnly: HasPrefix(InstFlags.Readonly));
         Emit(inst);
@@ -676,14 +676,14 @@ internal class BlockState
     {
         var addr = Pop();
 
-        Push(new LoadInst(addr, type, PopPointerFlags()));
+        Push(new LoadInst(addr, NormalizeStorageType(type, addr.ResultType), PopPointerFlags()));
     }
     private void ImportStoreInd(TypeDesc? type)
     {
         var value = Pop();
         var addr = Pop();
 
-        Emit(new StoreInst(addr, value, type, PopPointerFlags()));
+        Emit(new StoreInst(addr, value, NormalizeStorageType(type, addr.ResultType), PopPointerFlags()));
     }
     private PointerFlags PopPointerFlags()
     {
@@ -691,6 +691,32 @@ internal class BlockState
         if (HasPrefix(InstFlags.Unaligned)) flags |= PointerFlags.Unaligned;
         if (HasPrefix(InstFlags.Volatile)) flags |= PointerFlags.Volatile;
         return flags;
+    }
+    private static TypeDesc NormalizeStorageType(TypeDesc? type, TypeDesc actualArrayOrPtrType)
+    {
+        if (type == null) {
+            // ld/st .ref variants get null type. Infer from storage type or fallback to `object`.
+            type = actualArrayOrPtrType.ElemType ?? PrimType.Object;
+        }
+        // Primitive type definitions (from CoreLib) and aliases (PrimTypes) can be
+        // used interchangeably. The only difference between them is that the
+        // definitions provide actual metadata such as methods and interfaces.
+        // We'll normalize them to the aliases here for consistency.
+        if (type is TypeDef def && PrimType.GetFromDefinition(def) is { } alias) {
+            type = alias;
+        }
+        // Infer unsigned type based on `actualStorageType`.
+        // This is useful for load instructions, as they don't have many variants
+        // for unsigned types.
+        // Once again, the only purpose of this is consistency - signed and unsigned 
+        // types can be freely interchanged in both IL and IR.
+        var kind = type.Kind;
+        var actualKind = actualArrayOrPtrType.ElemType?.Kind ?? TypeKind.Void;
+
+        if (kind != actualKind && actualKind.IsUnsigned() && kind.GetUnsigned() == actualKind) {
+            type = PrimType.GetFromKind(kind.GetUnsigned());
+        }
+        return type;
     }
 
     private void ImportLoadField(FieldDesc field, bool isStatic)

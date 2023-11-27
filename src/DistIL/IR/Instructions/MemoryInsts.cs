@@ -60,8 +60,18 @@ public class StoreInst : MemoryInst
     }
     public override TypeDesc ElemType { get; }
 
-    /// <summary> Checks if <see cref="AddressInst.ElemType"/> differs from the value type. </summary>
-    public bool IsCasting => ElemType != Value.ResultType;
+    /// <summary> Checks if <see cref="AddressInst.ElemType"/> differs from the value type, ignoring sign/unsigned mismatches. </summary>
+    public bool IsCasting {
+        get {
+            if (ElemType == Value.ResultType) {
+                return false;
+            }
+            if (ElemType.IsInt() || ElemType.IsPointerLike()) {
+                return ElemType.Kind.GetSigned() != Value.ResultType.Kind.GetSigned();
+            }
+            return true;
+        }
+    }
 
     public override string InstName => FormatName("store");
     public override bool HasSideEffects => true;

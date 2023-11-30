@@ -34,7 +34,7 @@ public class ForestAnalysis : IMethodAnalysis
         var opers = inst.Operands;
 
         if (inst is StoreInst && opers[0] is FieldAddrInst or ArrayAddrInst) {
-            // For stores, inline the address first to hide hazards and assume they
+            // For stores, inline the address first to hide hazards, assuming they
             // will be combined into a single CIL instruction.
             InlineOperand(0);
             InlineOperand(1);
@@ -59,11 +59,6 @@ public class ForestAnalysis : IMethodAnalysis
             }
         }
     }
-
-    // TODO: Consider building a dependence graph like used for instruction scheduling to better detect hazards
-    //       This will currently miss trees like `store (r2 = arraddr #arr, idx), (r1 = call ...)`
-    //       (could maybe also try to inline multiple times somehow?)
-    //       (or maybe assign DFS numbers to defs and compare with block indices?)
 
     // Checks if `def` can be safely inlined down to a tree at `use`, skipping over leafs.
     private bool HasHazardsBetweenDefUse(Instruction def, Instruction use, AliasAnalysis aa)
@@ -126,9 +121,12 @@ public class ForestAnalysis : IMethodAnalysis
 
     private static bool IsCheaperToRematerialize(Instruction inst)
     {
-        // TODO: investigate if it's better to rematerialize LEAs and array accesses
-        //       (seems to be true to some extent due to speculative/parallel exec; will bottleneck on dep otherwise)
-        return inst is FieldAddrInst or ExtractFieldInst or CilIntrinsic.ArrayLen or CilIntrinsic.SizeOf &&
-               !inst.Users().Any(u => u is PhiInst); // codegen doesn't support defs inlined into phis, they *must* be rooted
+        // Prefer to rematerialize array accesses and LEAs, otherwise we could
+        // cause dep bottlenecks by hindering ILP/OOOE.
+        bool mayRematerialize =
+                (inst is FieldAddrInst or ArrayAddrInst or PtrOffsetInst && inst.NumUses <= 3) ||
+                (inst is ExtractFieldInst or CilIntrinsic.ArrayLen or CilIntrinsic.SizeOf);
+
+        return mayRematerialize && !inst.Users().Any(u => u is PhiInst); // codegen doesn't support defs inlined into phis, they *must* be rooted
     }
 }

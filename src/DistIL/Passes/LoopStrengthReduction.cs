@@ -75,6 +75,10 @@ public class LoopStrengthReduction : IMethodPass
 
         if (!(exitCond.Left is PhiInst counter && counter.Block == loop.Header)) return 0;
 
+        // The only benefit from LSR is enabling vectorization, which only works
+        // with loops that have a single body block. Bail if that's not the case.
+        if (loop.NumBlocks > 2) return 0;
+
         // Strength-reducing array indexes in backward loops is not trivial, as the GC
         // doesn't update refs pointing outside an object when compacting the heap.
         // Details: https://github.com/dotnet/runtime/pull/75857#discussion_r974661744

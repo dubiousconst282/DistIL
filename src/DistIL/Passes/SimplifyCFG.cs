@@ -112,7 +112,8 @@ public class SimplifyCFG : IMethodPass
 
         static BasicBlock? GetUniqueSuccWithPhis(BasicBlock block)
         {
-            return block.Last is BranchInst { IsJump: true, Then: var succ } && succ.Phis().Any() ? succ : null;
+            return block.Last is BranchInst { IsJump: true, Then: var succ } &&
+                   succ.Phis().Any() && !block.Phis().Any() ? succ : null;
         }
         static bool CanSpeculate(BasicBlock block)
         {
@@ -219,15 +220,19 @@ public class SimplifyCFG : IMethodPass
     private static bool SimpleJumpThread(BasicBlock block)
     {
         // Not the entry block, first inst is a jump
-        if (block is not { NumPreds: > 0, First: BranchInst { IsJump: true, Then: var succ } br }) return false;
+        if (block is not { NumPreds: > 0, First: BranchInst { IsJump: true, Then: var succ } }) return false;
+
+        // Don't mess with handler blocks for now.
+        // (Future note: they cannot have guards.)
+        if (block.IsHandlerEntry) return false;
 
         // Only transform if we don't need to change phis too much
-        // Also avoid removing gotos for handler entry blocks because handlers they can't have guards.
-        if (!succ.HasPhisOrGuards || (block.NumPreds == 1 && !block.Preds.First().IsUsedByPhis && !block.IsHandlerEntry)) {
+        if (!succ.HasPhisOrGuards || (block.NumPreds == 1 && !block.Preds.First().IsUsedByPhis)) {
             foreach (var pred in block.Preds) {
                 pred.RedirectSucc(block, succ);
                 succ.RedirectPhis(block, pred);
             }
+            Debug.Assert(block.NumUses == 0);
             block.Remove();
             return true;
         }

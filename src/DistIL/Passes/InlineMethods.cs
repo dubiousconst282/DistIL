@@ -1,9 +1,9 @@
 namespace DistIL.Passes;
 
-using DistIL.IR.Utils;
+using System.Reflection;
+using MethodBody = IR.MethodBody;
 
-using ImplAttribs = System.Reflection.MethodImplAttributes;
-using MethodAttribs = System.Reflection.MethodAttributes;
+using DistIL.IR.Utils;
 
 public class InlineMethods : IMethodPass
 {
@@ -19,11 +19,11 @@ public class InlineMethods : IMethodPass
 
     public MethodPassResult Run(MethodTransformContext ctx)
     {
+        // TODO: support for recursive inlines (without heuristics the code size will certainly blow up)
         var inlineableCalls = new List<CallInst>();
-        var method = ctx.Method;
 
-        foreach (var inst in method.Instructions()) {
-            if (inst is CallInst call && CanBeInlined(method.Definition, call)) {
+        foreach (var inst in ctx.Method.Instructions()) {
+            if (inst is CallInst call && CheckAndMakeInlineable(ctx.Method.Definition, call)) {
                 inlineableCalls.Add(call);
             }
         }
@@ -35,28 +35,65 @@ public class InlineMethods : IMethodPass
         return inlineableCalls.Count > 0 ? MethodInvalidations.Everything : 0;
     }
 
-    private bool CanBeInlined(MethodDef caller, CallInst callInst)
+    private bool CheckAndMakeInlineable(MethodDef parent, CallInst call)
     {
-        // TODO: proper checks - II.10.3 Introducing and overriding virtual methods
-        var blockedAttribs = MethodAttribs.NewSlot | MethodAttribs.Abstract | MethodAttribs.PinvokeImpl;
-        var staticVirt = MethodAttribs.Static | MethodAttribs.Virtual;
-
-        return callInst.Method is MethodDefOrSpec { Definition: var callee } &&
-            callee != caller &&
-            callee.ILBody?.Instructions.Count <= _opts.MaxCalleeSize &&
-            (callee.Attribs & blockedAttribs) == 0 &&
-            (callee.Attribs & staticVirt) != staticVirt &&
-            (callee.ImplAttribs & ImplAttribs.NoInlining) == 0 &&
-            !callee.HasCustomAttrib("System.Runtime.CompilerServices", "IntrinsicAttribute") &&
-            !callee.HasCustomAttrib("System.Runtime.CompilerServices", "AsyncStateMachine");
-    }
-
-    public static bool Inline(CallInst call)
-    {
-        if (call.Method is not MethodDefOrSpec { Definition.Body: MethodBody } callee) {
+        // Must be a non-recursive MethodDef
+        if (call.Method is not MethodDefOrSpec { Definition: var target } || target == parent) {
             return false;
         }
-        var result = Inline(call, callee, call.Args);
+
+        // Not too long
+        int maxInstrs = target.ImplAttribs.HasFlag(MethodImplAttributes.AggressiveInlining) 
+            ? _opts.MaxCandidateInstrsAggressive 
+            : _opts.MaxCandidateInstrs;
+        
+        if (target.ImplAttribs.HasFlag(MethodImplAttributes.NoInlining) || target.ILBody?.Instructions.Count > maxInstrs) {
+            return false;
+        }
+
+        // Known virtual target
+        if (call.IsVirtual && target.Attribs.HasFlag(MethodAttributes.Virtual) && !target.Attribs.HasFlag(MethodAttributes.Final)) {
+            if (DevirtUtils.ResolveVirtualCallTarget(call.Method, call.Args[0]) is not MethodDefOrSpec actualTarget || actualTarget == parent) {
+                return false;
+            }
+            call.Method = actualTarget;
+            target = actualTarget.Definition;
+        }
+
+        // If there's no body after devirt, there's no way we can inline this method.
+        if (target.Body == null) {
+            return false;
+        }
+
+        // Not abstract nor pinvoke decl
+        if (target.Attribs.HasFlag(MethodAttributes.Abstract) || target.Attribs.HasFlag(MethodAttributes.PinvokeImpl)) {
+            return false;
+        }
+
+        // TODO: support for static virtuals
+        if (target.Attribs.HasFlag(MethodAttributes.Static | MethodAttributes.Virtual)) {
+            return false;
+        }
+
+        // Not special
+        // For the time being we won't bother inlining async methods because there's
+        // not much benefit for doing so, and it might mess up stack traces.
+        if (target.HasCustomAttrib("System.Runtime.CompilerServices", "IntrinsicAttribute") ||
+            target.HasCustomAttrib("System.Runtime.CompilerServices", "AsyncStateMachine")
+        ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary> Unconditionally inlines the given call instruction into its parent method, unless the target method body is unavailable. </summary>
+    public static bool Inline(CallInst call)
+    {
+        if (call.Method is not MethodDefOrSpec { Definition.Body: MethodBody } target) {
+            return false;
+        }
+        var result = Inline(call, target, call.Args);
 
         if (result != null) {
             call.ReplaceWith(result);
@@ -66,15 +103,17 @@ public class InlineMethods : IMethodPass
         return true;
     }
 
-    public static Value? Inline(Instruction call, MethodDefOrSpec callee, ReadOnlySpan<Value> args)
+    public static Value? Inline(Instruction call, MethodDefOrSpec target, ReadOnlySpan<Value> args)
     {
         var callerBody = call.Block.Method;
-        var calleeBody = Ensure.NotNull(callee.Definition.Body);
-        var cloner = new IRCloner(new GenericContext(callee));
+        var targetBody = Ensure.NotNull(target.Definition.Body);
+        Ensure.That(callerBody != targetBody, "Cannot inline method into itself");
+
+        var cloner = new IRCloner(new GenericContext(target));
 
         // Add argument mappings
-        for (int i = 0; i < calleeBody.Args.Length; i++) {
-            var arg = calleeBody.Args[i];
+        for (int i = 0; i < targetBody.Args.Length; i++) {
+            var arg = targetBody.Args[i];
             var val = StoreInst.Coerce(arg.ResultType, args[i], insertBefore: call);
             cloner.AddMapping(arg, val);
         }
@@ -83,7 +122,7 @@ public class InlineMethods : IMethodPass
         var returningBlocks = new List<BasicBlock>();
         var lastBlock = call.Block;
 
-        foreach (var block in calleeBody) {
+        foreach (var block in targetBody) {
             var newBlock = callerBody.CreateBlock(insertAfter: lastBlock);
             cloner.AddBlock(block, newBlock);
             lastBlock = newBlock;
@@ -92,18 +131,19 @@ public class InlineMethods : IMethodPass
                 returningBlocks.Add(newBlock);
             }
         }
+
         cloner.Run();
 
-        // If the callee only has a single block ending with return,
+        // If the target only has a single block ending with return,
         // the entire code can be moved at once without creating new blocks.
-        var result = calleeBody.NumBlocks == 1 && returningBlocks.Count == 1
+        var result = targetBody.NumBlocks == 1 && returningBlocks.Count == 1
             ? InlineOneBlock(call, returningBlocks[0])
-            : InlineManyBlocks(call, cloner.GetMapping(calleeBody.EntryBlock), returningBlocks);
+            : InlineManyBlocks(call, cloner.GetMapping(targetBody.EntryBlock), returningBlocks);
 
         if (result != null) {
             // After inlining, `call` will be at the start of the continuation block.
             return result;
-        } else if (callee.ReturnType != PrimType.Void) {
+        } else if (target.ReturnType != PrimType.Void) {
             // This could happen if we inline a method that ends with ThrowInst, but it still returns something.
             // Code after `call` should be unreachable now, but we need to replace its uses with undef to avoid making the IR invalid.
             return new Undef(call.ResultType);
@@ -154,16 +194,13 @@ public class InlineMethods : IMethodPass
 
     public class Options
     {
-        /// <summary> Ignore callees whose number of IL instructions is greater than this. </summary>
-        public int MaxCalleeSize { get; init; } = 32;
+        /// <summary> Inline candidate instruction limit. </summary>
+        public int MaxCandidateInstrs { get; init; } = 32;
 
-        // <summary> If true, allows calls to methods from different assemblies to be inlined. </summary>
-        // public bool InlineCrossAssemblyCalls { get; init; } = false;
+        /// <summary> Inline candidate instruction limit, for AggressiveInlining. </summary>
+        public int MaxCandidateInstrsAggressive { get; init; } = 4096;
 
-        // <summary> If true, private members accessed by callee will be exposed as public (if they are on the same assembly). </summary>
-        // public bool ExposePrivateCalleeMembers { get; init; } = true;
-
-        // Note that IACA is undocumented: https://github.com/dotnet/runtime/issues/37875
-        // public bool UseIgnoreAccessChecksAttribute { get; init; } = false;
+        // /// <summary> If true, allows calls to methods from different assemblies to be inlined. </summary>
+        // public bool AllowCrossAssemblyCalls { get; init; } = false;
     }
 }

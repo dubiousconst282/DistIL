@@ -34,23 +34,20 @@ public class ScalarReplacement : IMethodPass
         var builder = new IRBuilder(alloc, InsertionDir.Before);
 
         foreach (var field in alloc.ResultType.Fields) {
-            builder.CreateStore(GetSlot(field), builder.CreateDefaultOf(field.Type));
+            builder.CreateInitObj(GetSlot(field));
         }
 
-        // At this point we know that the constructor doesn't let the instance escape,
-        // inlining it here will add the accessed fields to the use chain of `alloc`.
-        var ctorArgs = new Value[alloc.NumArgs + 1];
-        ctorArgs[0] = alloc;
-        alloc.Args.CopyTo(ctorArgs.AsSpan(1));
-        InlineMethods.Inline(alloc, (MethodDefOrSpec)alloc.Constructor, ctorArgs);
+        // At this point we know that the constructor doesn't let the instance escape.
+        // Inlining it here will add the accessed fields to the use chain of `alloc`.
+        InlineMethods.Inline(alloc, (MethodDefOrSpec)alloc.Constructor, [alloc, ..alloc.Args]);
 
         foreach (var user in alloc.Users()) {
             if (user is FieldAddrInst addr) {
                 addr.ReplaceWith(GetSlot(addr.Field));
             } else {
                 Debug.Assert(IsObjectCtorCall(user));
+                user.Remove();
             }
-            user.Remove();
         }
 
         // Remove redundant allocation

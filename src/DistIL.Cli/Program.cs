@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
@@ -9,7 +8,6 @@ using DistIL;
 using DistIL.AsmIO;
 using DistIL.IR.Utils;
 using DistIL.Passes;
-using DistIL.Util;
 
 var parser = new CommandLine.Parser(c => {
     c.CaseInsensitiveEnumValues = true;
@@ -67,19 +65,19 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
         .Apply<SimplifyInsts>(); // lambdas and devirtualization
 
     manager.AddPasses(applyIndependently: true) // this is so that e.g. all callees are in SSA before inlining.
-        .Apply<InlineMethods>()
-        .IfChanged(c => c.Apply<SimplifyInsts>());
+        .Apply<InlineMethods>();
 
     manager.AddPasses()
         .Apply<ScalarReplacement>()
-        .IfChanged(c => c.Apply<SsaPromotion>());
+        .IfChanged(c => c.Apply<SsaPromotion>()
+                         .Apply<InlineMethods>()) // SROA+SSA uncovers new devirtualization oportunities
+        .RepeatUntilFixedPoint(maxIters: 3);
 
-    // TODO: this segment is quite expansive, avoid repeating it too many times
     var simplifySeg = manager.AddPasses()
         .Apply<SimplifyInsts>()
         .Apply<SimplifyCFG>()
         .Apply<DeadCodeElim>()
-        .RepeatUntilFixedPoint(maxIters: 3);
+        .RepeatUntilFixedPoint(maxIters: 2);
 
     manager.AddPasses()
         .Apply<ValueNumbering>()

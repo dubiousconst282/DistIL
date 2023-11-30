@@ -287,6 +287,16 @@ public class IRBuilder
         return Const.CreateZero(type);
     }
 
+    /// <summary> Creates an instruction that stores the <see langword="default"/> value into the given address. </summary>
+    public Instruction CreateInitObj(Value addr, TypeDesc? objType = null)
+    {
+        objType ??= ((PointerType)addr.ResultType).ElemType;
+        
+        return objType.Kind == TypeKind.Struct 
+            ? Emit(new CilIntrinsic.MemSet(addr, objType))
+            : CreateStore(addr, Const.CreateZero(objType));
+    }
+
     public IntrinsicInst CreateBox(TypeDesc valueType, Value val)
         => Emit(new CilIntrinsic.Box(valueType, val));
     public IntrinsicInst CreateUnboxObj(TypeDesc valueType, Value val)

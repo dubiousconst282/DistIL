@@ -26,7 +26,7 @@
 
     <Exec
       WorkingDirectory="$(TargetDir)"
-      Command='dotnet "$(MSBuildThisFileDirectory)../tools/net7.0/DistIL.Cli.dll" -i "$(InputAsmPath)" $(ResolverPathsArg) $(FilterUnmarkedArg) $(DistilExtraArgs)'
+      Command='dotnet "$(MSBuildThisFileDirectory)../tools/net8.0/DistIL.Cli.dll" -i "$(InputAsmPath)" $(ResolverPathsArg) $(FilterUnmarkedArg) $(DistilExtraArgs)'
     />
     <Touch Files="@(IntermediateAssembly -> '%(Identity).bak')" />
   </Target>

@@ -21,8 +21,11 @@ public class ConsoleLogger : ICompilationLogger
             LogLevel.Fatal => ConsoleColor.DarkRed,
             _ => ConsoleColor.White,
         };
+        if (exception != null) {
+            msg = msg.ToString() + "\n\n" + exception.ToString();
+        }
         foreach (var line in msg.EnumerateLines()) {
-            Indent(_scopeStack.Count);
+            if (!line.IsEmpty) Indent(_scopeStack.Count);
             Console.Out.WriteLine(line);
         }
         Console.ResetColor();

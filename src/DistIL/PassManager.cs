@@ -80,11 +80,18 @@ public class PassManager
             var segments = Pipeline.AsSpan()[i..j];
 
             foreach (var method in candidates) {
+                if (method.Body == null) continue; // body will be null on failure to import the IL
+                
                 using var methodScope = Compilation.Logger.Push(s_ApplyScope, $"Apply passes to '{method}'");
-                var ctx = new MethodTransformContext(Compilation, method.Body!);
+                var ctx = new MethodTransformContext(Compilation, method.Body);
 
-                foreach (var seg in segments) {
-                    seg.Run(ctx);
+                try {
+                    foreach (var seg in segments) {
+                        seg.Run(ctx);
+                    }
+                } catch (Exception ex) {
+                    method.Body = null;
+                    Compilation.Logger.Error("Error while transforming method! Will fallback to original method body.", ex);
                 }
             }
             i = j;

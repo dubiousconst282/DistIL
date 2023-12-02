@@ -179,9 +179,9 @@ class OptimizerOptions
     public void FilterPassCandidates(List<MethodDef> candidates)
     {
         if (FilterUnmarked) {
-            candidates.RemoveAll(m => (GetOptimizeAttr(m) ?? GetOptimizeAttr(m.DeclaringType)) is not true);
+            candidates.RemoveAll(m => (IsMarkedForOpts(m) ?? IsMarkedForOpts(m.DeclaringType)) is not true && !IsGeneratedInnerMethod(m));
 
-            static bool? GetOptimizeAttr(ModuleEntity entity)
+            static bool? IsMarkedForOpts(ModuleEntity entity)
             {
                 foreach (var attr in entity.GetCustomAttribs()) {
                     if (attr.Type.Namespace != "DistIL.Attributes") continue;
@@ -189,6 +189,13 @@ class OptimizerOptions
                     if (attr.Type.Name == "DoNotOptimizeAttribute") return false;
                 }
                 return null;
+            }
+            // Checks if the given method has a mangled lambda or local function name.
+            // We'll forcibly import these in order to enable inlining into marked methods. See #27
+            // - https://github.com/dotnet/roslyn/blob/main/src/Compilers/CSharp/Portable/Symbols/Synthesized/GeneratedNames.cs
+            static bool IsGeneratedInnerMethod(MethodDef method)
+            {
+                return method.Name.StartsWith('<') && (method.Name.Contains(">b__") || method.Name.Contains(">g__"));
             }
         }
         if (MethodFilter != null && MethodFilter.StartsWith('!')) {

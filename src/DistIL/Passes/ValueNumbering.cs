@@ -84,8 +84,9 @@ public class ValueNumbering : IMethodPass
             var worklist = new DiscreteStack<BasicBlock>(user.Block);
 
             while (worklist.TryPop(out var block)) {
-                var inst = block == user.Block ? user : block.Last;
-                var firstInst = block == def.Block ? def.Next : null;
+                // `user.Prev` can't possibly be null if `user.Block == def.Block`.
+                var inst = block == user.Block ? user.Prev! : block.Last;
+                var firstInst = block == def.Block ? def : null;
 
                 for (; inst != firstInst; inst = inst.Prev!) {
                     if (MayClobberDef(def, inst)) {

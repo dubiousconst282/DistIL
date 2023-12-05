@@ -64,6 +64,21 @@ BB_01:
 // CHECK: ret
 }
 
+
+public static Self::LVN_MemClobber_1(#ptr: float&) -> float {
+BB_01:
+  r1 = load #ptr -> float
+  r2 = call Self::Clobber(float: r1) -> float
+  r3 = load #ptr -> float
+  r4 = fadd r1, r3 -> float
+  ret r4
+// CHECK: LVN_MemClobber_1
+// CHECK: load
+// CHECK: call
+// CHECK: load
+// CHECK: ret
+}
+
 public static Self::GVN_Memory_Store_1(#ptr: int*, #x: int) -> int {
 BB_01:
   r2 = add #x, 2 -> int

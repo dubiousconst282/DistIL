@@ -80,7 +80,7 @@ public class InterferenceGraph : IMethodAnalysis
         return na.Adjacent.Contains(nb.Id);
     }
 
-    /// <summary> Attempts to merge node <paramref name="b"/> into <paramref name="a"/> if they don't interfere. </summary>
+    /// <summary> Merge node <paramref name="b"/> into <paramref name="a"/> if they don't have interference edges. </summary>
     public bool TryMerge(Instruction a, Instruction b)
     {
         var na = GetOrCreateNode(a);
@@ -92,6 +92,7 @@ public class InterferenceGraph : IMethodAnalysis
 
         if (na != nb) {
             // Replace all existing edges to B with A
+            // This is necessary to avoid duplicate edges after merging.
             foreach (int id in nb.Adjacent) {
                 var node = GetNode(id);
                 node.Adjacent.Remove(nb.Id);
@@ -99,8 +100,16 @@ public class InterferenceGraph : IMethodAnalysis
             }
             na.Adjacent.Union(nb.Adjacent);
 
-            _nodes[nb.Id] = na;
-            _defNodeIds[b] = na.Id;
+            nb.MergedWith = na;
+
+            // Note that replacing the node array slot directly instead of using the
+            // MergedWith chain won't always work, consider the following sequence:
+            //   Merge 0 + 1
+            //   Merge 3 + 0    GetNode(0) -> 3
+            //   Merge 6 + 3    GetNode(0) -> 3
+            //
+            // _nodes[nb.Id] = na;
+            // Debug.Assert(_nodes.All(n => n == null || n.MergedWith == null));
         }
         return true;
     }
@@ -126,7 +135,13 @@ public class InterferenceGraph : IMethodAnalysis
 
     private Node GetNode(int id)
     {
-        return _nodes[id];
+        var node = _nodes[id];
+
+        while (node.MergedWith != null) {
+            node = node.MergedWith;
+            _nodes[id] = node;  // Replace slot so we won't have to traverse chain again
+        }
+        return node;
     }
 
     public IEnumerable<(Instruction K, Node V)> GetNodes()
@@ -176,13 +191,13 @@ public class InterferenceGraph : IMethodAnalysis
         return sw.ToString();
     }
 
-    public class Node
+    public class Node(int id, TypeDesc regType)
     {
         public readonly BitSet Adjacent = new();
-        public readonly int Id;
+        public readonly TypeDesc RegisterType = regType;
+        public readonly int Id = id;
         public int Color;
-        public TypeDesc RegisterType;
 
-        public Node(int id, TypeDesc regType) { Id = id; RegisterType = regType; }
+        internal Node? MergedWith;
     }
 }

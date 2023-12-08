@@ -126,10 +126,10 @@ public class PassManager
         s_StatsScope = new("DistIL.PassManager.ResultStats");
 
     /// <summary>
-    /// Searches for candidate transform methods and their dependencies via IL scan. <br/>
+    /// Searches for candidate transform methods and their dependencies through a depth-first IL scan. <br/>
     /// The returned list is ordered such that called methods appear before callers, if statically known.
     /// </summary>
-    public static List<MethodDef> GetCandidateMethodsFromIL(ModuleDef module, Predicate<MethodDef>? filter = null)
+    public static List<MethodDef> GetCandidateMethodsFromIL(ModuleDef module, CandidateMethodFilter? filter = null)
     {
         var candidates = new List<MethodDef>();
 
@@ -138,7 +138,7 @@ public class PassManager
 
         // Perform DFS on each defined method
         foreach (var seedMethod in module.MethodDefs()) {
-            Push(seedMethod);
+            Push(null, seedMethod);
 
             while (!worklist.IsEmpty) {
                 var (method, entered) = worklist.Top;
@@ -148,8 +148,8 @@ public class PassManager
 
                     // Enqueue called methods
                     foreach (ref var inst in method.ILBody!.Instructions.AsSpan()) {
-                        if (inst.Operand is MethodDefOrSpec { Definition: var callee }) {
-                            Push(callee);
+                        if (inst.Operand is MethodDefOrSpec { Definition: var target }) {
+                            Push(method, target);
                         }
                     }
                 } else {
@@ -160,19 +160,18 @@ public class PassManager
         }
         return candidates;
 
-        void Push(MethodDef method)
+        void Push(MethodDef? caller, MethodDef target)
         {
-            if (IsCandidate(method) && visited.Add(method)) {
-                worklist.Push((method, false));
+            if (target.ILBody != null && visited.Add(target)) {
+                // Invoke the filter late as it may be expansive.
+                if (filter != null && !filter.Invoke(caller, target)) return;
+
+                worklist.Push((target, false));
             }
         }
-        bool IsCandidate(MethodDef method)
-        {
-            return method.ILBody != null &&
-                   method.Module == module && 
-                   (filter == null || filter.Invoke(method));
-        }
     }
+
+    public delegate bool CandidateMethodFilter(MethodDef? caller, MethodDef method);
 
     public class PipelineSegment
     {

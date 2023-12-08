@@ -6,7 +6,6 @@ using CommandLine.Text;
 
 using DistIL;
 using DistIL.AsmIO;
-using DistIL.IR.Utils;
 using DistIL.Passes;
 
 var parser = new CommandLine.Parser(c => {
@@ -101,12 +100,15 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
         manager.AddPasses().Apply(new DumpPass() {
             BaseDir = options.DumpDir,
             Formats = options.DumpFmts,
-            Filter = options.GetMethodFilter()
+            Filter = CompileFilter(options.DumpMethodFilter)
         });
     }
 
-    var methods = PassManager.GetCandidateMethodsFromIL(comp.Module);
-    options.FilterPassCandidates(methods);
+    var methods = PassManager.GetCandidateMethodsFromIL(comp.Module, GetCandidateFilter(options, comp));
+
+    if (options.BisectFilter != null) {
+        ApplyFuzzyBisect(options.BisectFilter, methods);
+    }
     manager.Run(methods);
 }
 static void AddIgnoreAccessAttrib(ModuleDef module, IEnumerable<string> assemblyNames)
@@ -131,195 +133,101 @@ static void AddIgnoreAccessAttrib(ModuleDef module, IEnumerable<string> assembly
     }
 }
 
-[Verb("opt", isDefault: true, HelpText = "Optimizes a module.")]
-class OptimizerOptions
+static PassManager.CandidateMethodFilter GetCandidateFilter(OptimizerOptions options, Compilation comp)
 {
-    [Option('i', Required = true, HelpText = "Input module file path.")]
-    public string InputPath { get; set; } = null!;
+    var filter = CompileFilter(options.PassMethodFilter);
 
-    [Option('o', HelpText = "Output module file path. If unspecified, the input module will be overwritten.")]
-    public string? OutputPath { get; set; } = null;
+    return (caller, method) => {
+        if (method.Module != comp.Module) {
+            return false;
+        }
+        if (options.FilterUnmarked && !IsMarkedForOpts(method)) {
+            // Include inner lambdas and local functions within marked parent methods
+            // to enable inlining into marked methods. See #27
+            if (!(IsGeneratedInnerMethod(method) && caller != null && IsMarkedForOpts(caller))) {
+                return false;
+            }
+        }
+        // TODO: support for something like ILLink root descs file, see #30
+        if (filter != null && !filter.Invoke(method)) {
+            return false;
+        }
+        return true;
+    };
 
-    [Option('r', HelpText = "Module resolver search paths.")]
-    public IEnumerable<string> ResolverPaths { get; set; } = null!;
-
-    [Option("no-resolver-fallback", HelpText = "Don't use fallback search paths for module resolution.")]
-    public bool NoResolverFallback { get; set; } = false;
-
-    [Option("filter-unmarked", HelpText = "Only transform methods and classes marked with `OptimizeAttribute`.")]
-    public bool FilterUnmarked { get; set; } = false;
-
-    [Option("dump-dir", HelpText = "Output directory for IR dumps.")]
-    public string? DumpDir { get; set; } = null;
-
-    [Option("dump-fmts", HelpText = "Comma-separated list of IR dump formats.\n")]
-    public DumpFormats DumpFmts { get; set; } = DumpFormats.Graphviz;
-
-    [Option("purge-dumps", HelpText = "Delete all files in `dump-dir`.")]
-    public bool PurgeDumps { get; set; }
-
-    [Option("filter", HelpText = kFilterHelp)]
-    public string? MethodFilter { get; set; }
-
-    [Option("bisect", HelpText = "Colon-separated list of probabilities used to randomly disable optimizations from methods.")]
-    public string? BisectFilter { get; set; }
-
-    [Option("verbosity", HelpText = "Specifies logging verbosity.\n")]
-    public LogLevel Verbosity { get; set; } = LogLevel.Info;
-
-    const string kFilterHelp = """
-        Filters methods to optimize or dump using a wildcard pattern: 
-          [TypeName::] MethodName [(ParType1, ParType2, ...)]
-        Multiple patterns can be separated with '|'. 
-        The optimizer is only affected if this is prefixed with '!'.
-        """;
-
-    Predicate<MethodDef>? _cachedFilter;
-
-    public void FilterPassCandidates(List<MethodDef> candidates)
+    static bool IsMarkedForOpts(MethodDef method)
     {
-        if (FilterUnmarked) {
-            candidates.RemoveAll(m => (IsMarkedForOpts(m) ?? IsMarkedForOpts(m.DeclaringType)) is not true && !IsGeneratedInnerMethod(m));
-
-            static bool? IsMarkedForOpts(ModuleEntity entity)
-            {
-                foreach (var attr in entity.GetCustomAttribs()) {
-                    if (attr.Type.Namespace != "DistIL.Attributes") continue;
-                    if (attr.Type.Name == "OptimizeAttribute") return true;
-                    if (attr.Type.Name == "DoNotOptimizeAttribute") return false;
-                }
-                return null;
-            }
-            // Checks if the given method has a mangled lambda or local function name.
-            // We'll forcibly import these in order to enable inlining into marked methods. See #27
-            // - https://github.com/dotnet/roslyn/blob/main/src/Compilers/CSharp/Portable/Symbols/Synthesized/GeneratedNames.cs
-            static bool IsGeneratedInnerMethod(MethodDef method)
-            {
-                return method.Name.StartsWith('<') && (method.Name.Contains(">b__") || method.Name.Contains(">g__"));
-            }
-        }
-        if (MethodFilter != null && MethodFilter.StartsWith('!')) {
-            var pred = GetMethodFilter()!;
-            candidates.RemoveAll(m => !pred.Invoke(m));
-        }
-
-        // Fuzzy bisect will randomly filter-out methods based on a list of probabilities.
-        // Scripts can brute-force this list to easily find problematic methods.
-        if (BisectFilter != null) {
-            string[] parts = BisectFilter.Split(':');
-            int sourceCount = candidates.Count;
-
-            for (int i = 1; i < parts.Length; i++) {
-                var rng = new Random(123 + i * 456);
-                float prob = float.Parse(parts[i]) / 100.0f;
-
-                candidates.RemoveAll(m => rng.NextSingle() < prob);
-            }
-            Console.WriteLine($"Fuzzy bisecting methods {candidates.Count}/{sourceCount}");
-            File.WriteAllLines("bisect_log.txt", candidates.Select(RenderMethodSig));
-        }
+        return (FindOptFlag(method) ?? FindOptFlag(method.DeclaringType)) is true;
     }
-
-    public Predicate<MethodDef>? GetMethodFilter()
+    static bool? FindOptFlag(ModuleEntity entity)
     {
-        if (MethodFilter == null) {
-            return null;
+        foreach (var attr in entity.GetCustomAttribs()) {
+            if (attr.Type.Namespace != "DistIL.Attributes") continue;
+            if (attr.Type.Name == "OptimizeAttribute") return true;
+            if (attr.Type.Name == "DoNotOptimizeAttribute") return false;
         }
-        return _cachedFilter ??= CompileFilter(MethodFilter);
+        return null;
     }
-
-    private static Predicate<MethodDef> CompileFilter(string pattern)
+    // Checks if the given method has a mangled lambda or local function name.
+    // - https://github.com/dotnet/roslyn/blob/main/src/Compilers/CSharp/Portable/Symbols/Synthesized/GeneratedNames.cs
+    static bool IsGeneratedInnerMethod(MethodDef method)
     {
-        pattern = pattern.TrimStart('!');
-        
-        // Pattern :=  (ClassName  "::")? MethodName ( "(" Seq{TypeName} ")" )?  ("|" Pattern)?
-        pattern = string.Join("|", pattern.Split('|').Select(part => {
-            var tokens = Regex.Match(part, @"^(?:(.+)::)?(.+?)(?:\((.+)\))?$");
-
-            var typeToken = WildcardToRegex(tokens.Groups[1].Value);
-            var methodToken = WildcardToRegex(tokens.Groups[2].Value);
-            var sigToken = WildcardToRegex(tokens.Groups[3].Value, true);
-
-            return @$"(?:{typeToken}::{methodToken}\({sigToken}\))";
-        }));
-        var regex = new Regex("^" + pattern + "$", RegexOptions.CultureInvariant);
-
-        return (m) => regex.IsMatch(RenderMethodSig(m));
-
-        static string WildcardToRegex(string value, bool normalizeSeq = false)
-        {
-            if (string.IsNullOrWhiteSpace(value)) {
-                return ".*";
-            }
-            // Based on https://stackoverflow.com/a/30300521
-            if (normalizeSeq) {
-                value = Regex.Replace(value, @"\s*,\s*", ",");
-            }
-            value = Regex.Escape(value);
-            return value.Replace("\\?", ".").Replace("\\*", ".*");
-        }
-    }
-    private static string RenderMethodSig(MethodDef def)
-    {
-        var pars = def.ParamSig.Skip(def.IsInstance ? 1 : 0);
-        return $"{def.DeclaringType.Name}::{def.Name}({string.Join(',', pars.Select(p => p.Type.Name))})";
+        return method.Name.StartsWith('<') && (method.Name.Contains(">b__") || method.Name.Contains(">g__"));
     }
 }
 
-class DumpPass : IMethodPass
+// Fuzzy bisect will randomly filter-out methods based on a list of probabilities.
+// Scripts can brute-force this list to easily find problematic methods.
+static void ApplyFuzzyBisect(string filterStr, List<MethodDef> candidates)
 {
-    public string BaseDir { get; init; } = null!;
-    public Predicate<MethodDef>? Filter { get; init; }
-    public DumpFormats Formats { get; init; }
+    string[] parts = filterStr.Split(':');
+    int sourceCount = candidates.Count;
 
-    public MethodPassResult Run(MethodTransformContext ctx)
-    {
-        if (Filter == null || Filter.Invoke(ctx.Method.Definition)) {
-            var def = ctx.Method.Definition;
-            string name = $"{def.DeclaringType.Name}::{def.Name}";
+    for (int i = 1; i < parts.Length; i++) {
+        var rng = new Random(123 + i * 456);
+        float prob = float.Parse(parts[i]) / 100.0f;
 
-            // Escape all Windows forbidden characters to prevent issues with NTFS partitions on Linux
-            name = Regex.Replace(name, @"[\x00-\x1F:*?\/\\""<>|]", "_");
-
-            while (File.Exists($"{BaseDir}/{name}.txt")) {
-                name += HashCode.Combine(name) % 10;
-            }
-
-            if (Formats.HasFlag(DumpFormats.Graphviz)) {
-                IRPrinter.ExportDot(ctx.Method, $"{BaseDir}/{name}.dot");
-            }
-            if (Formats.HasFlag(DumpFormats.Plaintext)) {
-                IRPrinter.ExportPlain(ctx.Method, $"{BaseDir}/{name}.txt");
-            }
-            if (Formats.HasFlag(DumpFormats.Forest)) {
-                IRPrinter.ExportForest(ctx.Method, $"{BaseDir}/{name}_forest.txt");
-            }
-        }
-        return MethodInvalidations.None;
+        candidates.RemoveAll(m => rng.NextSingle() < prob);
     }
-}
-[Flags]
-enum DumpFormats
-{
-    None = 0,
-    Graphviz    = 1 << 0,
-    Plaintext   = 1 << 1,
-    Forest      = 1 << 2
+    Console.WriteLine($"Fuzzy bisecting methods {candidates.Count}/{sourceCount}");
+    File.WriteAllLines("bisect_log.txt", candidates.Select(RenderMethodSig));
 }
 
-class VerificationPass : IMethodPass
+static Predicate<MethodDef>? CompileFilter(string? pattern)
 {
-    public MethodPassResult Run(MethodTransformContext ctx)
-    {
-        var diags = IRVerifier.Diagnose(ctx.Method);
-
-        if (diags.Count > 0) {
-            using var scope = ctx.Logger.Push(new LoggerScopeInfo("DistIL.IR.Verification"), $"Bad IR in '{ctx.Method}'");
-
-            foreach (var diag in diags) {
-                ctx.Logger.Warn(diag.ToString());
-            }
-        }
-        return MethodInvalidations.None;
+    if (pattern == null) {
+        return null;
     }
+
+    // Pattern :=  (ClassName  "::")? MethodName ( "(" Seq{TypeName} ")" )?  ("|" Pattern)?
+    pattern = string.Join("|", pattern.Split('|').Select(part => {
+        var tokens = Regex.Match(part, @"^(?:(.+)::)?(.+?)(?:\((.+)\))?$");
+
+        var typeToken = WildcardToRegex(tokens.Groups[1].Value);
+        var methodToken = WildcardToRegex(tokens.Groups[2].Value);
+        var sigToken = WildcardToRegex(tokens.Groups[3].Value, true);
+
+        return @$"(?:{typeToken}::{methodToken}\({sigToken}\))";
+    }));
+    var regex = new Regex("^" + pattern + "$", RegexOptions.CultureInvariant);
+
+    return (m) => regex.IsMatch(RenderMethodSig(m));
+
+    static string WildcardToRegex(string value, bool normalizeSeq = false)
+    {
+        if (string.IsNullOrWhiteSpace(value)) {
+            return ".*";
+        }
+        // Based on https://stackoverflow.com/a/30300521
+        if (normalizeSeq) {
+            value = Regex.Replace(value, @"\s*,\s*", ",");
+        }
+        value = Regex.Escape(value);
+        return value.Replace("\\?", ".").Replace("\\*", ".*");
+    }
+}
+static string RenderMethodSig(MethodDef def)
+{
+    var pars = def.ParamSig.Skip(def.IsInstance ? 1 : 0);
+    return $"{def.DeclaringType.Name}::{def.Name}({string.Join(',', pars.Select(p => p.Type.Name))})";
 }

@@ -23,9 +23,9 @@ public abstract class IntrinsicInst : Instruction
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
 
-    /// <summary> Creates a new instance of this intrinsic with the given <see cref="Value.ResultType"/> and <see cref="Instruction.Operands"/> properties. </summary>
-    /// <remarks> This method is meant to be used internally by <see cref="Utils.IRCloner"/>. The ownership of <paramref name="args"/> is given to the new instruction. </remarks> 
-    internal IntrinsicInst CloneWith(TypeDesc resultType, EntityDesc[] staticArgs, Value[] args)
+    /// <summary> Creates a new instance of this intrinsic with the given properties. </summary>
+    /// <remarks> This method is meant to be used internally by <see cref="Utils.IRCloner"/>. The ownership of the arrays is given to the new instruction. </remarks> 
+    protected internal virtual IntrinsicInst CloneWith(TypeDesc resultType, EntityDesc[] staticArgs, Value[] args)
     {
         Debug.Assert(args.Length == _operands.Length);
         Debug.Assert(staticArgs.Length == StaticArgs.Length);

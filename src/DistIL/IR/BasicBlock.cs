@@ -61,6 +61,9 @@ public class BasicBlock : TrackedValue
     /// <summary> Whether the block starts with a <see cref="PhiInst"/> or <see cref="GuardInst"/>. </summary>
     public bool HasPhisOrGuards => First is PhiInst or GuardInst;
 
+    public bool HasGuards => First is GuardInst;
+    public bool HasPhis => FirstNonGuard is PhiInst;
+
     /// <summary> Checks if this block is the entry handler/filter block of a protected region. </summary>
     public bool IsHandlerEntry => Users().Any(u => u is GuardInst);
 

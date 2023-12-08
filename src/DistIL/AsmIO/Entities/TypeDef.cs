@@ -81,7 +81,7 @@ public class TypeDef : TypeDefOrSpec
 
     public int LayoutSize { get; set; }
     public int LayoutPack { get; set; }
-    public bool HasCustomLayout => (Attribs & TypeAttributes.ExplicitLayout) != 0;
+    public bool HasCustomLayout => LayoutSize > 0 || LayoutPack > 0;
 
     List<FieldDef>? _fields;
     public override List<FieldDef> Fields => _fields ??= (_loader?.LoadFields(this) ?? new());

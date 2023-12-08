@@ -224,10 +224,10 @@ public class SimplifyCFG : IMethodPass
 
         // Don't mess with handler blocks for now.
         // (Future note: they cannot have guards.)
-        if (block.IsHandlerEntry) return false;
+        if (block.IsHandlerEntry || succ.HasGuards) return false;
 
-        // Only transform if we don't need to change phis too much
-        if (!succ.HasPhisOrGuards || (block.NumPreds == 1 && !block.Preds.First().IsUsedByPhis)) {
+        // Transform is only valid if either the successor has no phis, or if threading won't introduce a duplicate edge
+        if (!succ.HasPhis || (block.NumPreds == 1 && !block.Preds.First().IsUsedByPhis)) {
             foreach (var pred in block.Preds) {
                 pred.RedirectSucc(block, succ);
                 succ.RedirectPhis(block, pred);

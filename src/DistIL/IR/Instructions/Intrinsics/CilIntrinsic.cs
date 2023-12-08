@@ -34,11 +34,16 @@ public abstract class CilIntrinsic : IntrinsicInst
     }
 
     /// <summary> (object?)T AsInstance&lt;T&gt;(object obj) </summary>
-    public class AsInstance(TypeDesc destType, Value obj)
-        : CilIntrinsic(destType.IsValueType ? PrimType.Object : destType, [destType], [obj])
+    public class AsInstance(TypeDesc destType, Value obj) : CilIntrinsic(GetResultType(destType), [destType], [obj])
     {
         public override ILCode Opcode => ILCode.Isinst;
         public TypeDesc DestType => (TypeDesc)StaticArgs[0];
+
+        // Adjust result type when cloning, because a generic parameter T may become a struct.
+        protected internal override IntrinsicInst CloneWith(TypeDesc resultType, EntityDesc[] staticArgs, Value[] args)
+            => base.CloneWith(GetResultType(resultType), staticArgs, args);
+
+        private static TypeDesc GetResultType(TypeDesc destType) => destType.IsValueType ? PrimType.Object : destType;
     }
 
     /// <summary> (object)T Box&lt;T&gt;(T val) </summary>

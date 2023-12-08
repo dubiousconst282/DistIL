@@ -122,7 +122,10 @@ public class PtrOffsetInst : AddressInst
         ResultType = basePtr.ResultType is ByrefType 
             ? strideType.CreateByref()
             : strideType.CreatePointer();
-        Stride = strideType.Kind.Size();
+            
+        // sizeof(void) makes no sense and is illegal in IL, but we'll assume
+        // it's a byte offset for a pointer of unknown type.
+        Stride = strideType.Kind == TypeKind.Void ? 1 : strideType.Kind.Size();
     }
     public PtrOffsetInst(Value basePtr, Value index, int stride)
         : base(basePtr, index)

@@ -473,7 +473,7 @@ public partial class IRParser
                 ?? throw _ctx.Fatal("Method could not be found", (start, _lexer.LastPos()));
 
         if (genPars.Count > 0) {
-            method = method.GetSpec(new GenericContext(methodArgs: genPars));
+            method = method.GetSpec(genPars.ToImmutableArray());
             _parsedResultType = method.ReturnType;
         }
 

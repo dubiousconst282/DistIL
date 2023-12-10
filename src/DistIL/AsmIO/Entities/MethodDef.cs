@@ -31,7 +31,16 @@ public abstract class MethodDesc : MemberDesc
         ctx.PrintSequence("(", ")", ParamSig, p => p.Print(ctx));
     }
 
+    /// <summary> Binds generic type parameters using the given context. </summary>
+    /// <remarks>
+    /// If neither the method nor its declaring type are generic, or if the
+    /// context is empty, the current instance may be returned unchanged. 
+    /// </remarks>
     public abstract MethodDesc GetSpec(GenericContext ctx);
+
+    /// <summary> Creates a new generic method specialization with the given type arguments. </summary>
+    /// <exception cref="InvalidOperationException"> If this is not a generic method. </exception>
+    public virtual MethodDesc GetSpec(ImmutableArray<TypeDesc> genArgs) => throw new InvalidOperationException();
 }
 public abstract class MethodDefOrSpec : MethodDesc, ModuleEntity
 {
@@ -43,6 +52,28 @@ public abstract class MethodDefOrSpec : MethodDesc, ModuleEntity
 
     public virtual IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
         => Definition.GetCustomAttribs(readOnly);
+
+    public override MethodDefOrSpec GetSpec(GenericContext ctx)
+    {
+        if (!IsGeneric && !DeclaringType.IsGeneric) return this;
+        
+        var newParent = DeclaringType.GetSpec(ctx);
+        bool hasChangedParams = ctx.TryFillParams(GenericParams, out var genArgs);
+
+        if (hasChangedParams || newParent != DeclaringType) {
+            if (!hasChangedParams && this is not MethodSpec { IsBoundGeneric: true }) {
+                // Return cached spec for unbound spec
+                return ((TypeSpec)newParent).GetMapping(Definition);
+            }
+            return new MethodSpec(newParent, Definition, genArgs);
+        }
+        return this;
+    }
+    public override MethodSpec GetSpec(ImmutableArray<TypeDesc> genArgs)
+    {
+        Ensure.That(IsGeneric && genArgs.Length == GenericParams.Count);
+        return new MethodSpec(DeclaringType, Definition, genArgs);
+    }
 }
 public class MethodDef : MethodDefOrSpec
 {
@@ -98,18 +129,6 @@ public class MethodDef : MethodDefOrSpec
             "`this` parameter for generic type must be specialized with the default parameters");
     }
 
-    public override MethodDefOrSpec GetSpec(GenericContext ctx)
-    {
-        return IsGeneric || DeclaringType.IsGeneric
-            ? new MethodSpec(DeclaringType.GetSpec(ctx), this, ctx.FillParams(GenericParams))
-            : this;
-    }
-    public MethodSpec GetSpec(ImmutableArray<TypeDesc> genArgs)
-    {
-        Ensure.That(IsGeneric && genArgs.Length == GenericParams.Length);
-        return new MethodSpec(DeclaringType, this, genArgs);
-    }
-
     public override IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
         => CustomAttribUtils.GetOrInitList(ref _customAttribs, readOnly);
 
@@ -142,19 +161,20 @@ public class MethodSpec : MethodDefOrSpec
     public override IReadOnlyList<TypeSig> ParamSig { get; }
     public override IReadOnlyList<TypeDesc> GenericParams { get; }
 
-    /// <summary> Returns whether the generic parameters from this spec are different from its definition. </summary>
+    /// <summary> Whether the generic parameters from this spec are different from its open-form definition. </summary>
     public bool IsBoundGeneric => IsGeneric && GenericParams != Definition.GenericParams;
 
-    internal MethodSpec(TypeDefOrSpec declaringType, MethodDef def, ImmutableArray<TypeDesc> genArgs = default)
+    internal MethodSpec(TypeDefOrSpec declaringType, MethodDef def, IReadOnlyList<TypeDesc> genArgs)
     {
+        Debug.Assert(!def.IsGeneric || genArgs.Count > 0);
+        
         Definition = def;
         DeclaringType = declaringType;
-        Ensure.That(genArgs.IsDefaultOrEmpty || def.IsGeneric);
-        GenericParams = genArgs.IsDefault ? def.GenericParams : genArgs;
+        GenericParams = genArgs;
 
-        var genCtx = new GenericContext(this);
-        ReturnSig = def.ReturnSig.GetSpec(genCtx);
-        ParamSig = GetParamsSpec(genCtx);
+        var ctx = new GenericContext(this);
+        ReturnSig = def.ReturnSig.GetSpec(ctx);
+        ParamSig = GetParamsSpec(ctx);
     }
 
     private TypeSig[] GetParamsSpec(GenericContext genCtx)
@@ -172,15 +192,6 @@ public class MethodSpec : MethodDefOrSpec
             types[index++] = par.Sig.GetSpec(genCtx);
         }
         return types;
-    }
-
-    public override MethodSpec GetSpec(GenericContext ctx)
-    {
-        var declType = DeclaringType.GetSpec(ctx);
-
-        return ctx.TryFillParams(GenericParams, out var genArgs) || declType != DeclaringType
-            ? new MethodSpec(declType, Definition, genArgs)
-            : this;
     }
 }
 

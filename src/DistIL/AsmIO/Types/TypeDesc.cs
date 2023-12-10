@@ -34,10 +34,8 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     private PointerType? _ptrType;
     private ByrefType? _byrefType;
 
-    /// <summary>
-    /// Creates a generic type instantiation with the given context as arguments, 
-    /// or returns the current instance if it is not a generic type definition.
-    /// </summary>
+    /// <summary> Binds generic type parameters using the given context. </summary>
+    /// <remarks> If the type is not generic, or if the context is empty, the current instance may be returned unchanged. </remarks>
     public virtual TypeDesc GetSpec(GenericContext context) => this;
 
     /// <summary> Creates an <see cref="ArrayType"/> of the current type. </summary>

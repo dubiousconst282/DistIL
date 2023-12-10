@@ -61,7 +61,7 @@ public class GenericParamType : TypeDesc
     }
 
     public override TypeDesc GetSpec(GenericContext context)
-        => context.GetArgument(Index, IsMethodParam) ?? this;
+        => context.GetArgument(Index, IsMethodParam) ?? GetUnbound(Index, IsMethodParam);
 
     public override bool Equals(TypeDesc? other)
         => other is GenericParamType o && o.Index == Index && o.IsMethodParam == IsMethodParam;

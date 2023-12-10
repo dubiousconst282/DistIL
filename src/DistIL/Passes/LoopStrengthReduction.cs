@@ -260,7 +260,7 @@ public class LoopStrengthReduction : IMethodPass
             var m_GetArrayDataRef = builder.Resolver
                 .Import(typeof(System.Runtime.InteropServices.MemoryMarshal))
                 .FindMethod("GetArrayDataReference", new MethodSig(T0.CreateByref(), new TypeSig[] { T0.CreateArray() }, numGenPars: 1))
-                .GetSpec(new GenericContext(methodArgs: new[] { elemType }));
+                .GetSpec([elemType]);
 
             return builder.CreateCall(m_GetArrayDataRef, source);
         }

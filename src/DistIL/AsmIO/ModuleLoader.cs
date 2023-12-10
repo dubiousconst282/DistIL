@@ -493,10 +493,11 @@ internal class ModuleLoader
             case HandleKind.MethodSpecification: {
                 var info = _reader.GetMethodSpecification((MethodSpecificationHandle)handle);
                 var method = (MethodDefOrSpec)GetEntity(info.Method);
-                var decoder = new SignatureDecoder(this, info.Signature, new GenericContext(method));
+                
+                var sigDec = new SignatureDecoder(this, info.Signature);
+                sigDec.ExpectHeader(SignatureKind.MethodSpecification);
 
-                Ensure.That(decoder.Reader.ReadSignatureHeader().Kind == SignatureKind.MethodSpecification);
-                return new MethodSpec(method.DeclaringType, method.Definition, decoder.DecodeGenArgs());
+                return method.GetSpec(sigDec.DecodeGenArgs());
             }
             case HandleKind.MemberReference: {
                 var info = _reader.GetMemberReference((MemberReferenceHandle)handle);

@@ -19,3 +19,15 @@ public static class GenRefs
     public static int DerivedC_Str(DerivedC<string> x) => x.GetFoo(123).Item2;
     public static int DerivedC_KA(DerivedC_KnownArg x) => x.GetFoo(123)?.Length ?? 0;
 }
+
+class GenericConv<T>
+{
+    public static void To<TDest>(ReadOnlySpan<T> src, Span<TDest> dest)
+    {
+        GenericConv<TDest>.From<T>(src, dest);
+    }
+    public static void From<TSrc>(ReadOnlySpan<TSrc> src, Span<T> dest)
+    {
+        throw new NotImplementedException();
+    }
+}

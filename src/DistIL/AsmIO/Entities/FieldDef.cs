@@ -26,6 +26,11 @@ public abstract class FieldDesc : MemberDesc
         ctx.Print(Name, PrintToner.MemberName);
     }
 
+    /// <summary> Binds generic type parameters using the given context. </summary>
+    /// <remarks>
+    /// If the field's declaring type is not generic, or if the context is empty, 
+    /// the current instance may be returned unchanged.
+    /// </remarks>
     public abstract FieldDesc GetSpec(GenericContext ctx);
 }
 public abstract class FieldDefOrSpec : FieldDesc, ModuleEntity
@@ -37,12 +42,14 @@ public abstract class FieldDefOrSpec : FieldDesc, ModuleEntity
 
     public override FieldDesc GetSpec(GenericContext ctx)
     {
-        var newDeclType = DeclaringType.GetSpec(ctx);
-        return newDeclType != DeclaringType
-            ? new FieldSpec((TypeSpec)newDeclType, Definition)
+        if (!DeclaringType.IsGeneric) return this;
+        
+        var newParent = DeclaringType.GetSpec(ctx);
+        return newParent != DeclaringType 
+            ? ((TypeSpec)newParent).GetMapping(Definition) 
             : this;
     }
-    
+
     public virtual IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
         => Definition.GetCustomAttribs(readOnly);
 }

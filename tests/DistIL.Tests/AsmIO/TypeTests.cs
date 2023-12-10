@@ -88,4 +88,17 @@ public class TypeTests
         Assert.Equal(t_TupleStrInt, method.ReturnType);
         Assert.Equal(t_MT0, method.GenericParams[0]);
     }
+
+    [Fact]
+    public void Test_GenericTypeRefWithMethodParam()
+    {
+        var t_GenericConv = _modResolver.Resolve("TestAsm").FindType("TestAsm.TypeSys.Generics", "GenericConv`1");
+        var instr = t_GenericConv.Methods.First(m => m.Name == "To").ILBody.Instructions.First(n => n.OpCode == ILCode.Call);
+        var method = (MethodSpec)instr.Operand;
+
+        // call GenericConv<TDest>.From<T>(src, dest);
+        // GenericConv<T> { void From<TSrc>(ReadOnlySpan<TSrc> src, Span<T> dest) }
+        Assert.Equal(GenericParamType.GetUnboundT(0), method.ParamSig[0].Type.GenericParams[0]); // ROSpan<T>
+        Assert.Equal(GenericParamType.GetUnboundM(0), method.ParamSig[1].Type.GenericParams[0]); // Span<M>
+    }
 }

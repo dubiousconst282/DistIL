@@ -322,7 +322,7 @@ public class TypeSpec : TypeDefOrSpec
     public override string Name => Definition.Name;
 
     public override IReadOnlyList<FieldSpec> Fields => _fields ??= new(Definition.Fields, def => new FieldSpec(this, def));
-    public override IReadOnlyList<MethodSpec> Methods => _methods ??= new(Definition.Methods, def => new MethodSpec(this, def));
+    public override IReadOnlyList<MethodSpec> Methods => _methods ??= new(Definition.Methods, def => new MethodSpec(this, def, def.GenericParams));
     public override IReadOnlyList<TypeDesc> Interfaces => _interfaces ??= new(Definition.Interfaces, def => def.GetSpec(new GenericContext(this)));
 
     MemberList<FieldDef, FieldSpec>? _fields;
@@ -347,16 +347,24 @@ public class TypeSpec : TypeDefOrSpec
         if (method.DeclaringType != Definition) {
             return method.GetSpec(new GenericContext(this));
         }
-        var memberList = (MemberList<MethodDef, MethodSpec>)Methods;
-        return memberList.GetMapping((MethodDef)method);
+        return GetMapping((MethodDef)method);
     }
 
     public override FieldDesc? FindField(string name, [DoesNotReturnIf(true)] bool throwIfNotFound = true)
     {
         var field = Definition.FindField(name, throwIfNotFound);
-        var memberList = (MemberList<FieldDef, FieldSpec>)Fields;
+        return field == null ? null : GetMapping((FieldDef)field);
+    }
 
-        return field == null ? null : memberList.GetMapping((FieldDef)field);
+    internal MethodSpec GetMapping(MethodDef def)
+    {
+        var memberList = (MemberList<MethodDef, MethodSpec>)Methods;
+        return memberList.GetMapping(def);
+    }
+    internal FieldSpec GetMapping(FieldDef def)
+    {
+        var memberList = (MemberList<FieldDef, FieldSpec>)Fields;
+        return memberList.GetMapping(def);
     }
 
     public override TypeSpec GetSpec(GenericContext context)

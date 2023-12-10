@@ -24,6 +24,11 @@ public class FuncPtrType : TypeDesc
         ctx.PrintSequence("(", ")", Signature.ParamTypes, p => p.Print(ctx, includeNs));
     }
 
+    public override TypeDesc GetSpec(GenericContext context)
+    {
+        throw new NotImplementedException();
+    }
+
     public override bool Equals(TypeDesc? other)
         => other is FuncPtrType o && o.Signature.Equals(Signature);
 }

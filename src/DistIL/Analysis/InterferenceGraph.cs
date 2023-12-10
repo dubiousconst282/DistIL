@@ -59,7 +59,10 @@ public class InterferenceGraph : IMethodAnalysis
     public void AddEdge(Instruction a, Instruction b)
     {
         // Avoid creating edges for defs of different types to make the graph smaller.
-        if (a.ResultType != b.ResultType) return;
+        // We actually need to check over the stack type because of cases like `uint ~ int`.
+        // This check could be more strict around object types, but keeping it this way
+        // ensures that graph is correct regardless if the typing info in the IR is valid or not.
+        if (!a.ResultType.IsStackAssignableTo(b.ResultType)) return;
         
         var na = GetOrCreateNode(a);
         var nb = GetOrCreateNode(b);

@@ -20,8 +20,7 @@ public class FuncPtrType : TypeDesc
     public override void Print(PrintContext ctx, bool includeNs = false)
     {
         ctx.Print($"delegate* ", PrintToner.Keyword);
-        ctx.Print(Signature.CallConv.ToString().ToLower());
-        ctx.PrintSequence("(", ")", Signature.ParamTypes, p => p.Print(ctx, includeNs));
+        Signature.Print(ctx, includeNs);
     }
 
     public override TypeDesc GetSpec(GenericContext context)

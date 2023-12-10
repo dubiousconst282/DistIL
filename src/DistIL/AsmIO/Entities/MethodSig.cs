@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Reflection.Metadata;
 
 /// <summary> Represents the signature of a method declared in a type. </summary>
-public readonly struct MethodSig
+public readonly struct MethodSig : IPrintable
 {
     const SignatureAttributes kMaybeInstance = (SignatureAttributes)0x80;
 
@@ -68,6 +68,26 @@ public readonly struct MethodSig
         }
         return true;
     }
+
+    public void Print(PrintContext ctx, bool includeNs = false)
+    {
+        if (CallConv != CallConvention.Managed) {
+            ctx.Print($"[{PrintToner.ClassName}{CallConv.ToString()}]");
+        }
+
+        ReturnType.Print(ctx, includeNs);
+
+        if (NumGenericParams > 0) {
+            ctx.PrintSequence(
+                "<", ">", Enumerable.Range(0, NumGenericParams), 
+                i => ctx.Print("?", PrintToner.Number));
+        }
+        ctx.PrintSequence("(", ")", ParamTypes, p => p.Print(ctx, includeNs));
+    }
+    void IPrintable.Print(PrintContext ctx) => Print(ctx, false);
+    void IPrintable.PrintAsOperand(PrintContext ctx) => Print(ctx, false);
+
+    public override string ToString() => PrintContext.ToString(this);
 }
 
 //Copied from SignatureCallingConvention

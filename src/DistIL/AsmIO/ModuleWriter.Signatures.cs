@@ -13,8 +13,12 @@ partial class ModuleWriter
         
         switch (sig.Type) {
             case PrimType t: {
-                if (ReferenceEquals(t, PrimType.Array)) { // PrimTypes were a mistake...
+                if (ReferenceEquals(t, PrimType.Array)) {
                     enc.Type(GetHandle(_mod.Resolver.SysTypes.Array), false);
+                    return;
+                }
+                if (ReferenceEquals(t, PrimType.ValueType)) {
+                    enc.Type(GetHandle(_mod.Resolver.SysTypes.ValueType), false);
                     return;
                 }
                 enc.Builder.WriteByte((byte)t.Kind.ToSrmTypeCode());
@@ -51,7 +55,8 @@ partial class ModuleWriter
                 break;
             }
             case FuncPtrType t: {
-                EncodeMethodSig(t.Signature);
+                enc.Builder.WriteByte((byte)SignatureTypeCode.FunctionPointer);
+                EncodeMethodSig(new BlobEncoder(enc.Builder), t.Signature, isPropSig: false);
                 break;
             }
             case GenericParamType t: {
@@ -66,24 +71,22 @@ partial class ModuleWriter
         }
     }
 
-    private BlobHandle EncodeMethodSig(MethodSig sig, bool isPropSig = false)
+    private void EncodeMethodSig(BlobEncoder b, MethodSig sig, bool isPropSig = false)
     {
-        return EncodeSig(b => {
-            var pars = sig.ParamTypes;
-            bool isInstance = sig.IsInstance ?? throw new InvalidOperationException();
+        var pars = sig.ParamTypes;
+        bool isInstance = sig.IsInstance ?? throw new InvalidOperationException();
 
-            var sigEnc = isPropSig
-                ? b.PropertySignature(isInstance)
-                : b.MethodSignature((SignatureCallingConvention)sig.CallConv, sig.NumGenericParams, isInstance);
+        var sigEnc = isPropSig
+            ? b.PropertySignature(isInstance)
+            : b.MethodSignature((SignatureCallingConvention)sig.CallConv, sig.NumGenericParams, isInstance);
 
-            sigEnc.Parameters(pars.Count, out var retTypeEnc, out var parsEnc);
+        sigEnc.Parameters(pars.Count, out var retTypeEnc, out var parsEnc);
 
-            EncodeType(retTypeEnc.Type(), sig.ReturnType);
+        EncodeType(retTypeEnc.Type(), sig.ReturnType);
 
-            foreach (var par in pars) {
-                EncodeType(parsEnc.AddParameter().Type(), par.Type);
-            }
-        });
+        foreach (var par in pars) {
+            EncodeType(parsEnc.AddParameter().Type(), par.Type);
+        }
     }
 
     private BlobHandle EncodeMethodSig(MethodDesc method)

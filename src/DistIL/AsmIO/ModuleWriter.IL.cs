@@ -81,7 +81,8 @@ partial class ModuleWriter
             }
             case ILOperandType.Sig: {
                 var fnType = (FuncPtrType)inst.Operand!;
-                var handle = _builder.AddStandaloneSignature(EncodeMethodSig(fnType.Signature));
+                var sigBlob = EncodeSig(b => EncodeMethodSig(b, fnType.Signature));
+                var handle = _builder.AddStandaloneSignature(sigBlob);
                 bw.WriteInt32(MetadataTokens.GetToken(handle));
                 break;
             }

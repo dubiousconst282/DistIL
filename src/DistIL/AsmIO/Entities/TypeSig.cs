@@ -46,20 +46,12 @@ public readonly struct TypeSig : IEquatable<TypeSig>, IPrintable
     void IPrintable.Print(PrintContext ctx) => Print(ctx, false);
     void IPrintable.PrintAsOperand(PrintContext ctx) => Print(ctx, false);
 
-    public override string ToString()
-    {
-        var sw = new StringWriter();
-        Print(new PrintContext(sw, SymbolTable.Empty));
-        return sw.ToString();
-    }
 
-    public bool Equals(TypeSig other)
-    {
-        return other.Type == Type && Modifiers.SequenceEqual(other.Modifiers);
-    }
+    public bool Equals(TypeSig other) => other.Type == Type && Modifiers.SequenceEqual(other.Modifiers);
 
     public override bool Equals(object? obj) => obj is TypeSig sig && Equals(sig);
     public override int GetHashCode() => Type.GetHashCode();
+    public override string ToString() => PrintContext.ToString(this);
 
     public static bool operator ==(TypeSig left, TypeSig right) => left.Equals(right);
     public static bool operator !=(TypeSig left, TypeSig right) => !(left == right);

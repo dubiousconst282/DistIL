@@ -65,8 +65,6 @@ public class ILMethodBody
             ILOperandType.Type
                 => loader.GetEntity(MetadataTokens.EntityHandle(reader.ReadInt32())),
             ILOperandType.Sig
-                // `StandaloneSignature` is only used by calli.
-                // We use `FuncPtrType` instead of `MethodSig` because it inherits `Value`.
                 // TODO: fix generic context (reuse generic parameters)
                 => loader.DecodeMethodSig(MetadataTokens.StandaloneSignatureHandle(reader.ReadInt32())),
             ILOperandType.String => loader._reader.GetUserString(MetadataTokens.UserStringHandle(reader.ReadInt32())),

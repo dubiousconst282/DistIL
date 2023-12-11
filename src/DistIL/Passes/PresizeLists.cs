@@ -39,17 +39,15 @@ public class PresizeLists : IMethodPass
 
             // Pre-size lists
             foreach (var list in candidateLists) {
-                Console.WriteLine(ctx.Method);
-
                 var builder = new IRBuilder(loop.PreHeader);
                 // TODO: multiply minSize with number of add calls inside loop
                 var minSize = loop.GetTripCount(builder)!;
 
-                if (list is NewObjInst listAlloc && minSize is Instruction minSizeI && CanSinkAlloc(listAlloc, minSizeI, domTree)) {
+                if (list is NewObjInst listAlloc && CanSinkAlloc(listAlloc, minSize as Instruction ?? loop.PreHeader.Last, domTree)) {
                     Debug.Assert(listAlloc.Operands.Length == 0);
 
                     var ctorWithCap = list.ResultType.FindMethod(".ctor", new MethodSig(PrimType.Void, [PrimType.Int32]));
-                    listAlloc.ReplaceWith(builder.CreateNewObj(ctorWithCap, [minSizeI]));
+                    listAlloc.ReplaceWith(builder.CreateNewObj(ctorWithCap, [minSize]));
                 } else {
                     var minCap = builder.CreateAdd(minSize, builder.CreateCallVirt("get_Count", list));
                     builder.CreateCallVirt("EnsureCapacity", [list, minCap]);

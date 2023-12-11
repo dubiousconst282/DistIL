@@ -34,6 +34,9 @@ public class PassRegressionTests
     [Fact]
     public void Test_ValueNumbering() => CheckEthil("ValueNumbering.ethil", new ValueNumbering());
 
+    [Fact]
+    public void Test_PresizeLists() => CheckEthil("PresizeLists.ethil", new PresizeLists());
+
     private void CheckEthil(string filename, IMethodPass pass)
     {
         var selfType = _testAsm.CreateType("RegressionTests", $"_Test_{Path.GetFileNameWithoutExtension(filename)}");

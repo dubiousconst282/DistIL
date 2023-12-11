@@ -1,0 +1,88 @@
+import System.Collections, System.Collections.Generic from System.Private.CoreLib
+
+public static Self::NewList_AddEnumerableLoop(#source: ICollection`1[int]) -> List`1[int] {
+BB_01:
+  list = newobj List`1[int]::.ctor() -> List`1[int]
+  iter = callvirt IEnumerable`1[int]::GetEnumerator(this: #source) -> IEnumerator`1[!0]
+  goto BB_Header
+BB_Body:
+  item = callvirt IEnumerator`1[int]::get_Current(this: iter) -> !0
+  callvirt List`1[int]::Add(this: list, !0: item) -> void
+  goto BB_Header
+BB_Header:
+  hasNext = callvirt IEnumerator::MoveNext(this: iter) -> bool
+  goto hasNext ? BB_Body : BB_Exit
+BB_Exit:
+  ret list
+// CHECK: NewList_AddEnumerableLoop
+// CHECK: get_Count(this: #source) -> int
+// CHECK: List`1[int]::.ctor(int
+// CHECK: ret
+}
+
+public static Self::NewList_AddCond_EnumerableLoop(#source: ICollection`1[int]) -> List`1[int] {
+BB_01:
+  list = newobj List`1[int]::.ctor() -> List`1[int]
+  iter = callvirt IEnumerable`1[int]::GetEnumerator(this: #source) -> IEnumerator`1[!0]
+  goto BB_Header
+BB_Body:
+  item = callvirt IEnumerator`1[int]::get_Current(this: iter) -> !0
+  isNonZero = icmp.sgt item, 0 -> bool
+  goto isNonZero ? BB_ListAdd : BB_Latch
+BB_ListAdd:
+  callvirt List`1[int]::Add(this: list, !0: item) -> void
+  goto BB_Latch
+BB_Latch:
+  goto BB_Header
+BB_Header:
+  hasNext = callvirt IEnumerator::MoveNext(this: iter) -> bool
+  goto hasNext ? BB_Body : BB_Exit
+BB_Exit:
+  ret list
+// CHECK: NewList_AddCond_EnumerableLoop
+// CHECK-NOT: get_Count
+// CHECK-NOT: List`1[int]::.ctor(int
+// CHECK-NOT: EnsureCapacity
+// CHECK: ret
+}
+
+public static Self::NewList_AddForLoop(#count: int) -> List`1[int] {
+BB_01:
+  list = newobj List`1[int]::.ctor() -> List`1[int]
+  goto BB_Header
+BB_Body:
+  callvirt List`1[int]::Add(this: list, !0: idx)
+  idx.2 = add idx, 1 -> int
+  goto BB_Header
+BB_Header:
+  idx = phi [BB_01: 0], [BB_Body: idx.2] -> int
+  hasNext = icmp.slt idx, #count -> bool
+  goto hasNext ? BB_Body : BB_Exit
+BB_Exit:
+  ret list
+// CHECK: NewList_AddForLoop
+// CHECK: .ctor(int: #count)
+// CHECK: ret
+}
+
+public static Self::NewList_AddEnumerableLoop_Clobber(#source: ICollection`1[int]) -> List`1[int] {
+BB_01:
+  list = newobj List`1[int]::.ctor() -> List`1[int]
+  callvirt List`1[int]::Add(this: list, !0: 123) -> void
+  iter = callvirt IEnumerable`1[int]::GetEnumerator(this: #source) -> IEnumerator`1[!0]
+  goto BB_Header
+BB_Body:
+  item = callvirt IEnumerator`1[int]::get_Current(this: iter) -> !0
+  callvirt List`1[int]::Add(this: list, !0: item) -> void
+  goto BB_Header
+BB_Header:
+  hasNext = callvirt IEnumerator::MoveNext(this: iter) -> bool
+  goto hasNext ? BB_Body : BB_Exit
+BB_Exit:
+  ret list
+// CHECK: NewList_AddEnumerableLoop_Clobber
+// CHECK: Add(this: {{\w+}}, int: 123)
+// CHECK: get_Count(this: #source) -> int
+// CHECK: EnsureCapacity
+// CHECK: ret
+}

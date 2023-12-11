@@ -242,6 +242,27 @@ Entry:
     }
 
     [Fact]
+    public void ParseNewObj()
+    {
+        string code = @"
+import $Root from TestAsm
+import System.Collections.Generic from System.Private.CoreLib
+
+public ParserDummy::TestCase() {
+Entry:
+    list = newobj List`1[int]::.ctor() -> List`1[int]
+    callvirt List`1[int]::Add(this: list, !0: 123)
+    ret
+}
+";
+        var body = Parse(code);
+        var insts = body.Instructions().ToArray();
+
+        Assert.True(insts[0] is NewObjInst { Constructor: { DeclaringType.Name: "List`1", DeclaringType.GenericParams: [ { Kind: TypeKind.Int32 }] }, Args: [] });
+        Assert.True(insts[1] is CallInst { Method.Name: "Add", Args: [ NewObjInst, ConstInt ] });
+    }
+
+    [Fact]
     public void MultiErrors()
     {
         var code = @"

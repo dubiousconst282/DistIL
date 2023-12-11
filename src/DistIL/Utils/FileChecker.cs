@@ -258,6 +258,10 @@ public class FileChecker
             ) {
                 return offset;
             }
+            if (Token.IsSeparator(lit[0])) {
+                Debug.Assert(lit.Length == 1);
+                return offset;
+            }
             startOffset = offset + lit.Length;
         }
     }

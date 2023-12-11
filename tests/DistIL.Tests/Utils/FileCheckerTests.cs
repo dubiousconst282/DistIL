@@ -75,6 +75,7 @@ public class FileCheckerTests
             Line#1
             //CHECK: Foo
             Line#2
+            //CHECK: .ctor
             //CHECK: Bar Qux
             """,
 
@@ -83,6 +84,7 @@ public class FileCheckerTests
             Line#1
             And then the Foo
             Line#2
+            newobj MyClass::.ctor()
             And finally, the  Bar   Qux
             """));
 

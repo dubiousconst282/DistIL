@@ -61,7 +61,7 @@ public partial class IRParser
         var ctx = new ParserContext(code, modResolver);
         try {
             new IRParser(ctx).ParseUnit();
-        } catch (FormatException) {
+        } catch (Exception) {
             // Preserve context and let caller handle errors
         }
         return ctx;
@@ -109,7 +109,7 @@ public partial class IRParser
 
         var parentType = (TypeDef)ParseType();
         _lexer.Expect(TokenType.DoubleColon);
-        string name = _lexer.ExpectId();
+        string name = ParseMethodName();
         
         var paramSig = ImmutableArray.CreateBuilder<ParamDef>();
 
@@ -232,7 +232,7 @@ public partial class IRParser
         }
 
         if (type == null) {
-            _lexer.Error("Type could not be found", start);
+            _lexer.Error("Cound not find type", start);
             return PrimType.Void;
         }
         // Generic arguments
@@ -442,7 +442,7 @@ public partial class IRParser
         int start = _lexer.Peek().Position.Start;
         var ownerType = ParseType();
         _lexer.Expect(TokenType.DoubleColon);
-        var name = _lexer.ExpectId();
+        string name = ParseMethodName();
 
         // GenArgs := ("<" Seq{Type} ">")?
         var genPars = new List<TypeDesc>();
@@ -468,13 +468,20 @@ public partial class IRParser
         });
         var retType = _lexer.IsNext(TokenType.Arrow) ? ParseResultType() : PrimType.Void;
 
+        if (name == ".ctor") {
+            retType = PrimType.Void;
+            isInstance = true;
+        }
+
         var sig = new MethodSig(retType, pars, isInstance, genPars.Count);
         var method = ownerType.FindMethod(name, sig, throwIfNotFound: false)
-                ?? throw _ctx.Fatal("Method could not be found", (start, _lexer.LastPos()));
+                ?? throw _ctx.Fatal("Cound not find method", (start, _lexer.LastPos()));
 
         if (genPars.Count > 0) {
             method = method.GetSpec(genPars.ToImmutableArray());
-            _parsedResultType = method.ReturnType;
+        }
+        if ((method.IsGeneric || method.DeclaringType.IsGeneric) && name != ".ctor") {
+            _parsedResultType = method.ReturnType; // replace with actual return type so that generic methods match
         }
 
         if (op == Opcode.NewObj) {
@@ -491,7 +498,7 @@ public partial class IRParser
         string name = _lexer.ExpectId();
 
         var field = declType.FindField(name)
-                ?? throw _ctx.Fatal("Field could not be found", (start, _lexer.LastPos()));
+                ?? throw _ctx.Fatal("Cound not find field", (start, _lexer.LastPos()));
 
         var obj = _lexer.Match(TokenType.Comma) ? ParseValue() : null;
 
@@ -741,6 +748,16 @@ public partial class IRParser
             attribs |= MethodAttribs.SpecialName;
         }
         return attribs;
+    }
+
+    private string ParseMethodName()
+    {
+        // Special-case method names that are prefixed with a dot
+        // to allow for cases like ".ctor" and ".cctor"
+        if (_lexer.Match(TokenType.Dot)) {
+            return "." + _lexer.ExpectId();
+        }
+        return _lexer.ExpectId();
     }
 
 

@@ -12,6 +12,7 @@ public class LoopStrengthReduction : IMethodPass
         var domTree = ctx.GetAnalysis<DominatorTree>(preserve: true);
         int numChanges = 0;
 
+        // TODO: migrate to ShapedLoopInfo
         foreach (var loop in loopAnalysis.Loops) {
             numChanges += RemoveDuplicatedCounters(loop, domTree);
             numChanges += ReduceLoop(loop);
@@ -68,7 +69,7 @@ public class LoopStrengthReduction : IMethodPass
     {
         var preheader = loop.GetPreheader();
         var latch = loop.GetLatch();
-        var exitCond = loop.GetExitCondition();
+        var exitCond = loop.GetExitCondition() as CompareInst;
 
         // Check for canonical loop
         if (preheader == null || latch == null || exitCond == null) return 0;

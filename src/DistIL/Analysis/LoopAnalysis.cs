@@ -38,6 +38,9 @@ public class LoopAnalysis : IMethodAnalysis
         }
     }
 
+    public IEnumerable<ShapedLoopInfo> GetShapedLoops(bool innermostOnly = false)
+        => (innermostOnly ? GetInnermostLoops() : Loops).Select(ShapedLoopInfo.Parse).Where(s => s != null)!;
+
     public IEnumerable<LoopInfo> GetInnermostLoops()
         => Loops; // FIXME: proper impl once we have loop trees
 
@@ -61,7 +64,7 @@ public class LoopInfo
     public int NumBlocks => Blocks.Count;
 
     /// <summary> Checks if the specified block is part of this loop. </summary>
-    /// <remarks> This includes the header, latch, preheader and any other body block. </remarks>
+    /// <remarks> This includes the header, latch, and any other body block. </remarks>
     public bool Contains(BasicBlock block) => Blocks.Contains(block);
 
     /// <summary> Checks if the specified value is defined outside the loop. </summary>
@@ -70,7 +73,11 @@ public class LoopInfo
         return !(val is Instruction inst && Contains(inst.Block));
     }
 
-    public BasicBlock? GetPreheader() => GetPredecessor() is { NumSuccs: 1 } bb ? bb : null;
+    public BasicBlock? GetPreheader()
+    {
+        var pred = GetPredecessor();
+        return pred?.Last is BranchInst { IsJump: true } ? pred : null;
+    }
 
     /// <summary> Returns the unique block entering the loop (its predecessor). Differently from the pre-header, this block may have multiple successors. </summary>
     public BasicBlock? GetPredecessor() => GetUniquePredAround(Header, inside: false);
@@ -96,14 +103,14 @@ public class LoopInfo
     }
 
     /// <summary> Returns the unique condition controlling the loop exit. </summary>
-    public CompareInst? GetExitCondition()
+    public Instruction? GetExitCondition()
     {
         // Header: goto cmp ? Body : Exit
         var exit = GetExit();
         return exit != null && GetUniquePredAround(exit, inside: true) == Header &&
-               Header.Last is BranchInst { Cond: CompareInst cmp } br &&
+               Header.Last is BranchInst { Cond: Instruction cond } br &&
                br.Else == exit
-            ? cmp : null;
+            ? cond : null;
     }
 
     public IEnumerable<LoopInfo> GetChildren()
@@ -133,8 +140,9 @@ public class LoopInfo
         // Prehdr^ -> Header[B1 B2 B3 Exiting* Latch↲]
         var sb = new StringBuilder();
 
+        var preheader = GetPreheader();
         var preds = Header.Preds.AsEnumerable().Where(b => !Contains(b));
-        sb.AppendSequence(preds, PrintBlock, "", " -> ", " ");
+        sb.AppendSequence(preds, PrintBlock, prefix: "", postfix: " -> ", separator: " ");
 
         PrintBlock(Header);
 
@@ -146,10 +154,8 @@ public class LoopInfo
         void PrintBlock(BasicBlock block)
         {
             sb.Append(block);
-            
-            bool isPrehdr = block.NumSuccs == 1 && block.Succs.First() == Header && !Contains(block);
 
-            if (isPrehdr) {
+            if (block == preheader) {
                 sb.Append('^');
                 return;
             }

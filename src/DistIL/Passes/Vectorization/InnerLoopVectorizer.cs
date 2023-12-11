@@ -23,9 +23,10 @@ internal class InnerLoopVectorizer
         // Only consider loops with a single body block (the latch).
         if (loop.NumBlocks != 2) return false;
 
+        // TODO: migrate to ShapedLoopInfo
         var pred = loop.GetPredecessor();
         var latch = loop.GetLatch();
-        var exitCond = loop.GetExitCondition();
+        var exitCond = loop.GetExitCondition() as CompareInst;
 
         if (pred == null || latch == null || exitCond == null) return false;
 

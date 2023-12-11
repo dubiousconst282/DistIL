@@ -368,5 +368,5 @@ public enum InsertionDir
     After,
 
     /// <summary> Inserts new instructions before the block terminator branch. </summary>
-    BeforeLast
+    BeforeLast      // TODO: is this even useful? maybe make it so that After behaves like this if the last instr is a branch.
 }

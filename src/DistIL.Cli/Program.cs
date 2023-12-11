@@ -80,6 +80,7 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
 
     manager.AddPasses()
         .Apply<ValueNumbering>()
+        .Apply<PresizeLists>()
         .Apply<LoopStrengthReduction>()
         .IfChanged(simplifySeg);
 

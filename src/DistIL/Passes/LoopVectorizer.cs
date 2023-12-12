@@ -23,8 +23,10 @@ public class LoopVectorizer : IMethodPass
         var loopAnalysis = ctx.GetAnalysis<LoopAnalysis>(preserve: true);
         bool changed = false;
 
-        foreach (var loop in loopAnalysis.GetInnermostLoops()) {
-            changed |= InnerLoopVectorizer.TryVectorize(loop, _trans, ctx.Logger);
+        foreach (var loop in loopAnalysis.GetShapedLoops(innermostOnly: true)) {
+            if (loop is not CountingLoopInfo forLoop) continue;
+            
+            changed |= InnerLoopVectorizer.TryVectorize(forLoop, _trans, ctx.Logger);
         }
 
         return changed ? MethodInvalidations.Loops : MethodInvalidations.None;

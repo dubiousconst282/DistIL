@@ -23,6 +23,12 @@ public class ShapedLoopInfo
         ExitCondition = exitCond;
     }
 
+    /// <inheritdoc cref="LoopInfo.Contains(BasicBlock)"/>
+    public bool Contains(BasicBlock block) => Loop.Contains(block);
+    
+    /// <inheritdoc cref="LoopInfo.IsInvariant(Value)"/>
+    public bool IsInvariant(Value value) => Loop.IsInvariant(value);
+
     /// <summary> Checks if the loop has a known trip count at the preheader, or if it is possible to calculate it before the specified instruction. </summary>
     public virtual bool HasKnownTripCount(DominatorTree? domTree, Instruction? position) => false;
 
@@ -76,6 +82,7 @@ public class CountingLoopInfo : ShapedLoopInfo
     public Value End => ExitCondition.Right;
 
     /// <summary> Checks if the loop counter starts at 0 and increments by 1 on every iteration. </summary>
+    /// <remarks> This may evaluate to true even if the loop bound (<see cref="End"/>) is not invariant. </remarks>
     public bool IsCanonical =>
         Start is ConstInt { Value: 0 } &&
         UpdatedCounter is BinaryInst { Op: BinaryOp.Add, Right: ConstInt { Value: 1 } };
@@ -192,6 +199,8 @@ public class EnumeratingLoopInfo : ShapedLoopInfo
         CurrentItem = (((BranchInst)Header.Last).Then.First as CallInst)!;
         if (CurrentItem is not { Method.Name: "get_Current", NumArgs: 1, HasResult: true }) return false;
         if (CurrentItem.Args[0] != Enumerator) return false;
+
+        // TODO: consider checking that Enumerator is only used twice inside the loop
 
         return true;
     }

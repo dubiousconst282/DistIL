@@ -86,3 +86,47 @@ BB_Exit:
 // CHECK: EnsureCapacity
 // CHECK: ret
 }
+
+public static Self::NewList_AddForLoop_ToArray(#count: int) -> int[] {
+BB_01:
+  list = newobj List`1[int]::.ctor() -> List`1[int]
+  goto BB_Header
+BB_Body:
+  callvirt List`1[int]::Add(this: list, !0: idx)
+  idx.2 = add idx, 1 -> int
+  goto BB_Header
+BB_Header:
+  idx = phi [BB_01: 0], [BB_Body: idx.2] -> int
+  hasNext = icmp.slt idx, #count -> bool
+  goto hasNext ? BB_Body : BB_Exit
+BB_Exit:
+  array = callvirt List`1[int]::ToArray(this: list) -> !0[]
+  ret array
+// CHECK: NewList_AddForLoop_ToArray
+// CHECK-NOT: newobj
+// CHECK: CIL::NewArray(#count)
+// CHECK: GetArrayDataReference
+// CHECK: ret
+}
+
+public static Self::ExtList_AddForLoop_ToArray(#list: List`1[int], #count: int) -> int[] {
+BB_01:
+  goto BB_Header
+BB_Body:
+  callvirt List`1[int]::Add(this: #list, !0: idx)
+  idx.2 = add idx, 1 -> int
+  goto BB_Header
+BB_Header:
+  idx = phi [BB_01: 0], [BB_Body: idx.2] -> int
+  hasNext = icmp.slt idx, #count -> bool
+  goto hasNext ? BB_Body : BB_Exit
+BB_Exit:
+  array = callvirt List`1[int]::ToArray(this: #list) -> !0[]
+  ret array
+// CHECK: ExtList_AddForLoop_ToArray
+// CHECK: EnsureCapacity
+// CHECK: _items
+// CHECK: GetArrayDataReference
+// CHECK: ToArray
+// CHECK: ret
+}

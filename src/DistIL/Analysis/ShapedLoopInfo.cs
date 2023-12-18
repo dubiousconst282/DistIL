@@ -173,10 +173,12 @@ public class EnumeratingLoopInfo : ShapedLoopInfo
         if (Enumerator is not CallInst { Method.Name: "GetEnumerator", Args: [var source] }) return false;
 
         var resolver = position.Block.Method.Definition.Module.Resolver;
-        var t_Collection = (TypeDef)resolver.Import(typeof(ICollection<>));
-        var t_CollectionOfT = t_Collection.GetSpec([CurrentItem.ResultType]);
+        var t_Collection = resolver.Import(typeof(ICollection<>)).GetSpec([CurrentItem.ResultType]);
+        var t_ROCollection = resolver.Import(typeof(IReadOnlyCollection<>)).GetSpec([CurrentItem.ResultType]);
 
-        if (!source.ResultType.Inherits(t_CollectionOfT)) return false;
+        // IROCollection<T> doesn't inherit from ICollection<T> as it should, for backwards compat or whatever,
+        // so we must check for both.
+        if (!source.ResultType.Inherits(t_Collection) && !source.ResultType.Inherits(t_ROCollection)) return false;
 
         if (source is Instruction sourceI && !domTree.Dominates(sourceI, position)) return false;
 

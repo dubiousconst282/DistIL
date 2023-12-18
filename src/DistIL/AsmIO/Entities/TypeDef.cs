@@ -25,6 +25,12 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
 
     public override abstract TypeDefOrSpec GetSpec(GenericContext context);
 
+    public TypeSpec GetSpec(ImmutableArray<TypeDesc> genArgs)
+    {
+        Ensure.That(IsGeneric && genArgs.Length == GenericParams.Count);
+        return Definition.GetCachedSpec(genArgs, default);
+    }
+
     public virtual IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
         => Definition.GetCustomAttribs(readOnly);
     
@@ -131,11 +137,6 @@ public class TypeDef : TypeDefOrSpec
     public override TypeDefOrSpec GetSpec(GenericContext context)
     {
         return IsGeneric ? GetCachedSpec(GenericParams, context) : this;
-    }
-    public TypeSpec GetSpec(ImmutableArray<TypeDesc> genArgs)
-    {
-        Ensure.That(IsGeneric && genArgs.Length == GenericParams.Length);
-        return GetCachedSpec(genArgs, default);
     }
 
     internal TypeSpec GetCachedSpec(IReadOnlyList<TypeDesc> pars, GenericContext ctx)

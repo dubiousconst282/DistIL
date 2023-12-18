@@ -79,7 +79,7 @@ public class PresizeLists : IMethodPass
     {
         var addCalls = new List<CallInst>();
         var toArrayCall = default(CallInst);
-        int numAddCalls = 0, numOtherUses = 0;
+        int numToArrayCalls = 0, numOtherUses = 0;
 
         foreach (var user in list.Users()) {
             if (loop.Contains(user.Block)) {
@@ -90,10 +90,10 @@ public class PresizeLists : IMethodPass
                     return false;
                 }
             } else {
-                // Uses from elsewhere can do whatever, but we still need to track ToArray() calls
+                // Uses from elsewhere can do whatever, we just need to track ToArray() calls
                 if (user is CallInst call && IsListMethod(call.Method) && call.Method.Name == "ToArray") {
                     toArrayCall = call;
-                    numAddCalls++;
+                    numToArrayCalls++;
                 } else {
                     numOtherUses++;
                 }
@@ -106,7 +106,7 @@ public class PresizeLists : IMethodPass
         // If the list is created within the method, and there are no other uses
         // but the Add() calls and a single ToArray() outside the loop at the end,
         // we can completely remove the list alloc and fill an array directly.
-        if (toArrayCall != null && numAddCalls == 1 && numOtherUses == 0 &&
+        if (toArrayCall != null && numToArrayCalls == 1 && numOtherUses == 0 &&
             list is NewObjInst { Args: [{ ResultType.Kind: TypeKind.Int32 }] } listAlloc
         ) {
             var elemType = list.ResultType.GenericParams[0];
@@ -122,19 +122,19 @@ public class PresizeLists : IMethodPass
             offset = builder.CreateFieldLoad("_size", list);
         }
 
-        // Emitting a pointer increment is a bit questionable because bad collections could theoretically
-        // report a wrong count, and the perf delta is quite small (the cost of a bounds check).
-        // But we should be doing anything to save those precious fractions of a nanosecond, yeah?
+        // Emitting a pointer increment for IEnumerables is a bit questionable because bad collections could
+        // theoretically report a wrong count, and the perf delta is quite small (the cost of a bounds check).
         // |        ArrayIdx |    4 |     6.209 ns |   115 B |
         // |     ArrayPtrInc |    4 |     5.760 ns |    78 B |
         // |        ArrayIdx | 4096 | 4,095.651 ns |   115 B |
         // |     ArrayPtrInc | 4096 | 4,081.241 ns |    78 B |
-        var basePtr = LoopStrengthReduction.CreateGetDataPtrRange(builder, array, getCount: false).BasePtr;
-        basePtr = builder.CreatePtrOffset(basePtr, offset);
 
         // With a little more effort we can avoid creating a non-SSA variable and
-        // potentially enable vectorization by specializing for canonical for..i loops.
+        // potentially enable vectorization by specializing over canonical for..i loops.
         if (loop is CountingLoopInfo { IsCanonical: true } forLoop) {
+            var basePtr = LoopStrengthReduction.CreateGetDataPtrRange(builder, array, getCount: false).BasePtr;
+            basePtr = builder.CreatePtrOffset(basePtr, offset);
+
             foreach (var call in addCalls) {
                 builder.SetPosition(call, InsertionDir.After);
 
@@ -143,15 +143,14 @@ public class PresizeLists : IMethodPass
                 call.Remove();
             }
         } else {
-            var ptrVar = new LocalSlot(basePtr.ResultType, "arrbuilder_ptr");
-            builder.CreateStore(ptrVar, basePtr);
+            var idxVar = new LocalSlot(PrimType.Int32, "arrbuilder_idx");
+            builder.CreateStore(idxVar, offset);
 
             foreach (var call in addCalls) {
                 builder.SetPosition(call, InsertionDir.After);
 
-                var ptr = builder.CreateLoad(ptrVar);
-                builder.CreateStore(ptr, call.Args[1]); // *ptr = value
-                builder.CreateStore(ptrVar, builder.CreatePtrIncrement(ptr)); // ptr++
+                builder.CreateArrayStore(array, builder.CreateLoad(idxVar), call.Args[1]); // array[idx] = value
+                builder.CreateStore(idxVar, builder.CreateAdd(builder.CreateLoad(idxVar), ConstInt.CreateI(1))); // idx++
                 call.Remove();
             }
         }

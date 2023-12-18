@@ -9,7 +9,7 @@ public class ExpandLinq : IMethodPass
     public ExpandLinq(ModuleResolver resolver)
     {
         t_Enumerable = resolver.Import(typeof(Enumerable));
-        t_IEnumerableOfT0 = resolver.Import(typeof(IEnumerable<>)).GetSpec(default);
+        t_IEnumerableOfT0 = resolver.Import(typeof(IEnumerable<>)).GetSpec(GenericContext.Empty);
     }
 
     static IMethodPass IMethodPass.Create<TSelf>(Compilation comp)

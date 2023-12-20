@@ -6,7 +6,7 @@ using System.Runtime.Intrinsics;
 using System.Runtime.InteropServices;
 
 [Optimize(TryVectorize = true), DisassemblyDiagnoser]
-public class AutoVecBenchs
+public class AutoVectorization
 {
     [Params(4096)]
     public int ElemCount {

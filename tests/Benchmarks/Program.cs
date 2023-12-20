@@ -9,7 +9,7 @@ using BenchmarkDotNet.Toolchains.CsProj;
 using BenchmarkDotNet.Toolchains.Parameters;
 using BenchmarkDotNet.Toolchains.Results;
 
-var toolchain = CsProjCoreToolchain.NetCoreApp70;
+var toolchain = CsProjCoreToolchain.NetCoreApp80;
 var defaultJob = Job.ShortRun
     .WithIterationCount(20)
     .WithToolchain(toolchain);

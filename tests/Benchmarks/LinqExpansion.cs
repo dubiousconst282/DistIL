@@ -2,7 +2,7 @@ using BenchmarkDotNet.Attributes;
 
 using DistIL.Attributes;
 
-public class LinqBenchs
+public class LinqExpansion
 {
     [Params(4096)]
     public int ElemCount {

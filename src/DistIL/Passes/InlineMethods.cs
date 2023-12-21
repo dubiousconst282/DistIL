@@ -53,7 +53,7 @@ public class InlineMethods : IMethodPass
 
         // Known virtual target
         if (call.IsVirtual && target.Attribs.HasFlag(MethodAttributes.Virtual) && !target.Attribs.HasFlag(MethodAttributes.Final)) {
-            if (DevirtUtils.ResolveVirtualCallTarget(call.Method, call.Args[0]) is not MethodDefOrSpec actualTarget || actualTarget == parent) {
+            if (TypeUtils.ResolveVirtualMethod(call.Method, call.Args[0]) is not MethodDefOrSpec actualTarget || actualTarget == parent) {
                 return false;
             }
             call.Method = actualTarget;

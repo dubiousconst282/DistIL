@@ -227,14 +227,22 @@ public class ConstFolding
         if (IsCoreLibMethod(method, out var methodDef) && AllConsts(args)) {
             var declType = methodDef.DeclaringType;
 
-            object? result = (declType.Namespace, declType.Name, method.Name) switch {
-                ("System", "Math" or "MathF", _) => FoldMathCall(methodDef, args.ToArray()),
-                ("System", "String", _) => FoldStringCall(methodDef, args.ToArray()),
+            object? result = (declType.Namespace, declType.Name, method.Name, AllConsts(args)) switch {
+                ("System", "Math" or "MathF", _, true)
+                    => FoldMathCall(methodDef, args.ToArray()),
+
+                ("System", "String", _, true)
+                    => FoldStringCall(methodDef, args.ToArray()),
+
+                ("System", "Type", "op_Equality", false)
+                    => FoldTypeEquality(args[0], args[1]),
+
                 _ => null
             };
             return result switch {
                 double r => ConstFloat.Create(method.ReturnType, r),
                 long r   => ConstInt.Create(method.ReturnType, r),
+                bool r   => ConstInt.Create(method.ReturnType, r ? 1 : 0),
                 string r => ConstString.Create(r),
                 _ => null
             };
@@ -242,16 +250,49 @@ public class ConstFolding
         return null;
     }
 
+    // bool Type.op_Equality(Type a, Type b)
+    private static bool? FoldTypeEquality(Value arg1, Value arg2)
+    {
+        var typeA = UnwrapType(arg1);
+        var typeB = UnwrapType(arg2);
+
+        if (typeA == null || typeB == null) return null;
+        if ((typeA.IsUnboundGeneric || typeB.IsUnboundGeneric) && typeA != typeB) return null;
+
+        return typeA == typeB;
+
+        static TypeDesc? UnwrapType(Value obj)
+        {
+            if (obj is not CallInst call) return null;
+
+            if (call.Method.Name == "GetTypeFromHandle" && call.Method.DeclaringType.IsCorelibType(typeof(Type))) {
+                return (call.Args[0] as CilIntrinsic.LoadHandle)?.StaticArgs[0] as TypeDesc;
+            }
+            if (call.Method.Name == "GetType" && call.Method.DeclaringType == PrimType.Object) {
+                return TypeUtils.HasConcreteType(call.Args[0]) ? call.Args[0].ResultType : null;
+            }
+            return null;
+        }
+    }
+
     public static Value? FoldIntrinsic(IntrinsicInst intrin)
     {
         if (intrin is CilIntrinsic.SizeOf { ObjType.Kind: >= TypeKind.Bool and <= TypeKind.Double and var type }) {
             return ConstInt.CreateI(type.BitSize() / 8);
         }
-        if (intrin is CilIntrinsic.AsInstance asi && asi.Args[0].ResultType.Inherits(asi.DestType)) {
-            return asi.Args[0];
+        if (intrin is CilIntrinsic.AsInstance asi) {
+            return TypeUtils.CheckCast(asi.Args[0], asi.DestType) switch {
+                true => asi.Args[0],
+                false => ConstNull.Create(),
+                _ => null,
+            };
         }
-        if (intrin is CilIntrinsic.CastClass cast && cast.Args[0].ResultType.Inherits(cast.DestType)) {
-            return cast.Args[0];
+        if (intrin is CilIntrinsic.CastClass cast) {
+            return TypeUtils.CheckCast(cast.Args[0], cast.DestType) switch {
+                true => cast.Args[0],
+                false => ConstNull.Create(),
+                _ => null,
+            };
         }
         return null;
     }

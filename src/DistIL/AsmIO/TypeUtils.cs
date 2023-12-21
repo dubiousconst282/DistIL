@@ -1,5 +1,7 @@
 namespace DistIL.AsmIO;
 
+using System.Reflection;
+
 public static class TypeUtils
 {
     /// <summary> Checks if this type is defined in <c>System.Private.CoreLib</c>. </summary>
@@ -48,7 +50,79 @@ public static class TypeUtils
     public static TypeDesc GetUnboundSpec(this TypeDesc type)
     {
         return type is TypeDefOrSpec { Definition: var def } 
-            ? def.GetSpec(new GenericContext(def))
+            ? def.GetSpec(GenericContext.Empty)
             : type;
     }
+
+    /// <summary> Checks if the given value has a concrete result object type (it's statically known). </summary>
+    public static bool HasConcreteType(Value obj)
+    {
+        // TODO: could probably build a more sophisticated analysis for this, with propagation / use chain scan
+        return obj.ResultType is TypeDefOrSpec def && def.Attribs.HasFlag(TypeAttributes.Sealed) ||
+               obj is NewObjInst;
+    }
+
+    public static MethodDesc? ResolveVirtualMethod(MethodDesc method, Value instanceObj)
+    {
+        return HasConcreteType(instanceObj) ? ResolveVirtualMethod(method, instanceObj.ResultType) : null;
+    }
+
+    /// <summary> Resolves the implementation of the given virtual method defined by a concrete instance type. </summary>
+    public static MethodDesc? ResolveVirtualMethod(MethodDesc method, TypeDesc actualType)
+    {
+        Ensure.That(method.Attribs.HasFlag(MethodAttributes.Virtual));
+        Ensure.That(actualType.Inherits(method.DeclaringType));
+
+        // FIXME: spec conformance
+        // - II.10.3.4 Impact of overrides on derived classes
+        // - II.12.2 Implementing virtual methods on interfaces
+        // - https://github.com/dotnet/runtime/blob/main/docs/design/specs/Ecma-335-Augments.md#ii122-implementing-virtual-methods-on-interfaces
+
+        var type = (TypeDefOrSpec)actualType;
+        // var sig = default(MethodSig?);
+
+        var genCtx = new GenericContext(actualType.GenericParams, method.GenericParams);
+
+        for (; type != null; type = type.BaseType) {
+            // Try get from MethodImpl table
+            if (type.Definition.MethodImpls.TryGetValue(method, out var explicitImpl)) {
+                return explicitImpl.GetSpec(genCtx);
+            }
+
+            // Search for method with matching sig
+            // sig ??= new MethodSig(method.ReturnSig, method.ParamSig.Skip(1).ToList(), isInstance: true, method.GenericParams.Count);
+
+            // if (type.FindMethod(method.Name, sig.Value, throwIfNotFound: false) is { } matchImpl) {
+            //     Debug.Assert(!matchImpl.Attribs.HasFlag(MethodAttributes.Abstract));
+            //     return matchImpl.GetSpec(genCtx);
+            // }
+        }
+        return null;
+    }
+
+
+    /// <summary> Checks if the given object can be cast to <paramref name="destType"/>, or null if unknown. </summary>
+    public static bool? CheckCast(Value obj, TypeDesc destType)
+    {
+        var srcType = obj.ResultType;
+        bool castable = srcType.IsAssignableTo(destType);
+
+        // If the object type is known or already assignable to `destType`, we don't need to look further.
+        if (castable || HasConcreteType(obj)) {
+            return castable;
+        }
+
+        // Impossible cast: Both `srcType` and `destType` are classes, but `destType` doesn't inherit from srcType
+        if (srcType.IsClass && destType.IsClass && !destType.Inherits(srcType)) {
+            return false;
+        }
+        // Impossible cast: `destType` is an array but `srcType` is some other def
+        if (destType is ArrayType && !srcType.IsInterface && srcType != PrimType.Object && srcType != PrimType.Array) {
+            return false;
+        }
+
+        // No idea
+        return null;
+    }
+
 }

@@ -4,7 +4,6 @@ using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Metadata;
-using System.Runtime.CompilerServices;
 
 public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
 {
@@ -22,6 +21,7 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
         }
     }
     public override bool IsInterface => (Attribs & TypeAttributes.Interface) != 0;
+    public override bool IsClass => !IsInterface;
 
     public override abstract TypeDefOrSpec GetSpec(GenericContext context);
 
@@ -70,6 +70,7 @@ public class TypeDef : TypeDefOrSpec
         }
         // set => _genericParams = value;
     }
+    public override bool IsUnboundGeneric => IsGeneric;
 
     public override string? Namespace { get; }
     public override string Name { get; }
@@ -116,7 +117,7 @@ public class TypeDef : TypeDefOrSpec
     // - MethodImpl: (MethodDesc Decl, MethodDef Impl)
     Dictionary<(EntityDesc, EntityDesc?), IList<CustomAttrib>>? _implCustomAttribs;
 
-    private SpecCache? _specCache;
+    private TypeSpecCache? _specCache;
     internal TypeDefinitionHandle _handle;
     private ModuleLoader? _loader => _handle.IsNil ? null : Module._loader;
 
@@ -244,66 +245,6 @@ public class TypeDef : TypeDefOrSpec
 
     public override bool Equals(TypeDesc? other)
         => object.ReferenceEquals(this, other) || (other is PrimType p && p.IsDefinition(this));
-
-    class SpecCache
-    {
-        // TODO: experiment with WeakRefs/ConditionalWeakTable
-        readonly Dictionary<SpecKey, TypeSpec> _entries = new();
-
-        public ref TypeSpec? Get(IReadOnlyList<TypeDesc> pars, GenericContext ctx, out ImmutableArray<TypeDesc> filledArgs)
-        {
-            var key = new SpecKey(pars, ctx);
-            ref var slot = ref _entries.GetOrAddRef(key, out bool exists);
-            filledArgs = exists ? default : key.GetArgs();
-            return ref slot;
-        }
-
-        struct SpecKey : IEquatable<SpecKey>
-        {
-            readonly object _data; // Either<TypeDesc, TypeDesc[]>
-
-            public SpecKey(IReadOnlyList<TypeDesc> pars, GenericContext ctx)
-            {
-                if (pars.Count == 1) {
-                    _data = pars[0].GetSpec(ctx);
-                } else {
-                    var args = ctx.FillParams(pars);
-                    // take the internal array directly to avoid boxing
-                    _data = Unsafe.As<ImmutableArray<TypeDesc>, TypeDesc[]>(ref args);
-                }
-            }
-
-            public ImmutableArray<TypeDesc> GetArgs()
-            {
-                return _data is TypeDesc[] arr
-                    ? Unsafe.As<TypeDesc[], ImmutableArray<TypeDesc>>(ref arr)
-                    : ImmutableArray.Create((TypeDesc)_data);
-            }
-
-            public bool Equals(SpecKey other)
-            {
-                if (_data is TypeDesc[] sig) {
-                    return other._data is TypeDesc[] otherSig && sig.AsSpan().SequenceEqual(otherSig);
-                }
-                return _data.Equals(other._data); // TypeDesc
-            }
-
-            public override int GetHashCode()
-            {
-                if (_data is TypeDesc[] sig) {
-                    var hash = new HashCode();
-                    foreach (var type in sig) {
-                        hash.Add(type);
-                    }
-                    return hash.ToHashCode();
-                }
-                return _data.GetHashCode();
-            }
-
-            public override bool Equals(object? obj)
-                => throw new InvalidOperationException();
-        }
-    }
 }
 
 /// <summary> Represents a generic type instantiation. </summary>
@@ -318,6 +259,7 @@ public class TypeSpec : TypeDefOrSpec
 
     public override TypeDefOrSpec? BaseType => Definition.BaseType;
     public override IReadOnlyList<TypeDesc> GenericParams { get; }
+    public override bool IsUnboundGeneric => GenericParams.Any(p => p.IsUnboundGeneric);
 
     public override string? Namespace => Definition.Namespace;
     public override string Name => Definition.Name;

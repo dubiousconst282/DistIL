@@ -27,7 +27,7 @@ public class PrimType : TypeDesc
         String  = new(TypeKind.String,  StackType.Object,   "String",    "string"),
         Object  = new(TypeKind.Object,  StackType.Object,   "Object",    "object"),
         Array   = new(TypeKind.Array,   StackType.Object,   "Array",     null),
-        ValueType=new(TypeKind.Struct,  StackType.Struct,   "ValueType", null),
+        ValueType=new(TypeKind.Object,  StackType.Object,   "ValueType", null),
         TypedRef= new(TypeKind.TypedRef, StackType.Struct,  "TypedReference", null);
 #pragma warning restore format
 
@@ -35,7 +35,7 @@ public class PrimType : TypeDesc
     public override StackType StackType { get; }
     public override TypeDesc? BaseType => StackType switch {
         < StackType.Object => ValueType,
-        StackType.Struct => this == ValueType ? Object : ValueType,
+        StackType.Struct => Object,
         StackType.Object => this == Object ? null : Object
     };
 

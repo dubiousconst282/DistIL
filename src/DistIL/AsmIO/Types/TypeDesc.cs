@@ -19,6 +19,11 @@ public abstract class TypeDesc : EntityDesc, IEquatable<TypeDesc>
     public virtual bool IsValueType => false;
     public virtual bool IsEnum => false;
     public virtual bool IsInterface => false;
+    /// <summary> Whether this type describes a class (e.g. not interface or array). </summary>
+    public virtual bool IsClass => false;
+    
+    /// <summary> Whether this type contains unbound generic parameters. </summary>
+    public virtual bool IsUnboundGeneric => IsGeneric;
     public bool IsGeneric => GenericParams.Count > 0;
 
     [MemberNotNullWhen(true, nameof(IsEnum))]

@@ -11,6 +11,7 @@ public class GenericParamType : TypeDesc
     public override TypeDesc? BaseType => null;
     public override string? Namespace => null;
     public override string Name { get; }
+    public override bool IsUnboundGeneric => true;
 
     public GenericParameterAttributes Attribs { get; }
 

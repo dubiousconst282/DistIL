@@ -8,6 +8,7 @@ public class FuncPtrType : TypeDesc
     public override StackType StackType => StackType.NInt;
     public override TypeDesc? BaseType => PrimType.ValueType;
     public override bool IsValueType => true;
+    public override bool IsUnboundGeneric => Signature.ReturnType.Type.IsUnboundGeneric || Signature.ParamTypes.Any(p => p.Type.IsUnboundGeneric);
 
     public override string? Namespace => "";
     public override string Name => ToString();

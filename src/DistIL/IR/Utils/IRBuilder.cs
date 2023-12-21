@@ -292,7 +292,7 @@ public class IRBuilder
     {
         objType ??= ((PointerType)addr.ResultType).ElemType;
         
-        return objType.Kind == TypeKind.Struct 
+        return objType.Kind == TypeKind.Struct
             ? Emit(new CilIntrinsic.MemSet(addr, objType))
             : CreateStore(addr, Const.CreateZero(objType));
     }

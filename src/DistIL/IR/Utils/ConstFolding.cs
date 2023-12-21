@@ -3,7 +3,7 @@ namespace DistIL.IR.Utils;
 /// <summary> Helper for folding instructions with constant operands. </summary>
 public class ConstFolding
 {
-    public static Value? Fold(Instruction inst)
+    public static Value? Fold(Value inst)
     {
         return inst switch {
             BinaryInst b    => FoldBinary(b.Op, b.Left, b.Right),
@@ -172,11 +172,53 @@ public class ConstFolding
         if (ifTrue.Equals(ifFalse)) {
             return ifTrue;
         }
-        
-        return cond switch {
-            ConstInt c => c.Value != 0 ? ifTrue : ifFalse,
-            ConstNull => ifFalse,
+
+        return FoldCondition(cond) switch {
+            true => ifTrue,
+            false => ifFalse,
             _ => null
+        };
+    }
+
+    /// <summary> Attempts to fold a conditional branch/switch in the block.  (goto 1 ? T : F)  ->  (goto T) </summary>
+    public static bool FoldBlockBranch(BasicBlock block)
+    {
+        if (block.Last is BranchInst { IsConditional: true } br && FoldCondition(br.Cond) is bool cond) {
+            var (blockT, blockF) = cond ? (br.Then, br.Else!) : (br.Else!, br.Then);
+
+            blockF.RedirectPhis(block, newPred: null);
+            block.SetBranch(blockT);
+            return true;
+        }
+        if (block.Last is SwitchInst sw && (Fold(sw.TargetIndex) ?? sw.TargetIndex) is ConstInt caseIdx) {
+            var targetBlock = sw.GetTarget((int)caseIdx.Value);
+
+            foreach (var succ in sw.GetUniqueTargets()) {
+                if (succ == targetBlock) continue;
+                succ.RedirectPhis(block, newPred: null);
+            }
+            block.SetBranch(targetBlock);
+            return true;
+        }
+        return false;
+    }
+
+    // TODO: evolve this using something like RangeAnalysis
+    public static bool? FoldCondition(Value cond)
+    {
+        if (cond is CompareInst { Op: CompareOp.Ne, Right: ConstNull or ConstInt { Value: 0 } } cmp) {
+            cond = cmp.Left;
+        }
+        if (cond is Instruction inst) {
+            cond = Fold(inst) ?? cond;
+        }
+
+        return cond switch {
+            ConstInt c => c.Value != 0,
+            ConstNull => false,
+            CilIntrinsic.Box { SourceType: { IsValueType: true, Name: not "Nullable`1" } } => true, // either throws or returns non-null 
+            NewObjInst => true,
+            _ => null,
         };
     }
 

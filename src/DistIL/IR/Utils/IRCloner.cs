@@ -5,9 +5,9 @@ public class IRCloner
     // Mapping from old to new (clonned) values
     readonly Dictionary<Value, Value> _mappings = new();
     // Values that must be remapped and replaced last (they depend on defs in an unprocessed block).
-    readonly RefSet<TrackedValue> _pendingValues = new();
+    readonly RefSet<PendingValue> _pendingValues = new();
     readonly InstCloner _instCloner;
-    readonly List<BasicBlock> _srcBlocks = new();
+    readonly List<BasicBlock> _blocks = new();
     readonly GenericContext _genericContext;
 
     public IRCloner(GenericContext genericContext = default)
@@ -19,52 +19,103 @@ public class IRCloner
     public void AddMapping(Value oldVal, Value newVal)
     {
         _mappings.Add(oldVal, newVal);
-    }
-    /// <summary> Schedules the cloning of the specified block. </summary>
-    public void AddBlock(BasicBlock srcBlock, BasicBlock destBlock)
-    {
-        Ensure.That(destBlock.First == null, "Destination block must be empty");
-        _mappings.Add(srcBlock, destBlock);
-        _srcBlocks.Add(srcBlock);
+
+        if (oldVal is BasicBlock oldBlock) {
+            Ensure.That(newVal is BasicBlock);
+            _blocks.Add(oldBlock);
+        }
     }
 
-    public BasicBlock GetMapping(BasicBlock srcBlock)
-    {
-        return (BasicBlock)_mappings[srcBlock];
-    }
+    public BasicBlock GetMapping(BasicBlock originalBlock) => (BasicBlock)_mappings[originalBlock];
+    public Value GetMapping(Value originalValue) => _mappings[originalValue];
 
-    /// <summary> Clones all scheduled blocks. </summary>
-    public void Run()
+    /// <summary> Clones all blocks that are reachable from <paramref name="entry"/>. </summary>
+    /// <remarks> Destination blocks must be created and mapped beforehand via <see cref="AddMapping(Value, Value)"/>. </remarks>
+    public void Run(BasicBlock entry)
     {
-        foreach (var block in _srcBlocks) {
-            var destBlock = (BasicBlock)_mappings[block];
+        Ensure.That(_mappings.ContainsKey(entry));
 
-            // Clone instructions
+        var worklist = new DiscreteStack<BasicBlock>(entry);
+
+        while (worklist.TryPop(out var block)) {
+            var clonedBlock = GetMapping(block);
+            
             foreach (var inst in block) {
-                var newVal = _instCloner.Clone(inst);
+                var clonedInst = Clone(inst);
                 // Clone() may fold constants: `add r10, 0` -> `r10`,
                 // so we can only insert a inst if it isn't already in a block.
-                if (newVal is Instruction { Block: null } newInst) {
-                    destBlock.InsertLast(newInst);
-                }
-                if (newVal.HasResult) {
-                    _mappings.Add(inst, newVal);
+                if (clonedInst is Instruction { Block: null } newInst) {
+                    clonedBlock.InsertLast(newInst);
                 }
             }
-        }
-        // Remap pending values
-        foreach (var value in _pendingValues) {
-            var newValue = Remap(value) ??
-                throw new InvalidOperationException("No mapping for value " + value);
-            
-            foreach (var (user, operIdx) in value.Uses()) {
-                // If we don't have a mapping for the block `user` is in, assume it's
-                // a newly cloned instruction and proceed replacing its operand
-                if (!_mappings.ContainsKey(user.Block)) {
-                    user.ReplaceOperand(operIdx, newValue);
-                }
+
+            // If the cloned branch gets folded, we should only push reachable succs.
+            var newSuccs = ConstFolding.FoldBlockBranch(clonedBlock)
+                ? [..clonedBlock.Succs]
+                : default(HashSet<BasicBlock>);
+
+            foreach (var succ in block.Succs) {
+                if (newSuccs != null && !newSuccs.Contains(GetMapping(succ))) continue;
+
+                worklist.Push(succ);
             }
         }
+
+        // Remove unreachable blocks
+        foreach (var block in _blocks) {
+            var clonedBlock = GetMapping(block);
+
+            if (!worklist.WasPushed(block)) {
+                clonedBlock.Remove();
+            } else if (clonedBlock.NumPreds != block.NumPreds) {
+                RemoveUnreachablePhiPreds(clonedBlock);
+            }
+        }
+
+        // At this point the only pending values should be from phi uses for
+        // unreachable pred blocks. Check that they're no longer used.
+        foreach (var pending in _pendingValues) {
+            Ensure.That(pending.NumUses == 0);
+        }
+    }
+
+    private void RemoveUnreachablePhiPreds(BasicBlock block)
+    {
+        HashSet<BasicBlock> actualPreds = [..block.Preds];
+
+        foreach (var phi in block.Phis()) {
+            for (int i = phi.NumArgs - 1; i >= 0; i--) {
+                if (actualPreds.Contains(phi.GetBlock(i))) continue;
+
+                phi.RemoveArg(i, removeTrivialPhi: true);
+            }
+        }
+    }
+
+    /// <summary> Clones or folds the given instruction. </summary>
+    public Value Clone(Instruction inst)
+    {
+        var clonedInst = _instCloner.Clone(inst);
+
+        if (clonedInst.HasResult) {
+            ref var mapping = ref _mappings.GetOrAddRef(inst, out bool exists);
+
+            if (exists) {
+                if (mapping is not PendingValue pending) {
+                    throw new InvalidOperationException("Cloned instruction with an already existing mapping");
+                }
+                pending.ReplaceUses(clonedInst);
+                _pendingValues.Remove(pending);
+            }
+            mapping = clonedInst;
+        }
+        return clonedInst;
+    }
+
+    /// <summary> Checks if the given cloned block is unreachable and was removed. </summary>
+    public bool IsDead(BasicBlock clonedBlock)
+    {
+        return clonedBlock.Method == null;
     }
 
     private Value? Remap(Value value)
@@ -74,16 +125,17 @@ public class IRCloner
         }
         if (value is LocalSlot var) {
             var newType = (TypeDesc)Remap(var.Type);
-            newValue = new LocalSlot(newType, pinned: var.IsPinned);
+            newValue = new LocalSlot(newType, pinned: var.IsPinned, hardExposed: var.HardExposed);
             _mappings.Add(value, newValue);
             return newValue;
         }
         if (value is Const or Undef) {
             return value;
         }
-        // At this point, all non TrackedValue`s, must have been handled
-        _pendingValues.Add((TrackedValue)value); 
-        return null;
+        var pending = new PendingValue(value);
+        _mappings.Add(value, pending);
+        _pendingValues.Add(pending);
+        return pending;
     }
     private EntityDesc Remap(EntityDesc entity)
     {
@@ -97,7 +149,13 @@ public class IRCloner
         };
     }
 
-    class InstCloner : InstVisitor
+    class PendingValue : TrackedValue
+    {
+        public PendingValue(Value actual) => ResultType = actual.ResultType;
+        public override void Print(PrintContext ctx) => ctx.Print("**PENDING**");
+    }
+
+    sealed class InstCloner : InstVisitor
     {
         readonly IRCloner _ctx;
         Value _result = null!;
@@ -171,11 +229,37 @@ public class IRCloner
         public void Visit(FieldAddrInst inst) => Out(new FieldAddrInst(Remap(inst.Field), inst.IsStatic ? null : Remap(inst.Obj)));
         public void Visit(PtrOffsetInst inst) => Out(new PtrOffsetInst(Remap(inst.BasePtr), Remap(inst.Index), Remap(inst.ResultType), inst.Stride, 0));
 
-        public void Visit(CallInst inst) => Out(new CallInst(Remap(inst.Method), RemapArgs(inst.Args), inst.IsVirtual, inst.Constraint == null ? null : Remap(inst.Constraint)));
+        public void Visit(CallInst inst)
+        {
+            var method = Remap(inst.Method);
+            var args = RemapArgs(inst.Args);
+            
+            Out(ConstFolding.FoldCall(method, args)
+                ?? new CallInst(method, args, inst.IsVirtual, inst.Constraint == null ? null : Remap(inst.Constraint)));
+        }
         public void Visit(NewObjInst inst) => Out(new NewObjInst(Remap(inst.Constructor), RemapArgs(inst.Args)));
         public void Visit(FuncAddrInst inst) => Out(new FuncAddrInst(Remap(inst.Method), inst.IsVirtual ? Remap(inst.Object) : null));
-        public void Visit(IntrinsicInst inst) => Out(inst.CloneWith(Remap(inst.ResultType), RemapEntities(inst.StaticArgs), RemapArgs(inst.Args)));
-        public void Visit(SelectInst inst) => Out(new SelectInst(Remap(inst.Cond), Remap(inst.IfTrue), Remap(inst.IfFalse), Remap(inst.ResultType)));
+        public void Visit(IntrinsicInst inst)
+        {
+            var cloned = inst.CloneWith(Remap(inst.ResultType), RemapEntities(inst.StaticArgs), RemapArgs(inst.Args));
+            var folded = ConstFolding.FoldIntrinsic(cloned);
+
+            if (folded != null) {
+                Out(folded);
+                cloned.Remove(); // delete uses
+            } else {
+                Out(cloned);
+            }
+        }
+        public void Visit(SelectInst inst)
+        {
+            var cond = Remap(inst.Cond);
+            var ifTrue = Remap(inst.IfTrue);
+            var ifFalse = Remap(inst.IfFalse);
+
+            Out(ConstFolding.FoldSelect(cond, ifTrue, ifFalse)
+                ?? new SelectInst(cond, ifTrue, ifFalse, Remap(inst.ResultType)));
+        }
 
         public void Visit(ReturnInst inst) => Out(new ReturnInst(inst.HasValue ? Remap(inst.Value) : null));
         public void Visit(BranchInst inst) => Out(inst.IsJump ? new BranchInst(Remap(inst.Then)) : new BranchInst(Remap(inst.Cond), Remap(inst.Then), Remap(inst.Else)));

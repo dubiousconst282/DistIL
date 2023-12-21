@@ -124,7 +124,7 @@ public class InlineMethods : IMethodPass
 
         foreach (var block in targetBody) {
             var newBlock = callerBody.CreateBlock(insertAfter: lastBlock);
-            cloner.AddBlock(block, newBlock);
+            cloner.AddMapping(block, newBlock);
             lastBlock = newBlock;
 
             if (block.Last is ReturnInst) {
@@ -132,7 +132,8 @@ public class InlineMethods : IMethodPass
             }
         }
 
-        cloner.Run();
+        cloner.Run(targetBody.EntryBlock);
+        returningBlocks.RemoveAll(cloner.IsDead);
 
         // If the target only has a single block ending with return,
         // the entire code can be moved at once without creating new blocks.

@@ -1,6 +1,7 @@
 namespace DistIL.Passes;
 
 using DistIL.Analysis;
+using DistIL.IR.Utils;
 
 public class DeadCodeElim : IMethodPass
 {
@@ -24,13 +25,7 @@ public class DeadCodeElim : IMethodPass
 
         while (worklist.TryPop(out var block)) {
             // (goto 1 ? T : F)  ->  (goto T)
-            if (block.Last is BranchInst { Cond: ConstInt { Value: var cond } } br) {
-                var (blockT, blockF) = cond != 0 ? (br.Then, br.Else!) : (br.Else!, br.Then);
-
-                blockF.RedirectPhis(block, newPred: null);
-                block.SetBranch(blockT);
-                changed = true;
-            }
+            changed |= ConstFolding.FoldBlockBranch(block);
 
             // Remove empty try-finally regions
             if (block.First is GuardInst { Kind: GuardKind.Finally, Next: not GuardInst, HandlerBlock.First: ResumeInst } guard) {
@@ -107,7 +102,7 @@ public class DeadCodeElim : IMethodPass
             for (int i = 1; i < phi.NumArgs; i++) {
                 var arg = phi.GetValue(i);
 
-                if (arg != firstArg && arg != phi) return;
+                if (!arg.Equals(firstArg) && arg != phi) return;
             }
             phi.ReplaceWith(firstArg);
 

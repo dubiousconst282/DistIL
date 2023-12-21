@@ -256,6 +256,10 @@ public class BasicBlock : TrackedValue
         }
     }
 
+    // TODO: Redirect* methods are quite finicky and error prone. Find a better way to do edge replacement/removal and consolidate them.
+    // - https://gcc.gnu.org/onlinedocs/gccint/control-flow-graph/maintaining-the-cfg.html
+    // - https://llvm.org/doxygen/classllvm_1_1BasicBlock.html
+
     /// <summary> Replaces the incomming block of all phis in successor blocks from this block to <paramref name="newPred"/>. </summary>
     public void RedirectSuccPhis(BasicBlock? newPred, bool removeTrivialPhis = true)
     {

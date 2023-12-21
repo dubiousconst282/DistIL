@@ -33,8 +33,8 @@ public class BranchInst : Instruction
         : base(target) { }
 
     public BranchInst(Value cond, BasicBlock then, BasicBlock else_)
-        // Implicitly fold conditional branches with the same target, so that we can guarantee
-        // that there will be no duplicated yields when iterating block successors (except for SwitchInst).
+        // Implicitly fold conditional branches with the same target, to guarantee
+        // that branch block uses are unique (as required by BasicBlock edge iterators).
         : base(then == else_ ? [then] : [cond, then, else_]) { }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
@@ -101,9 +101,12 @@ public class SwitchInst : Instruction
         return operIdx == opers.Length ? opers : opers[0..operIdx]; // slicing always creates a copy
     }
 
-    /// <summary> Returns the target block for the case at <paramref name="index"/>. The default case is represented as <c>-1</c>. </summary>
+    /// <summary> Returns the target block for the case at <paramref name="index"/>. If the index is out of range, returns the default case target. </summary>
     public BasicBlock GetTarget(int index)
     {
+        if (index < 0 || index >= NumTargets) {
+            index = -1;
+        }
         return (BasicBlock)_operands[TargetMappings[index + 1]];
     }
 

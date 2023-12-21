@@ -224,7 +224,7 @@ public class ConstFolding
 
     public static Value? FoldCall(MethodDesc method, ReadOnlySpan<Value> args)
     {
-        if (IsCoreLibMethod(method, out var methodDef) && AllConsts(args)) {
+        if (IsCoreLibMethod(method, out var methodDef)) {
             var declType = methodDef.DeclaringType;
 
             object? result = (declType.Namespace, declType.Name, method.Name, AllConsts(args)) switch {
@@ -236,6 +236,9 @@ public class ConstFolding
 
                 ("System", "Type", "op_Equality", false)
                     => FoldTypeEquality(args[0], args[1]),
+
+                ("System.Runtime.CompilerServices", "RuntimeHelpers", "IsReferenceOrContainsReferences", _)
+                    => method.GenericParams[0].IsRefOrContainsRefs(),
 
                 _ => null
             };

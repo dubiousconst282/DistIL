@@ -125,4 +125,16 @@ public static class TypeUtils
         return null;
     }
 
+    /// <summary> Checks if this type is or contains managed references. May return null if the type is an open generic. </summary>
+    /// <remarks> See <see cref="System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences{T}"/> </remarks>
+    public static bool? IsRefOrContainsRefs(this TypeDesc type)
+    {
+        if (type is TypeDefOrSpec { IsValueType: true }) {
+            return type.Fields.All(f => !f.IsInstance || IsRefOrContainsRefs(f.Type) is false);
+        }
+        if (type.StackType is not (StackType.Object or StackType.ByRef)) {
+            return false;
+        }
+        return null; // possibly a generic type parameter
+    }
 }

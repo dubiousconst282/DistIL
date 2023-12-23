@@ -27,9 +27,10 @@ public abstract class Const : Value, IEquatable<Const>
 
 public class ConstNull : Const
 {
-    private ConstNull() { }
+    private ConstNull() { ResultType = PrimType.Object; }
 
-    public static ConstNull Create() => new() { ResultType = PrimType.Object };
+    static readonly ConstNull _instance = new();
+    public static ConstNull Create() => _instance;
 
     public override void Print(PrintContext ctx)
     {

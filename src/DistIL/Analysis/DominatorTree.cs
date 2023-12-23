@@ -6,14 +6,10 @@ public class DominatorTree : IMethodAnalysis
     readonly Node _root;
     bool _hasDfsIndices = false; // whether Node.{PreIndex, PostIndex} have been calculated
 
-    public MethodBody Method { get; }
-
     public DominatorTree(MethodBody method)
     {
-        Method = method;
-
-        var nodes = CreateNodes();
-        _root = nodes[^1];
+        var nodes = CreateNodes(method);
+        _root = nodes[0];
         ComputeDom(nodes);
         ComputeChildren(nodes);
     }
@@ -33,6 +29,7 @@ public class DominatorTree : IMethodAnalysis
         if (!_hasDfsIndices) {
             ComputeDfsIndices();
         }
+
         var parentNode = GetNode(parent);
         var childNode = GetNode(child);
 
@@ -77,58 +74,51 @@ public class DominatorTree : IMethodAnalysis
         }
     }
 
-    public int GetPreIndex(BasicBlock block)
-    {
-        if (!_hasDfsIndices) {
-            ComputeDfsIndices();
-        }
-        return GetNode(block).PreIndex;
-    }
-
+    // NOTE: Querying nodes from unreachable blocks lead to KeyNotFoundException.
+    //       Unsure how to best handle them, but ideally passes would not even consider unreachable blocks in the first place.
     private Node GetNode(BasicBlock block)
     {
         return _block2node[block];
     }
 
     /// <summary> Creates the tree nodes and returns an array with them in DFS post order. </summary>
-    private Node[] CreateNodes()
+    private Span<Node> CreateNodes(MethodBody method)
     {
-        Debug.Assert(Method.EntryBlock.NumPreds == 0);
+        Debug.Assert(method.EntryBlock.NumPreds == 0);
 
-        var nodes = new Node[Method.NumBlocks];
-        int index = 0;
+        var nodes = new Node[method.NumBlocks];
+        int index = nodes.Length;
 
-        Method.TraverseDepthFirst(postVisit: block => {
+        method.TraverseDepthFirst(postVisit: block => {
             var node = new Node() {
                 Block = block,
-                PostIndex = index
+                PostIndex = nodes.Length - index
             };
             _block2node.Add(block, node);
-            nodes[index++] = node;
+            nodes[--index] = node;
         });
-        return nodes;
+        // index will only be >0 if there are unreachable blocks.
+        return nodes.AsSpan(index);
     }
 
     // Algorithm from the paper "A Simple, Fast Dominance Algorithm"
     // https://www.cs.rice.edu/~keith/EMBED/dom.pdf
-    private void ComputeDom(Node[] nodes)
+    private void ComputeDom(Span<Node> nodesRPO)
     {
-        var entry = nodes[^1];
+        var entry = nodesRPO[0];
         entry.IDom = entry; // entry block dominates itself
 
         bool changed = true;
         while (changed) {
             changed = false;
-            // foreach block in reverse post order, except entry (at `len - 1`)
-            for (int i = nodes.Length - 2; i >= 0; i--) {
-                var node = nodes[i];
-                var block = node.Block;
+            // foreach block in reverse post order, except entry (at index 0)
+            foreach (var node in nodesRPO[1..]) {
                 var newDom = default(Node);
 
-                foreach (var predBlock in block.Preds) {
-                    var pred = GetNode(predBlock);
+                foreach (var predBlock in node.Block.Preds) {
+                    var pred = _block2node.GetValueOrDefault(predBlock);
 
-                    if (pred.IDom != null) {
+                    if (pred?.IDom != null) {
                         newDom = newDom == null ? pred : Intersect(pred, newDom);
                     }
                 }
@@ -153,10 +143,10 @@ public class DominatorTree : IMethodAnalysis
         }
     }
 
-    private static void ComputeChildren(Node[] nodes)
+    private static void ComputeChildren(Span<Node> nodes)
     {
-        // Ignore entry node (^1) to avoid cycles in the children list
-        foreach (var node in nodes.AsSpan()[..^1]) {
+        // Ignore entry node (index 0) to avoid cycles in the children list
+        foreach (var node in nodes[1..]) {
             var parent = node.IDom;
             if (parent.FirstChild == null) {
                 parent.FirstChild = node;
@@ -219,9 +209,9 @@ public class DominanceFrontier : IMethodAnalysis
     static readonly RefSet<BasicBlock> _emptySet = new();
     readonly Dictionary<BasicBlock, RefSet<BasicBlock>> _df = new();
 
-    public DominanceFrontier(DominatorTree domTree)
+    public DominanceFrontier(MethodBody method, DominatorTree domTree)
     {
-        foreach (var block in domTree.Method) {
+        foreach (var block in method) {
             if (block.NumPreds < 2) continue;
 
             var blockDom = domTree.IDom(block);
@@ -239,7 +229,7 @@ public class DominanceFrontier : IMethodAnalysis
     }
 
     static IMethodAnalysis IMethodAnalysis.Create(IMethodAnalysisManager mgr)
-        => new DominanceFrontier(mgr.GetAnalysis<DominatorTree>());
+        => new DominanceFrontier(mgr.Method, mgr.GetAnalysis<DominatorTree>());
 
     public RefSet<BasicBlock> Of(BasicBlock block)
         => _df.GetValueOrDefault(block, _emptySet);

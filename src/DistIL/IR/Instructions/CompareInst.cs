@@ -165,4 +165,37 @@ public static class CompareOps
     /// <summary> Returns the signed version of the current operator, if it is unsigned; otherwise returns it unchanged. </summary>
     public static CompareOp GetSigned(this CompareOp op)
         => op.IsUnsigned() ? op + (CompareOp.Slt - CompareOp.Ult) : op;
+
+    /// <summary> Returns whether the operator is strict (non-inclusive, not "-or-equal"). </summary>
+    public static bool IsStrict(this CompareOp op)
+        => op is CompareOp.Slt or CompareOp.Sgt or CompareOp.Ult or CompareOp.Ugt or
+                 CompareOp.FOlt or CompareOp.FOgt or CompareOp.FUlt or CompareOp.FUgt;
+
+    /// <summary> Returns the strict version of this operator: Sle -> Slt, Sge -> Sgt, ... </summary>
+    public static CompareOp GetStrict(this CompareOp op)
+        => op switch {
+            CompareOp.Sle => CompareOp.Slt,
+            CompareOp.Sge => CompareOp.Sgt,
+            CompareOp.Ule => CompareOp.Ult,
+            CompareOp.Uge => CompareOp.Ugt,
+            CompareOp.FOle => CompareOp.FOlt,
+            CompareOp.FOge => CompareOp.FOgt,
+            CompareOp.FUle => CompareOp.FUlt,
+            CompareOp.FUge => CompareOp.FUgt,
+            _ => op
+        };
+
+    /// <summary> Returns the non-strict version of this operator: Slt -> Sle, Sgt -> Sge, ... </summary>
+    public static CompareOp GetNonStrict(this CompareOp op)
+        => op switch {
+            CompareOp.Slt => CompareOp.Sle,
+            CompareOp.Sgt => CompareOp.Sge,
+            CompareOp.Ult => CompareOp.Ule,
+            CompareOp.Ugt => CompareOp.Uge,
+            CompareOp.FOlt => CompareOp.FOle,
+            CompareOp.FOgt => CompareOp.FOge,
+            CompareOp.FUlt => CompareOp.FUle,
+            CompareOp.FUgt => CompareOp.FUge,
+            _ => op
+        };
 }

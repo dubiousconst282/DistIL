@@ -1,0 +1,98 @@
+public static Self::ImpliedNullness1_Local(#obj: string) -> int {
+BB_01:
+  r2 = callvirt String::IndexOf(this: #obj, char: 65) -> int
+  r3 = cmp.ne #obj, null -> bool
+  goto r3 ? BB_True : BB_False
+BB_True: ret 1
+BB_False: ret 0
+
+// CHECK: ImpliedNullness1_Local
+// CHECK: goto 1 ? BB_True : BB_False
+// CHECK: }
+}
+
+public static Self::ImpliedNullness2_Global(#obj: string) -> int {
+BB_01:
+  r2 = callvirt String::IndexOf(this: #obj, char: 65) -> int
+  r3 = icmp.sge r2, 0 -> bool
+  goto r3 ? BB_Found : BB_False
+BB_Found:
+  r6 = cmp.ne #obj, null -> bool
+  goto r6 ? BB_True : BB_False
+BB_True:
+  ret r2
+BB_False: ret 0
+
+// CHECK: ImpliedNullness2_Global
+// CHECK: goto 1 ? BB_True : BB_False
+// CHECK: }
+}
+
+
+public static Self::DominatingBranch_FoldCmp1(#x: int, #y: int) -> int {
+BB_01:
+  r2 = icmp.sgt #x, 0 -> bool
+  goto r2 ? BB_True : BB_False
+BB_True:
+  r5 = icmp.sgt #x, 0 -> bool
+  r6 = or #y, r5 -> int
+  ret r6
+BB_False:
+  r9 = icmp.sgt #x, 0 -> bool
+  r10 = and #y, r9 -> int
+  ret r10
+
+// CHECK: DominatingBranch_FoldCmp1
+// CHECK: or #y, 1
+// CHECK: and #y, 0
+// CHECK: }
+}
+
+public static Self::DominatingBranch_FoldCmp2(#x: int, #y: int) -> int {
+BB_01:
+  r2 = icmp.sgt #x, 0 -> bool
+  goto r2 ? BB_True : BB_False
+BB_True:
+  r5 = icmp.slt #x, 0 -> bool
+  r6 = or #y, r5 -> int
+  ret r6
+BB_False:
+  r9 = icmp.sle #x, 0 -> bool
+  r10 = and #y, r9 -> int
+  ret r10
+
+// CHECK: DominatingBranch_FoldCmp2
+// CHECK: or #y, 0
+// CHECK: and #y, 1
+// CHECK: }
+}
+
+public static Self::DominatingBranch_FoldCmp3_Reuse(#x: int, #y: int, #ptr: int&) -> int {
+BB_01:
+  r2 = icmp.sgt #x, 0 -> bool
+  goto r2 ? BB_True : BB_Ret
+BB_True:
+  goto r2 ? BB_Ret : BB_Ret2
+BB_Ret: ret 1
+BB_Ret2: ret 0
+
+// CHECK: DominatingBranch_FoldCmp3_Reuse
+// CHECK: BB_True:
+// CHECK: goto 1 ? BB_Ret : BB_Ret2
+// CHECK: }
+}
+
+public static Self::DominatingBranch_FoldCmp4_Loop(#x: int, #y: int, #ptr: int&) -> int {
+BB_01:
+  goto BB_Loop
+BB_Loop:
+  r2 = load #ptr -> int
+  r3 = icmp.slt r2, #x -> bool
+  goto r3 ? BB_Loop : BB_Ret
+BB_Ret:
+  ret 1
+
+// CHECK: DominatingBranch_FoldCmp4_Loop
+// CHECK: goto {{r\d+}} ? BB_Loop : BB_Ret
+// CHECK: }
+}

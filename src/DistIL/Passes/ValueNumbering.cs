@@ -80,7 +80,7 @@ public class ValueNumbering : IMethodPass
             }
 
             // Scan CFG backwards to find memory clobbers
-            // TODO: cache results or mark something on the avail list to avoid re-scans
+            // TODO: investigate using MemorySSA for fast avail-dep checks: https://llvm.org/docs/MemorySSA.html
             var worklist = new DiscreteStack<BasicBlock>(user.Block);
 
             while (worklist.TryPop(out var block)) {

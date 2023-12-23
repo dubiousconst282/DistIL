@@ -37,6 +37,9 @@ public class PassRegressionTests
     [Fact]
     public void Test_PresizeLists() => CheckEthil("PresizeLists.ethil", new PresizeLists());
 
+    [Fact]
+    public void Test_AssertionProp() => CheckEthil("AssertionProp.ethil", new AssertionProp());
+
     private void CheckEthil(string filename, IMethodPass pass)
     {
         var selfType = _testAsm.CreateType("RegressionTests", $"_Test_{Path.GetFileNameWithoutExtension(filename)}");

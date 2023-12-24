@@ -13,24 +13,40 @@ public class SimplifyCFG : IMethodPass
 
         // Simplification
         ctx.Method.TraverseDepthFirst(postVisit: block => {
-            bool changed = true;
-
-            while (changed) {
-                changed = false;
-                changed |= ConvertSwitchToLut(ctx.Compilation, block);
-                changed |= MergeWithSucc(block);
-                changed |= InvertCond(block);
-                changed |= ConvertToBranchless(block);
-                everChanged |= changed;
+            while (SimplifyBlock(ctx, block)) {
+                everChanged = true;
             }
         });
 
         return everChanged ? MethodInvalidations.ControlFlow : 0;
     }
 
-    private static bool MergeWithSucc(BasicBlock block)
+    private static bool SimplifyBlock(MethodTransformContext ctx, BasicBlock block)
     {
-        if (block.Last is not BranchInst { IsJump: true } br) return false;
+        bool changed = false;
+
+        switch (block.Last) {
+            case BranchInst { IsConditional: true } br: {
+                changed |= SimplifyCond(br);
+                changed |= ConvertToBranchless(block);
+                changed |= JumpThreadThroughPhi(block);
+                break;
+            }
+            case BranchInst { IsJump: true } br: {
+                changed |= MergeWithSucc(block, br);
+                break;
+            }
+            case SwitchInst sw: {
+                changed |= ConvertSwitchToLut(ctx.Compilation, block);
+                break;
+            }
+        }
+        return changed;
+    }
+
+    private static bool MergeWithSucc(BasicBlock block, BranchInst br)
+    {
+        Debug.Assert(br.IsJump);
 
         // succ can't start with a phi/guard, nor loop on itself, and we must be its only predecessor
         if (br.Then is not { HasPhisOrGuards: false, NumPreds: 1 } succ || succ == block) return false;
@@ -41,13 +57,12 @@ public class SimplifyCFG : IMethodPass
 
     // goto x == 0 ? T : F  ->  goto x ? F : T
     // goto x != 0 ? T : F  ->  goto x ? T : F
-    private static bool InvertCond(BasicBlock block)
+    //   for `x is bool` 
+    private static bool SimplifyCond(BranchInst br)
     {
-        if (block.Last is not BranchInst { IsConditional: true } br) return false;
-
-        if (br.Cond is CompareInst { Op: CompareOp.Eq or CompareOp.Ne, Right: ConstInt { Value: 0 } } cond) {
+        if (br.Cond is CompareInst { Op: CompareOp.Eq or CompareOp.Ne, Left.ResultType.Kind: TypeKind.Bool, Right: ConstInt { Value: 0 } } cond) {
             br.Cond = cond.Left;
-            
+
             if (cond.Op == CompareOp.Eq) {
                 (br.Then, br.Else) = (br.Else!, br.Then);
             }
@@ -192,7 +207,7 @@ public class SimplifyCFG : IMethodPass
             if (block.Last is ReturnInst) {
                 exitBlocks.Add(block);
             } else {
-                SimpleJumpThread(block);
+                CollapseJumps(block);
             }
         }
 
@@ -207,7 +222,7 @@ public class SimplifyCFG : IMethodPass
             phi.AddArg(block, value);
             block.SetBranch(singleExit);
 
-            SimpleJumpThread(block);
+            CollapseJumps(block);
         }
         return true;
     }
@@ -217,7 +232,7 @@ public class SimplifyCFG : IMethodPass
     //  BB_02: goto BB_03;
     //  ----
     //  BB_01: goto BB_03;
-    private static bool SimpleJumpThread(BasicBlock block)
+    private static bool CollapseJumps(BasicBlock block)
     {
         // Not the entry block, first inst is a jump
         if (block is not { NumPreds: > 0, First: BranchInst { IsJump: true, Then: var succ } }) return false;
@@ -237,6 +252,39 @@ public class SimplifyCFG : IMethodPass
             return true;
         }
         return false;
+    }
+
+
+    // Jump thread conditional branches that are based on phis.
+    //   BB_01:
+    //     ...
+    //     goto BB_08
+    //   BB_08:
+    //     r9 = phi [BB_01: 0], [BB_05: 1] -> bool
+    //     goto r9 ? BB_11 : BB_16
+    //
+    // TODO: make this work on blocks with more than one phi (sum loop with inlined MoveNext() + return true/false)
+    // Note: LLVM does this in a very different way, replacing the branch condition to one from a dominating block.
+    //       Their SimplifyCFG pass also seems to be doing lots of jump threadings-style transforms, but I don't think
+    //       we can do that efficiently without keeping the dom tree up to date.
+    private static bool JumpThreadThroughPhi(BasicBlock block)
+    {
+        if (block.Last is not BranchInst { IsConditional: true, Cond: PhiInst phi } br || phi.Block != block) return false;
+        if (phi.NumUses >= 2 || br.Prev != phi || phi.Prev != null) return false; // block has other instructions that may have side effects
+
+        int numChanged = 0;
+
+        foreach (var (pred, value) in phi) {
+            if (ConstFolding.FoldCondition(value) is not bool cond) continue;
+
+            var newSucc = cond ? br.Then : br.Else;
+            if (newSucc.Phis().Any()) continue; // Don't mess with phi edges
+
+            pred.RedirectSucc(block, newSucc);
+            block.RedirectPhis(pred, null); // Remove phi edges
+            numChanged++;
+        }
+        return numChanged > 0;
     }
 
     // Convert a integer based switch into a lookup table (RVA)

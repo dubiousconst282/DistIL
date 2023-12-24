@@ -66,17 +66,17 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
     manager.AddPasses(applyIndependently: true) // this is so that e.g. all callees are in SSA before inlining.
         .Apply<InlineMethods>();
 
+    var simplifySeg = manager.AddPasses()
+        .Apply<SimplifyInsts>()
+        .Apply<SimplifyCFG>()
+        .Apply<DeadCodeElim>()
+        .RepeatUntilFixedPoint(maxIters: 3);
+
     manager.AddPasses()
         .Apply<ScalarReplacement>()
         .IfChanged(c => c.Apply<SsaPromotion>()
                          .Apply<InlineMethods>()) // SROA+SSA uncovers new devirtualization oportunities
         .RepeatUntilFixedPoint(maxIters: 3);
-
-    var simplifySeg = manager.AddPasses()
-        .Apply<SimplifyInsts>()
-        .Apply<SimplifyCFG>()
-        .Apply<DeadCodeElim>()
-        .RepeatUntilFixedPoint(maxIters: 2);
 
     manager.AddPasses()
         .Apply<ValueNumbering>()

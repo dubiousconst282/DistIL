@@ -8,9 +8,10 @@ public class DeadCodeElim : IMethodPass
     public MethodPassResult Run(MethodTransformContext ctx)
     {
         var changes = MethodInvalidations.None;
+        var funcInfo = ctx.Compilation.GetAnalysis<GlobalFunctionEffects>();
 
         changes |= RemoveUnreachableBlocks(ctx.Method) ? MethodInvalidations.ControlFlow : 0;
-        changes |= RemoveUselessCode(ctx.Method) ? MethodInvalidations.DataFlow : 0;
+        changes |= RemoveUselessCode(ctx.Method, funcInfo) ? MethodInvalidations.DataFlow : 0;
 
         return changes;
     }
@@ -58,13 +59,14 @@ public class DeadCodeElim : IMethodPass
         return changed;
     }
 
-    public static bool RemoveUselessCode(MethodBody method)
+    public static bool RemoveUselessCode(MethodBody method, GlobalFunctionEffects? funcInfo)
     {
         var worklist = new DiscreteStack<Instruction>();
 
         // Mark useful instructions
         foreach (var inst in method.Instructions()) {
             if (inst.SafeToRemove) continue;
+            if (funcInfo != null && IsSafeToRemoveCall(inst, funcInfo)) continue;
 
             // Mark `inst` and its entire dependency chain
             worklist.Push(inst);
@@ -91,6 +93,16 @@ public class DeadCodeElim : IMethodPass
             }
         }
         return changed;
+    }
+
+    private static bool IsSafeToRemoveCall(Instruction inst, GlobalFunctionEffects funcInfo)
+    {
+        // TODO: allow removing virtual calls on objs that are known not to be null (via CallInst.InBounds?)
+        if (inst is not CallInst { IsVirtual: false } call) return false;
+
+        var effects = funcInfo.GetEffects(call.Method);
+
+        return effects.IsPure;
     }
 
     // Remove phi-webs where all arguments have the same value

@@ -47,15 +47,17 @@ BB_09:
 // CHECK: ret
 }
 
-static Self::Clobber(#x: float) -> float {
+static Self::Clobber(#ptr: float&) -> float {
 BB_01:
-  ret #x
+  store #ptr, 0.0f
+  r3 = load #ptr -> float
+  ret r3
 }
 
-public static Self::LVN_Call_NonPure_2(#x: float) -> float {
+public static Self::LVN_Call_NonPure_2(#x: float&) -> float {
 BB_01:
-  r2 = call Self::Clobber(float: #x) -> float
-  r3 = call Self::Clobber(float: #x) -> float
+  r2 = call Self::Clobber(float&: #x) -> float
+  r3 = call Self::Clobber(float&: #x) -> float
   r4 = fadd r2, r3 -> float
   ret r4
 // CHECK: LVN_Call_NonPure_2
@@ -68,7 +70,7 @@ BB_01:
 public static Self::LVN_MemClobber_1(#ptr: float&) -> float {
 BB_01:
   r1 = load #ptr -> float
-  r2 = call Self::Clobber(float: r1) -> float
+  r2 = call Self::Clobber(float&: #ptr) -> float
   r3 = load #ptr -> float
   r4 = fadd r1, r3 -> float
   ret r4

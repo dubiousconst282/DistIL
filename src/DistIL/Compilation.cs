@@ -4,6 +4,8 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 
+using DistIL.Analysis;
+
 public class Compilation
 {
     public ModuleDef Module { get; }
@@ -14,11 +16,22 @@ public class Compilation
 
     private TypeDef? _auxType;
 
+    readonly Dictionary<Type, IGlobalAnalysis> _analyses = new();
+
     public Compilation(ModuleDef module, ICompilationLogger logger, CompilationSettings settings)
     {
         Module = module;
         Logger = logger;
         Settings = settings;
+    }
+
+    public A GetAnalysis<A>() where A : IGlobalAnalysis
+    {
+        Logger.Trace($"Get analysis {typeof(A).Name}");
+
+        ref var analysis = ref _analyses.GetOrAddRef(typeof(A));
+        analysis ??= A.Create(this);
+        return (A)analysis;
     }
 
     /// <summary> Returns the compiler's auxiliary type for the current module. </summary>

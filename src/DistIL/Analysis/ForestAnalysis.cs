@@ -84,6 +84,8 @@ public class ForestAnalysis : IMethodAnalysis
     // Assumes that `a` is defined before `b`.
     private bool AreInterchangeableHazards(Instruction a, Instruction b, AliasAnalysis aa)
     {
+        // TODO: extend this to query GlobalFunctionEffects for more accurate call info
+
         // Unrelated memory loads can be safely interchanged
         if (b.MayWriteToMemory) {
             if (a is LoadInst ld && b is StoreInst st) {

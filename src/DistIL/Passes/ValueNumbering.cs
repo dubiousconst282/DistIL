@@ -9,7 +9,8 @@ public class ValueNumbering : IMethodPass
     {
         var table = new ValueTable() {
             DomTree = ctx.GetAnalysis<DominatorTree>(),
-            AliasAnalysis = ctx.GetAnalysis<AliasAnalysis>()
+            AliasAnalysis = ctx.GetAnalysis<AliasAnalysis>(),
+            FuncInfo = ctx.Compilation.GetAnalysis<GlobalFunctionEffects>(),
         };
         bool madeChanges = false;
 
@@ -34,6 +35,7 @@ public class ValueNumbering : IMethodPass
         readonly Dictionary<Instruction, List<Instruction>> _availMap = new(VNComparer.Instance);
         public required DominatorTree DomTree;
         public required AliasAnalysis AliasAnalysis;
+        public required GlobalFunctionEffects FuncInfo;
 
         public bool Process(Instruction inst)
         {
@@ -72,10 +74,10 @@ public class ValueNumbering : IMethodPass
             if (!(def is MemoryInst or CallInst)) return true;
 
             if (def is CallInst call) {
-                var effect = GetFuncSideEffect(call.Method);
+                var effect = FuncInfo.GetEffects(call.Method);
 
-                if (effect == FuncSideEffect.Pure) return true;
-                if (effect == FuncSideEffect.MayWrite) return false;
+                if (effect.MayWriteMem) return false;
+                if (!effect.MayReadMem) return true;
                 // if effect == MayRead, check for clobbers
             }
 
@@ -113,7 +115,7 @@ public class ValueNumbering : IMethodPass
                 return true;
             }
             if (inst is CallInst call) {
-                return GetFuncSideEffect(call.Method) == FuncSideEffect.MayWrite;
+                return FuncInfo.GetEffects(call.Method).MayWriteMem;
             }
             return inst.MayWriteToMemory;
         }
@@ -235,49 +237,4 @@ public class ValueNumbering : IMethodPass
         public required Func<Instruction, int> HashFn { get; init; }
     }
 #endregion
-
-
-    private static FuncSideEffect GetFuncSideEffect(MethodDesc fn)
-    {
-        if (fn.DeclaringType is TypeDefOrSpec type && type.IsCorelibType()) {
-            if (IsPure(type.Namespace, type.Name, fn)) {
-                return FuncSideEffect.Pure;
-            }
-            if (type.Namespace == "System.Collections.Generic" && type.Name is "Dictionary`2" or "List`1" or "HashSet`1") {
-                bool isAccessor = fn.Name is "get_Item" or "get_Count" or "ContainsKey";
-                return isAccessor ? FuncSideEffect.MayRead : FuncSideEffect.MayWrite;
-            }
-        }
-        return FuncSideEffect.MayWrite;
-    }
-
-    private static bool IsPure(string? ns, string typeName, MethodDesc fn)
-    {
-        if (ns == "System") {
-            if (typeName is "Math" or "MathF") {
-                return true;
-            }
-            if (typeName is "Int32" or "Int64" or "Single" or "Double" or "DateTime" or "Decimal") {
-                // ToString() et al. aren't pure because they depend on the instance reference.
-                return fn.Name is "Parse" or "TryParse" && fn.ParamSig[0] == PrimType.String;
-            }
-            if (typeName is "String") {
-                return fn.Name is
-                    "Compare" or "CompareTo" or "Substring" or "Concat" or
-                    "Replace" or "Contains" or "IndexOf" or "LastIndexOf" or
-                    "ToLower" or "ToUpper" or
-                    "op_Equality" or "op_Inequality" or "Equals";
-            }
-        } else if (ns == "System.Numerics" && typeName == "BitOperations") {
-            return true;
-        }
-        return false;
-    }
-
-    enum FuncSideEffect
-    {
-        Pure,       // Memory is not accessed.
-        MayRead,
-        MayWrite
-    }
 }

@@ -3,6 +3,10 @@ namespace DistIL.Analysis;
 public interface IAnalysis
 {
 }
+public interface IGlobalAnalysis : IAnalysis
+{
+    static virtual IGlobalAnalysis Create(Compilation comp) => throw new NotImplementedException();
+}
 public interface IMethodAnalysis : IAnalysis
 {
     static virtual IMethodAnalysis Create(IMethodAnalysisManager mgr) => throw new NotImplementedException();

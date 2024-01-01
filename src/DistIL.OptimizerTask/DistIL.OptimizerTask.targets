@@ -15,6 +15,7 @@
     </RemoveDuplicates>
 
     <PropertyGroup>
+      <CliOptimizerPath>$(MSBuildThisFileDirectory)../tools/net8.0/DistIL.Cli.dll</CliOptimizerPath>
       <InputAsmPath>%(IntermediateAssembly.FullPath)</InputAsmPath>
 
       <!-- Trailing slashes are removed to prevent issues with argument splitting. -->
@@ -24,9 +25,20 @@
       <FilterUnmarkedArg Condition="'$(DistilAllMethods)' != 'true'">--filter-unmarked</FilterUnmarkedArg>
     </PropertyGroup>
 
+    <!-- If the CLI isn't on the NuGet tools path, try to find it from referenced assemblies.
+         This allows the task to work properly when this project is referenced directly. -->
+    <ResolveAssemblyReference
+        Condition="!Exists('$(CliOptimizerPath)')"
+        Assemblies="DistIL.Cli"
+        SearchPaths="@(AsmRefPaths)"
+        FindDependencies="False"
+    >
+      <Output TaskParameter="ResolvedFiles" PropertyName="CliOptimizerPath" />
+    </ResolveAssemblyReference>
+
     <Exec
       WorkingDirectory="$(TargetDir)"
-      Command='dotnet "$(MSBuildThisFileDirectory)../tools/net8.0/DistIL.Cli.dll" -i "$(InputAsmPath)" $(ResolverPathsArg) $(FilterUnmarkedArg) $(DistilExtraArgs)'
+      Command='dotnet "$(CliOptimizerPath)" -i "$(InputAsmPath)" $(ResolverPathsArg) $(FilterUnmarkedArg) $(DistilExtraArgs)'
     />
     <Touch Files="@(IntermediateAssembly -> '%(Identity).bak')" />
   </Target>

@@ -48,22 +48,22 @@ public class PresizeLists : IMethodPass
                 if (info.AddCallCount == 0) continue; // nothing we can do
 
                 var builder = new IRBuilder(loop.PreHeader);
-                var minSize = builder.CreateMul(loop.GetTripCount(builder)!, ConstInt.CreateI(info.AddCallCount));
+                var numAddedItems = builder.CreateMul(loop.GetTripCount(builder)!, ConstInt.CreateI(info.AddCallCount));
                 var newList = list;
 
-                if (list is NewObjInst listAlloc && CanSinkAlloc(listAlloc, minSize as Instruction ?? loop.PreHeader.Last, domTree)) {
+                if (list is NewObjInst listAlloc && CanSinkAlloc(listAlloc, numAddedItems as Instruction ?? loop.PreHeader.Last, domTree)) {
                     Debug.Assert(listAlloc.Operands.Length == 0);
 
                     var ctorWithCap = list.ResultType.FindMethod(".ctor", new MethodSig(PrimType.Void, [PrimType.Int32]));
-                    newList = builder.CreateNewObj(ctorWithCap, [minSize]);
+                    newList = builder.CreateNewObj(ctorWithCap, [numAddedItems]);
                     listAlloc.ReplaceWith(newList);
                 } else {
-                    var minCap = builder.CreateAdd(minSize, builder.CreateFieldLoad("_size", list));
+                    var minCap = builder.CreateAdd(numAddedItems, builder.CreateFieldLoad("_size", list));
                     builder.CreateCallVirt("EnsureCapacity", [list, minCap]);
                 }
 
                 if (!info.HasConditionalAdd) {
-                    InlineAddCalls(loop, builder, newList);
+                    InlineAddCalls(loop, builder, newList, numAddedItems);
                 }
                 numChanges++;
             }
@@ -75,7 +75,7 @@ public class PresizeLists : IMethodPass
     // Given a list presized to the exact loop trip count, attempts to replace all Add() calls
     // inside the loop with direct array stores.
     // Also attempts to remove ToArray() calls and the list allocation.
-    private static bool InlineAddCalls(ShapedLoopInfo loop, IRBuilder builder, TrackedValue list)
+    private static bool InlineAddCalls(ShapedLoopInfo loop, IRBuilder builder, TrackedValue list, Value numAddedItems)
     {
         var addCalls = new List<CallInst>();
         var toArrayCall = default(CallInst);
@@ -116,10 +116,10 @@ public class PresizeLists : IMethodPass
             listAlloc.Remove();
             Debug.Assert(listAlloc.NumUses == addCalls.Count);
         } else {
-            // TODO: this will realistically not break any time soon (if ever), but we should
-            //       probably consider using CM.SetCount() + AsSpan() instead
+            // TODO: centralize List<T> field accesses and consider using CM.SetCount() and AsSpan() instead
             array = builder.CreateFieldLoad("_items", list);
             offset = builder.CreateFieldLoad("_size", list);
+            builder.CreateFieldStore("_size", list, builder.CreateAdd(offset, numAddedItems));
         }
 
         // Emitting a pointer increment for IEnumerables is a bit questionable because bad collections could

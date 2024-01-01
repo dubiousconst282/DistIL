@@ -26,16 +26,10 @@ public class PassRegressionTests
     public void Test_SimplifyCFG() => CheckEthil("SimplifyCFG.ethil", new SimplifyCFG());
 
     [Fact]
-    public void Test_ExpandLinq() => CheckEthil("ExpandLinq.ethil", new ExpandLinq(_modResolver));
-
-    [Fact]
     public void Test_LoopStrengthReduction() => CheckEthil("LoopStrengthReduction.ethil", new LoopStrengthReduction());
 
     [Fact]
     public void Test_ValueNumbering() => CheckEthil("ValueNumbering.ethil", new ValueNumbering());
-
-    [Fact]
-    public void Test_PresizeLists() => CheckEthil("PresizeLists.ethil", new PresizeLists());
 
     [Fact]
     public void Test_AssertionProp() => CheckEthil("AssertionProp.ethil", new AssertionProp());

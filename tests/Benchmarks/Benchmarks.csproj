@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <Configuration>Release</Configuration>
+    <Optimize>true</Optimize>
   </PropertyGroup>
 
   <ItemGroup>

@@ -123,7 +123,7 @@ static void AddIgnoreAccessAttrib(ModuleDef module, IEnumerable<string> assembly
     var attribCtor = attribType.CreateMethod(
         ".ctor", PrimType.Void,
         [new ParamDef(attribType, "this"), new ParamDef(PrimType.String, "assemblyName")],
-        MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig
+        MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig | MethodAttributes.RTSpecialName
     );
     attribCtor.ILBody = new ILMethodBody() {
         Instructions = new[] { new ILInstruction(ILCode.Ret) }

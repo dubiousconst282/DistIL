@@ -1,8 +1,11 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    
+    <RunDistil>true</RunDistil>
+    <DistilExtraArgs>--dump-dir $(OutputPath)ir_dumps/ --purge-dumps --dump-fmts plaintext</DistilExtraArgs>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,16 +23,9 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/DistIL/DistIL.csproj" />
-    <ProjectReference Include="../misc/TestAsm/TestAsm.csproj; ../misc/TestAsm.IL/TestAsm.IL.ilproj">
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-      <OutputItemType>Content</OutputItemType>
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </ProjectReference>
-
-    <!-- Copy all IR test cases to output -->
-    <Content Include="Passes/Cases/*.ethil">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
+    <ProjectReference Include="../../src/DistIL.OptimizerTask/DistIL.OptimizerTask.csproj" />
   </ItemGroup>
+  
+  <Import Project="../../src/DistIL.OptimizerTask/DistIL.OptimizerTask.targets" />
 
 </Project>

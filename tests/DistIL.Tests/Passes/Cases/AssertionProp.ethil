@@ -96,3 +96,19 @@ BB_Ret:
 // CHECK: goto {{r\d+}} ? BB_Loop : BB_Ret
 // CHECK: }
 }
+
+public static Self::MultiPred_NoReuse(#x: int, #y: int, #ptr: int&) -> int {
+BB_01:
+  r2 = icmp.sgt #x, 0 -> bool
+  goto r2 ? BB_True : BB_Ret
+BB_True:
+  goto BB_Ret
+BB_Ret:
+  r3 = icmp.sgt #x, 0 -> bool
+  ret r3
+
+// CHECK: MultiPred_NoReuse
+// CHECK: icmp.sgt
+// CHECK: icmp.sgt
+// CHECK: ret {{r\d+}}
+}

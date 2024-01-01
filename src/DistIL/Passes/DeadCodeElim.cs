@@ -97,8 +97,7 @@ public class DeadCodeElim : IMethodPass
 
     private static bool IsSafeToRemoveCall(Instruction inst, GlobalFunctionEffects funcInfo)
     {
-        // TODO: allow removing virtual calls on objs that are known not to be null (via CallInst.InBounds?)
-        if (inst is not CallInst { IsVirtual: false } call) return false;
+        if (inst is not CallInst call || (call.IsVirtual && !call.InBounds)) return false;
 
         var effects = funcInfo.GetEffects(call.Method);
 

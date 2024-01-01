@@ -12,6 +12,9 @@ public class CallInst : Instruction
     public bool IsStatic => Method.IsStatic;
     public TypeDesc? Constraint { get; set; }
 
+    /// <summary> For virtual calls, indicates if the instance object is known to be non-null. </summary>
+    public bool InBounds { get; set; }
+
     public override bool HasSideEffects => true;
     public override bool MayThrow => true;
     public override bool MayWriteToMemory => true;

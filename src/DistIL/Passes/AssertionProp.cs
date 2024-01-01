@@ -2,6 +2,8 @@ namespace DistIL.Passes;
 
 using DistIL.Analysis;
 
+using AssertFragment = (CompareOp Op, Value Right, BasicBlock ActiveBlock);
+
 /// <summary> A simple dominator-based "assertion propagation" pass. </summary>
 public class AssertionProp : IMethodPass
 {
@@ -9,142 +11,174 @@ public class AssertionProp : IMethodPass
     // array range checks. These are quite few in typical methods, but it enables folding of
     // some LINQ dispatching code.
     //
-    // Unfortunately, extending this impl to support array bounds-check elimination may be difficult since
-    // the assert chain will not include info from other scopes of the dom tree, thus deriving accurate
-    // range info from it might not be possible.
-    //
     // Both GCC and LLVM use an on-demand approach to determine this kind of info, which looks relatively easy
     // to implement and could be faster as it would save some needless tracking:
     // - https://gcc.gnu.org/wiki/AndrewMacLeod/Ranger
     // - LLVM LazyValueInfo and ValueTracking
     //
     // SCCP is another option but it looks rather finicky, requiring insertion of "assertion" defs in the IR.
-    // It would probably catch edge cases that this might miss?
+    // Though it could potentially catch edge cases that this might miss (which?)
     //
     // RyuJIT on the otherhand appears to be using path sensitive DFA to compute all asserts + a later elimination pass,
     // which also sounds complicated/expansive.
+    // - https://github.com/dotnet/runtime/blob/main/src/coreclr/jit/assertionprop.cpp#L6207
+
+    Dictionary<Value, List<AssertFragment>> _activeAsserts = new();
+    DominatorTree _domTree = null!;
+    int _numChanges = 0;
 
     public MethodPassResult Run(MethodTransformContext ctx)
     {
-        var domTree = ctx.GetAnalysis<DominatorTree>();
-        var impliedAsserts = new Dictionary<Value, Assertion>();
-        bool changed = false;
+        _domTree = ctx.GetAnalysis<DominatorTree>();
+        _numChanges = 0;
 
-        domTree.Traverse(preVisit: EnterBlock);
+        _domTree.Traverse(preVisit: ProcessBlock);
 
-        return changed ? MethodInvalidations.DataFlow : MethodInvalidations.None;
+        // Cleanup
+        _activeAsserts.Clear();
+        _domTree = null!;
 
-        void EnterBlock(BasicBlock block)
-        {
-            // Add implications from predecessor branches.
-            foreach (var pred in block.Preds) {
-                if (pred.Last is not BranchInst { Cond: CompareInst cmp } br) continue;
+        return _numChanges > 0 ? MethodInvalidations.DataFlow : MethodInvalidations.None;
+    }
 
-                // Backedges must be ignored because otherwise they will lead to
-                // incorrect folding of loop conditions:
-                //   Header:
-                //      (cond is implied to be true here, will be incorrectly folded at body)
-                //   Body:
-                //     cond = cmp ...
-                //     if (cond) goto header;
-                if (domTree.Dominates(block, pred)) continue;
+    private void ProcessBlock(BasicBlock block)
+    {
+        // Add implications from predecessor edge
+        if (block.NumPreds == 1 && block.Preds.First() is { Last: BranchInst { Cond: CompareInst predCmp } predBr }) {
+            var op = block == predBr.Then ? predCmp.Op : predCmp.Op.GetNegated();
+            Imply(op, predCmp.Left, predCmp.Right);
 
-                var op = block == br.Then ? cmp.Op : cmp.Op.GetNegated();
-                Imply(block, op, cmp.Left, cmp.Right);
+            // Replace existing uses of the predecessor branch condition's
+            // that are dominated by this block, to catch cases like:
+            //   if (cond) { if (cond) { ... } }
+            foreach (var use in predCmp.Uses()) {
+                if (_domTree.Dominates(block, use.Parent.Block)) {
+                    use.Operand = ConstInt.CreateI(block == predBr.Then ? 1 : 0);
+                    _numChanges++;
+                }
+            }
+        }
 
-                // Replace existing uses of the predecessor branch condition's
-                // that are dominated by this block, to catch cases like:
-                //   if (cond) { if (cond) { ... } }
-                if (block.NumPreds == 1) {
-                    var condResult = ConstInt.CreateI(block == br.Then ? 1 : 0);
+        // Add null asserts for phis
+        foreach (var phi in block.Phis()) {
+            if (!phi.ResultType.IsPointerOrObject()) continue;
 
-                    foreach (var use in cmp.Uses()) {
-                        if (domTree.Dominates(block, use.Parent.Block)) {
-                            use.Operand = condResult;
-                            changed = true;
-                        }
-                    }
+            bool? commonResult = null;
+
+            foreach (var (pred, arg) in phi) {
+                bool? result = null;
+
+                // Try to derive from pred branch, `if (obj != null)`
+                if (pred.Last is BranchInst { Cond: CompareInst { Op: CompareOp.Ne or CompareOp.Eq, Right: ConstNull } cmp } br && cmp.Left == arg) {
+                    result = (br.Then == pred) ^ (cmp.Op == CompareOp.Ne);
+                } else {
+                    result = Evaluate(CompareOp.Ne, arg, ConstNull.Create(), pred);
+                }
+
+                // Abort if we have no info about this argument, or if it conflicts
+                // with a previous one.
+                if (result == null || ((commonResult ??= result) != result)) {
+                    commonResult = null;
+                    break;
                 }
             }
 
-            foreach (var inst in block.NonPhis()) {
+            if (commonResult != null) {
+                Imply(commonResult.Value ? CompareOp.Ne : CompareOp.Eq, phi, ConstNull.Create());
+            }
+        }
+
+        // Looking for new implications and fold existing conditions
+        foreach (var inst in block.NonPhis()) {
+            switch (inst) {
                 // Access to an object implies that it must be non-null afterwards.
                 // FIXME: check if try..catch regions will mess with this
-                if (inst is MemoryInst or
-                            CallInst { IsVirtual: true } or
-                            FieldAddrInst { IsInstance: true } or
-                            ArrayAddrInst
-                    && inst.Operands[0] is TrackedValue obj
-                ) {
-                    Imply(block, CompareOp.Ne, obj, ConstNull.Create());
-                    continue;
-                }
+                case MemoryInst:
+                case CallInst { IsVirtual: true }:
+                case FieldAddrInst { IsInstance: true }:
+                case ArrayAddrInst: {
+                    if (inst.Operands[0] is not TrackedValue obj) break;
 
-                if (inst is CompareInst cmp && EvaluateCond(block, cmp.Op, cmp.Left, cmp.Right) is bool cond) {
-                    cmp.ReplaceUses(ConstInt.CreateI(cond ? 1 : 0));
-                    changed = true;
-                    continue;
+                    bool? isNonNull = Evaluate(CompareOp.Ne, obj, ConstNull.Create(), block);
+
+                    if (isNonNull is null) {
+                        Imply(CompareOp.Ne, obj, ConstNull.Create());
+                    } else if (isNonNull is true) {
+                        SetInBounds(inst);
+                    } // else, inst is unreachable
+
+                    break;
+                }
+                case NewObjInst: {
+                    Imply(CompareOp.Ne, inst, ConstNull.Create());
+                    break;
+                }
+                case CompareInst instC: {
+                    if (Evaluate(instC.Op, instC.Left, instC.Right, block) is bool cond) {
+                        instC.ReplaceUses(ConstInt.CreateI(cond ? 1 : 0));
+                        _numChanges++;
+                    }
+                    break;
                 }
             }
         }
 
         // Adds an assertion that implies a true condition.
-        void Imply(BasicBlock block, CompareOp op, Value left, Value right)
+        void Imply(CompareOp op, Value left, Value right)
         {
-            if (EvaluateCond(block, op, left, right) is not null) return;
-
-            for (int i = 0; i < 2; i++) {
-                var operand = i == 0 ? left : right;
-
-                // Don't bother tracking asserts related to consts for now
-                if (operand is not TrackedValue) continue;
-
-                ref var lastNode = ref impliedAsserts.GetOrAddRef(operand);
-                lastNode = new Assertion() {
-                    Block = block,
-                    Op = op, Left = left, Right = right,
-                    Prev = lastNode
-                };
-            }
-        }
-
-        bool? EvaluateCond(BasicBlock activeBlock, CompareOp op, Value left, Value right)
-        {
-            return Evaluate(GetActiveAssert(activeBlock, left), op, left, right) ??
-                   Evaluate(GetActiveAssert(activeBlock, right), op, left, right);
-        }
-        Assertion? GetActiveAssert(BasicBlock activeBlock, Value key)
-        {
-            if (!impliedAsserts.ContainsKey(key)) return null;
-
-            ref var node = ref impliedAsserts.GetRef(key);
-
-            // Lazily remove asserts that are out of scope, rather than
-            // tracking and removing dirty state on PostVisit.
-            // This shouldn't be too slow since dom queries are O(1).
-            while (node != null && !domTree.Dominates(node.Block, activeBlock)) {
-                node = node.Prev;
-            }
-
-            return node;
+            Assert(op, left, right, block);
+            Assert(op.GetSwapped(), right, left, block);
         }
     }
 
-    private static bool? Evaluate(Assertion? assert, CompareOp op, Value left, Value right)
+    private static void SetInBounds(Instruction inst)
     {
-        for (; assert != null; assert = assert.Prev!) {
-            bool argsMatch = assert.Left.Equals(left) && assert.Right.Equals(right);
+        switch (inst) {
+            case FieldAddrInst instC: instC.InBounds = true; break;
+            case CallInst instC: instC.InBounds = true; break;
+        }
+    }
 
-            if (!argsMatch && assert.Left.Equals(right) && assert.Right.Equals(left)) {
-                op = op.GetSwapped();
-                argsMatch = true;
-            }
+    private void Assert(CompareOp op, Value left, Value right, BasicBlock activeBlock)
+    {
+        // Don't bother tracking asserts related to consts
+        if (left is not TrackedValue) return;
 
-            if (argsMatch) {
-                if (AssertImpliesCond(assert.Op, op)) {
+        var list = _activeAsserts.GetOrAddRef(left) ??= new();
+
+        // Limit list size to avoid exponential runtime
+        if (list.Count >= 16) {
+            list.RemoveAt(0);
+        }
+        list.Add((op, right, activeBlock));
+    }
+
+    private bool? Evaluate(CompareOp op, Value left, Value right, BasicBlock block)
+    {
+        bool? result = null;
+
+        if (result == null && _activeAsserts.TryGetValue(left, out var asserts)) {
+            result = EvaluateRelatedAsserts(asserts, (op, right, block));
+        }
+        if (result == null && _activeAsserts.TryGetValue(right, out asserts)) {
+            result = EvaluateRelatedAsserts(asserts, (op.GetSwapped(), left, block));
+        }
+        return result;
+    }
+
+    private bool? EvaluateRelatedAsserts(List<AssertFragment>? relatedAsserts, AssertFragment cond)
+    {
+        if (relatedAsserts == null) return null;
+
+        // Consider most recent asserts first
+        for (int i = relatedAsserts.Count - 1; i >= 0; i--) {
+            var assert = relatedAsserts[i];
+
+            if (assert.Right.Equals(cond.Right) && _domTree.Dominates(assert.ActiveBlock, cond.ActiveBlock)) {
+                if (IsImpliedPredicate(assert.Op, cond.Op)) {
                     return true;
                 }
-                if (AssertImpliesCond(assert.Op, op.GetNegated())) {
+                if (IsImpliedPredicate(assert.Op, cond.Op.GetNegated())) {
                     return false;
                 }
             }
@@ -154,29 +188,24 @@ public class AssertionProp : IMethodPass
         return null;
     }
 
-    private static bool AssertImpliesCond(CompareOp assert, CompareOp cond)
+    // Checks if predicate `a` implies `b`
+    private static bool IsImpliedPredicate(CompareOp a, CompareOp b)
     {
         // x < y  implies  x <= y
-        if (assert.IsStrict() && !cond.IsStrict()) {
-            cond = cond.GetStrict();
+        if (a.IsStrict() && !b.IsStrict()) {
+            b = b.GetStrict();
         }
-        return assert == cond;
+        return a == b;
     }
 
-    // List of known assertions linked to a value, ordered in most recent order.
-    class Assertion
+    record struct Condition(CompareOp Op, Value Left, Value Right, BasicBlock Block)
     {
-        public required CompareOp Op;
-        public required Value Left, Right;
-        public required BasicBlock Block;
-        public Assertion? Prev;
-
         public override string ToString()
         {
             var sw = new StringWriter();
             var symTable = (Left as TrackedValue ?? Right as TrackedValue)?.GetSymbolTable();
             var pc = new PrintContext(sw, symTable ?? SymbolTable.Empty);
-            pc.Print($"{Op.ToString()} {Left}, {Right}");
+            pc.Print($"{Left} {Op.ToString()} {Right} @ {Block}");
             return sw.ToString();
         }
     }

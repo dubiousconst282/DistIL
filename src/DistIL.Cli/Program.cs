@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.RegularExpressions;
 
 using CommandLine;
@@ -36,11 +35,9 @@ static void RunOptimizer(OptimizerOptions options)
     }
 
     var module = resolver.Load(options.InputPath);
-
+    
     var comp = new Compilation(module, logger, new CompilationSettings());
     RunPasses(options, comp);
-
-    AddIgnoreAccessAttrib(module, [module.AsmName.Name!, "System.Private.CoreLib"]);
 
     string? outputPath = options.OutputPath;
 
@@ -112,27 +109,6 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
         ApplyFuzzyBisect(options.BisectFilter, methods);
     }
     manager.Run(methods);
-}
-static void AddIgnoreAccessAttrib(ModuleDef module, IEnumerable<string> assemblyNames)
-{
-    var attribType = module.CreateType(
-        "System.Runtime.CompilerServices", "IgnoresAccessChecksToAttribute",
-        TypeAttributes.BeforeFieldInit,
-        module.Resolver.CoreLib.FindType("System", "Attribute")
-    );
-    var attribCtor = attribType.CreateMethod(
-        ".ctor", PrimType.Void,
-        [new ParamDef(attribType, "this"), new ParamDef(PrimType.String, "assemblyName")],
-        MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig | MethodAttributes.RTSpecialName
-    );
-    attribCtor.ILBody = new ILMethodBody() {
-        Instructions = new[] { new ILInstruction(ILCode.Ret) }
-    };
-
-    var assemblyAttribs = module.GetCustomAttribs(forAssembly: true);
-    foreach (var name in assemblyNames) {
-        assemblyAttribs.Add(new CustomAttrib(attribCtor, [name]));
-    }
 }
 
 static PassManager.CandidateMethodFilter GetCandidateFilter(OptimizerOptions options, Compilation comp)

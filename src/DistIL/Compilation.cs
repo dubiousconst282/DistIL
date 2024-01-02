@@ -23,6 +23,9 @@ public class Compilation
         Module = module;
         Logger = logger;
         Settings = settings;
+
+        EnsureMembersAccessible(module.Resolver.CoreLib);
+        EnsureMembersAccessible(module);
     }
 
     public A GetAnalysis<A>() where A : IGlobalAnalysis
@@ -92,6 +95,57 @@ public class Compilation
             blockType.LayoutSize = size;
         }
         return (blockType, size);
+    }
+
+    HashSet<string> _assembliesToIgnoreAccessChecksFor = new();
+
+    /// <summary> Adds an IgnoresAccessChecksToAttribute for the given module if there's not already one. </summary>
+    /// <remarks> This ensures that <see cref="Module"/> can access any private member declared in the given module.  </remarks>
+    public void EnsureMembersAccessible(ModuleDef module)
+    {
+        string name = module.AsmName.Name!;
+
+        if (_assembliesToIgnoreAccessChecksFor.Add(name)) {
+            MarkIgnoreAccessChecksToAssembly(name);
+        }
+    }
+
+    private MethodDesc? m_IgnoreAccessChecksToAttributeCtor;
+
+    private void MarkIgnoreAccessChecksToAssembly(string assemblyName)
+    {
+        var asmAttribs = Module.GetCustomAttribs(forAssembly: true);
+
+        if (m_IgnoreAccessChecksToAttributeCtor == null) {
+            var attribType = Module.FindType("System.Runtime.CompilerServices", "IgnoresAccessChecksToAttribute");
+
+            if (attribType == null) {
+                attribType = Module.CreateType(
+                    "System.Runtime.CompilerServices", "IgnoresAccessChecksToAttribute",
+                    TypeAttributes.BeforeFieldInit,
+                    Module.Resolver.CoreLib.FindType("System", "Attribute")
+                );
+                var attribCtor = attribType.CreateMethod(
+                    ".ctor", PrimType.Void,
+                    [new ParamDef(attribType, "this"), new ParamDef(PrimType.String, "assemblyName")],
+                    MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName
+                );
+                attribCtor.ILBody = new ILMethodBody() {
+                    Instructions = new[] { new ILInstruction(ILCode.Ret) }
+                };
+
+                m_IgnoreAccessChecksToAttributeCtor = attribCtor;
+            } else {
+                m_IgnoreAccessChecksToAttributeCtor = attribType.FindMethod(".ctor", new MethodSig(PrimType.Void, [PrimType.String]));
+
+                foreach (var attrib in asmAttribs) {
+                    if (attrib.Constructor == m_IgnoreAccessChecksToAttributeCtor) {
+                        _assembliesToIgnoreAccessChecksFor.Add((string)attrib.Args[0]);
+                    }
+                }
+            }
+        }
+        asmAttribs.Add(new CustomAttrib(m_IgnoreAccessChecksToAttributeCtor, [assemblyName]));
     }
 }
 

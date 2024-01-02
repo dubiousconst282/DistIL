@@ -108,17 +108,20 @@ internal class LoopSink : LinqSink
                 numLatches = 1000; // conditional/special backedge; must be merged
             }
         }
-        return _regionEntry != null && (numLatches == 1 || (numLatches >= 2 && MergeBackedges())) &&
+        return _regionEntry != null &&
                // Match `Header: goto enumer.MoveNext() ? Body : Latch`
                _header.First == _moveNext && _header.Last is BranchInst br && br.Cond == _moveNext &&
                // Match `Body: T curr = enumer.get_Current()`
                (_body = br.Then).First == _getCurrent &&
                // Match `Exit: leave RegionSucc`
-               (_exit = br.Else!).First is LeaveInst;
+               (_exit = br.Else!).First is LeaveInst &&
+               (numLatches == 1 || (numLatches >= 2 && MergeBackedges()));
     }
 
     private bool MergeBackedges()
     {
+        Debug.Assert(!_header.HasPhisOrGuards); // header must start with "MoveNext()"
+
         // Try reuse some block with a single jump, otherwise create a new one.
         _latch = _header.Preds.FirstOrDefault(b => b.First is BranchInst { IsJump: true })!;
 

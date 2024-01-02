@@ -107,4 +107,30 @@ public class ExpandLinqTests
         // CHECK-SAME: ArraySegment`1+Enumerator[string]
         // CHECK: try finally
     }
+
+    [Fact]
+    public void Enumerable_Filter_Loop_PhiHeader()
+    {
+        var source = "the quick brown Fox jumped over the Lazy Dog".Split(' ').Where(s => !string.IsNullOrEmpty(s));
+        var result = new List<string>();
+
+        var itr = source.GetEnumerator();
+        try {
+            for (int i = 0; itr.MoveNext(); ) {
+                string word = itr.Current;
+                i++;
+                if (!char.IsUpper(word[0])) continue; // backedge
+
+                result.Add(string.Format("{0}:{1}", i, word)); // box to prevent i from being addr taken
+            }
+        } finally {
+            (itr as IDisposable)?.Dispose();
+        }
+
+        Assert.Equal("4:Fox 8:Lazy 9:Dog".Split(' '), result);
+
+        // CHECK: Where<string>(
+        // CHECK: phi
+        // CHECK-NEXT: MoveNext(
+    }
 }

@@ -26,6 +26,9 @@ public class ModuleDef : EntityDesc
     internal List<CustomAttrib> _asmCustomAttribs = new(), _modCustomAttribs = new();
 
     internal ModuleLoader? _loader;
+    private DebugSymbolStore? _debugSymbols;
+    private bool _triedToLoadDebugSymbols = false;
+    internal int _resolverIndex;
 
     internal ModuleDef(ModuleResolver resolver)
     {
@@ -78,6 +81,23 @@ public class ModuleDef : EntityDesc
     {
         using var stream = File.Create(filename);
         Save(stream);
+    }
+
+    public DebugSymbolStore? GetDebugSymbols(Func<string, Stream?>? fileStreamProvider = null)
+    {
+        if (_debugSymbols != null || _triedToLoadDebugSymbols || _loader == null) {
+            return _debugSymbols;
+        }
+
+        _triedToLoadDebugSymbols = true;
+
+        fileStreamProvider ??= (name) => File.Exists(name) ? File.OpenRead(name) : null;
+        _loader._pe.TryOpenAssociatedPortablePdb(_loader._path, fileStreamProvider, out var provider, out string? pdbPath);
+
+        if (provider != null) {
+            _debugSymbols = new DebugSymbolStore(this, provider.GetMetadataReader());
+        }
+        return _debugSymbols;
     }
 
     public override string ToString()

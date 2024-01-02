@@ -6,18 +6,19 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
-// TODO: Consider loading entities and metadata lazily - full module loading takes a *long* time
 internal class ModuleLoader
 {
+    public readonly string _path;
     public readonly PEReader _pe;
     public readonly MetadataReader _reader;
     public readonly ModuleDef _mod;
     private readonly TableEntryCache _tables;
 
-    public ModuleLoader(PEReader pe, ModuleDef mod)
+    public ModuleLoader(string path, ModuleDef mod)
     {
-        _pe = pe;
-        _reader = pe.GetMetadataReader();
+        _path = path;
+        _pe = new PEReader(File.OpenRead(path), PEStreamOptions.PrefetchEntireImage);
+        _reader = _pe.GetMetadataReader();
         _mod = mod;
         _tables = new TableEntryCache(_reader);
 
@@ -230,6 +231,7 @@ internal class ModuleLoader
             );
 
             LoadParams(method, info);
+            method._handle = handle;
             method._bodyRva = info.RelativeVirtualAddress;
             method._customAttribs = LoadCustomAttribs(info.GetCustomAttributes());
 
@@ -537,9 +539,6 @@ internal class ModuleLoader
         }
         public EntityDesc? Get(EntityHandle handle)
         {
-            // FIXME: Create() will update the ranges before populating the table,
-            // so that ResolveTypeRef() can call Get() with a nested type.
-            // There must be a better way to do that...
             int index = GetIndex(handle);
             return _entities[index];
         }

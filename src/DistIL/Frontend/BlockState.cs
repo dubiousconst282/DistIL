@@ -18,6 +18,8 @@ internal class BlockState
     private InstFlags _prefixFlags = InstFlags.None;
     private TypeDesc? _callConstraint;
 
+    private SourceLocation _currLoc = default;
+
     public BlockState(ILImporter importer, int startOffset)
     {
         _importer = importer;
@@ -34,6 +36,7 @@ internal class BlockState
     public void Emit(Instruction inst)
     {
         Block.InsertLast(inst);
+        inst.Location = _currLoc;
     }
 
     public void PushNoEmit(Value value)
@@ -145,8 +148,11 @@ internal class BlockState
     public void ImportCode(Span<ILInstruction> code)
     {
         MergePredStacks();
+        _currLoc = new SourceLocation(_body.Definition, 0);
 
         foreach (ref var inst in code) {
+            _currLoc = _currLoc.WithOffset(inst.Offset);
+            
             var prefix = InstFlags.None;
             var opcode = inst.OpCode;
 

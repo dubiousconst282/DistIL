@@ -165,6 +165,10 @@ public class IRCloner
         public Value Clone(Instruction inst)
         {
             inst.Accept(this);
+            
+            if (_result is Instruction clonedInst) {
+                clonedInst.Location = inst.Location;
+            }
             return _result;
         }
 

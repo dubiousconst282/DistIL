@@ -2,13 +2,14 @@ namespace DistIL.AsmIO;
 
 using System.IO;
 using System.Reflection;
-using System.Reflection.PortableExecutable;
 using System.Text.RegularExpressions;
 
 public class ModuleResolver
 {
     // TODO: Do we need to care about FullName (public keys and versions)?
     protected readonly Dictionary<string, ModuleDef> _cache = new(StringComparer.OrdinalIgnoreCase);
+    internal readonly List<ModuleDef> _loadedModules = new();
+
     private string[] _searchPaths = [];
     private readonly ICompilationLogger? _logger;
 
@@ -42,7 +43,6 @@ public class ModuleResolver
         {
             // e.g. "C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\7.0.3\ref\net7.0"
             //                              shared                     ****      ***********
-            // (I guess this piece will be in the top 3 reasons why I'll be sent to code hell.)
             string normPath = Path.GetFullPath(path).Replace('\\', '/');
             string implPath = Regex.Replace(normPath, @"(.+?\/)packs(\/Microsoft\.NETCore\.App)\.Ref(\/.+?)\/.+", "$1shared$2$3");
             return implPath != normPath && Directory.Exists(implPath) ? implPath : path;
@@ -113,11 +113,11 @@ public class ModuleResolver
         }
         module = ResolveImpl(name);
 
-        if (module != null) {
-            _cache[name] = module;
-        } else if (throwIfNotFound) {
+        if (module == null && throwIfNotFound) {
             throw new InvalidOperationException($"Failed to resolve module '{name}'");
         }
+
+        Debug.Assert(module == null || _cache.GetValueOrDefault(name) == module);
         return module!;
     }
 
@@ -135,11 +135,9 @@ public class ModuleResolver
     public ModuleDef Load(string path)
     {
         var module = new ModuleDef(this);
+        module._loader = new ModuleLoader(path, module);
 
-        var reader = new PEReader(File.OpenRead(path), PEStreamOptions.PrefetchEntireImage);
-        module._loader = new ModuleLoader(reader, module);
-
-        _cache.Add(module.AsmName.Name!, module); // AsmName is loaded by ModuleLoader ctor
+        AddToCache(module.AsmName.Name!, module); // AsmName is loaded by ModuleLoader ctor
         _logger?.Debug($"Loading module '{module.AsmName.Name}, v{module.AsmName.Version}'");
 
         module._loader.Load();
@@ -157,7 +155,15 @@ public class ModuleResolver
             ModName = asmName + ".dll"
         };
         module.CreateType(null, "<Module>", TypeAttributes.NotPublic); // global type required by the writer
-        _cache.Add(asmName, module);
+        AddToCache(asmName, module);
         return module;
+    }
+
+    private void AddToCache(string name, ModuleDef module)
+    {
+        _cache.Add(name, module);
+
+        module._resolverIndex = _loadedModules.Count;
+        _loadedModules.Add(module);
     }
 }

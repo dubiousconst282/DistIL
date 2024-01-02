@@ -2,6 +2,7 @@ namespace DistIL.AsmIO;
 
 using System.Collections;
 using System.Reflection;
+using System.Reflection.Metadata;
 
 /// <summary> Base class for all method entities. </summary>
 public abstract class MethodDesc : MemberDesc
@@ -108,6 +109,7 @@ public class MethodDef : MethodDefOrSpec
     public IR.MethodBody? Body { get; set; }
 
     internal int _bodyRva;
+    internal MethodDefinitionHandle _handle;
     internal IList<CustomAttrib>? _customAttribs;
 
     public MethodDef(
@@ -131,6 +133,8 @@ public class MethodDef : MethodDefOrSpec
 
     public override IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
         => CustomAttribUtils.GetOrInitList(ref _customAttribs, readOnly);
+
+    public MethodDebugSymbols? GetDebugSymbols() => Module.GetDebugSymbols()?.GetMethodSymbols(this);
 
     class ParamSigProxyList : IReadOnlyList<TypeSig>
     {

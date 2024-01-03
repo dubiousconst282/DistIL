@@ -14,6 +14,9 @@ class OptimizerOptions
     [Option('r', HelpText = "Module resolver search paths.")]
     public IEnumerable<string> ResolverPaths { get; set; } = null!;
 
+    [Option("no-pdb-gen", HelpText = "Don't generate debug symbols.")]
+    public bool DisablePdbGeneration { get; set; } = false;
+
     [Option("no-resolver-fallback", HelpText = "Don't use fallback search paths for module resolution.")]
     public bool NoResolverFallback { get; set; } = false;
 

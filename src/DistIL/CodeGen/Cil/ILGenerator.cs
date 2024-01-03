@@ -5,6 +5,7 @@ using DistIL.Analysis;
 public partial class ILGenerator : InstVisitor
 {
     readonly MethodBody _method;
+    readonly SequencePointBuilder? _spBuilder;
     readonly RegisterAllocator _regAlloc;
     readonly ForestAnalysis _forest;
     readonly ILAssembler _asm = new();
@@ -13,11 +14,12 @@ public partial class ILGenerator : InstVisitor
     BasicBlock? _currBlock, _nextBlock;
     ParallelCopyEmitter? _pcopyEmitter;
 
-    private ILGenerator(MethodBody method)
+    private ILGenerator(MethodBody method, SequencePointBuilder? spBuilder)
     {
         _method = method;
-        _forest = new ForestAnalysis(method);
+        _spBuilder = spBuilder;
 
+        _forest = new ForestAnalysis(method);
         FixupIR();
 
         var interfs = new InterferenceGraph(method, new LivenessAnalysis(method), _forest);
@@ -26,9 +28,9 @@ public partial class ILGenerator : InstVisitor
         // DistIL.IR.Utils.IRPrinter.ExportDot(method, "code.dot", new[] { _regAlloc });
     }
 
-    public static ILMethodBody GenerateCode(MethodBody method)
+    public static ILMethodBody GenerateCode(MethodBody method, SequencePointBuilder? spBuilder = null)
     {
-        return new ILGenerator(method).Generate();
+        return new ILGenerator(method, spBuilder).Generate();
     }
 
     private void FixupIR()
@@ -41,7 +43,7 @@ public partial class ILGenerator : InstVisitor
                     var value = phi.GetValue(block);
 
                     if (value is Instruction { NumUses: 1, HasSideEffects: false } def) {
-                        if (MakeSpeculatableLeaf(def) != def) {
+                        if (MakeSpeculatableTree(def) != def) {
                             def.MoveBefore(def.Block.Last);
                         }
                     }
@@ -51,8 +53,8 @@ public partial class ILGenerator : InstVisitor
             // Visit(SelectInst) requires that the two values be speculatable.
             foreach (var inst in block.NonPhis()) {
                 if (inst is SelectInst csel) {
-                    MakeSpeculatableLeaf(csel.IfTrue);
-                    MakeSpeculatableLeaf(csel.IfFalse);
+                    MakeSpeculatableTree(csel.IfTrue);
+                    MakeSpeculatableTree(csel.IfFalse);
                 }
             }
         }
@@ -82,6 +84,7 @@ public partial class ILGenerator : InstVisitor
             foreach (var inst in _currBlock.NonPhis()) {
                 if (!_forest.IsTreeRoot(inst)) continue;
 
+                BeginSequencePoint(inst, isTreeRoot: true);
                 inst.Accept(this);
                 StoreResult(inst);
             }
@@ -143,6 +146,7 @@ public partial class ILGenerator : InstVisitor
             }
             case Instruction inst: {
                 if (_forest.IsLeaf(inst)) {
+                    BeginSequencePoint(inst, isTreeRoot: false);
                     inst.Accept(this);
                 } else {
                     var reg = _regAlloc.GetRegister(inst);
@@ -151,6 +155,13 @@ public partial class ILGenerator : InstVisitor
                 break;
             }
             default: throw new NotSupportedException(value.GetType().Name + " as operand");
+        }
+    }
+
+    private void BeginSequencePoint(Instruction inst, bool isTreeRoot)
+    {
+        if (_spBuilder != null && (isTreeRoot || inst.HasSideEffects)) {
+            _spBuilder.Add(inst.Location, _asm.Count);
         }
     }
 
@@ -203,8 +214,8 @@ public partial class ILGenerator : InstVisitor
         }
     }
 
-    // Marks any leaf with side-effects from `value` as a root, to make it safely speculatable. 
-    private Instruction? MakeSpeculatableLeaf(Value value)
+    // Marks any leaf with side-effects from `value` as a root, to make a safely speculatable tree. 
+    private Instruction? MakeSpeculatableTree(Value value)
     {
         var leaf = GetLeafWithSideEffects(value);
         if (leaf != null) {

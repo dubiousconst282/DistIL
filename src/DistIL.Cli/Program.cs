@@ -45,7 +45,7 @@ static void RunOptimizer(OptimizerOptions options)
         File.Move(options.InputPath, Path.ChangeExtension(options.InputPath, ".dll.bak"), overwrite: true);
         outputPath = options.InputPath;
     }
-    module.Save(outputPath);
+    module.Save(outputPath, savePdb: !options.DisablePdbGeneration);
 }
 static void RunPasses(OptimizerOptions options, Compilation comp)
 {

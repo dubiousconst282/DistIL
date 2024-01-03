@@ -557,7 +557,7 @@ internal class ModuleLoader
 
             var (start, end) = _ranges[tableIdx];
             int index = start + MetadataTokens.GetRowNumber(handle) - 1; // rows are 1 based
-            Ensure.That(index < end);
+            Ensure.That(index >= start && index < end);
             return index;
         }
     }

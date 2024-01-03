@@ -25,7 +25,7 @@ internal partial class ModuleWriter
 
     }
 
-    public void Emit(BlobBuilder peBlob)
+    public void BuildTables()
     {
         // https:// github.com/dotnet/runtime/blob/main/src/libraries/System.Reflection.Metadata/tests/PortableExecutable/PEBuilderTests.cs
         var mainModHandle = _builder.AddModule(
@@ -54,8 +54,6 @@ internal partial class ModuleWriter
 
         EmitCustomAttribs(mainAsmHandle, _mod.GetCustomAttribs(forAssembly: true));
         EmitCustomAttribs(mainModHandle, _mod.GetCustomAttribs(forAssembly: false));
-
-        SerializePE(peBlob);
     }
 
     private void EmitEntities()
@@ -279,7 +277,7 @@ internal partial class ModuleWriter
         }
     }
 
-    private void SerializePE(BlobBuilder peBlob)
+    public void Serialize(Stream peStream, Stream? pdbStream, string pePath)
     {
         var imageChars = 
             Characteristics.LargeAddressAware |
@@ -287,14 +285,34 @@ internal partial class ModuleWriter
             (_mod.EntryPoint == null ? Characteristics.Dll : 0);
 
         var header = new PEHeaderBuilder(imageCharacteristics: imageChars);
+        var entryPoint = _mod.EntryPoint == null ? default : (MethodDefinitionHandle)_handleMap[_mod.EntryPoint];
+
+        var debugDirBuilder = new DebugDirectoryBuilder();
+        var debugSymbols = _mod.GetDebugSymbols(create: false);
+
+        if (pdbStream != null && debugSymbols != null) {
+            var pdbEmitter = new PdbBuilder(this);
+            debugSymbols.Write(pdbEmitter);
+
+            // Serialize
+            var pdbBuilder = new PortablePdbBuilder(pdbEmitter.TableBuilder, _builder.GetRowCounts(), entryPoint);
+            var pdbBlob = new BlobBuilder();
+            var pdbContentId = pdbBuilder.Serialize(pdbBlob);
+            pdbBlob.WriteContentTo(pdbStream);
+
+            debugDirBuilder.AddCodeViewEntry(Path.ChangeExtension(pePath, ".pdb"), pdbContentId, pdbBuilder.FormatVersion);
+        }
 
         var peBuilder = new ManagedPEBuilder(
             header: header,
             metadataRootBuilder: new MetadataRootBuilder(_builder),
             ilStream: _bodyEncoder.Builder,
             mappedFieldData: _fieldDataStream,
-            entryPoint: _mod.EntryPoint == null ? default : (MethodDefinitionHandle)_handleMap[_mod.EntryPoint]
+            entryPoint: entryPoint,
+            debugDirectoryBuilder: debugDirBuilder
         );
-        peBuilder.Serialize(peBlob);
+        var blob = new BlobBuilder();
+        peBuilder.Serialize(blob);
+        blob.WriteContentTo(peStream);
     }
 }

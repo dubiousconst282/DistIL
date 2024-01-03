@@ -56,7 +56,10 @@ public class PassManager
         foreach (var method in candidates) {
             try {
                 if (method.Body != null) {
-                    method.ILBody = ILGenerator.GenerateCode(method.Body);
+                    var spBuilder = method.GetDebugSymbols() != null ? new SequencePointBuilder(method) : null;
+                    method.ILBody = ILGenerator.GenerateCode(method.Body, spBuilder);
+                    spBuilder?.BuildAndReplace();
+                    
                     count++;
                 }
             } catch (Exception ex) {

@@ -27,7 +27,7 @@ public readonly struct SourceLocation
         int methodRid = MetadataTokens.GetRowNumber(method._handle);
 
         // If we can't represent moduleId in 20 bits, create a null location instead.
-        moduleId = moduleId >= 0xFFFFF ? 0 : moduleId;
+        moduleId = methodRid == 0 || moduleId >= 0xFFFFF ? 0 : moduleId;
 
         _data = (ulong)moduleId << 44 | (ulong)methodRid << 20 | Math.Min((ulong)offset, 0xFFFFF);
 

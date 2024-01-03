@@ -71,33 +71,72 @@ public class ModuleDef : EntityDesc
     public List<CustomAttrib> GetCustomAttribs(bool forAssembly)
         => forAssembly ? _asmCustomAttribs : _modCustomAttribs;
 
-    public void Save(Stream stream)
+    /// <summary> Serializes this module to the specified stream. </summary>
+    /// <param name="pdbStream">
+    /// If non-null, specifies the stream where the PDB data should be serialized into.
+    /// If the module does not have debug symbols, nothing will be written to this stream.
+    /// </param>
+    public void Save(Stream stream, Stream? pdbStream, string path)
     {
-        var builder = new BlobBuilder();
-        new ModuleWriter(this).Emit(builder);
-        builder.WriteContentTo(stream);
+        var writer = new ModuleWriter(this);
+        writer.BuildTables();
+        writer.Serialize(stream, pdbStream, path);
     }
-    public void Save(string filename)
+    public void Save(string path, bool savePdb)
     {
-        using var stream = File.Create(filename);
-        Save(stream);
+        using var stream = File.Create(path);
+
+        using var pdbStream = savePdb && _debugSymbols != null
+            ? File.Create(Path.ChangeExtension(path, ".pdb")): null;
+
+        Save(stream, pdbStream, path);
     }
 
-    public DebugSymbolStore? GetDebugSymbols(Func<string, Stream?>? fileStreamProvider = null)
+    public DebugSymbolStore? GetDebugSymbols(bool create = false, Func<string, Stream?>? pdbFileStreamProvider = null)
     {
-        if (_debugSymbols != null || _triedToLoadDebugSymbols || _loader == null) {
+        if (_debugSymbols != null) {
             return _debugSymbols;
         }
 
-        _triedToLoadDebugSymbols = true;
+        if (_loader != null && !_triedToLoadDebugSymbols) {
+            _triedToLoadDebugSymbols = true;
 
-        fileStreamProvider ??= (name) => File.Exists(name) ? File.OpenRead(name) : null;
-        _loader._pe.TryOpenAssociatedPortablePdb(_loader._path, fileStreamProvider, out var provider, out string? pdbPath);
+            try {
+                _loader._pe.TryOpenAssociatedPortablePdb(_loader._path, OpenPdbStream, out var provider, out string? pdbPath);
 
-        if (provider != null) {
-            _debugSymbols = new DebugSymbolStore(this, provider.GetMetadataReader());
+                if (provider != null) {
+                    _debugSymbols = new PortablePdbSymbolStore(this, provider.GetMetadataReader());
+                }
+            } catch (Exception ex) {
+                Resolver._logger?.Error($"Failed to load debug symbols for module '{ModName}'", ex);
+            }
+        }
+
+        if (_debugSymbols == null && create) {
+            _debugSymbols = new DebugSymbolStore(this);
         }
         return _debugSymbols;
+
+        Stream? OpenPdbStream(string name)
+        {
+            try {
+                using var stream = pdbFileStreamProvider?.Invoke(name) ?? File.OpenRead(name);
+
+                // Read file to memory to avoid locking it and allow for overwrites in Save().
+                // This isn't quite efficient and will probably result in two copies of the file
+                // in memory (one internal to MetadataReader/MemoryBlock).
+                //
+                // In the future, we could avoid this by replicating TryOpenAssociatedPortablePdb() and
+                // directly calling FromPortablePdbStream() with the Prefetch flag.
+                var ms = new MemoryStream((int)stream.Length);
+                stream.CopyTo(ms);
+                ms.Position = 0;
+                return ms;
+            } catch (FileNotFoundException) {
+                // nop
+            }
+            return null;
+        }
     }
 
     public override string ToString()

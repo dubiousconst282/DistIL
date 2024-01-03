@@ -77,7 +77,7 @@ partial class ModuleWriter
         }
     }
 
-    private EntityHandle GetHandle(EntityDesc entity)
+    public EntityHandle GetHandle(EntityDesc entity)
     {
         if (entity is PrimType primType) {
             entity = primType.GetDefinition(_mod.Resolver);

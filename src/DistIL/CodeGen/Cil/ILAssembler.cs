@@ -3,7 +3,7 @@
 using EHRegionKind = System.Reflection.Metadata.ExceptionRegionKind;
 
 /// <summary> Helper for building a list of <see cref="ILInstruction"/>s. </summary>
-internal class ILAssembler
+public class ILAssembler
 {
     ILInstruction[] _insts = new ILInstruction[16];
     int _index = 0;
@@ -11,6 +11,9 @@ internal class ILAssembler
     Dictionary<ILLabel, int> _labelStarts = new();
     List<ILVariable> _usedVars = new();
     int _stackDepth = 0, _maxStackDepth = 0;
+
+    /// <summary> Number of instructions emitted so far. </summary>
+    public int Count => _index;
 
     /// <summary> Marks the label for the specified block. </summary>
     public void StartBlock(BasicBlock block, bool isCatchEntry)
@@ -107,14 +110,16 @@ internal class ILAssembler
         }
     }
 
-    public ILMethodBody Assemble(LayoutedCFG layout)
+    /// <summary> Finishes assembling of the emitted IL instructions. </summary>
+    /// <param name="layout"> CFG layout to derive exception clauses from. </param>
+    public ILMethodBody Assemble(LayoutedCFG? layout)
     {
         ComputeOffsets();
         
         return new ILMethodBody() {
             Instructions = new ArraySegment<ILInstruction>(_insts, 0, _index),
             Locals = _usedVars.ToArray(),
-            ExceptionClauses = BuildEHClauses(layout),
+            ExceptionClauses = layout == null ? [] : BuildEHClauses(layout),
             MaxStack = _maxStackDepth,
             InitLocals = true // TODO: preserve InitLocals
         };
@@ -229,7 +234,7 @@ internal class ILAssembler
     }
 }
 
-internal readonly struct ILLabel : IEquatable<ILLabel>
+public readonly struct ILLabel : IEquatable<ILLabel>
 {
     readonly object _token; // Either<BasicBlock, int>
 

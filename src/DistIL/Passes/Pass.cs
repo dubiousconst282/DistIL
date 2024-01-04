@@ -1,6 +1,7 @@
 namespace DistIL.Passes;
 
 using DistIL.Analysis;
+using DistIL.Frontend;
 
 public interface IMethodPass
 {
@@ -81,4 +82,36 @@ public class MethodTransformContext : IMethodAnalysisManager
     {
         _analyses.Clear();
     }
+
+    /// <summary> Gets or attempts to import a method body for IPO purposes. </summary>
+    public MethodBody? GetMethodBodyForIPO(MethodDef method)
+    {
+        if (method.Module != Compilation.Module && !Compilation.Settings.AllowCrossAssemblyIPO) {
+            return null;
+        }
+        if (method.Body == null && method.ILBody != null) {
+            try {
+                Logger.Debug($"Importing method for IPO: {method}");
+
+                // FIXME: make this less precarious somehow (Compilation.DefaultPassesForIPO?)
+                method.Body = ILImporter.ParseCode(method);
+
+                var ctx = new MethodTransformContext(Compilation, method.Body);
+                new SsaPromotion().Run(ctx);
+
+                if (method.Name == ".ctor") {
+                    new InlineMethods().Run(ctx);
+                }
+            } catch (Exception ex) {
+                Logger.Error($"Failed to import method for IPO: {method}", ex);
+            }
+        }
+        return method.Body;
+    }
+}
+
+[AttributeUsage(AttributeTargets.Class)]
+public class PassOptionsAttribute(string className) : Attribute
+{
+    public string ClassName { get; } = className;
 }

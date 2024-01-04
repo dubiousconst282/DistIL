@@ -97,7 +97,7 @@ public class IRCloner
     }
 
     /// <summary> Clones or folds the given instruction. </summary>
-    public Value Clone(Instruction inst)
+    public virtual Value Clone(Instruction inst)
     {
         var clonedInst = _instCloner.Clone(inst);
 

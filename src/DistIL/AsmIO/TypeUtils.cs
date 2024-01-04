@@ -79,23 +79,24 @@ public static class TypeUtils
         // - https://github.com/dotnet/runtime/blob/main/docs/design/specs/Ecma-335-Augments.md#ii122-implementing-virtual-methods-on-interfaces
 
         var type = (TypeDefOrSpec)actualType;
-        // var sig = default(MethodSig?);
+        var sig = default(MethodSig?);
 
         var genCtx = new GenericContext(actualType.GenericParams, method.GenericParams);
 
         for (; type != null; type = type.BaseType) {
             // Try get from MethodImpl table
-            if (type.Definition.MethodImpls.TryGetValue(method, out var explicitImpl)) {
+            var methodDef = ((MethodDefOrSpec)method).Definition;
+            if (type.Definition.MethodImpls.TryGetValue(methodDef, out var explicitImpl)) {
                 return explicitImpl.GetSpec(genCtx);
             }
 
             // Search for method with matching sig
-            // sig ??= new MethodSig(method.ReturnSig, method.ParamSig.Skip(1).ToList(), isInstance: true, method.GenericParams.Count);
+            sig ??= new MethodSig(methodDef.ReturnSig, methodDef.ParamSig.Skip(1).ToList(), isInstance: true, method.GenericParams.Count);
 
-            // if (type.FindMethod(method.Name, sig.Value, throwIfNotFound: false) is { } matchImpl) {
-            //     Debug.Assert(!matchImpl.Attribs.HasFlag(MethodAttributes.Abstract));
-            //     return matchImpl.GetSpec(genCtx);
-            // }
+            if (type.FindMethod(method.Name, sig.Value, throwIfNotFound: false) is { } matchImpl) {
+                Debug.Assert(!matchImpl.Attribs.HasFlag(MethodAttributes.Abstract));
+                return matchImpl.GetSpec(genCtx);
+            }
         }
         return null;
     }

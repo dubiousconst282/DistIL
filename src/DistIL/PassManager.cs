@@ -166,11 +166,17 @@ public class PassManager
         void Push(MethodDef? caller, MethodDef target)
         {
             if (target.ILBody != null && visited.Add(target)) {
+                if (IsIntrinsic(target) || IsIntrinsic(target.DeclaringType)) return;
+                
                 // Invoke the filter late as it may be expansive.
                 if (filter != null && !filter.Invoke(caller, target)) return;
 
                 worklist.Push((target, false));
             }
+        }
+        static bool IsIntrinsic(ModuleEntity entity)
+        {
+            return entity.HasCustomAttrib("System.Runtime.CompilerServices", "IntrinsicAttribute");
         }
     }
 

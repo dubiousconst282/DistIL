@@ -153,4 +153,7 @@ public class CompilationSettings
 {
     /// <summary> If set to true, the resulting module will have a fixed dependency on a little-endianess. </summary>
     public bool AssumeLittleEndian { get; init; } = true; // TODO: add module cctor check
+
+    /// <summary> Whether to allow optimizations to inline or make assumptions about methods defined in other assemblies. </summary>
+    public bool AllowCrossAssemblyIPO { get; init; } = true;
 }

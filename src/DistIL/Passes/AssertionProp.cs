@@ -88,7 +88,7 @@ public class AssertionProp : IMethodPass
             }
         }
 
-        // Looking for new implications and fold existing conditions
+        // Look for new implications and fold existing conditions
         foreach (var inst in block.NonPhis()) {
             switch (inst) {
                 // Access to an object implies that it must be non-null afterwards.

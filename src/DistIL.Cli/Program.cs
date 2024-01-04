@@ -70,17 +70,29 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
         .RepeatUntilFixedPoint(maxIters: 3);
 
     manager.AddPasses()
-        .Apply<ScalarReplacement>()
-        .IfChanged(c => c.Apply<SsaPromotion>()
-                         .Apply<InlineMethods>()) // SROA+SSA uncovers new devirtualization oportunities
-        .RepeatUntilFixedPoint(maxIters: 3);
-
-    manager.AddPasses()
         .Apply<ValueNumbering>()
         .Apply<AssertionProp>()
         .Apply<PresizeLists>()
         .Apply<LoopStrengthReduction>()
         .IfChanged(simplifySeg);
+
+    // FIXME: before merging
+    manager.AddPasses()
+        .Apply<InlineMethods>()
+        .IfChanged(c => c
+            .Apply<SimplifyCFG>()
+            .Apply<AssertionProp>()
+            .Apply<DeadCodeElim>())
+        .RepeatUntilFixedPoint(2);
+    
+    manager.AddPasses()
+        .Apply<ScalarReplacement>()
+        .IfChanged(c => c.Apply<SsaPromotion>()
+                         .Apply<SimplifyInsts>()
+                         .Apply<SimplifyCFG>()
+                         .Apply<InlineMethods>() // SROA+SSA uncovers new devirtualization oportunities
+                         .Apply<DeadCodeElim>())
+        .RepeatUntilFixedPoint(maxIters: 3);
 
     manager.AddPasses()
         .Apply<LoopVectorizer>()

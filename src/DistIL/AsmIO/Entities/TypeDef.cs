@@ -257,7 +257,14 @@ public class TypeSpec : TypeDefOrSpec
     public override StackType StackType => Definition.StackType;
     public override TypeAttributes Attribs => Definition.Attribs;
 
-    public override TypeDefOrSpec? BaseType => Definition.BaseType;
+    public override TypeDefOrSpec? BaseType {
+        get {
+            if (_baseType == null || _baseType.Definition != Definition.BaseType) {
+                _baseType = Definition.BaseType?.GetSpec(new GenericContext(this));
+            }
+            return _baseType;
+        }
+    }
     public override IReadOnlyList<TypeDesc> GenericParams { get; }
     public override bool IsUnboundGeneric => GenericParams.Any(p => p.IsUnboundGeneric);
 
@@ -271,6 +278,7 @@ public class TypeSpec : TypeDefOrSpec
     MemberList<FieldDef, FieldSpec>? _fields;
     MemberList<MethodDef, MethodSpec>? _methods;
     MemberList<TypeDesc, TypeDesc>? _interfaces;
+    TypeDefOrSpec? _baseType;
 
     internal TypeSpec(TypeDef def, ImmutableArray<TypeDesc> args)
     {

@@ -4,6 +4,7 @@ using System.Reflection;
 using MethodBody = IR.MethodBody;
 
 using DistIL.IR.Utils;
+using DistIL.Frontend;
 
 public class InlineMethods : IMethodPass
 {
@@ -20,34 +21,32 @@ public class InlineMethods : IMethodPass
     public MethodPassResult Run(MethodTransformContext ctx)
     {
         // TODO: support for recursive inlines (without heuristics the code size will certainly blow up)
-        var inlineableCalls = new List<CallInst>();
+        var worklist = new ArrayStack<CallInst>();
+        int numChanges = 0;
 
         foreach (var inst in ctx.Method.Instructions()) {
-            if (inst is CallInst call && CheckAndMakeInlineable(ctx.Method.Definition, call)) {
-                inlineableCalls.Add(call);
+            if (inst is CallInst call) {
+                worklist.Push(call);
             }
         }
 
-        foreach (var call in inlineableCalls) {
-            Inline(call);
+        while (worklist.TryPop(out var call)) {
+            if (!CheckAndMakeInlineable(ctx, call)) continue;
+
+            if (Inline(call, onNewCall: worklist.Push)) {
+                numChanges++;
+            }
         }
 
-        return inlineableCalls.Count > 0 ? MethodInvalidations.Everything : 0;
+        return numChanges > 0 ? MethodInvalidations.Everything : 0;
     }
 
-    private bool CheckAndMakeInlineable(MethodDef parent, CallInst call)
+    private bool CheckAndMakeInlineable(MethodTransformContext ctx, CallInst call)
     {
         // Must be a non-recursive MethodDef
-        if (call.Method is not MethodDefOrSpec { Definition: var target } || target == parent) {
-            return false;
-        }
+        var parent = ctx.Method.Definition;
 
-        // Not too long
-        int maxInstrs = target.ImplAttribs.HasFlag(MethodImplAttributes.AggressiveInlining) 
-            ? _opts.MaxCandidateInstrsAggressive 
-            : _opts.MaxCandidateInstrs;
-        
-        if (target.ImplAttribs.HasFlag(MethodImplAttributes.NoInlining) || target.ILBody?.Instructions.Count > maxInstrs) {
+        if (call.Method is not MethodDefOrSpec { Definition: var target } || target == parent) {
             return false;
         }
 
@@ -60,8 +59,16 @@ public class InlineMethods : IMethodPass
             target = actualTarget.Definition;
         }
 
-        // If there's no body after devirt, there's no way we can inline this method.
-        if (target.Body == null) {
+        // Not too long
+        int maxInstrs = target.ImplAttribs.HasFlag(MethodImplAttributes.AggressiveInlining)
+            ? _opts.MaxCandidateInstrsAggressive
+            : _opts.MaxCandidateInstrs;
+
+        if (IsCandidateLinqMethod(target)) {
+            maxInstrs = 128;
+        }
+
+        if (target.ImplAttribs.HasFlag(MethodImplAttributes.NoInlining) || target.ILBody?.Instructions.Count > maxInstrs) {
             return false;
         }
 
@@ -84,16 +91,45 @@ public class InlineMethods : IMethodPass
             return false;
         }
 
+        // If there's no body after devirt, there's no way we can inline this method.
+        if (target.Body == null && !ImportBodyForInlining(ctx, target)) {
+            return false;
+        }
+
         return true;
     }
 
+    public static bool ImportBodyForInlining(MethodTransformContext ctx, MethodDef method)
+    {
+        // var effects = comp.GetAnalysis<GlobalFunctionEffects>().GetEffects(method);
+        // var blockingTraits = FunctionTraits.HasStackAllocs | FunctionTraits.DoesNotReturn | FunctionTraits.Recursive;
+        // if ((effects.Traits & blockingTraits) != 0) return false;
+
+        return method.ILBody != null && IsCandidateLinqMethod(method) && ctx.GetMethodBodyForIPO(method) != null;
+    }
+
+    private static bool IsCandidateLinqMethod(MethodDef method)
+    {
+        if (method.Module.AsmName.Name == "System.Linq") {
+            return true;
+        }
+        if (method.Name is "GetEnumerator" or "MoveNext") {
+            // Inline enumerator methods for all but builtin collections
+            var declType = method.DeclaringType;
+            if (declType.IsNested) declType = declType.DeclaringType;
+
+            return declType.Namespace != "System.Collections.Generic";
+        }
+        return false;
+    }
+
     /// <summary> Unconditionally inlines the given call instruction into its parent method, unless the target method body is unavailable. </summary>
-    public static bool Inline(CallInst call)
+    public static bool Inline(CallInst call, Action<CallInst>? onNewCall = null)
     {
         if (call.Method is not MethodDefOrSpec { Definition.Body: MethodBody } target) {
             return false;
         }
-        var result = Inline(call, target, call.Args);
+        var result = Inline(call, target, call.Args, onNewCall);
 
         if (result != null) {
             call.ReplaceWith(result);
@@ -103,13 +139,14 @@ public class InlineMethods : IMethodPass
         return true;
     }
 
-    public static Value? Inline(Instruction call, MethodDefOrSpec target, ReadOnlySpan<Value> args)
+    public static Value? Inline(Instruction call, MethodDefOrSpec target, ReadOnlySpan<Value> args, Action<CallInst>? onNewCall = null)
     {
         var callerBody = call.Block.Method;
         var targetBody = Ensure.NotNull(target.Definition.Body);
         Ensure.That(callerBody != targetBody, "Cannot inline method into itself");
 
-        var cloner = new IRCloner(callerBody, new GenericContext(target));
+        var genCtx = new GenericContext(target);
+        var cloner = onNewCall == null ? new IRCloner(callerBody, genCtx) : new MonitoringIRCloner(callerBody, target.Definition, onNewCall, genCtx);
 
         // Add argument mappings
         for (int i = 0; i < targetBody.Args.Length; i++) {
@@ -173,14 +210,13 @@ public class InlineMethods : IMethodPass
         var startBlock = call.Block;
         var endBlock = startBlock.Split(call, branchTo: entryBlock);
 
-        var resultType = call.ResultType;
         var results = new PhiArg[returningBlocks.Count];
         int resultIdx = 0;
 
         // Rewrite exit blocks to jump into endBlock
         foreach (var block in returningBlocks) {
             if (block.Last is ReturnInst { HasValue: true } ret) {
-                var result = StoreInst.Coerce(resultType, ret.Value, insertBefore: ret);
+                var result = StoreInst.Coerce(call.ResultType, ret.Value, insertBefore: ret);
                 results[resultIdx++] = (block, result);
             }
             block.SetBranch(endBlock);
@@ -188,11 +224,26 @@ public class InlineMethods : IMethodPass
 
         // Return the generated value
         if (resultIdx >= 2) {
-            return endBlock.InsertPhi(new PhiInst(resultType, results));
+            return endBlock.InsertPhi(new PhiInst(call.ResultType, results));
         }
         return results.FirstOrDefault().Value;
     }
 
+    sealed class MonitoringIRCloner(MethodBody method, MethodDef CalledMethod, Action<CallInst> onNewCall, GenericContext genCtx) : IRCloner(method, genCtx)
+    {
+        public override Value Clone(Instruction inst)
+        {
+            var cloned = base.Clone(inst);
+
+            // Ignore calls to recursive methods to prevent infinite loop.
+            if (cloned is CallInst { Method: MethodDefOrSpec method } call && method.Definition != CalledMethod) {
+                onNewCall.Invoke(call);
+            }
+            return cloned;
+        }
+    }
+
+    [PassOptions("inliner")]
     public class Options
     {
         /// <summary> Inline candidate instruction limit. </summary>
@@ -200,8 +251,5 @@ public class InlineMethods : IMethodPass
 
         /// <summary> Inline candidate instruction limit, for AggressiveInlining. </summary>
         public int MaxCandidateInstrsAggressive { get; init; } = 4096;
-
-        // /// <summary> If true, allows calls to methods from different assemblies to be inlined. </summary>
-        // public bool AllowCrossAssemblyCalls { get; init; } = false;
     }
 }

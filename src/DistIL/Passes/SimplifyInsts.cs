@@ -78,6 +78,9 @@ public partial class SimplifyInsts : IMethodPass
                 }
             }
         }
+        if (inst is CilIntrinsic.MemSet { StaticArgs: [TypeDesc { StackType: StackType.Int }]} initObj) {
+            return new StoreInst(initObj.Args[0], ConstInt.CreateI(0));
+        }
         return ConstFolding.FoldIntrinsic(inst);
     }
 

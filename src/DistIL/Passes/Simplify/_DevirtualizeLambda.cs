@@ -89,18 +89,15 @@ partial class SimplifyInsts
                     br.Else == allocInst.Block &&
                     condCache == cacheLoad &&
                 // BB_CacheLoad must store to the cache field
+                allocInst.Block.NumSuccs == 1 &&
                 allocInst.NumUses == 2 && // phi and next store
                 IRMatcher.StaticFieldLoad(cacheLoad, out var cacheField) &&
-                allocInst.Next?.Next is StoreInst cacheStore && 
-                (cacheStore.Address as FieldAddrInst)?.Field == cacheField &&
                 cacheField.DeclaringType is TypeDefOrSpec declType && 
                 declType.Definition.HasCustomAttrib(typeof(CompilerGeneratedAttribute))
             )) return false;
 
-            br.Cond = ConstInt.CreateI(0); // We can't change the CFG, leave this for DCE.
+            br.Cond = ConstInt.CreateI(1); // We can't change the CFG, leave this for DCE.
             phi.Remove();
-            cacheStore.Remove();
-            allocInst.Remove();
             return true;
         }
     }

@@ -163,6 +163,17 @@ public class ConstFolding
             case ({ ResultType.Kind: TypeKind.Bool }, ConstInt { Value: 0 }, CompareOp.Ne): {
                 return left;
             }
+            // Cheat for thread checks in Linq iterators, blocking SROA.
+            case (LoadInst { Address: FieldAddrInst { Field.Name: "_threadId" or "_state", Field: var fld, Obj: NewObjInst } }, _, _): {
+                if (fld.DeclaringType is not TypeDefOrSpec { Module.AsmName.Name: "System.Linq" }) break;
+
+                if (op == CompareOp.Eq && right is CallInst { Method.Name: "get_CurrentManagedThreadId" }) {
+                    r = true;
+                } else if (op == CompareOp.Ne && right is ConstInt { Value: 0 } && fld.Name == "_state") {
+                    r = false;
+                }
+                break;
+            }
         }
         return r == null ? null : ConstInt.Create(PrimType.Bool, r.Value ? 1 : 0);
     }

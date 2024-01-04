@@ -11,7 +11,7 @@ public class ScalarReplacement : IMethodPass
         
         // Find non-escaping object allocations
         foreach (var inst in ctx.Method.Instructions()) {
-            if (inst is NewObjInst alloc && !alloc.ResultType.IsValueType && IsSimpleCtor(alloc) && !Escapes(alloc)) {
+            if (inst is NewObjInst alloc && IsSimpleCtor(ctx, alloc) && !Escapes(alloc)) {
                 allocs.Add(alloc);
             }
         }
@@ -60,12 +60,20 @@ public class ScalarReplacement : IMethodPass
         }
     }
 
-    private static bool IsSimpleCtor(NewObjInst alloc)
+    private static bool IsSimpleCtor(MethodTransformContext ctx, NewObjInst alloc)
     {
-        if (alloc.Constructor is not MethodDefOrSpec { Definition.Body: MethodBody body }) {
+        if (alloc.ResultType.IsValueType) {
             return false;
         }
+        if (alloc.Constructor is not MethodDefOrSpec { Definition: var ctor }) {
+            return false;
+        }
+        if (ctor.Body == null && !InlineMethods.ImportBodyForInlining(ctx, ctor)) {
+            return false;
+        }
+
         // Ctor must be small and instance obj cannot escape
+        var body = ctor.Body!;
         return body.NumBlocks < 8 && !Escapes(body.Args[0], isCtor: true);
     }
     private static bool Escapes(TrackedValue obj, bool isCtor = false)

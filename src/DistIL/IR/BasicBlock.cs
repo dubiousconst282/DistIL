@@ -7,14 +7,17 @@ public class BasicBlock : TrackedValue
     public PredIterator Preds => new(this);
     public SuccIterator Succs => new(this);
 
-    public Instruction First { get; private set; } = null!;
+    public Instruction First => _first!;
     /// <remarks> Must be one of: 
     /// <see cref="ReturnInst"/>, <see cref="BranchInst"/>, <see cref="SwitchInst"/>,
     /// <see cref="ThrowInst"/>, <see cref="LeaveInst"/>, or <see cref="ResumeInst"/>. </remarks>
-    public Instruction Last { get; private set; } = null!;
+    public Instruction Last => _last!;
 
-    public BasicBlock? Prev { get; set; }
-    public BasicBlock? Next { get; set; }
+    public BasicBlock? Prev { get => _prev; set => _prev = value; }
+    public BasicBlock? Next { get => _next; set => _next = value; }
+
+    internal Instruction? _first, _last;
+    internal BasicBlock? _prev, _next;
 
     public int NumPreds {
         get => Users().Count(u => u is not PhiInst);
@@ -76,54 +79,32 @@ public class BasicBlock : TrackedValue
     }
 
     /// <summary> Inserts <paramref name="newInst"/> before the first instruction in this block. </summary>
-    public void InsertFirst(Instruction newInst) => InsertRange(null, newInst, newInst);
+    public void InsertFirst(Instruction newInst) => InsertBefore(null, newInst);
 
     /// <summary> Inserts <paramref name="newInst"/> after the last instruction in this block. </summary>
-    public void InsertLast(Instruction newInst) => InsertRange(Last, newInst, newInst);
+    public void InsertLast(Instruction newInst) => InsertAfter(Last, newInst);
 
     /// <summary> Inserts <paramref name="newInst"/> before <paramref name="inst"/>. If <paramref name="inst"/> is null, <paramref name="newInst"/> will be inserted at the block start. </summary>
-    public void InsertBefore(Instruction? inst, Instruction newInst) => InsertRange(inst?.Prev, newInst, newInst);
+    internal void InsertBefore(Instruction? inst, Instruction newInst)
+    {
+        Ensure.That(newInst.Block == null);
+        newInst.Block = this;
+
+        IIntrusiveList<BasicBlock, Instruction>.InsertBefore<InstLinkAccessor>(this, inst, newInst);
+    }
 
     /// <summary> Inserts <paramref name="newInst"/> after <paramref name="inst"/>. If <paramref name="inst"/> is null, <paramref name="newInst"/> will be inserted at the block start. </summary>
-    public void InsertAfter(Instruction? inst, Instruction newInst) => InsertRange(inst, newInst, newInst);
+    internal void InsertAfter(Instruction? inst, Instruction newInst)
+    {
+        Ensure.That(newInst.Block == null);
+        newInst.Block = this;
+
+        IIntrusiveList<BasicBlock, Instruction>.InsertAfter<InstLinkAccessor>(this, inst, newInst);
+    }
 
     /// <summary> Inserts <paramref name="newInst"/> before the block terminator, if one exists. </summary>
     public void InsertAnteLast(Instruction newInst)
-        => InsertRange(LastNonBranch, newInst, newInst);
-
-    // Inserts a range of instructions into this block after `pos` (null means before the first instruction).
-    internal void InsertRange(Instruction? pos, Instruction rangeFirst, Instruction rangeLast, bool transfering = false)
-    {
-        // Set parent block for range
-        for (var inst = rangeFirst; true; inst = inst.Next!) {
-            Ensure.That(inst.Block == null || transfering);
-            inst.Block = this;
-            if (inst == rangeLast) break;
-        }
-
-        if (pos != null) {
-            Ensure.That(pos != rangeFirst);
-
-            rangeFirst.Prev = pos;
-            rangeLast.Next = pos.Next;
-
-            if (pos.Next != null) {
-                pos.Next.Prev = rangeLast;
-            } else {
-                Debug.Assert(pos == Last);
-                Last = rangeLast;
-            }
-            pos.Next = rangeFirst;
-        } else {
-            if (First != null) {
-                First.Prev = rangeLast;
-            }
-            rangeLast.Next = First;
-            rangeFirst.Prev = null;
-            First = rangeFirst;
-            Last ??= rangeLast;
-        }
-    }
+        => InsertBefore(LastNonBranch, newInst);
 
     /// <summary> Moves a range of instructions from this block to <paramref name="newParent"/>, after <paramref name="newParentPos"/> (null means before the first instruction in <paramref name="newParent"/>). </summary>
     public void MoveRange(BasicBlock newParent, Instruction? newParentPos, Instruction first, Instruction last)
@@ -133,13 +114,19 @@ public class BasicBlock : TrackedValue
         Ensure.That(newParentPos == null || newParentPos?.Block == newParent);
         Ensure.That(first.Block == this && last.Block == this);
 
-        UnlinkRange(first, last);
-        newParent.InsertRange(newParentPos, first, last, transfering: true);
+        // Set parent block for range
+        for (var inst = first; true; inst = inst.Next!) {
+            inst.Block = newParent;
+            if (inst == last) break;
+        }
+        IIntrusiveList<BasicBlock, Instruction>.RemoveRange<InstLinkAccessor>(this, first, last);
+        IIntrusiveList<BasicBlock, Instruction>.InsertRangeAfter<InstLinkAccessor>(newParent, newParentPos, first, last);
     }
+
     /// <summary> Moves all instructions in this block to the end of <paramref name="block"/>, then removes it from the parent method. </summary>
     public void MergeInto(BasicBlock block, bool replaceBranch = false, bool redirectSuccPhis = true)
     {
-        Ensure.That(!HasPhisOrGuards, "Cannot move code from block with header instructions");
+        Ensure.That(!HasPhisOrGuards, "Cannot merge block with header instructions");
 
         if (redirectSuccPhis) {
             RedirectSuccPhis(block);
@@ -153,29 +140,6 @@ public class BasicBlock : TrackedValue
             MoveRange(block, block.LastNonBranch, First, LastNonBranch);
         }
         Remove();
-    }
-
-    /// <summary> Detaches <paramref name="inst"/> from this block. </summary>
-    internal void Remove(Instruction inst)
-    {
-        Ensure.That(inst.Block == this);
-        inst.Block = null!; // prevent inst from being removed again
-
-        UnlinkRange(inst, inst);
-    }
-
-    private void UnlinkRange(Instruction rangeFirst, Instruction rangeLast)
-    {
-        if (rangeFirst.Prev != null) {
-            rangeFirst.Prev.Next = rangeLast.Next;
-        } else {
-            First = rangeLast.Next!;
-        }
-        if (rangeLast.Next != null) {
-            rangeLast.Next.Prev = rangeFirst.Prev;
-        } else {
-            Last = rangeFirst.Prev!;
-        }
     }
 
     public PhiInst InsertPhi(PhiInst phi)
@@ -360,7 +324,7 @@ public class BasicBlock : TrackedValue
     // SwitchInst has a special representation to avoid duplicated block use edges.
     public struct PredIterator : Iterator<BasicBlock>
     {
-        ValueUserIterator _users;
+        UserIterator _users;
 
         public BasicBlock Current => _users.Current.Block;
 
@@ -424,5 +388,14 @@ public class BasicBlock : TrackedValue
         }
 
         public override string ToString() => "[" + string.Join(", ", this.AsEnumerable()) + "]";
+    }
+
+    internal struct InstLinkAccessor : IIntrusiveList<BasicBlock, Instruction>
+    {
+        public static ref Instruction? First(BasicBlock block) => ref block._first;
+        public static ref Instruction? Last(BasicBlock block) => ref block._last;
+
+        public static ref Instruction? Prev(Instruction block) => ref block._prev;
+        public static ref Instruction? Next(Instruction block) => ref block._next;
     }
 }

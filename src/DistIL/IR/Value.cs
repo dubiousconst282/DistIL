@@ -103,41 +103,42 @@ public abstract class TrackedValue : Value
     }
 
     /// <summary> Returns an iterator of instructions using this value. Neither order nor uniqueness is guaranteed. </summary>
-    public ValueUserIterator Users() => new() { _use = _firstUse };
+    public UserIterator Users() => new() { _use = _firstUse };
     /// <summary> Returns an iterator of operands using this value. </summary>
-    public ValueUseIterator Uses() => new() { _use = _firstUse };
+    public UseIterator Uses() => new() { _use = _firstUse };
 
     public virtual SymbolTable? GetSymbolTable() => null;
-}
 
-public struct ValueUserIterator : Iterator<Instruction>
-{
-    internal UseRef _use;
-    public Instruction Current { get; private set; }
 
-    public bool MoveNext()
+    public struct UserIterator : Iterator<Instruction>
     {
-        if (_use.Exists) {
-            Current = _use.Parent;
-            _use = _use.Next;
-            return true;
+        internal UseRef _use;
+        public Instruction Current { get; private set; }
+
+        public bool MoveNext()
+        {
+            if (_use.Exists) {
+                Current = _use.Parent;
+                _use = _use.Next;
+                return true;
+            }
+            return false;
         }
-        return false;
     }
-}
-public struct ValueUseIterator : Iterator<UseRef>
-{
-    internal UseRef _use;
-    public UseRef Current { get; private set; }
-
-    public bool MoveNext()
+    public struct UseIterator : Iterator<UseRef>
     {
-        if (_use.Exists) {
-            Current = _use;
-            _use = _use.Next;
-            return true;
+        internal UseRef _use;
+        public UseRef Current { get; private set; }
+
+        public bool MoveNext()
+        {
+            if (_use.Exists) {
+                Current = _use;
+                _use = _use.Next;
+                return true;
+            }
+            return false;
         }
-        return false;
     }
 }
 

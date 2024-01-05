@@ -38,7 +38,7 @@ public class BasicBlockTests
         block.InsertBefore(inst3, inst5);
         Assert.True(inst5.Prev == inst4 && inst5.Next == inst3);
 
-        block.Remove(inst4);
+        inst4.Remove();
         Assert.True(inst2.Next == inst5 && inst5.Prev == inst2);
     }
 
@@ -63,9 +63,9 @@ public class BasicBlockTests
         Assert.Equal(inst5, block.Last);
         Assert.Equal(inst3, block.FirstNonHeader);
 
-        Assert.Equal(new Instruction[] { inst1, inst2, inst3, inst4, inst5 }, ToList(block.GetEnumerator()));
-        Assert.Equal(new Instruction[] { inst3, inst4, inst5 }, ToList(block.NonPhis().GetEnumerator()));
-        Assert.Equal(new Instruction[] { inst1, inst2 }, ToList(block.Phis().GetEnumerator()));
+        Assert.Equal(new Instruction[] { inst1, inst2, inst3, inst4, inst5 }, [..block]);
+        Assert.Equal(new Instruction[] { inst3, inst4, inst5 }, [..block.NonPhis()]);
+        Assert.Equal(new Instruction[] { inst1, inst2 }, [..block.Phis()]);
     }
 
     [Fact]
@@ -121,13 +121,17 @@ public class BasicBlockTests
         var block = method.CreateBlock();
 
         var insts = GetDummyInsts(8);
-        block.InsertRange(null, insts[0], insts[3]);
+        for (int i = 0; i < 4; i++) {
+            block.InsertLast(insts[i]);
+        }
         Assert.Equal(insts[0], block.First);
         Assert.Equal(insts[3], block.Last);
         Assert.Null(block.First.Prev);
         Assert.Null(block.Last.Next);
 
-        block.InsertRange(block.Last, insts[4], insts[7]);
+        for (int i = 4; i < 8; i++) {
+            block.InsertLast(insts[i]);
+        }
         Assert.Equal(insts[0], block.First);
         Assert.Equal(insts[7], block.Last);
         Assert.Null(block.First.Prev);
@@ -141,10 +145,12 @@ public class BasicBlockTests
         var block = method.CreateBlock();
 
         var insts = GetDummyInsts(8);
-        block.InsertRange(null, insts[0], insts[7]);
+        for (int i = 0; i < 8; i++) {
+            block.InsertLast(insts[i]);
+        }
 
-        block.Remove(insts[3]);
-        Assert.Equal(insts.Except(new[] { insts[3] }), ToList(block.GetEnumerator()));
+        insts[3].Remove();
+        Assert.Equal(insts.Except(new[] { insts[3] }), [..block]);
     }
 
     [Fact]
@@ -183,20 +189,8 @@ public class BasicBlockTests
     {
         var insts = new List<Instruction>();
         for (int i = 0; i < count; i++) {
-            var inst = new ReturnInst(ConstInt.CreateI(i));
-            if (i > 0) {
-                inst.Prev = insts[i - 1];
-                insts[i - 1].Next = inst;
-            }
-            insts.Add(inst);
+            insts.Add(new ReturnInst(ConstInt.CreateI(i)));
         }
         return insts;
-    }
-
-    private List<Instruction> ToList(IEnumerator<Instruction> itr)
-    {
-        var list = new List<Instruction>();
-        while (itr.MoveNext()) list.Add(itr.Current);
-        return list;
     }
 }

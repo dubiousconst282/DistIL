@@ -9,9 +9,9 @@ public class MethodBody
     public TypeDesc ReturnType => Definition.ReturnType;
 
     /// <summary> The entry block of this method. Should not have predecessors. </summary>
-    public BasicBlock EntryBlock { get; private set; } = null!;
+    public BasicBlock EntryBlock => _firstBlock!;
     public int NumBlocks { get; private set; } = 0;
-    private BasicBlock? _lastBlock; // Last block in the list
+    private BasicBlock? _firstBlock, _lastBlock;
 
     public MethodBody(MethodDef def)
     {
@@ -24,41 +24,21 @@ public class MethodBody
     {
         var block = new BasicBlock(this);
 
-        if (EntryBlock == null) {
-            EntryBlock = _lastBlock = block;
-        } else {
-            InsertBlock(insertAfter ?? _lastBlock!, block);
-        }
+        IIntrusiveList<MethodBody, BasicBlock>.InsertAfter<BlockLinkAccessor>(this, insertAfter ?? _lastBlock, block);
         NumBlocks++;
+
         return block;
-    }
-
-    private void InsertBlock(BasicBlock after, BasicBlock block)
-    {
-        block.Prev = after;
-        block.Next = after.Next;
-
-        if (after.Next != null) {
-            after.Next.Prev = block;
-        } else {
-            _lastBlock = block;
-        }
-        after.Next = block;
     }
 
     /// <summary> Removes a block from the method without cleanup. </summary>
     internal bool RemoveBlock(BasicBlock block)
     {
-        Ensure.That(block.Method == this && block != EntryBlock);
+        Debug.Assert(block.Method == this);
+        Ensure.That(block != EntryBlock);
 
-        block.Prev!.Next = block.Next;
+        IIntrusiveList<MethodBody, BasicBlock>.RemoveRange<BlockLinkAccessor>(this, block, block);
 
-        if (block.Next != null) {
-            block.Next.Prev = block.Prev;
-        } else {
-            _lastBlock = block.Prev;
-        }
-        block.Method = null!; // to ensure it can't be removed again
+        block.Method = null!; // prevent multiple remove calls
         NumBlocks--;
         return false;
     }
@@ -72,7 +52,7 @@ public class MethodBody
     public void TraverseDepthFirst(Action<BasicBlock>? preVisit = null, Action<BasicBlock>? postVisit = null)
     {
         var pending = new ArrayStack<(BasicBlock Block, BasicBlock.SuccIterator Itr)>();
-        var visited = new RefSet<BasicBlock>();
+        var visited = new RefSet<BasicBlock>(NumBlocks);
 
         Push(EntryBlock);
 
@@ -113,4 +93,14 @@ public class MethodBody
     }
 
     public override string ToString() => Definition.ToString();
+
+
+    internal struct BlockLinkAccessor : IIntrusiveList<MethodBody, BasicBlock>
+    {
+        public static ref BasicBlock? First(MethodBody body) => ref body._firstBlock;
+        public static ref BasicBlock? Last(MethodBody body) => ref body._lastBlock;
+
+        public static ref BasicBlock? Prev(BasicBlock block) => ref block._prev;
+        public static ref BasicBlock? Next(BasicBlock block) => ref block._next;
+    }
 }

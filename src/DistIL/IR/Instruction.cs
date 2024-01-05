@@ -1,13 +1,15 @@
-﻿namespace DistIL.IR;
+namespace DistIL.IR;
 
 public abstract class Instruction : TrackedValue
 {
     public BasicBlock Block { get; set; } = null!;
 
     /// <summary> The previous instruction in the block. </summary>
-    public Instruction? Prev { get; set; }
+    public Instruction? Prev { get => _prev; set => _prev = value; }
     /// <summary> The next instruction in the block. </summary>
-    public Instruction? Next { get; set; }
+    public Instruction? Next { get => _next; set => _next = value; }
+
+    internal Instruction? _prev, _next;
 
     internal Value[] _operands;
     internal UseDef[] _useDefs;
@@ -32,8 +34,8 @@ public abstract class Instruction : TrackedValue
 
     protected Instruction()
     {
-        _operands = Array.Empty<Value>();
-        _useDefs = Array.Empty<UseDef>();
+        _operands = [];
+        _useDefs = [];
     }
     protected Instruction(params Value[] opers)
     {
@@ -76,12 +78,16 @@ public abstract class Instruction : TrackedValue
 
     /// <summary> Removes this instruction from the parent basic block. </summary>
     /// <remarks> 
-    /// Once this method returns, this instruction should be considered invalid and should not be added in a block again.
+    /// Once this method returns, this instruction should be considered invalid and must not be added in a block again.
     /// The <see cref="Operands"/> array is left unmodified, but uses are removed.
     /// </remarks>
     public void Remove()
     {
-        Block?.Remove(this);
+        // Allow Remove() calls on unattached instructions to allow for proper disposal of value uses.
+        if (Block != null) {
+            IIntrusiveList<BasicBlock, Instruction>.RemoveRange<BasicBlock.InstLinkAccessor>(Block, this, this);
+            Block = null!;
+        }
         RemoveOperandUses();
     }
 

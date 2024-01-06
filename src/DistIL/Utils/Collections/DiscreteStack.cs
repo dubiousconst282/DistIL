@@ -6,6 +6,15 @@ public class DiscreteStack<T> where T : class
     readonly ArrayStack<T> _stack = new();
     readonly RefSet<T> _pushed = new();
 
+    /// <summary> Number of items currently in the stack. </summary>
+    public int Depth => _stack.Count;
+
+    /// <summary> Number of distinct items ever pushed to the stack. </summary>
+    public int DiscreteCount => _pushed.Count;
+
+    /// <inheritdoc cref="ArrayStack{T}.Top"/>
+    public ref T Top => ref _stack.Top;
+
     public DiscreteStack() { }
     public DiscreteStack(T head) => Push(head);
 
@@ -20,9 +29,9 @@ public class DiscreteStack<T> where T : class
 
     public bool WasPushed(T item) => _pushed.Contains(item);
 
-    public void Clear(bool keepSeen = false)
+    public void Clear(bool rememberPushed = false)
     {
-        if (!keepSeen) {
+        if (!rememberPushed) {
             _pushed.Clear();
         }
         _stack.Clear();

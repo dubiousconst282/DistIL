@@ -69,8 +69,6 @@ public class MethodTransformContext : IMethodAnalysisManager
 
     public A GetAnalysis<A>(bool preserve = true) where A : IMethodAnalysis
     {
-        Logger.Trace($"Get analysis {typeof(A).Name}");
-
         ref var analysis = ref _analyses.GetOrAddRef(typeof(A));
         analysis ??= A.Create(this);
         return (A)analysis;

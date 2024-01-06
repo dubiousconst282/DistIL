@@ -26,13 +26,20 @@ public class DominatorTree : IMethodAnalysis
     /// <summary> Checks if all paths from the entry block must go through <paramref name="parent"/> before entering <paramref name="child"/>. </summary>
     public bool Dominates(BasicBlock parent, BasicBlock child)
     {
-        if (!_hasDfsIndices) {
-            ComputeDfsIndices();
+        if (parent == child) {
+            return true;
         }
 
         var parentNode = GetNode(parent);
         var childNode = GetNode(child);
 
+        if (childNode.IDom == parentNode) {
+            return true;
+        }
+
+        if (!_hasDfsIndices) {
+            ComputeDfsIndices();
+        }
         return childNode.PreIndex >= parentNode.PreIndex &&
                childNode.PostIndex <= parentNode.PostIndex;
     }

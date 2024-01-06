@@ -11,6 +11,7 @@ public class DeadCodeElim : IMethodPass
         var funcInfo = ctx.Compilation.GetAnalysis<GlobalFunctionEffects>();
 
         changes |= RemoveUnreachableBlocks(ctx.Method) ? MethodInvalidations.ControlFlow : 0;
+        changes |= RemoveUnusedVars(ctx.Method) ? MethodInvalidations.DataFlow : 0;
         changes |= RemoveUselessCode(ctx.Method, funcInfo) ? MethodInvalidations.DataFlow : 0;
 
         return changes;
@@ -89,7 +90,7 @@ public class DeadCodeElim : IMethodPass
                 changed = true;
             }
             else if (inst is PhiInst phi) {
-                PeelTrivialPhi(phi);
+                RemoveTrivialPhi(phi, peel: true);
             }
         }
         return changed;
@@ -105,7 +106,7 @@ public class DeadCodeElim : IMethodPass
     }
 
     // Remove phi-webs where all arguments have the same value
-    private static void PeelTrivialPhi(PhiInst phi)
+    public static void RemoveTrivialPhi(PhiInst phi, bool peel)
     {
         while (true) {
             var firstArg = phi.GetValue(0);
@@ -117,9 +118,26 @@ public class DeadCodeElim : IMethodPass
             }
             phi.ReplaceWith(firstArg);
 
-            if (firstArg is PhiInst nextPhi) {
+            if (peel && firstArg is PhiInst nextPhi) {
                 phi = nextPhi;
             } else break;
         }
+    }
+
+    public static bool RemoveUnusedVars(MethodBody method)
+    {
+        bool changed = false;
+
+        foreach (var slot in method.LocalVars()) {
+            // Remove if unused, or if non-pinned and all uses are from stores
+            if (slot.NumUses == 0 || (!slot.IsPinned && slot.Users().All(u => u is StoreInst or CilIntrinsic.MemSet))) {
+                foreach (var user in slot.Users()) {
+                    user.Remove();
+                }
+                slot.Remove();
+                changed = true;
+            }
+        }
+        return changed;
     }
 }

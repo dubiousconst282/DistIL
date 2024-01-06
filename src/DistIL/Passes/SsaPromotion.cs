@@ -1,189 +1,156 @@
 namespace DistIL.Passes;
 
-using System.Runtime.CompilerServices;
-
 using DistIL.Analysis;
+
+using NameStack = ArrayStack<(BasicBlock B, Value V)>;
 
 /// <summary> Promotes non-exposed local variables to SSA. </summary>
 public class SsaPromotion : IMethodPass
 {
-    MethodBody _method = null!;
-    Dictionary<LocalSlot, SlotInfo> _slotInfos = new();
     Dictionary<PhiInst, LocalSlot> _phiDefs = new(); // phi -> variable
+    Dictionary<LocalSlot, NameStack> _slotNameStacks = new();
+    DominatorTree _domTree = null!;
 
     public MethodPassResult Run(MethodTransformContext ctx)
     {
-        _method = ctx.Method;
-        var domTree = ctx.GetAnalysis<DominatorTree>(preserve: true);
-        var domFrontier = ctx.GetAnalysis<DominanceFrontier>(preserve: true);
+        InsertPhis(ctx);
 
-        InsertPhis(domFrontier);
-        RenameDefs(domTree);
+        if (_slotNameStacks.Count == 0) {
+            Debug.Assert(_phiDefs.Count == 0);
+            return MethodInvalidations.None;
+        }
 
-        _method = null!;
+        _domTree = ctx.GetAnalysis<DominatorTree>();
+        _domTree.Traverse(preVisit: RenameBlock);
+
+        RemoveTrivialPhis();
+
         _phiDefs.Clear();
-        _slotInfos.Clear();
-
+        _slotNameStacks.Clear();
+        _domTree = null!;
         return MethodInvalidations.DataFlow;
     }
 
-    private void InsertPhis(DominanceFrontier domFrontier)
+    private void InsertPhis(MethodTransformContext ctx)
     {
-        var killedVars = new RefSet<LocalSlot>();
-
-        // Find definitions
-        foreach (var block in _method) {
-            foreach (var inst in block) {
-                ref var slotInfo = ref GetAccessedSlotInfo(inst, out var slot);
-                if (Unsafe.IsNullRef(ref slotInfo)) continue;
-
-                if (inst is StoreInst) {
-                    var worklist = slotInfo.AssignBlocks ??= new();
-                    // Add parent block to the worklist, avoiding dupes
-                    if (worklist.Count == 0 || worklist.Top != block) {
-                        worklist.Push(block);
-                    }
-                    killedVars.Add(slot);
-                }
-                // If we are loading a variable that has not yet been assigned in this block, mark it as global
-                else if (!killedVars.Contains(slot)) {
-                    slotInfo.IsGlobal = true;
-                }
-            }
-            killedVars.Clear();
-        }
-
+        var worklist = new DiscreteStack<BasicBlock>();
         var phiAdded = new RefSet<BasicBlock>(); // blocks where a phi has been added
-        var processed = new RefSet<BasicBlock>(); // blocks already visited in worklist
+        var domFrontier = default(DominanceFrontier);
 
-        // Insert phis
-        foreach (var (slot, info) in _slotInfos) {
-            var worklist = info.AssignBlocks;
+        foreach (var slot in ctx.Method.LocalVars()) {
+            if (!CheckPromoteableAndFindStores(slot, worklist, out bool isGlobal)) continue;
 
-            // Avoid inserting phis for variables only alive in a single block (semi-pruned ssa)
-            if (worklist == null || !info.IsGlobal) continue;
+            // Only need to insert phis for variables used across multiple blocks
+            if (isGlobal) {
+                domFrontier ??= ctx.GetAnalysis<DominanceFrontier>();
 
-            // Initialize processed set (we do this to avoid keeping a whole HashSet for each variable)
-            foreach (var def in worklist) {
-                processed.Add(def);
-            }
-            // Recursively insert phis on the DF of each block in the worklist
-            while (worklist.TryPop(out var block)) {
-                foreach (var dom in domFrontier.Of(block)) {
-                    if (!phiAdded.Add(dom)) continue;
-                    
-                    var phi = dom.InsertPhi(slot.Type);
-                    _phiDefs.Add(phi, slot);
+                // Recursively insert phis on the DF of each block in the worklist
+                while (worklist.TryPop(out var block)) {
+                    foreach (var dom in domFrontier.Of(block)) {
+                        if (!phiAdded.Add(dom)) continue;
 
-                    if (processed.Add(dom)) {
+                        var phi = dom.InsertPhi(slot.Type);
+                        _phiDefs.Add(phi, slot);
+
                         worklist.Push(dom);
                     }
                 }
+                phiAdded.Clear();
             }
-            phiAdded.Clear();
-            processed.Clear();
+            _slotNameStacks.Add(slot, new());
         }
     }
 
-    private void RenameDefs(DominatorTree domTree)
+    private static bool CheckPromoteableAndFindStores(LocalSlot slot, DiscreteStack<BasicBlock> definingBlocks, out bool isGlobal)
     {
-        var defDeltas = new ArrayStack<(BasicBlock B, ArrayStack<Value> DefStack)>();
-        defDeltas.Push((null!, null!)); // dummy element so we don't need to check IsEmpty in RestoreDefs
+        isGlobal = false;
 
-        domTree.Traverse(
-            preVisit: RenameBlock,
-            postVisit: RestoreDefs
-        );
+        if (slot.IsPinned || slot.IsHardExposed) {
+            return false;
+        }
 
-        void RenameBlock(BasicBlock block)
-        {
-            // Init phi defs
-            foreach (var phi in block.Phis()) {
+        definingBlocks.Clear();
+
+        foreach (var (user, operIdx) in slot.Uses()) {
+            if (user is StoreInst && operIdx == 0) {
+                definingBlocks.Push(user.Block);
+            } else if (user is LoadInst) {
+                isGlobal |= definingBlocks.Depth == 0 || definingBlocks.Top != user.Block;
+            } else {
+                return false;
+            }
+        }
+        isGlobal |= definingBlocks.DiscreteCount >= 2;
+
+        return true;
+    }
+
+    private void RenameBlock(BasicBlock block)
+    {
+        // Init phi defs
+        foreach (var phi in block.Phis()) {
+            if (_phiDefs.TryGetValue(phi, out var slot)) {
+                PushDef(_slotNameStacks[slot], block, phi);
+            }
+        }
+        // Promote load/stores
+        foreach (var inst in block.NonPhis()) {
+            if (inst is not MemoryInst { Address: LocalSlot slot }) continue;
+            if (!_slotNameStacks.TryGetValue(slot, out var stack)) continue;
+
+            // Update latest def
+            if (inst is StoreInst store) {
+                var value = StoreInst.Coerce(store.ElemType, store.Value, insertBefore: inst);
+                PushDef(stack, block, value);
+                inst.Remove();
+            }
+            // Replace load with latest def
+            else {
+                Debug.Assert(inst is LoadInst);
+                inst.ReplaceWith(ReadDef(stack, block, slot));
+            }
+        }
+        // Fill successors phis
+        foreach (var succ in block.Succs) {
+            foreach (var phi in succ.Phis()) {
                 if (_phiDefs.TryGetValue(phi, out var slot)) {
-                    PushDef(ref GetSlotInfo(slot), block, phi);
+                    // TODO: AddArg() is O(n), maybe rewrite all phis in a final pass
+                    phi.AddArg(block, ReadDef(_slotNameStacks[slot], block, slot));
                 }
             }
-            // Promote load/stores
-            foreach (var inst in block.NonPhis()) {
-                ref var slotInfo = ref GetAccessedSlotInfo(inst, out var slot);
-                if (Unsafe.IsNullRef(ref slotInfo)) continue;
-
-                // Update latest def
-                if (inst is StoreInst store) {
-                    var value = StoreInst.Coerce(store.ElemType, store.Value, insertBefore: inst);
-                    PushDef(ref slotInfo, block, value);
-                    inst.Remove();
-                }
-                // Replace load with latest def
-                else {
-                    Debug.Assert(inst is LoadInst);
-                    inst.ReplaceWith(ReadDef(ref slotInfo, slot));
-                }
-            }
-            // Fill successors phis
-            foreach (var succ in block.Succs) {
-                foreach (var phi in succ.Phis()) {
-                    if (_phiDefs.TryGetValue(phi, out var slot)) {
-                        // TODO: AddArg() is O(n), maybe rewrite all phis in a final pass
-                        phi.AddArg(block, ReadDef(ref GetSlotInfo(slot), slot));
-                    }
-                }
-            }
-        }
-        void RestoreDefs(BasicBlock block)
-        {
-            // Restore def stack to what it was before visiting `block`
-            while (defDeltas.Top.B == block) {
-                defDeltas.Top.DefStack.Pop();
-                defDeltas.Pop();
-            }
-
-            // Remove trivially useless phis
-            foreach (var phi in block.Phis()) {
-                if (!phi.Users().Any(u => u != phi)) {
-                    phi.Remove();
-                }
-            }
-        }
-        // Helpers for R/W the def stack
-        void PushDef(ref SlotInfo slotInfo, BasicBlock block, Value value)
-        {
-            var stack = slotInfo.DefStack ??= new();
-            stack.Push(value);
-            defDeltas.Push((block, stack));
-        }
-        Value ReadDef(ref SlotInfo slotInfo, LocalSlot slot)
-        {
-            var stack = slotInfo.DefStack;
-            return stack != null && !stack.IsEmpty 
-                ? stack.Top 
-                : new Undef(slot.Type);
         }
     }
 
-    private ref SlotInfo GetAccessedSlotInfo(Instruction? inst, out LocalSlot slot)
+    private void RemoveTrivialPhis()
     {
-        slot = ((inst as MemoryInst)?.Address as LocalSlot)!;
-
-        if (slot != null && !slot.IsPinned) {
-            ref var info = ref _slotInfos.GetOrAddRef(slot);
-
-            if (info.CanPromote ??= !slot.IsExposed()) {
-                return ref info;
+        // Remove trivially useless phis
+        foreach (var phi in _phiDefs.Keys) {
+            if (!phi.Users().Any(u => u != phi)) {
+                phi.Remove();
+            } else {
+                DeadCodeElim.RemoveTrivialPhi(phi, peel: false);
             }
         }
-        return ref Unsafe.NullRef<SlotInfo>();
-    }
-    private ref SlotInfo GetSlotInfo(LocalSlot slot)
-    {
-        return ref _slotInfos.GetRef(slot);
     }
 
-    struct SlotInfo
+    private void PushDef(NameStack stack, BasicBlock block, Value value)
     {
-        public bool? CanPromote;
-        public bool IsGlobal;
-        public ArrayStack<BasicBlock>? AssignBlocks;
-        public ArrayStack<Value>? DefStack;
+        // Avoid pushing duplicate defs for the same block
+        if (!stack.IsEmpty && stack.Top.B == block) stack.Pop();
+
+        stack.Push((block, value));
+    }
+    private Value ReadDef(NameStack stack, BasicBlock block, LocalSlot slot)
+    {
+        // Try find a name for this block, while purging out of scope entries.
+        // This is simpler and maybe even faster than tracking and popping all names
+        // in PostVisit, since our dominance checks are quite cheap.
+        while (!stack.IsEmpty) {
+            if (_domTree.Dominates(stack.Top.B, block)) {
+                return stack.Top.V;
+            }
+            stack.Pop();
+        }
+        return new Undef(slot.Type);
     }
 }

@@ -122,10 +122,9 @@ public class StoreInst : MemoryInst
         // `NInt -> &` as in "Start GC Tracking" sounds particularly brittle. Not even Roslyn makes guarantees about it:
         //  https://github.com/dotnet/runtime/issues/34501#issuecomment-608548207
         // It's probably for the best if we don't support it.
-        return
-            (destType.Kind.IsSmallInt() && !srcType.Kind.IsSmallInt()) ||
-            (destType.StackType == StackType.Int && srcType.StackType == StackType.NInt) ||
-            (destType.Kind == TypeKind.Single && srcType.Kind == TypeKind.Double);
+        return (destType.Kind.IsSmallInt() && destType.Kind.Size() < srcType.Kind.Size()) ||
+               (destType.StackType == StackType.Int && srcType.StackType == StackType.NInt) ||
+               (destType.Kind == TypeKind.Single && srcType.Kind == TypeKind.Double);
     }
 }
 

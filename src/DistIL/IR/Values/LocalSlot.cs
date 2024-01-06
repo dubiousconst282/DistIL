@@ -1,31 +1,37 @@
-﻿namespace DistIL.IR;
+namespace DistIL.IR;
 
-/// <summary> Represents a method local memory slot (variable). </summary>
+/// <summary> Represents a memory slot local to a method. </summary>
 public class LocalSlot : TrackedValue
 {
     public TypeDesc Type => ResultType.ElemType!;
     
-    public string? Name { get; }
-    public bool IsPinned { get; }
+    /// <summary>
+    /// If this slot contains a managed object or ref, controls whether the GC should
+    /// keep it at a fixed heap location for the lifetime of this slot.
+    /// </summary>
+    public bool IsPinned { get; set; }
 
     /// <summary>
     /// Whether this slot should always be considered exposed.
     /// This is currently used to control SSA promotion for slots crossing protected regions. 
     /// </summary>
-    public bool HardExposed { get; set; }
+    public bool IsHardExposed { get; set; }
 
-    public LocalSlot(TypeDesc type, string? name = null, bool pinned = false, bool hardExposed = false)
+    public MethodBody Method { get; internal set; }
+    internal LocalSlot? _prev, _next;
+
+    internal LocalSlot(MethodBody method, TypeDesc type, bool pinned = false, bool hardExposed = false)
     {
         ResultType = type.CreateByref();
-        Name = name;
+        Method = method;
         IsPinned = pinned;
-        HardExposed = hardExposed;
+        IsHardExposed = hardExposed;
     }
 
     /// <summary> Checks if this slot is used by any instruction other than a memory load or store. </summary>
     public bool IsExposed()
     {
-        if (HardExposed) {
+        if (IsHardExposed) {
             return true;
         }
         foreach (var use in Uses()) {
@@ -36,14 +42,20 @@ public class LocalSlot : TrackedValue
         return false;
     }
 
-    public override void Print(PrintContext ctx)
+    public void Remove()
     {
-        ctx.Print("$" + (Name ?? ctx.SymTable.GetName(this)), PrintToner.VarName);
+        Ensure.That(NumUses == 0);
+        
+        if (Method != null) {
+            IIntrusiveList<MethodBody, LocalSlot>.RemoveRange<MethodBody.VarLinkAccessor>(Method, this, this);
+            Method = null!;
+        }
     }
 
-    public override SymbolTable? GetSymbolTable()
+    public override void Print(PrintContext ctx)
     {
-        var parentMethod = Users().FirstOrDefault()?.Block?.Method;
-        return parentMethod?.GetSymbolTable();
+        ctx.Print("$" + ctx.SymTable.GetName(this), PrintToner.VarName);
     }
+
+    public override SymbolTable? GetSymbolTable() => Method.GetSymbolTable();
 }

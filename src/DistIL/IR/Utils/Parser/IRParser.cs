@@ -186,7 +186,7 @@ public partial class IRParser
             bool pinned = _lexer.Match(TokenType.Caret);
 
             foreach (var token in tokens) {
-                var slot = new LocalSlot(type, token.StrValue, pinned);
+                var slot = _method!.CreateVar(type, token.StrValue, pinned);
                 AssignId(token, slot, "$" + token.StrValue);
             }
         });

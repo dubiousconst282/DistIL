@@ -143,7 +143,7 @@ public class PresizeLists : IMethodPass
                 call.Remove();
             }
         } else {
-            var idxVar = new LocalSlot(PrimType.Int32, "arrbuilder_idx");
+            var idxVar = builder.Method.CreateVar(PrimType.Int32, "arrbuilder_idx");
             builder.CreateStore(idxVar, offset);
 
             foreach (var call in addCalls) {

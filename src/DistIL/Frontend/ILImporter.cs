@@ -140,7 +140,7 @@ public class ILImporter
             if (!Has(_varFlags[i], VarFlags.AddrTaken | VarFlags.Stored)) continue;
 
             var arg = _body.Args[i];
-            var slot = _varSlots[i] = new LocalSlot(arg.ResultType, $"a_{arg.Name}");
+            var slot = _varSlots[i] = _body.CreateVar(arg.ResultType, $"a_{arg.Name}");
             entryBlock.InsertAnteLast(new StoreInst(slot, arg));
         }
 
@@ -303,8 +303,8 @@ public class ILImporter
 
         slot ??= isBlockLocal
             ? (Has(op, VarFlags.Loaded) ? new Undef(localVar.Type) : null)
-            : new LocalSlot(
-                    localVar.Type, "loc" + index,
+            : _body.CreateVar(
+                    localVar.Type,
                     pinned: localVar.IsPinned,
                     hardExposed: Has(flags, VarFlags.CrossesRegions));
 

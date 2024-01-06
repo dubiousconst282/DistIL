@@ -57,7 +57,7 @@ internal class EnumeratorSource : LinqSourceNode
                 _enumerator = builder.CreateCallVirt(getEnumer, builder.CreateUnboxRef(box.SourceType, box));
 
                 if (_enumerator.ResultType.IsValueType) {
-                    var slot = new LocalSlot(_enumerator.ResultType, "lq_srcIter");
+                    var slot = builder.Method.CreateVar(_enumerator.ResultType, "lq_srcIter");
                     builder.CreateStore(slot, _enumerator);
                     _enumerator = slot;
                 }

@@ -9,9 +9,11 @@ public class IRCloner
     readonly InstCloner _instCloner;
     readonly List<BasicBlock> _blocks = new();
     readonly GenericContext _genericContext;
+    readonly MethodBody _destMethod;
 
-    public IRCloner(GenericContext genericContext = default)
+    public IRCloner(MethodBody method, GenericContext genericContext = default)
     {
+        _destMethod = method;
         _instCloner = new(this);
         _genericContext = genericContext;
     }
@@ -22,6 +24,8 @@ public class IRCloner
 
         if (oldVal is BasicBlock oldBlock) {
             Ensure.That(newVal is BasicBlock);
+            Debug.Assert(((BasicBlock)newVal).Method == _destMethod);
+            
             _blocks.Add(oldBlock);
         }
     }
@@ -125,7 +129,7 @@ public class IRCloner
         }
         if (value is LocalSlot var) {
             var newType = (TypeDesc)Remap(var.Type);
-            newValue = new LocalSlot(newType, pinned: var.IsPinned, hardExposed: var.HardExposed);
+            newValue = _destMethod.CreateVar(newType, pinned: var.IsPinned, hardExposed: var.IsHardExposed);
             _mappings.Add(value, newValue);
             return newValue;
         }

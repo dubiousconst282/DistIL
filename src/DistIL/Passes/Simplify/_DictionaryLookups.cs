@@ -39,9 +39,10 @@ partial class SimplifyInsts
             getCall.Method.DeclaringType != declType ||
             getCall.Args[0] != instance || getCall.Args[1] != key) return false;
 
-        var tempVar = new LocalSlot(declType.GenericParams[1], "dictLookupOut");
 
         var builder = new IRBuilder(call, InsertionDir.After);
+        
+        var tempVar = builder.Method.CreateVar(declType.GenericParams[1], "dictLookupOut");
         call.ReplaceWith(builder.CreateCallVirt("TryGetValue", instance, key, tempVar));
 
         builder.SetPosition(getCall, InsertionDir.After);

@@ -280,7 +280,7 @@ public class IRBuilder
     public Value CreateDefaultOf(TypeDesc type)
     {
         if (type.Kind == TypeKind.Struct) {
-            var slot = new LocalSlot(type, "tmpZeroInit");
+            var slot = Method.CreateVar(type, "tmpZeroInit");
             Emit(new CilIntrinsic.MemSet(slot, type));
             return CreateLoad(slot);
         }

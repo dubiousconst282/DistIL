@@ -109,7 +109,7 @@ public class InlineMethods : IMethodPass
         var targetBody = Ensure.NotNull(target.Definition.Body);
         Ensure.That(callerBody != targetBody, "Cannot inline method into itself");
 
-        var cloner = new IRCloner(new GenericContext(target));
+        var cloner = new IRCloner(callerBody, new GenericContext(target));
 
         // Add argument mappings
         for (int i = 0; i < targetBody.Args.Length; i++) {

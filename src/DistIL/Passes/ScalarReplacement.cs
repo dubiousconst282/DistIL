@@ -56,7 +56,7 @@ public class ScalarReplacement : IMethodPass
         LocalSlot GetSlot(FieldDesc field)
         {
             var def = ((FieldDefOrSpec)field).Definition;
-            return fieldSlots.GetOrAddRef(def) ??= new LocalSlot(field.Type, "sroa." + field.Name);
+            return fieldSlots.GetOrAddRef(def) ??= builder.Method.CreateVar(field.Type, "sroa." + field.Name);
         }
     }
 

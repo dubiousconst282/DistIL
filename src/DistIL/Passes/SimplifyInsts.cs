@@ -69,7 +69,7 @@ public partial class SimplifyInsts : IMethodPass
                 box.Remove();
 
                 if (inst is CilIntrinsic.UnboxRef) {
-                    var slot = new LocalSlot(box.SourceType);
+                    var slot = inst.Block.Method.CreateVar(box.SourceType, "boxFoldCopy");
                     var copy = new StoreInst(slot, box.Args[0]);
                     copy.InsertBefore(inst);
                     return slot;

@@ -13,6 +13,8 @@ public class MethodBody
     public int NumBlocks { get; private set; } = 0;
     private BasicBlock? _firstBlock, _lastBlock;
 
+    private LocalSlot? _firstVar, _lastVar;
+
     public MethodBody(MethodDef def)
     {
         Definition = def;
@@ -41,6 +43,18 @@ public class MethodBody
         block.Method = null!; // prevent multiple remove calls
         NumBlocks--;
         return false;
+    }
+
+    /// <summary> Creates a local memory slot (variable). </summary>
+    public LocalSlot CreateVar(TypeDesc type, string? name = null, bool pinned = false, bool hardExposed = false)
+    {
+        var slot = new LocalSlot(this, type, pinned, hardExposed);
+        IIntrusiveList<MethodBody, LocalSlot>.InsertAfter<VarLinkAccessor>(this, _lastVar, slot);
+
+        if (name != null) {
+            GetSymbolTable().SetName(slot, name);
+        }
+        return slot;
     }
 
     public SymbolTable GetSymbolTable()
@@ -92,6 +106,13 @@ public class MethodBody
         }
     }
 
+    public IEnumerable<LocalSlot> LocalVars()
+    {
+        for (var slot = _firstVar; slot != null; slot = slot._next) {
+            yield return slot;
+        }
+    }
+
     public override string ToString() => Definition.ToString();
 
 
@@ -102,5 +123,13 @@ public class MethodBody
 
         public static ref BasicBlock? Prev(BasicBlock block) => ref block._prev;
         public static ref BasicBlock? Next(BasicBlock block) => ref block._next;
+    }
+    internal struct VarLinkAccessor : IIntrusiveList<MethodBody, LocalSlot>
+    {
+        public static ref LocalSlot? First(MethodBody body) => ref body._firstVar;
+        public static ref LocalSlot? Last(MethodBody body) => ref body._lastVar;
+
+        public static ref LocalSlot? Prev(LocalSlot slot) => ref slot._prev;
+        public static ref LocalSlot? Next(LocalSlot slot) => ref slot._next;
     }
 }

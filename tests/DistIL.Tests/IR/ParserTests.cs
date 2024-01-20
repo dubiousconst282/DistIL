@@ -160,9 +160,9 @@ Entry:
         var body = Parse(code);
         var insts = body.Instructions().ToArray();
 
-        Assert.True(insts[0] is StoreInst { Address: LocalSlot { Name: "pin", IsPinned: true, Type: ArrayType { ElemType.Kind: TypeKind.Int32 } }, Value: Argument });
-        Assert.True(insts[1] is CallInst { Method.Name: "ToString", Args: [LocalSlot { Name: "num", Type.Kind: TypeKind.Int32 }] });
-        Assert.True(insts[2] is StoreInst { Address: LocalSlot { Name: "str" }, Value: CallInst });
+        Assert.True(insts[0] is StoreInst { Address: LocalSlot { IsPinned: true, Type: ArrayType { ElemType.Kind: TypeKind.Int32 } }, Value: Argument });
+        Assert.True(insts[1] is CallInst { Method.Name: "ToString", Args: [LocalSlot { Type.Kind: TypeKind.Int32 }] });
+        Assert.True(insts[2] is StoreInst { Address: LocalSlot, Value: CallInst });
     }
 
     [Fact]

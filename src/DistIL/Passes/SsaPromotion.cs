@@ -13,7 +13,7 @@ public class SsaPromotion : IMethodPass
 
     public MethodPassResult Run(MethodTransformContext ctx)
     {
-        InsertPhis(ctx);
+        FindSlotsAndInsertPhis(ctx);
 
         if (_slotNameStacks.Count == 0) {
             Debug.Assert(_phiDefs.Count == 0);
@@ -21,9 +21,9 @@ public class SsaPromotion : IMethodPass
         }
 
         _domTree = ctx.GetAnalysis<DominatorTree>();
-        _domTree.Traverse(preVisit: RenameBlock);
+        _domTree.Traverse(preVisit: RenameBlock, postVisit: LeaveBlock);
 
-        RemoveTrivialPhis();
+        RemoveDeadSlotsAndPhis();
 
         _phiDefs.Clear();
         _slotNameStacks.Clear();
@@ -31,7 +31,7 @@ public class SsaPromotion : IMethodPass
         return MethodInvalidations.DataFlow;
     }
 
-    private void InsertPhis(MethodTransformContext ctx)
+    private void FindSlotsAndInsertPhis(MethodTransformContext ctx)
     {
         var worklist = new DiscreteStack<BasicBlock>();
         var phiAdded = new RefSet<BasicBlock>(); // blocks where a phi has been added
@@ -90,7 +90,7 @@ public class SsaPromotion : IMethodPass
         // Init phi defs
         foreach (var phi in block.Phis()) {
             if (_phiDefs.TryGetValue(phi, out var slot)) {
-                PushDef(_slotNameStacks[slot], block, phi);
+                WriteDef(_slotNameStacks[slot], block, phi);
             }
         }
         // Promote load/stores
@@ -101,7 +101,7 @@ public class SsaPromotion : IMethodPass
             // Update latest def
             if (inst is StoreInst store) {
                 var value = StoreInst.Coerce(store.ElemType, store.Value, insertBefore: inst);
-                PushDef(stack, block, value);
+                WriteDef(stack, block, value);
                 inst.Remove();
             }
             // Replace load with latest def
@@ -121,19 +121,28 @@ public class SsaPromotion : IMethodPass
         }
     }
 
-    private void RemoveTrivialPhis()
+    private void LeaveBlock(BasicBlock block)
     {
         // Remove trivially useless phis
-        foreach (var phi in _phiDefs.Keys) {
+        // This must be done in post-dominance order, before
+        // the materialization of useless phi-loops. 
+        foreach (var phi in block.Phis()) {
             if (!phi.Users().Any(u => u != phi)) {
                 phi.Remove();
-            } else {
-                DeadCodeElim.RemoveTrivialPhi(phi, peel: false);
             }
         }
     }
 
-    private void PushDef(NameStack stack, BasicBlock block, Value value)
+    private void RemoveDeadSlotsAndPhis()
+    {
+        // Remove promoted slots
+        foreach (var slot in _slotNameStacks.Keys) {
+            Debug.Assert(slot.NumUses == 0);
+            slot.Remove();
+        }
+    }
+
+    private void WriteDef(NameStack stack, BasicBlock block, Value value)
     {
         // Avoid pushing duplicate defs for the same block
         if (!stack.IsEmpty && stack.Top.B == block) stack.Pop();

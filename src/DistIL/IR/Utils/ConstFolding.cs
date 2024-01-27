@@ -174,6 +174,11 @@ public class ConstFolding
                 }
                 break;
             }
+            // Fold `obj != null` for trivially non-null values
+            case (_, ConstNull, CompareOp.Eq or CompareOp.Ne): {
+                r = FoldCondition(left) ^ (op == CompareOp.Eq);
+                break;
+            }
         }
         return r == null ? null : ConstInt.Create(PrimType.Bool, r.Value ? 1 : 0);
     }

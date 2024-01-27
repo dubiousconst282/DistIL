@@ -64,7 +64,7 @@ public class InlineMethods : IMethodPass
             ? _opts.MaxCandidateInstrsAggressive
             : _opts.MaxCandidateInstrs;
 
-        if (IsCandidateLinqMethod(target)) {
+        if (IsCandidateForAggressiveInlining(target)) {
             maxInstrs = 128;
         }
 
@@ -105,10 +105,10 @@ public class InlineMethods : IMethodPass
         // var blockingTraits = FunctionTraits.HasStackAllocs | FunctionTraits.DoesNotReturn | FunctionTraits.Recursive;
         // if ((effects.Traits & blockingTraits) != 0) return false;
 
-        return method.ILBody != null && IsCandidateLinqMethod(method) && ctx.GetMethodBodyForIPO(method) != null;
+        return method.ILBody != null && IsCandidateForAggressiveInlining(method) && ctx.GetMethodBodyForIPO(method) != null;
     }
 
-    private static bool IsCandidateLinqMethod(MethodDef method)
+    private static bool IsCandidateForAggressiveInlining(MethodDef method)
     {
         if (method.Module.AsmName.Name == "System.Linq") {
             return true;

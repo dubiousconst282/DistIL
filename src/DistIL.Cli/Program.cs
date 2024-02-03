@@ -51,7 +51,7 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
 {
     var manager = new PassManager() {
         Compilation = comp,
-        TrackAndLogStats = true
+        Inspectors = { new PassTimingInspector() }
     };
 
     manager.AddPasses()
@@ -90,6 +90,9 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
         manager.AddPasses().Apply<VerificationPass>();
     }
 
+    var dumpFilter = options.DumpDir != null || options.PassDumpBundlePath != null
+        ? CompileFilter(options.DumpMethodFilter) : null;
+
     if (options.DumpDir != null) {
         if (options.PurgeDumps && Directory.Exists(options.DumpDir)) {
             Directory.Delete(options.DumpDir, recursive: true);
@@ -99,8 +102,11 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
         manager.AddPasses().Apply(new DumpPass() {
             BaseDir = options.DumpDir,
             Formats = options.DumpFmts,
-            Filter = CompileFilter(options.DumpMethodFilter)
+            Filter = dumpFilter
         });
+    }
+    if (options.PassDumpBundlePath != null) {
+        manager.Inspectors.Add(new PassDiffCollector(options.PassDumpBundlePath, dumpFilter));
     }
 
     var methods = PassManager.GetCandidateMethodsFromIL(comp.Module, GetCandidateFilter(options, comp));

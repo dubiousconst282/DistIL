@@ -23,7 +23,10 @@ class OptimizerOptions
     [Option("filter-unmarked", HelpText = "Only transform methods and classes marked with `OptimizeAttribute`.")]
     public bool FilterUnmarked { get; set; } = false;
 
-    [Option("dump-dir", HelpText = "Output directory for IR dumps.")]
+    [Option("pass-dump-path", HelpText = "Output path for pass IR dump bundle (tools/PassDiffInspector.html). dump-filter")]
+    public string? PassDumpBundlePath { get; set; } = null;
+
+    [Option("dump-dir", HelpText = "Output directory for plain IR dumps.")]
     public string? DumpDir { get; set; } = null;
 
     [Option("dump-fmts", HelpText = "Comma-separated list of IR dump formats.\n")]

@@ -8,9 +8,7 @@ public class PassManager
 {
     public required Compilation Compilation { get; init; }
     public List<PipelineSegment> Pipeline { get; } = new();
-    public bool TrackAndLogStats { get; init; }
-
-    readonly Dictionary<Type, (int NumChanges, TimeSpan TimeTaken)> _stats = new();
+    public List<IPassInspector> Inspectors { get; } = new();
 
     /// <summary> Adds a new segment to the pass pipeline. </summary>
     /// <param name="applyIndependently"> Whether to apply the segment on all methods independently from others. </param>
@@ -21,13 +19,20 @@ public class PassManager
         return pipe;
     }
 
+    /// <summary> Apply passes to the given methods, while additionally importing and generating IL. </summary>
     public void Run(IReadOnlyCollection<MethodDef> methods)
     {
+        foreach (var insp in Inspectors) {
+            insp.OnBegin(Compilation);
+        }
+
         ImportIL(methods);
         ApplyPasses(methods);
         GenerateIL(methods);
 
-        LogStats();
+        foreach (var insp in Inspectors) {
+            insp.OnFinish(Compilation);
+        }
     }
 
     private void ImportIL(IReadOnlyCollection<MethodDef> candidates)
@@ -45,7 +50,9 @@ public class PassManager
                 Compilation.Logger.Error($"Failed to import code from '{method}'", ex);
             }
         }
-        IncrementStat(typeof(ILImporter), startTs, count);
+
+        var timer = Inspectors.OfType<PassTimingInspector>().FirstOrDefault();
+        timer?.IncrementStat(typeof(ILImporter), startTs, count);
     }
 
     private void GenerateIL(IReadOnlyCollection<MethodDef> candidates)
@@ -66,10 +73,12 @@ public class PassManager
                 Compilation.Logger.Error($"Failed to generate code for '{method}'", ex);
             }
         }
-        IncrementStat(typeof(ILGenerator), startTs, count);
+
+        var timer = Inspectors.OfType<PassTimingInspector>().FirstOrDefault();
+        timer?.IncrementStat(typeof(ILGenerator), startTs, count);
     }
 
-    private void ApplyPasses(IReadOnlyCollection<MethodDef> candidates)
+    public void ApplyPasses(IReadOnlyCollection<MethodDef> candidates)
     {
         for (int i = 0; i < Pipeline.Count;) {
             int j = i + 1;
@@ -90,7 +99,7 @@ public class PassManager
 
                 try {
                     foreach (var seg in segments) {
-                        seg.Run(ctx);
+                        seg.Run(ctx, Inspectors.AsSpan());
                     }
                 } catch (Exception ex) {
                     method.Body = null;
@@ -101,32 +110,7 @@ public class PassManager
         }
     }
 
-    internal void IncrementStat(Type passType, long startTs, int numChanges)
-    {
-        if (!TrackAndLogStats) return;
-
-        ref var stat = ref _stats.GetOrAddRef(passType);
-        stat.TimeTaken += Stopwatch.GetElapsedTime(startTs);
-        stat.NumChanges += numChanges;
-    }
-
-    private void LogStats()
-    {
-        if (!TrackAndLogStats) return;
-
-        using var scope = Compilation.Logger.Push(s_StatsScope, "Pass statistics");
-        var totalTime = TimeSpan.Zero;
-
-        foreach (var (key, stats) in _stats) {
-            Compilation.Logger.Info($"{key.Name}: made {stats.NumChanges} changes in {stats.TimeTaken.TotalSeconds:0.00}s");
-            totalTime += stats.TimeTaken;
-        }
-        Compilation.Logger.Info($"-- Total time: {totalTime.TotalSeconds:0.00}s");
-    }
-
-    static readonly LoggerScopeInfo
-        s_ApplyScope = new("DistIL.PassManager.Apply"),
-        s_StatsScope = new("DistIL.PassManager.ResultStats");
+    static readonly LoggerScopeInfo s_ApplyScope = new("DistIL.PassManager.Apply");
 
     /// <summary>
     /// Searches for candidate transform methods and their dependencies through a depth-first IL scan. <br/>
@@ -188,21 +172,24 @@ public class PassManager
         internal PipelineSegment(PassManager manager, bool applyIndependently)
             => (_manager, _applyIndependently) = (manager, applyIndependently);
 
-        public void Run(MethodTransformContext ctx)
+        public void Run(MethodTransformContext ctx, ReadOnlySpan<IPassInspector> inspectors)
         {
             for (int i = 0; i < _maxIters; i++) {
-                if (!RunOnce(ctx)) break;
+                if (!RunOnce(ctx, inspectors)) break;
 
-                _contIfChanged?.Run(ctx);
+                _contIfChanged?.Run(ctx, inspectors);
             }
         }
 
-        private bool RunOnce(MethodTransformContext ctx)
+        private bool RunOnce(MethodTransformContext ctx, ReadOnlySpan<IPassInspector> inspectors)
         {
             bool changed = false;
 
             foreach (var pass in _passes) {
-                long startTs = Stopwatch.GetTimestamp();
+                foreach (var insp in inspectors) {
+                    insp.OnBeforePass(pass, ctx);
+                }
+
                 var result = pass.Run(ctx);
 
                 if (result.Changes != 0) {
@@ -211,7 +198,10 @@ public class PassManager
 
                     ctx.Logger.Trace($"{pass.GetType().Name} changed {result.Changes}");
                 }
-                _manager.IncrementStat(pass.GetType(), startTs, result.Changes != 0 ? 1 : 0);
+
+                foreach (var insp in inspectors) {
+                    insp.OnAfterPass(pass, ctx, result);
+                }
             }
             return changed;
         }

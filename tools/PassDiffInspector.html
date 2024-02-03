@@ -1,0 +1,288 @@
+<html>
+
+<body>
+    <div id="main" class="flex-row-fullsize">
+        <div id="diff-pass-list" class="pass-list"> </div>
+        <div id="codedump-container">
+            <div id="graphviz-container"></div>
+            <div id="diff-container" style="border: 1px solid grey; width: 100%"></div>
+        </div>
+    </div>
+
+    <div id="initial-overlay">
+        <h2>Drag and drop a dump bundle to get started.</h2>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@viz-js/viz/lib/viz-standalone.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor/min/vs/loader.js"></script>
+
+    <script>
+        require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor/min/vs' } });
+        require(["vs/editor/editor.main"], () => {
+            this.diffEditor = monaco.editor.createDiffEditor(
+                document.getElementById("diff-container"),
+                {
+                    theme: "vs-dark",
+                    automaticLayout: true,
+                    renderSideBySide: true,
+                    useInlineViewWhenSpaceIsLimited: false,
+                }
+            );
+
+            monaco.languages.register({ id: "distil-ir" });
+            monaco.languages.setMonarchTokensProvider("distil-ir", getIrLangSyntax());
+        });
+
+        if (history.state?.lastFile != null) {
+            loadBundleFile(history.state.lastFile);
+        }
+
+        addEventListener("drop", (ev) => {
+            ev.preventDefault();
+
+            for (let item of ev.dataTransfer.items) {
+                if (item.kind === "file" && item.type === "application/json") {
+                    item.getAsFileSystemHandle().then(this.loadBundleFile);
+                }
+            }
+        });
+        addEventListener("dragover", (ev) => {
+            ev.preventDefault();
+        });
+
+        async function loadBundleFile(fileHandle) {
+            history.replaceState({ lastFile: fileHandle }, "");
+
+            let file = await fileHandle.getFile();
+            let entries = JSON.parse(await file.text());
+
+            let methodSelect = document.createElement("select");
+            for (let method of entries) {
+                let opt = document.createElement("option");
+                opt.innerText = method.name;
+                methodSelect.appendChild(opt);
+            }
+
+            methodSelect.onchange = (ev) => {
+                updateDiffEditor(methodSelect, entries[methodSelect.selectedIndex]);
+            };
+            updateDiffEditor(methodSelect, entries[0]);
+
+            document.querySelector("#initial-overlay")?.remove();
+        }
+        function updateDiffEditor(methodSelector, method) {
+            let listDiv = document.querySelector("#diff-pass-list");
+            listDiv.replaceChildren(methodSelector);
+
+            let activeRow = null;
+
+            for (let i = 1; i < method.passes.length; i++) {
+                let prevSnapshot = method.passes[i - 1];
+                let currSnapshot = method.passes[i];
+                
+                // Code is only recorded when there are changes.
+                // Propagate from prev snapshot when missing.
+                currSnapshot.plainCode ??= prevSnapshot.plainCode;
+
+                let row = document.createElement("div");
+                row.innerText = currSnapshot.passName;
+                row.onclick = () => {
+                    activeRow?.removeAttribute("active");
+                    activeRow = row;
+                    row.setAttribute("active", true);
+
+                    diffEditor.setModel({
+                        original: monaco.editor.createModel(prevSnapshot.plainCode, "distil-ir"),
+                        modified: monaco.editor.createModel(currSnapshot.plainCode, "distil-ir"),
+                    });
+                    
+                    /*Viz.instance().then(function (viz) {
+                        let svg = viz.renderSVGElement(currSnapshot.graphvizCode);
+                        document.getElementById("graphviz-container").replaceChildren(svg);
+                    });*/
+                };
+                if (currSnapshot.plainCode !== prevSnapshot.plainCode) {
+                    row.style.color = "#3a3";
+                }
+
+                listDiv.appendChild(row);
+            }
+        }
+
+        // https://microsoft.github.io/monaco-editor/monarch.html
+        function getIrLangSyntax() {
+            return {
+                // Set defaultToken to invalid to see what you do not tokenize yet
+                // defaultToken: 'invalid',
+
+                opcodes: [
+                    "goto", "switch", "ret", "phi",
+                    "throw", "rethrow",
+                    "try", "catch", "fault", "filter", "finally", "leave", "resume",
+
+                    "call", "callvirt", "newobj",
+                    "conv", "intrinsic", "select",
+
+                    "add", "sub", "mul", "sdiv", "srem", "udiv", "urem", "and", "or", "xor", "shl", "shra", "shrl",
+                    "fadd", "fsub", "fmul", "fdiv", "frem",
+                    "add.ovf", "sub.ovf", "mul.ovf", "uadd.ovf", "usub.ovf", "umul.ovf",
+                    "not", "neg", "fneg",
+
+                    "cmp.eq", "cmp.ne", 
+                    "icmp.slt", "icmp.sgt", "icmp.sle", "icmp.sge", 
+                    "icmp.ult", "icmp.ugt", "icmp.ule", "icmp.uge",
+                    "fcmp.olt", "fcmp.ogt", "fcmp.ole", "fcmp.oge", "fcmp.oeq", "fcmp.one",
+                    "fcmp.ult", "fcmp.ugt", "fcmp.ule", "fcmp.uge", "fcmp.ueq", "fcmp.une",
+
+                    "load", "store",
+                    "arraddr", "fldaddr", "funcaddr", "virtfuncaddr", "lea",
+                    "extractfield",
+                ],
+
+                typeKeywords: [
+                    "void", "bool", "char",
+                    "sbyte", "short", "int", "long",
+                    "byte", "ushort", "uint", "ulong",
+                    "nint", "nuint",
+                    "float", "double",
+                    "string", "object", "this"
+                ],
+
+                operators: [
+                    "=", '->', ':',
+                ],
+
+                // we include these common regular expressions
+                symbols:  /[=><!~?:&|+\-*\/\^%]+/,
+
+                // C# style strings
+                escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
+
+                // The main tokenizer for our languages
+                tokenizer: {
+                    root: [
+                    // identifiers and keywords
+                    [/[A-Za-z_$#@][A-Za-z0-9_\-.`]*/, { cases: { 
+                            '@opcodes': 'keyword',
+                            '@typeKeywords': 'type',
+                            '@default': 'identifier' } }],
+
+                    // whitespace
+                    { include: '@whitespace' },
+
+                    // delimiters and operators
+                    [/[{}()\[\]]/, '@brackets'],
+                    [/[<>](?!@symbols)/, '@brackets'],
+                    [/@symbols/, { cases: { '@operators': 'operator',
+                                            '@default'  : '' } } ],
+
+                    // numbers
+                    [/\d*\.\d+([eE][\-+]?\d+)?/, 'number.float'],
+                    [/0[xX][0-9a-fA-F]+/, 'number.hex'],
+                    [/\d+/, 'number'],
+
+                    // delimiter: after number because of .\d floats
+                    [/[;,.]/, 'delimiter'],
+
+                    // strings
+                    [/"([^"\\]|\\.)*$/, 'string.invalid' ],  // non-teminated string
+                    [/"/,  { token: 'string.quote', bracket: '@open', next: '@string' } ],
+
+                    // characters
+                    [/'[^\\']'/, 'string'],
+                    [/(')(@escapes)(')/, ['string','string.escape','string']],
+                    [/'/, 'string.invalid']
+                    ],
+
+                    comment: [
+                    [/[^\/*]+/, 'comment' ],
+                    [/\/\*/,    'comment', '@push' ],    // nested comment
+                    ["\\*/",    'comment', '@pop'  ],
+                    [/[\/*]/,   'comment' ]
+                    ],
+
+                    string: [
+                    [/[^\\"]+/,  'string'],
+                    [/@escapes/, 'string.escape'],
+                    [/\\./,      'string.escape.invalid'],
+                    [/"/,        { token: 'string.quote', bracket: '@close', next: '@pop' } ]
+                    ],
+
+                    whitespace: [
+                    [/[ \t\r\n]+/, 'white'],
+                    [/\/\*/,       'comment', '@comment' ],
+                    [/\/\/.*$/,    'comment'],
+                    ],
+                },
+            };
+        }
+    </script>
+</body>
+
+<style>
+    body {
+        font-family: 'Segoe UI', Helvetica, sans-serif;
+    }
+    select {
+        padding: 2px;
+        width: 100%;
+    }
+
+    .flex-row-fullsize {
+        display: flex;
+        flex-direction: row;
+        width: 100%; height: 100%;
+        gap: 2px;
+    }
+
+    .pass-list {
+        width: 250px;
+        border: 1px solid #aaa;
+        overflow-y: auto;
+    }
+
+    .pass-list>div {
+        border: 1px solid #aaa;
+        background-color: #ddd;
+        user-select: none;
+        padding: 2px 4px;
+    }
+
+    .pass-list>div:hover,
+    .pass-list>div[active=true] {
+        background-color: #fff;
+    }
+
+    #codedump-container {
+        display: flex;
+        flex-direction: column;
+        width: 100%; height: 100%;
+    }
+    #diff-container {
+        width: 100%; height: 100%;
+    }
+    #graphviz-container {
+        width: 100%; height: 70%;
+        overflow: hidden;
+        display: none; /* TODO */
+    }
+
+    #initial-overlay {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #0005;
+        text-align: center;
+    }
+
+    #initial-overlay>h2 {
+        color: #fff;
+        margin-top: 150px;
+        text-shadow: #000 0px 0px 3px;
+    }
+</style>
+
+
+</html>

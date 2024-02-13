@@ -8,8 +8,8 @@ public class IRCloner
     readonly RefSet<PendingValue> _pendingValues = new();
     readonly InstCloner _instCloner;
     readonly List<BasicBlock> _blocks = new();
-    readonly GenericContext _genericContext;
-    readonly MethodBody _destMethod;
+    protected readonly GenericContext _genericContext;
+    protected readonly MethodBody _destMethod;
 
     public IRCloner(MethodBody method, GenericContext genericContext = default)
     {
@@ -97,7 +97,7 @@ public class IRCloner
     }
 
     /// <summary> Clones or folds the given instruction. </summary>
-    public Value Clone(Instruction inst)
+    public virtual Value Clone(Instruction inst)
     {
         var clonedInst = _instCloner.Clone(inst);
 

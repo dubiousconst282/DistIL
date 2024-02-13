@@ -4,6 +4,7 @@ using System.Reflection;
 using MethodBody = IR.MethodBody;
 
 using DistIL.IR.Utils;
+using DistIL.Analysis;
 
 public class InlineMethods : IMethodPass
 {
@@ -19,97 +20,94 @@ public class InlineMethods : IMethodPass
 
     public MethodPassResult Run(MethodTransformContext ctx)
     {
-        // TODO: support for recursive inlines (without heuristics the code size will certainly blow up)
-        var inlineableCalls = new List<CallInst>();
+        // Not sure why, but using a stack instead of queue will lead to some removed calls with `Block == null`.
+        // A future improvement would be to use a priority queue to inline more benefitial calls first, so budget is more well spent.
+        var worklist = new Queue<CallInst>();
 
+        // Find initial calls
         foreach (var inst in ctx.Method.Instructions()) {
-            if (inst is CallInst call && CheckAndMakeInlineable(ctx.Method.Definition, call)) {
-                inlineableCalls.Add(call);
+            if (inst is CallInst call) {
+                worklist.Enqueue(call);
             }
         }
 
-        foreach (var call in inlineableCalls) {
-            Inline(call);
+        var advisor = ctx.Compilation.GetAnalysis<InliningAdvisor>();
+        var ownMetrics = advisor.GetMetrics(ctx.Method).Metrics;
+
+        // Budget should be less than caller cost to avoid code duplication (eg. in forwarding methods).
+        int budget = _opts.InitialBudget + (int)(ownMetrics == null ? 0 : ownMetrics.BaseCost * _opts.BudgetFactor);
+        int numChanges = 0;
+
+        // Recursive inline
+        while (worklist.TryDequeue(out var call) && budget > 0) {
+            var target = ResolveTarget(ctx, advisor, call);
+            if (target == null) continue;
+
+            int cost = advisor.EvaluateInliningCost(target.Body!, call.Args);
+            if (cost > _opts.CostThreshold || cost > budget) continue;
+
+            budget -= Math.Max(cost, -_opts.NegativeCostLimit);
+
+            ctx.Logger.Trace($"Inlining '{target}' into '{ctx.Method}'. RemBudget={budget} Cost={cost}");
+
+            var result = Inline(call, (MethodDefOrSpec)call.Method, call.Args, ctx.Compilation, onNewCall: worklist.Enqueue);
+
+            if (result != null) {
+                call.ReplaceUses(result);
+            }
+            call.Remove();
+            
+            numChanges++;
         }
 
-        return inlineableCalls.Count > 0 ? MethodInvalidations.Everything : 0;
+        if (numChanges > 0) {
+            advisor.InvalidateMetrics(ctx.Method);
+            return MethodInvalidations.Everything;
+        }
+        return MethodInvalidations.None;
     }
 
-    private bool CheckAndMakeInlineable(MethodDef parent, CallInst call)
+    private static MethodDef? ResolveTarget(MethodTransformContext ctx, InliningAdvisor advisor, CallInst call)
     {
         // Must be a non-recursive MethodDef
+        var parent = ctx.Method.Definition;
+
         if (call.Method is not MethodDefOrSpec { Definition: var target } || target == parent) {
-            return false;
+            return null;
         }
 
-        // Not too long
-        int maxInstrs = target.ImplAttribs.HasFlag(MethodImplAttributes.AggressiveInlining) 
-            ? _opts.MaxCandidateInstrsAggressive 
-            : _opts.MaxCandidateInstrs;
-        
-        if (target.ImplAttribs.HasFlag(MethodImplAttributes.NoInlining) || target.ILBody?.Instructions.Count > maxInstrs) {
-            return false;
+        // TODO: support for static virtuals
+        if (target.Attribs.HasFlag(MethodAttributes.Static | MethodAttributes.Virtual)) {
+            return null;
         }
 
         // Known virtual target
         if (call.IsVirtual && target.Attribs.HasFlag(MethodAttributes.Virtual) && !target.Attribs.HasFlag(MethodAttributes.Final)) {
             if (TypeUtils.ResolveVirtualMethod(call.Method, call.Args[0]) is not MethodDefOrSpec actualTarget || actualTarget == parent) {
-                return false;
+                return null;
             }
             call.Method = actualTarget;
             target = actualTarget.Definition;
         }
 
+        if (advisor.EarlyCheck(target) != InlineRejectReason.Accepted) {
+            return null;
+        }
+
         // If there's no body after devirt, there's no way we can inline this method.
-        if (target.Body == null) {
-            return false;
+        if (target.Body == null && !advisor.ImportBodyForInlining(target)) {
+            return null;
         }
-
-        // Not abstract nor pinvoke decl
-        if (target.Attribs.HasFlag(MethodAttributes.Abstract) || target.Attribs.HasFlag(MethodAttributes.PinvokeImpl)) {
-            return false;
-        }
-
-        // TODO: support for static virtuals
-        if (target.Attribs.HasFlag(MethodAttributes.Static | MethodAttributes.Virtual)) {
-            return false;
-        }
-
-        // Not special
-        // For the time being we won't bother inlining async methods because there's
-        // not much benefit for doing so, and it might mess up stack traces.
-        if (target.HasCustomAttrib("System.Runtime.CompilerServices", "IntrinsicAttribute") ||
-            target.HasCustomAttrib("System.Runtime.CompilerServices", "AsyncStateMachine")
-        ) {
-            return false;
-        }
-
-        return true;
+        return target;
     }
 
-    /// <summary> Unconditionally inlines the given call instruction into its parent method, unless the target method body is unavailable. </summary>
-    public static bool Inline(CallInst call)
-    {
-        if (call.Method is not MethodDefOrSpec { Definition.Body: MethodBody } target) {
-            return false;
-        }
-        var result = Inline(call, target, call.Args);
-
-        if (result != null) {
-            call.ReplaceWith(result);
-        } else {
-            call.Remove();
-        }
-        return true;
-    }
-
-    public static Value? Inline(Instruction call, MethodDefOrSpec target, ReadOnlySpan<Value> args)
+    public static Value? Inline(Instruction call, MethodDefOrSpec target, ReadOnlySpan<Value> args, Compilation comp, Action<CallInst>? onNewCall = null)
     {
         var callerBody = call.Block.Method;
         var targetBody = Ensure.NotNull(target.Definition.Body);
         Ensure.That(callerBody != targetBody, "Cannot inline method into itself");
 
-        var cloner = new IRCloner(callerBody, new GenericContext(target));
+        var cloner = new InlinerIRCloner(callerBody, target, comp, onNewCall);
 
         // Add argument mappings
         for (int i = 0; i < targetBody.Args.Length; i++) {
@@ -173,14 +171,13 @@ public class InlineMethods : IMethodPass
         var startBlock = call.Block;
         var endBlock = startBlock.Split(call, branchTo: entryBlock);
 
-        var resultType = call.ResultType;
         var results = new PhiArg[returningBlocks.Count];
         int resultIdx = 0;
 
         // Rewrite exit blocks to jump into endBlock
         foreach (var block in returningBlocks) {
             if (block.Last is ReturnInst { HasValue: true } ret) {
-                var result = StoreInst.Coerce(resultType, ret.Value, insertBefore: ret);
+                var result = StoreInst.Coerce(call.ResultType, ret.Value, insertBefore: ret);
                 results[resultIdx++] = (block, result);
             }
             block.SetBranch(endBlock);
@@ -188,20 +185,58 @@ public class InlineMethods : IMethodPass
 
         // Return the generated value
         if (resultIdx >= 2) {
-            return endBlock.InsertPhi(new PhiInst(resultType, results));
+            return endBlock.InsertPhi(new PhiInst(call.ResultType, results));
         }
         return results.FirstOrDefault().Value;
+    }
+
+    sealed class InlinerIRCloner(MethodBody caller, MethodDefOrSpec target, Compilation comp, Action<CallInst>? onNewCall)
+        : IRCloner(caller, new GenericContext(target))
+    {
+        public override Value Clone(Instruction inst)
+        {
+            var clonedVal = base.Clone(inst);
+
+            // Ensure that references defined in other modules are accessible
+            if (target.Module != _destMethod.Definition.Module) {
+                var entityRef = clonedVal switch {
+                    CallInst { Method: MethodDefOrSpec target } => target,
+                    NewObjInst { Constructor: MethodDefOrSpec ctor } => ctor,
+                    FieldAddrInst { Field: FieldDefOrSpec field } => field,
+                    ExtractFieldInst { Field: FieldDefOrSpec field } => field,
+                    CilIntrinsic.NewArray { ElemType: TypeDefOrSpec type } => type,
+                    CilIntrinsic.CastClass { DestType: TypeDefOrSpec type } => type,
+                    CilIntrinsic.UnboxObj { DestType: TypeDefOrSpec type } => type,
+                    CilIntrinsic.UnboxRef { DestType: TypeDefOrSpec type } => type,
+                    CilIntrinsic { StaticArgs: [ModuleEntity entity] } => entity,
+                    _ => null
+                };
+                if (entityRef != null) {
+                    comp.EnsureMembersAccessible(entityRef.Module);
+                }
+            }
+            if (onNewCall != null && clonedVal is CallInst { Method: MethodDefOrSpec method } call) {
+                // Ignore calls to recursive methods to prevent infinite loop.
+                if (method.Definition != target.Definition) {
+                    onNewCall.Invoke(call);
+                }
+            }
+            return clonedVal;
+        }
     }
 
     public class Options
     {
         /// <summary> Inline candidate instruction limit. </summary>
-        public int MaxCandidateInstrs { get; init; } = 32;
+        public int CostThreshold { get; init; } = 250;
 
-        /// <summary> Inline candidate instruction limit, for AggressiveInlining. </summary>
-        public int MaxCandidateInstrsAggressive { get; init; } = 4096;
+        /// <summary> Initial inlining budget. </summary>
+        public int InitialBudget { get; init; } = 80;
 
-        // /// <summary> If true, allows calls to methods from different assemblies to be inlined. </summary>
-        // public bool AllowCrossAssemblyCalls { get; init; } = false;
+        /// <summary> A factor used to derive inlining budget from method's own cost. </summary>
+        public double BudgetFactor { get; init; } = 0.5;
+
+        /// <summary> For inlinees with negative cost, sets the limit to increase inlining budget. </summary>
+        public int NegativeCostLimit { get; init; } = 50;
     }
 }

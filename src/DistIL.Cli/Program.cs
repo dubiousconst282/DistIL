@@ -60,7 +60,7 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
         .Apply<ExpandLinq>()
         .Apply<SimplifyInsts>(); // lambdas and devirtualization
 
-    manager.AddPasses(applyIndependently: true) // this is so that e.g. all callees are in SSA before inlining.
+    manager.AddPasses(applyIndependently: true) // this is so that all callees are in SSA before inlining.
         .Apply<InlineMethods>();
 
     var simplifySeg = manager.AddPasses()

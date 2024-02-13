@@ -1,13 +1,14 @@
 namespace DistIL.Analysis;
 
-using System;
-
 public class GlobalFunctionEffects : IGlobalAnalysis
 {
     readonly Dictionary<MethodDef, FunctionEffects> _cache = new();
+    readonly Compilation _comp;
+
+    private GlobalFunctionEffects(Compilation comp) => _comp = comp;
 
     static IGlobalAnalysis IGlobalAnalysis.Create(Compilation comp)
-        => new GlobalFunctionEffects();
+        => new GlobalFunctionEffects(comp);
     
     public FunctionEffects GetEffects(MethodDesc method)
     {
@@ -30,10 +31,10 @@ public class GlobalFunctionEffects : IGlobalAnalysis
         if (method.DeclaringType.IsCorelibType() && GetEffectsFromCorelibMethod(method) is { } effects) {
             return effects;
         }
-        if (method.Body != null) {
+        if (method.Body != null && (method.Module == _comp.Module || _comp.Settings.AllowCrossAssemblyIPO)) {
             return ComputeEffectsFromBody(method.Body);
         }
-        // We don't can't deduce anything about this method, assume the worst.
+        // We can't deduce anything about this method, assume the worst.
         return FunctionEffects.Unknown;
     }
 
@@ -55,10 +56,6 @@ public class GlobalFunctionEffects : IGlobalAnalysis
                         } else {
                             traits |= FunctionTraits.Recursive;
                         }
-                        break;
-                    }
-                    case CilIntrinsic.Alloca: {
-                        traits |= FunctionTraits.HasStackAllocs | FunctionTraits.MayThrow;
                         break;
                     }
                     default: {
@@ -213,7 +210,6 @@ public enum FunctionTraits
 
     MayThrow        = 1 << 0,
     Recursive       = 1 << 1,
-    HasStackAllocs  = 1 << 2,
     DoesNotReturn   = 1 << 3, // e.g. ThrowHelper
 
 }

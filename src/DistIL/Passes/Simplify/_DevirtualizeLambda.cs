@@ -56,7 +56,7 @@ partial class SimplifyInsts
 
         static bool DevirtWithCtorArgs(CallInst call, NewObjInst alloc)
         {
-            if (alloc is not { Args: [var instanceObj, FuncAddrInst { Method: var method }] }) return false;
+            if (alloc is not { Args: [var instanceObj, FuncAddrInst { Method: var method } addr] }) return false;
             if (call.NumArgs - (method.IsStatic ? 1 : 0) != method.ParamSig.Count) return false;
 
             if (instanceObj is ConstNull) {
@@ -73,6 +73,7 @@ partial class SimplifyInsts
                     instanceObj = newLoad;
                 }
                 call.SetArg(0, instanceObj);
+                call.IsVirtual = addr.IsVirtual;
                 return true;
             }
             return false;

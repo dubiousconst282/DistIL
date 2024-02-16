@@ -28,6 +28,7 @@ public class DiscreteStack<T> where T : class
     public bool TryPop(out T item) => _stack.TryPop(out item);
 
     public bool WasPushed(T item) => _pushed.Contains(item);
+    public void UnmarkPushed(T item) => _pushed.Remove(item);
 
     public void Clear(bool rememberPushed = false)
     {

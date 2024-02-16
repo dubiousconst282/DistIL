@@ -108,3 +108,33 @@ BB_14: //preds: BB_09 BB_01
 // CHECK: load
 // CHECK: ret
 }
+
+
+public static Self::GVN_Memory_Store_2_Loop(#ptr: int*, #x: int) -> int {
+BB_01:
+  store #ptr, 0
+  goto BB_Header
+BB_Header:
+  idx = phi [BB_01: 0], [BB_Body: idx.1] -> int
+  hasNext = icmp.slt idx, 10 -> bool
+  goto hasNext ? BB_Body : BB_Exit
+BB_Body:
+  r10 = load #ptr -> int
+  r11 = add r10, 1 -> int
+  store #ptr, r11
+  idx.1 = add idx, 1 -> int
+  goto BB_Header
+BB_Exit:
+  res = load #ptr -> int
+  ret res
+// CHECK: GVN_Memory_Store_2_Loop
+// CHECK: icmp.slt
+// CHECK-NEXT: goto
+// CHECK: BB_Body:
+// CHECK-NEXT: load
+// CHECK-NEXT: add
+// CHECK-NEXT: store
+// CHECK: BB_Exit:
+// CHECK-NEXT: load
+// CHECK: ret
+}

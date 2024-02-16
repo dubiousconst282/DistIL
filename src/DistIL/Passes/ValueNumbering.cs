@@ -85,9 +85,12 @@ public class ValueNumbering : IMethodPass
             // TODO: investigate using MemorySSA for fast avail-dep checks: https://llvm.org/docs/MemorySSA.html
             var worklist = new DiscreteStack<BasicBlock>(user.Block);
 
+            // Make the worklist forget the user block was pushed so the loop can check
+            // loop backedges when visiting predecessors.
+            worklist.UnmarkPushed(user.Block);
+
             while (worklist.TryPop(out var block)) {
-                // `user.Prev` can't possibly be null if `user.Block == def.Block`.
-                var inst = block == user.Block ? user.Prev! : block.Last;
+                var inst = block == user.Block && worklist.DiscreteCount == 0 ? user.Prev! : block.Last;
                 var firstInst = block == def.Block ? def : null;
 
                 for (; inst != firstInst; inst = inst.Prev!) {

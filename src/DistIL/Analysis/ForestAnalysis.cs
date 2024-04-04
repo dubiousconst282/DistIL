@@ -121,13 +121,14 @@ public class ForestAnalysis : IMethodAnalysis
         }
     }
 
+    // Some instructions are free or cheap enough to make rematerialization preferable to
+    // spilling to local vars. RyuJIT doesn't do this as of .NET 8, so at least for instructions
+    // with embedded addressing, this should help ILP and avoid increasing register pressure.
     private static bool IsCheaperToRematerialize(Instruction inst)
     {
-        // Prefer to rematerialize array accesses and LEAs, otherwise we could
-        // cause dep bottlenecks by hindering ILP/OOOE.
         bool mayRematerialize =
-                (inst is FieldAddrInst or ArrayAddrInst or PtrOffsetInst && inst.NumUses <= 3) ||
-                (inst is ExtractFieldInst or CilIntrinsic.ArrayLen or CilIntrinsic.SizeOf);
+                (inst is ArrayAddrInst or PtrOffsetInst && inst.NumUses <= 3) ||
+                (inst is FieldAddrInst or ExtractFieldInst or CilIntrinsic.ArrayLen or CilIntrinsic.SizeOf);
 
         return mayRematerialize && !inst.Users().Any(u => u is PhiInst); // codegen doesn't support defs inlined into phis, they *must* be rooted
     }

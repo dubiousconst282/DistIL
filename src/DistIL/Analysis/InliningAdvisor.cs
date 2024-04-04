@@ -97,7 +97,7 @@ public class InliningAdvisor : IGlobalAnalysis
             var declType = method.DeclaringType;
             if (declType.IsNested) declType = declType.DeclaringType;
 
-            return declType.Namespace != "System.Collections.Generic" ? 0 : 2;
+            return declType.Namespace != "System.Collections.Generic" ? 2 : 0;
         }
         return 0;
     }

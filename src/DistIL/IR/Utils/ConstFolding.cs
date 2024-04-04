@@ -163,6 +163,15 @@ public class ConstFolding
             case ({ ResultType.Kind: TypeKind.Bool }, ConstInt { Value: 0 }, CompareOp.Ne): {
                 return left;
             }
+            // x == x, x != x
+            case (_, _, CompareOp.Eq or CompareOp.Ne) when left.Equals(right): {
+                return ConstInt.Create(PrimType.Bool, op == CompareOp.Eq ? 1 : 0);
+            }
+            // (x != 0/null) when x is trivially known to be non-null
+            case (_, ConstNull or ConstInt { Value: 0 }, CompareOp.Eq or CompareOp.Ne): {
+                r = FoldCondition(left) ^ (op == CompareOp.Eq);
+                break;
+            }
         }
         return r == null ? null : ConstInt.Create(PrimType.Bool, r.Value ? 1 : 0);
     }

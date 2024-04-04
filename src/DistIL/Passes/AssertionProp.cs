@@ -1,6 +1,7 @@
 namespace DistIL.Passes;
 
 using DistIL.Analysis;
+using DistIL.IR.Utils;
 
 using AssertFragment = (CompareOp Op, Value Right, BasicBlock ActiveBlock);
 
@@ -109,10 +110,6 @@ public class AssertionProp : IMethodPass
 
                     break;
                 }
-                case NewObjInst: {
-                    Imply(CompareOp.Ne, inst, ConstNull.Create());
-                    break;
-                }
                 case CompareInst instC: {
                     if (Evaluate(instC.Op, instC.Left, instC.Right, block) is bool cond) {
                         instC.ReplaceUses(ConstInt.CreateI(cond ? 1 : 0));
@@ -162,6 +159,9 @@ public class AssertionProp : IMethodPass
         }
         if (result == null && _activeAsserts.TryGetValue(right, out asserts)) {
             result = EvaluateRelatedAsserts(asserts, (op.GetSwapped(), left, block));
+        }
+        if (result == null && ConstFolding.FoldCompare(op, left, right) is ConstInt cons) {
+            result = cons.Value != 0;
         }
         return result;
     }

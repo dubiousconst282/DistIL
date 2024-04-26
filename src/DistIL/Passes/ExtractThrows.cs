@@ -9,6 +9,9 @@ public class ExtractThrows : IMethodPass
 
     public MethodPassResult Run(MethodTransformContext ctx)
     {
+        if (ctx.Method.NumBlocks < 2 || !HasThrowsAndMayReturn(ctx.Method)) {
+            return MethodInvalidations.None;
+        }
         bool changed = false;
 
         foreach (var block in ctx.Method) {
@@ -31,6 +34,18 @@ public class ExtractThrows : IMethodPass
             }
         }
         return changed ? MethodInvalidations.DataFlow : MethodInvalidations.None;
+    }
+
+    private static bool HasThrowsAndMayReturn(IR.MethodBody method)
+    {
+        bool hasReturns = false;
+        bool hasThrows = false;
+
+        foreach (var block in method) {
+            hasReturns |= block.Last is ReturnInst;
+            hasThrows |= block.Last is ThrowInst;
+        }
+        return hasThrows && hasReturns;
     }
 
     private (MethodDef Helper, int MsgId) FindSharedThrowHelper(Compilation comp, MethodDesc ctor, string? msg)

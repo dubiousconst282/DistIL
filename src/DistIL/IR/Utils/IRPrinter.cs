@@ -57,6 +57,9 @@ public class IRPrinter
                     port = succ == br.Then ? "sw" : "se";
                 } else if (block.Last is LeaveInst) {
                     style.Color = "red";
+                } else if (block.Last is ResumeInst) {
+                    style.Color = "gray";
+                    style.Dashed = true;
                 }
                 if (block.Guards().Any(g => g.HandlerBlock == succ || g.FilterBlock == succ)) {
                     port = "e";

@@ -107,11 +107,29 @@ public class IRVerifier
                 if (region == regionAnalysis.Root) {
                     Error(block, "Cannot leave or resume from root region");
                 } else if (block.Last is ResumeInst resume) {
-                    bool isValid = region.StartBlock.Users().OfType<GuardInst>().FirstOrDefault() is { } guard &&
-                        (resume.IsFromFilter
-                            ? (guard.FilterBlock == region.StartBlock)
-                            : guard.Kind is GuardKind.Finally or GuardKind.Fault);
+                    var guard = region.StartBlock.Users().OfType<GuardInst>().FirstOrDefault();
+
+                    if (guard == null) {
+                        Error(block, "Missing guard for filter or finally region");
+                        break;
+                    }
+
+                    bool isValid = 
+                        resume.IsFromFilter
+                            ? guard.FilterBlock == region.StartBlock
+                            : guard.Kind is GuardKind.Finally or GuardKind.Fault;
                     Check(isValid, block, "ResumeInst should not be used outside filter, finally, or fault handlers");
+
+                    var protectedRegion = regionAnalysis.GetBlockRegion(guard.Block);
+                    var succBlocks = new HashSet<BasicBlock>();
+                    
+                    foreach (var exitBlock in protectedRegion.GetExitBlocks()) {
+                        Debug.Assert(exitBlock.Last is LeaveInst);
+                        succBlocks.Add(exitBlock.Succs.First());
+                    }
+                    succBlocks.SymmetricExceptWith(resume.GetExitTargets());
+
+                    Check(succBlocks.Count == 0, resume, "ResumeInst targets must be consistent with exits in sibling protected region");
                 }
                 break;
             }

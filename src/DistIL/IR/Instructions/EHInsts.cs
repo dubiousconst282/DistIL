@@ -77,16 +77,41 @@ public class ResumeInst : Instruction
             ReplaceOperand(0, value);
         }
     }
+
     [MemberNotNullWhen(true, nameof(FilterResult))]
-    public bool IsFromFilter => Operands.Length > 0;
+    public bool IsFromFilter => Operands is [Value and not BasicBlock, ..];
 
     public override string InstName => "resume";
     public override bool IsBranch => true;
 
-    public ResumeInst(Value? filterResult = null)
-        : base(filterResult == null ? [] : [filterResult]) { }
+    public ResumeInst(IEnumerable<BasicBlock> exitTargets, Value? filterResult = null)
+        : base(filterResult == null ? exitTargets.Distinct().ToArray() : [filterResult, ..exitTargets]) { }
+
+    /// <summary> Unchecked cloning constructor. </summary>
+    public ResumeInst(int _, Value[] operands)
+        : base(operands) { }
 
     public override void Accept(InstVisitor visitor) => visitor.Visit(this);
+
+    public void SetExitTargets(IReadOnlySet<BasicBlock> targets)
+    {
+        int startIdx = IsFromFilter ? 1 : 0;
+        int newCount = targets.Count + startIdx;
+
+        if (newCount > _operands.Length) {
+            startIdx = GrowOperands(newCount - _operands.Length);
+        } else if (newCount < _operands.Length) {
+            RemoveOperands(newCount, _operands.Length - newCount);
+        }
+
+        foreach (var target in targets) {
+            _operands[startIdx] = target;
+            target.AddUse(this, startIdx);
+            startIdx++;
+        }
+    }
+
+    public IEnumerable<BasicBlock> GetExitTargets() => _operands.Skip(IsFromFilter ? 1 : 0).Cast<BasicBlock>();
 }
 
 /// <summary> Throws or rethrows an exception. </summary>

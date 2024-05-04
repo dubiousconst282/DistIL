@@ -10,6 +10,9 @@ internal class RegionNode
     public RegionNode? Parent;
     public List<RegionNode> Children = new();
 
+    public HashSet<BasicBlock> ExitTargets = new();
+    public Dictionary<BasicBlock, BasicBlock>? LeavingBlocks; // Target -> Leave. May form a chain through multiple regions at a time.
+
     public RegionNode FindEnclosing(int start, int end)
     {
         foreach (var child in Children) {

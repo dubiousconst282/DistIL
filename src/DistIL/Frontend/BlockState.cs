@@ -4,7 +4,7 @@ internal class BlockState
 {
     readonly ILImporter _importer;
     readonly MethodBody _body;
-    readonly int _startOffset;
+    public readonly int StartOffset;
 
     private ModuleDef _mod => _body.Definition.Module;
 
@@ -24,7 +24,7 @@ internal class BlockState
     {
         _importer = importer;
         _body = importer._body;
-        _startOffset = startOffset;
+        this.StartOffset = startOffset;
         
         Block = _body.CreateBlock();
         EntryBlock = Block;
@@ -800,25 +800,36 @@ internal class BlockState
 
     private void ImportLeave(int targetOffset)
     {
-        var chainBlock = _importer.GetBlock(targetOffset).Block;
-        var currRegion = _importer._regionTree!.FindEnclosing(_startOffset).Parent!;
-        var parentRegion = _importer._regionTree!.FindEnclosing(targetOffset);
+        var currRegion = _importer._regionTree!.FindEnclosing(StartOffset);
+        var destRegion = _importer._regionTree!.FindEnclosing(targetOffset);
+        var targetBlock = _importer.GetBlock(targetOffset).Block;
+
+        currRegion.ExitTargets.Add(targetBlock);
 
         // Create a chain of blocks leaving all nested regions until target (in reverse order)
-        while (currRegion != parentRegion) {
-            // TODO: avoid creating new blocks (can't use preds as they may be in another region)
-            var nextBlock = _body.CreateBlock(insertAfter: Block);
-            nextBlock.InsertLast(new LeaveInst(chainBlock!));
-
-            chainBlock = nextBlock;
+        while (currRegion.Parent! != destRegion) {
             currRegion = currRegion.Parent!;
+
+            currRegion.LeavingBlocks ??= new();
+
+            if (currRegion.LeavingBlocks.TryGetValue(targetBlock, out var exitBlock)) {
+                targetBlock = exitBlock;
+                break;
+            }
+            var nextBlock = _body.CreateBlock(insertAfter: Block);
+            nextBlock.InsertLast(new LeaveInst(targetBlock!));
+
+            currRegion.LeavingBlocks.Add(targetBlock, nextBlock);
+            targetBlock = nextBlock;
         }
-        TerminateBlock(new LeaveInst(chainBlock), clearStack: true);
+        TerminateBlock(new LeaveInst(targetBlock), clearStack: true);
     }
     private void ImportResume(bool isFromFilter)
     {
         var filterResult = isFromFilter ? Pop() : null;
-        TerminateBlock(new ResumeInst(filterResult), clearStack: true);
+        TerminateBlock(new ResumeInst([], filterResult), clearStack: true);
+        
+        _importer._blocksEndingWithEhResume.Add(this);
     }
 
     private void ImportThrow(bool isRethrow)

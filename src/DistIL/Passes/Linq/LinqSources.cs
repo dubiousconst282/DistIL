@@ -127,7 +127,7 @@ internal class EnumeratorSource : LinqSourceNode
             var isNotDisposable = builder.CreateEq(enumer, ConstNull.Create());
             builder.Fork(isNotDisposable, (elseBuilder, newBlock) => elseBuilder.CreateCallVirt(disposeFn, enumer));
         }
-        builder.Emit(new ResumeInst());
+        builder.Emit(new ResumeInst([succBlock]));
 
         loop.Header.Block.InsertFirst(new GuardInst(GuardKind.Finally, finallyBlock));
     }

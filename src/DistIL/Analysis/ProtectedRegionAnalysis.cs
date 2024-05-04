@@ -33,6 +33,9 @@ public class ProtectedRegionAnalysis : IMethodAnalysis
             }
             region.Blocks.Add(block);
 
+            // Don't need to visit resume edges because they only exist only for consistency.
+            if (block.Last is ResumeInst) continue;
+
             // Add succs to worklist
             var succRegion = block.Last is LeaveInst ? region.Parent! : region;
             foreach (var succ in block.Succs) {

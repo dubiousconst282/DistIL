@@ -13,6 +13,7 @@ public class ILImporter
     internal readonly Value?[] _varSlots;
 
     readonly Dictionary<int, BlockState> _blocks = new();
+    internal List<BlockState> _blocksEndingWithEhResume = new();
 
     private ILImporter(MethodDef method)
     {
@@ -44,6 +45,9 @@ public class ILImporter
         CreateBlocks(leaders);
         CreateGuards(ehRegions);
         ImportBlocks(code, leaders);
+
+        AddFinallyResumeEdges(ehRegions);
+
         return _body;
     }
 
@@ -151,6 +155,21 @@ public class ILImporter
             int endIndex = FindIndex(code, endOffset);
             block.ImportCode(code[startIndex..endIndex]);
             startIndex = endIndex;
+        }
+    }
+
+    private void AddFinallyResumeEdges(ExceptionClause[] clauses)
+    {
+        foreach (var block in _blocksEndingWithEhResume) {
+            var parentClause = clauses.First(c => {
+                return c.Kind == ExceptionRegionKind.Filter 
+                    ? block.StartOffset >= c.FilterStart && block.StartOffset < c.FilterEnd 
+                    : block.StartOffset >= c.HandlerStart && block.StartOffset < c.HandlerEnd;
+            });
+            var protectedNode = _regionTree!.FindEnclosing(parentClause.TryStart);
+
+            var resume = (ResumeInst)block.Block.Last;
+            resume.SetExitTargets(protectedNode.ExitTargets);
         }
     }
 

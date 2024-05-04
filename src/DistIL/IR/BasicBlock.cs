@@ -317,7 +317,7 @@ public class BasicBlock : TrackedValue
     }
 
     private static bool IsBranchWithSuccEdges(Instruction? inst)
-        => inst is BranchInst or SwitchInst or LeaveInst;
+        => inst is BranchInst or SwitchInst or LeaveInst or ResumeInst;
 
     // Enumerating block users (ignoring phis) will lead directly to predecessors.
     // GuardInst`s will not yield duplicates because handler blocks can only have one predecessor guard.
@@ -362,8 +362,9 @@ public class BasicBlock : TrackedValue
                 //  Switch: [value, targetBlock0, targetBlock1, ...]  (targets are never duplicated)
                 //  Guard:  [handlerBlock, filterBlock?]
                 //  Leave:  [targetBlock]
+                //  Resume: [filterResult?, targetBlock0, targetBlock1, ...]
                 var opers = _currInst.Operands;
-                _operIdx = opers.Length >= 2 && _currInst is not GuardInst ? 1 : 0;
+                _operIdx = opers.Length >= 2 && _currInst is not (GuardInst or ResumeInst { IsFromFilter: false }) ? 1 : 0;
             } else {
                 _currInst = block.First as GuardInst;
                 Ensure.That(block.Last is not GuardInst); // prevents an infinite loop in MoveNext()

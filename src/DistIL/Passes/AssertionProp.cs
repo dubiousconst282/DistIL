@@ -161,7 +161,8 @@ public class AssertionProp : IMethodPass
             result = EvaluateRelatedAsserts(asserts, (op.GetSwapped(), left, block));
         }
         if (result == null && ConstFolding.FoldCompare(op, left, right) is ConstInt cons) {
-            result = cons.Value != 0;
+            // FIXME: broken
+            //result = cons.Value != 0;
         }
         return result;
     }

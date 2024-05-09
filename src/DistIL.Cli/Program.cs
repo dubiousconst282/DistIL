@@ -77,14 +77,15 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
 
     manager.AddPasses()
         .Apply<ValueNumbering>()
-        .Apply<AssertionProp>()
+        // FIXME: broken
+        // .Apply<AssertionProp>()
         .Apply<PresizeLists>()
         .Apply<LoopStrengthReduction>()
         .IfChanged(simplifySeg);
 
     manager.AddPasses()
         .Apply<LoopVectorizer>()
-        .Apply<ExtractThrows>()
+       // .Apply<ExtractThrows>()
         .IfChanged(simplifySeg);
 
     if (comp.Logger.IsEnabled(LogLevel.Debug)) {

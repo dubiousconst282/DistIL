@@ -11,6 +11,7 @@ public class ValueNumbering : IMethodPass
             DomTree = ctx.GetAnalysis<DominatorTree>(),
             AliasAnalysis = ctx.GetAnalysis<AliasAnalysis>(),
             FuncInfo = ctx.Compilation.GetAnalysis<GlobalFunctionEffects>(),
+            RegionAnalysis = ctx.GetAnalysis<ProtectedRegionAnalysis>(),
         };
         bool madeChanges = false;
 
@@ -36,6 +37,7 @@ public class ValueNumbering : IMethodPass
         public required DominatorTree DomTree;
         public required AliasAnalysis AliasAnalysis;
         public required GlobalFunctionEffects FuncInfo;
+        public required ProtectedRegionAnalysis RegionAnalysis;
 
         public bool Process(Instruction inst)
         {
@@ -69,6 +71,13 @@ public class ValueNumbering : IMethodPass
         {
             // Trivial reject
             if (!DomTree.Dominates(def.Block, user.Block)) return false;
+
+            // Don't propagate values across different regions. #33
+            // This check is a bit conservative, there are cases where
+            // it is safe to propagate values into child regions.
+            var defRegion = RegionAnalysis.GetBlockRegion(def.Block);
+            var useRegion = RegionAnalysis.GetBlockRegion(user.Block);
+            if (defRegion != useRegion) return false;
 
             // Trivial accept instructions that don't access memory or are pure
             if (!(def is MemoryInst or CallInst)) return true;

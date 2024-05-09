@@ -107,7 +107,7 @@ public class IRVerifier
                 if (region == regionAnalysis.Root) {
                     Error(block, "Cannot leave or resume from root region");
                 } else if (block.Last is ResumeInst resume) {
-                    var guard = region.StartBlock.Users().OfType<GuardInst>().FirstOrDefault();
+                    var guard = region.GetHandlerGuard();
 
                     if (guard == null) {
                         Error(block, "Missing guard for filter or finally region");

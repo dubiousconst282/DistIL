@@ -95,4 +95,7 @@ public class ProtectedRegion
         }
         return null;
     }
+
+    /// <summary> If this is a handler region, returns the guard defining it. </summary>
+    public GuardInst? GetHandlerGuard() => StartBlock.Users().OfType<GuardInst>().FirstOrDefault();
 }

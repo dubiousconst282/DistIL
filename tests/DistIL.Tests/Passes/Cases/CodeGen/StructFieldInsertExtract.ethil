@@ -1,0 +1,38 @@
+public static Self::StructFieldInsertExt_1() -> int {
+BB_01:
+  r2 = setfld ValueTuple`3[int, int, int]::Item1, undef(ValueTuple`3[int, int, int]), 123 -> ValueTuple`3[int, int, int]
+  r3 = setfld ValueTuple`3[int, int, int]::Item2, r2, 456 -> ValueTuple`3[int, int, int]
+  r4 = setfld ValueTuple`3[int, int, int]::Item3, r3, 789 -> ValueTuple`3[int, int, int]
+  r5 = getfld ValueTuple`3[int, int, int]::Item1, r4 -> int
+  r6 = getfld ValueTuple`3[int, int, int]::Item2, r4 -> int
+  r7 = add r5, r6 -> int
+  r8 = getfld ValueTuple`3[int, int, int]::Item3, r4 -> int
+  r9 = add r7, r8 -> int
+  r10 = getfld ValueTuple`3[int, int, int]::Item1, r2 -> int
+  r11 = add r9, r10 -> int
+  ret r11
+// CHECK: StructFieldInsertExt_1
+// CHECK-NEXT: ldloca.s 1
+// CHECK-NEXT: ldc.i4.s 123
+// CHECK-NEXT: stfld int ValueTuple`3[int, int, int]::Item1
+// CHECK-NEXT: ldloc.1
+// CHECK-NEXT: stloc.0
+// CHECK-NEXT: ldloca.s 0
+// CHECK-NEXT: ldc.i4 456
+// CHECK-NEXT: stfld int ValueTuple`3[int, int, int]::Item2
+// CHECK-NEXT: ldloca.s 0
+// CHECK-NEXT: ldc.i4 789
+// CHECK-NEXT: stfld int ValueTuple`3[int, int, int]::Item3
+// CHECK-NEXT: ldloc.0
+// CHECK-NEXT: ldfld int ValueTuple`3[int, int, int]::Item1
+// CHECK-NEXT: ldloc.0
+// CHECK-NEXT: ldfld int ValueTuple`3[int, int, int]::Item2
+// CHECK-NEXT: add
+// CHECK-NEXT: ldloc.0
+// CHECK-NEXT: ldfld int ValueTuple`3[int, int, int]::Item3
+// CHECK-NEXT: add
+// CHECK-NEXT: ldloc.1
+// CHECK-NEXT: ldfld int ValueTuple`3[int, int, int]::Item1
+// CHECK-NEXT: add
+// CHECK-NEXT: ret
+}

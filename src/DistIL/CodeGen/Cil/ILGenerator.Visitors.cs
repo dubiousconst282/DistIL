@@ -46,10 +46,26 @@ partial class ILGenerator
         Push(inst.Value);
         EmitLoadOrStorePtr(inst, isLoad: false);
     }
-    public void Visit(ExtractFieldInst inst)
+    public void Visit(FieldExtractInst inst)
     {
         Push(inst.Obj);
         _asm.Emit(ILCode.Ldfld, inst.Field);
+    }
+    public void Visit(FieldInsertInst inst)
+    {
+        Debug.Assert(_forest.IsTreeRoot(inst));
+        var slot = _regAlloc.GetRegister(inst);
+
+        // This will generate lots of garbage like "ldloc x; stloc x",
+        // but for simplicity we'll clean up using a peephole in ILAssembler.
+        if (inst.Obj is not Undef) {
+            Push(inst.Obj);
+            _asm.EmitStore(slot);
+        }
+        _asm.EmitAddr(slot);
+        Push(inst.NewValue);
+        _asm.Emit(ILCode.Stfld, inst.Field);
+        _asm.EmitLoad(slot);
     }
 
     private bool EmitContainedLoadOrStore(MemoryInst inst, Value? valToStore)

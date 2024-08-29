@@ -10,6 +10,7 @@ internal enum Opcode
     Call, CallVirt, NewObj,
     Intrinsic,
     Lea,
+    Getfld, Setfld,
 
     // Has modifiers
     ArrAddr, FldAddr,
@@ -70,6 +71,9 @@ internal static class Opcodes
             
             "intrinsic" => Opcode.Intrinsic,
             "lea"       => Opcode.Lea,
+
+            "getfld"    => Opcode.Getfld,
+            "setfld"    => Opcode.Setfld,
 
             "add"       => Opcode.Bin_Add,
             "sub"       => Opcode.Bin_Sub,

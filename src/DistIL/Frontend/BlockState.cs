@@ -733,7 +733,7 @@ internal class BlockState
             if (obj is LoadInst load) {
                 obj = load.Address;
             } else {
-                Push(new ExtractFieldInst(field, obj));
+                Push(new FieldExtractInst(field, obj));
                 return;
             }
         }

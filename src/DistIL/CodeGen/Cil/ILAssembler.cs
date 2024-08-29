@@ -85,6 +85,12 @@ public class ILAssembler
 
     private void EmitVarInst(ILCode code, ILVariable var)
     {
+        // Peephole: delete nop copies like "ldloc x; stloc x"
+        // These usually appear when lowering FieldInsertInst.
+        if (code == ILCode.Stloc && _index > 0 && _insts[_index - 1].OpCode == ILCode.Ldloc && _insts[_index - 1].Operand == var) {
+            _index--;
+            return;
+        }
         // ILVariable.Index above this value is reserved for the use counter
         // This value was choosen based on the fact that encoded var indices are limited to 16-bit.
         const int kCounterStartIdx = ushort.MaxValue + 1;

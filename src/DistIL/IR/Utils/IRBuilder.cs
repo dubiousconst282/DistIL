@@ -214,7 +214,7 @@ public class IRBuilder
     public Instruction CreateFieldLoad(FieldDesc field, Value? obj = null, bool inBounds = false)
     {
         if (obj != null && obj.ResultType.IsValueType) {
-            return Emit(new ExtractFieldInst(field, obj));
+            return Emit(new FieldExtractInst(field, obj));
         }
         return CreateLoad(CreateFieldAddr(field, obj, inBounds));
     }
@@ -225,6 +225,8 @@ public class IRBuilder
     public FieldAddrInst CreateFieldAddr(FieldDesc field, Value? obj = null, bool inBounds = false)
         => Emit(new FieldAddrInst(field, obj, inBounds));
 
+    public FieldInsertInst CreateFieldInsert(FieldDesc field, Value obj, Value newValue)
+        => Emit(new FieldInsertInst(field, obj, newValue));
 
     public Instruction CreateFieldLoad(string fieldName, Value obj)
         => CreateFieldLoad(GetInstanceType(obj).FindField(fieldName), obj);

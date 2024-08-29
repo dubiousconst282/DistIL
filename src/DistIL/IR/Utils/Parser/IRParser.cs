@@ -310,6 +310,7 @@ public partial class IRParser
             Opcode.Conv => ParseConv(op, mods),
             Opcode.Lea => ParseLea(),
             Opcode.Intrinsic => ParseIntrinsic(),
+            Opcode.Getfld or Opcode.Setfld => ParseGetSetField(op),
             _ => ParseMultiOpInst(op, opToken.Position),
         };
         if (slotToken.Type == TokenType.Identifier) {
@@ -324,6 +325,7 @@ public partial class IRParser
         }
         return inst;
     }
+
     private TypeDesc ParseResultType()
     {
         _lexer.Expect(TokenType.Arrow);
@@ -492,14 +494,7 @@ public partial class IRParser
 
     private Instruction ParseFieldAddr(OpcodeModifiers mods)
     {
-        int start = _lexer.NextPos();
-        var declType = ParseType();
-        _lexer.Expect(TokenType.DoubleColon);
-        string name = _lexer.ExpectId();
-
-        var field = declType.FindField(name)
-                ?? throw _ctx.Fatal("Cound not find field", (start, _lexer.LastPos()));
-
+        var field = ParseFieldRef();
         var obj = _lexer.Match(TokenType.Comma) ? ParseValue() : null;
 
         return new FieldAddrInst(field, obj, inBounds: (mods & OpcodeModifiers.InBounds) != 0);
@@ -619,6 +614,35 @@ public partial class IRParser
         };
     }
 
+    // r2 = setfld T::Item1, undef(T), 123 -> T
+    // r5 = getfld T::Item1, r4 -> Int32
+    private Instruction ParseGetSetField(Opcode op)
+    {
+        var field = ParseFieldRef();
+
+        _lexer.Expect(TokenType.Comma);
+        var obj = ParseValue();
+
+        if (op == Opcode.Getfld) {
+            return new FieldExtractInst(field, obj);
+        } else {
+            _lexer.Expect(TokenType.Comma);
+            var newValue = ParseValue();
+
+            return new FieldInsertInst(field, obj, newValue);
+        }
+    }
+
+    private FieldDesc ParseFieldRef()
+    {
+        int start = _lexer.NextPos();
+        var declType = ParseType();
+        _lexer.Expect(TokenType.DoubleColon);
+        string name = _lexer.ExpectId();
+
+        return declType.FindField(name)
+                ?? throw _ctx.Fatal("Cound not find field", (start, _lexer.LastPos()));
+    }
 
     private BasicBlock ParseLabel()
     {
@@ -637,6 +661,12 @@ public partial class IRParser
         switch (token.Type) {
             case TokenType.Identifier when token.StrValue is "null": {
                 return ConstNull.Create();
+            }
+            case TokenType.Identifier when token.StrValue is "undef": {
+                _lexer.Expect(TokenType.LParen);
+                var type = ParseType();
+                _lexer.Expect(TokenType.RParen);
+                return new Undef(type);
             }
             case TokenType.Identifier: {
                 return AllocId<Value>(token, () => {

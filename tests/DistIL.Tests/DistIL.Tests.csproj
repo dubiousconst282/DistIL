@@ -27,7 +27,7 @@
     </ProjectReference>
 
     <!-- Copy all IR test cases to output -->
-    <Content Include="Passes/Cases/*.ethil">
+    <Content Include="Passes/Cases/**/*.ethil">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

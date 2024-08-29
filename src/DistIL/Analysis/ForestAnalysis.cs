@@ -49,9 +49,10 @@ public class ForestAnalysis : IMethodAnalysis
         {
             // Check for single-use instruction defined in the same block
             if (inst.Operands[i] is not Instruction oper || oper.Block != inst.Block) return;
+            if (oper is PhiInst or FieldInsertInst) return; // needs own slot for codegen
             if (oper.NumUses >= 2 && !IsCheaperToRematerialize(oper)) return;
 
-            if (oper is PhiInst || HasHazardsBetweenDefUse(oper, root, aa)) return;
+            if (HasHazardsBetweenDefUse(oper, root, aa)) return;
 
             // Recursively inline defs, except when rematerializing
             if (_leafs.Add(oper) && oper.NumUses == 1) {
@@ -128,7 +129,7 @@ public class ForestAnalysis : IMethodAnalysis
     {
         bool mayRematerialize =
                 (inst is ArrayAddrInst or PtrOffsetInst && inst.NumUses <= 3) ||
-                (inst is FieldAddrInst or ExtractFieldInst or CilIntrinsic.ArrayLen or CilIntrinsic.SizeOf);
+                (inst is FieldAddrInst or FieldExtractInst or CilIntrinsic.ArrayLen or CilIntrinsic.SizeOf);
 
         return mayRematerialize && !inst.Users().Any(u => u is PhiInst); // codegen doesn't support defs inlined into phis, they *must* be rooted
     }

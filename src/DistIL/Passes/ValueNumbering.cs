@@ -183,7 +183,7 @@ public class ValueNumbering : IMethodPass
                             a.CheckOverflow == b.CheckOverflow && a.SrcUnsigned == b.SrcUnsigned,
             hash: (inst) => HashCode.Combine(inst.ResultType, inst.Value)
         );
-        Reg<ExtractFieldInst>(
+        Reg<FieldExtractInst>(
             comp: (a, b) => a.Field == b.Field && a.Obj == b.Obj,
             hash: (inst) => HashCode.Combine(inst.Field, inst.Obj, 2345)
         );

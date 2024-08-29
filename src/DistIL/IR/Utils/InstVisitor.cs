@@ -9,7 +9,8 @@ public interface InstVisitor
     
     void Visit(LoadInst inst);
     void Visit(StoreInst inst);
-    void Visit(ExtractFieldInst inst);
+    void Visit(FieldExtractInst inst);
+    void Visit(FieldInsertInst inst);
     
     void Visit(ArrayAddrInst inst);
     void Visit(FieldAddrInst inst);

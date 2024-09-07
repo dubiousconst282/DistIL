@@ -24,7 +24,7 @@ public class PhiInst : Instruction
     /// Operand array containing pairs of [PredBlock, IncommingValue].
     /// The instruction will take ownership of this array, its elements should not be modified after.
     /// </param>
-    internal PhiInst(TypeDesc resultType, Value[] operands)
+    public PhiInst(TypeDesc resultType, Value[] operands)
         : base(operands)
     {
         ResultType = resultType;
@@ -89,6 +89,12 @@ public class PhiInst : Instruction
         if (newValue != null) {
             ReplaceOperand(index * 2 + 1, newValue);
         }
+    }
+
+    /// <summary> Changes <see cref="Value.ResultType"/> to the given type. </summary>
+    public void SetResultType(TypeDesc type)
+    {
+        ResultType = type;
     }
 
     private int FindArgIndex(Value operand, bool isValue = false)

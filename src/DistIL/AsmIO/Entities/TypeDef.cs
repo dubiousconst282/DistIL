@@ -53,7 +53,7 @@ public class TypeDef : TypeDefOrSpec
             return _kind;
         }
     }
-    public override StackType StackType => _kind.ToStackType();
+    public override StackType StackType => Kind.ToStackType();
     public override TypeAttributes Attribs { get; }
 
     private TypeDefOrSpec? _baseType;

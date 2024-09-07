@@ -17,6 +17,9 @@ public class IRBuilder
     /// <summary> Initializes a builder that inserts instructions relative to <paramref name="block"/>. </summary>
     public IRBuilder(BasicBlock block, InsertionDir dir = InsertionDir.BeforeLast) => SetPosition(block, dir);
 
+    /// <summary> Creates an unitialized builder. SetPosition() must be called before use. </summary>
+    public IRBuilder() { }
+
     public void SetPosition(BasicBlock block, InsertionDir dir = InsertionDir.BeforeLast)
     {
         _block = block;

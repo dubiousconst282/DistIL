@@ -13,6 +13,7 @@ public interface IMethodAnalysis : IAnalysis
 }
 public interface IMethodAnalysisManager
 {
+    Compilation Compilation { get; }
     MethodBody Method { get; }
 
     A GetAnalysis<A>(bool preserve = true) where A : IMethodAnalysis;

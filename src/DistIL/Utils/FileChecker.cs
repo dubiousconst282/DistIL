@@ -37,9 +37,17 @@ public class FileChecker
                 int lineNo = source.Take(match.Index).Count(c => c == '\n');
                 throw new FormatException($"Unknown FileCheck directive '{source[start..end]}' on line {lineNo}");
             }
+
+            int patternStart = end + 1;
+            int patternEnd = match.Index + match.Length;
+
+            // Trim whitespace
+            while (patternStart < source.Length && char.IsWhiteSpace(source[patternStart])) patternStart++;
+            while (patternEnd > 0 && char.IsWhiteSpace(source[patternEnd - 1])) patternEnd--;
+
             _directives.Add(new() {
                 Type = type,
-                PatternRange = new AbsRange(end + 1, match.Index + match.Length)
+                PatternRange = new AbsRange(patternStart, patternEnd)
             });
 
             var line = source.AsSpan(end, match.Index + match.Length - end);
@@ -169,18 +177,20 @@ public class FileChecker
             var sb = new StringBuilder();
 
             sb.Append(dir.Type == DirectiveType.CheckNot ? "Found unexpected match" : "No match found");
-            sb.Append($" for '{dir.Type}: {Source.AsSpan().Slice(dir.PatternRange)}' directive, near input lines\n\n");
+            sb.Append($" for '{dir.Type}: {Source.AsSpan().Slice(dir.PatternRange)}' directive");
 
             var inputRange = Reader.GetCurrentRange();
-            int startLine = StringExt.GetLinePos(Reader.Text, inputRange.Start).Line;
+            if (inputRange.Start + 1 < Reader.Text.Length) {
+                int startLine = StringExt.GetLinePos(Reader.Text, inputRange.Start).Line;
 
-            sb.Append($"  {startLine}. ");
+                sb.Append($", near input lines:\n  {startLine}. ");
 
-            if (inputRange.Length > 120) {
-                var truncRange = AbsRange.FromSlice(inputRange.Start, 120);
-                sb.Append(Reader.Text.Slice(truncRange)).Append("...");
-            } else {
-                sb.Append(Reader.Text.Slice(inputRange));
+                if (inputRange.Length > 120) {
+                    var truncRange = AbsRange.FromSlice(inputRange.Start, 120);
+                    sb.Append(Reader.Text.Slice(truncRange)).Append("...");
+                } else {
+                    sb.Append(Reader.Text.Slice(inputRange));
+                }
             }
             
             _failures ??= new();

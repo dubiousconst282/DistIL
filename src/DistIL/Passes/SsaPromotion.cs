@@ -80,7 +80,7 @@ public class SsaPromotion : IMethodPass
                 return false;
             }
         }
-        isGlobal |= definingBlocks.DiscreteCount >= 2;
+        isGlobal |= definingBlocks.UniqueCount >= 2;
 
         return true;
     }

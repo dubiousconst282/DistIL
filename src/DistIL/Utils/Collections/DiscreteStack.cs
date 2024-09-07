@@ -10,7 +10,7 @@ public class DiscreteStack<T> where T : class
     public int Depth => _stack.Count;
 
     /// <summary> Number of distinct items ever pushed to the stack. </summary>
-    public int DiscreteCount => _pushed.Count;
+    public int UniqueCount => _pushed.Count;
 
     /// <inheritdoc cref="ArrayStack{T}.Top"/>
     public ref T Top => ref _stack.Top;
@@ -29,6 +29,8 @@ public class DiscreteStack<T> where T : class
 
     public bool WasPushed(T item) => _pushed.Contains(item);
     public void UnmarkPushed(T item) => _pushed.Remove(item);
+
+    public Iterator<T> EnumeratePushed() => _pushed.GetEnumerator();
 
     public void Clear(bool rememberPushed = false)
     {

@@ -99,7 +99,7 @@ public class ValueNumbering : IMethodPass
             worklist.UnmarkPushed(user.Block);
 
             while (worklist.TryPop(out var block)) {
-                var inst = block == user.Block && worklist.DiscreteCount == 0 ? user.Prev! : block.Last;
+                var inst = block == user.Block && worklist.UniqueCount == 0 ? user.Prev! : block.Last;
                 var firstInst = block == def.Block ? def : null;
 
                 for (; inst != firstInst; inst = inst.Prev!) {

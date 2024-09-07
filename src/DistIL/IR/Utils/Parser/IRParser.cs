@@ -59,10 +59,14 @@ public partial class IRParser
     public static ParserContext Populate(string code, ModuleResolver modResolver)
     {
         var ctx = new ParserContext(code, modResolver);
+        var parser = new IRParser(ctx);
+
         try {
-            new IRParser(ctx).ParseUnit();
-        } catch (Exception) {
-            // Preserve context and let caller handle errors
+            parser.ParseUnit();
+        } catch (Exception ex) {
+            if (!ctx.HasErrors) {
+                ctx.Errors.Add(new ParseError(code, "Internal parser error: " + ex.ToString(), AbsRange.FromSlice(parser._lexer.LastPos(), 1)));
+            }
         }
         return ctx;
     }
@@ -310,6 +314,7 @@ public partial class IRParser
             Opcode.Conv => ParseConv(op, mods),
             Opcode.Lea => ParseLea(),
             Opcode.Intrinsic => ParseIntrinsic(),
+            Opcode.Select => ParseSelect(),
             Opcode.Getfld or Opcode.Setfld => ParseGetSetField(op),
             _ => ParseMultiOpInst(op, opToken.Position),
         };
@@ -477,7 +482,7 @@ public partial class IRParser
 
         var sig = new MethodSig(retType, pars, isInstance, genPars.Count);
         var method = ownerType.FindMethod(name, sig, throwIfNotFound: false)
-                ?? throw _ctx.Fatal("Cound not find method", (start, _lexer.LastPos()));
+                ?? throw _ctx.Fatal("Could not find method", (start, _lexer.LastPos()));
 
         if (genPars.Count > 0) {
             method = method.GetSpec(genPars.ToImmutableArray());
@@ -612,6 +617,21 @@ public partial class IRParser
             ("CIL", "UnboxRef") => new CilIntrinsic.UnboxRef((type as ByrefType)!.ElemType, args[0]),
             _ => throw new NotImplementedException($"Don't know how to parse intrinsc '{ns}::{name}'")
         };
+    }
+
+    private Instruction ParseSelect()
+    {
+        var cond = ParseValue();
+        
+        _lexer.Expect(TokenType.QuestionMark);
+        var ifTrue = ParseValue();
+
+        _lexer.Expect(TokenType.Colon);
+        var ifFalse = ParseValue();
+
+        var resultType = ParseResultType();
+
+        return new SelectInst(cond, ifTrue, ifFalse, resultType);
     }
 
     // r2 = setfld T::Item1, undef(T), 123 -> T

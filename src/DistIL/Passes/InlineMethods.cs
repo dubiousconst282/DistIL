@@ -193,9 +193,9 @@ public class InlineMethods : IMethodPass
     sealed class InlinerIRCloner(MethodBody caller, MethodDefOrSpec target, Compilation comp, Action<CallInst>? onNewCall)
         : IRCloner(caller, new GenericContext(target))
     {
-        public override Value Clone(Instruction inst)
+        protected override Value CreateClone(Instruction inst)
         {
-            var clonedVal = base.Clone(inst);
+            var clonedVal = base.CreateClone(inst);
 
             // Ensure that references defined in other modules are accessible
             if (target.Module != _destMethod.Definition.Module) {

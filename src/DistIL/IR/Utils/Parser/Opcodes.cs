@@ -9,6 +9,7 @@ internal enum Opcode
     Goto, Switch, Ret, Phi,
     Call, CallVirt, NewObj,
     Intrinsic,
+    Select,
     Lea,
     Getfld, Setfld,
 
@@ -70,6 +71,7 @@ internal static class Opcodes
             "newobj"    => Opcode.NewObj,
             
             "intrinsic" => Opcode.Intrinsic,
+            "select"    => Opcode.Select,
             "lea"       => Opcode.Lea,
 
             "getfld"    => Opcode.Getfld,

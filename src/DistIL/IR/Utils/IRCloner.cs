@@ -97,9 +97,9 @@ public class IRCloner
     }
 
     /// <summary> Clones or folds the given instruction. </summary>
-    public virtual Value Clone(Instruction inst)
+    public Value Clone(Instruction inst)
     {
-        var clonedInst = _instCloner.Clone(inst);
+        var clonedInst = CreateClone(inst);
 
         if (clonedInst.HasResult) {
             ref var mapping = ref _mappings.GetOrAddRef(inst, out bool exists);
@@ -114,6 +114,11 @@ public class IRCloner
             mapping = clonedInst;
         }
         return clonedInst;
+    } 
+
+    protected virtual Value CreateClone(Instruction inst)
+    {
+        return _instCloner.Clone(inst);
     }
 
     /// <summary> Checks if the given cloned block is unreachable and was removed. </summary>
@@ -122,7 +127,7 @@ public class IRCloner
         return clonedBlock.Method == null;
     }
 
-    private Value? Remap(Value value)
+    protected Value Remap(Value value)
     {
         if (_mappings.TryGetValue(value, out var newValue)) {
             return newValue;
@@ -141,7 +146,7 @@ public class IRCloner
         _pendingValues.Add(pending);
         return pending;
     }
-    private EntityDesc Remap(EntityDesc entity)
+    protected EntityDesc Remap(EntityDesc entity)
     {
         if (_genericContext.IsNull) {
             return entity;

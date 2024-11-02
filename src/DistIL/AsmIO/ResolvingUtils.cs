@@ -47,9 +47,9 @@ public static class ResolvingUtils
         return methods.FirstOrDefault();
     }
 
-    private static FunctionSelector GetSelector(this ModuleResolver resolver, string selector)
+    private static MethodSelector GetSelector(this ModuleResolver resolver, string selector)
     {
-        var ms = new FunctionSelector();
+        var ms = new MethodSelector();
 
         var spl = selector.Split("::");
 
@@ -99,7 +99,7 @@ public static class ResolvingUtils
         return null;
     }
 
-    private class FunctionSelector
+    private class MethodSelector
     {
         public TypeDefOrSpec? Type { get; set; }
         public string FunctionName { get; set; }

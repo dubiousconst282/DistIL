@@ -5,33 +5,29 @@ public static class ResolvingUtils
     /// <summary>
     /// Finds a method based on a selector
     /// </summary>
-    /// <param name="binder"></param>
+    /// <param name="resolver"></param>
     /// <param name="selector">Specifies which method to select</param>
     /// <example>FindMethod("System.Text.StringBuilder::AppendLine(this, System.String)")</example>
     /// <returns></returns>
     public static MethodDesc? FindMethod(this ModuleResolver resolver, string selector)
     {
-        if (resolver.FunctionCache.TryGetValue(selector, out MethodDesc? cachedMethod))
-        {
+        if (resolver.FunctionCache.TryGetValue(selector, out MethodDesc? cachedMethod)) {
             return cachedMethod;
         }
 
         var convertedSelector = GetSelector(resolver, selector);
 
-        if(convertedSelector.Type == null) {
+        if (convertedSelector.Type == null) {
             return null;
         }
 
         var methods = convertedSelector.Type.Methods
             .Where(_ => _.Name.ToString() == convertedSelector.FunctionName)
-            .Where(_ => _.ParamSig.Count == convertedSelector.ParameterTypes.Length);
+            .Where(_ => _.ParamSig.Count == convertedSelector.ParameterTypes.Length).ToArray();
 
-        foreach (var method in methods)
-        {
-            for (int i = 0; i < method.ParamSig.Count; i++)
-            {
-                if (method.ParamSig[i].Type == convertedSelector.ParameterTypes[i])
-                {
+        foreach (var method in methods) {
+            for (int i = 0; i < method.ParamSig.Count; i++) {
+                if (method.ParamSig[i].Type == convertedSelector.ParameterTypes[i]) {
                     resolver.FunctionCache.AddOrUpdate(selector, _ => method, (_, oldMethod) => oldMethod);
 
                     return method;
@@ -57,11 +53,7 @@ public static class ResolvingUtils
 
         TypeDesc? GetParameterType(string fullname)
         {
-            if (fullname == "this") {
-                return ms.Type;
-            }
-
-            return GetTypeSpec(resolver, fullname.Trim());
+            return fullname == "this" ? ms.Type : GetTypeSpec(resolver, fullname.Trim());
         }
 
         ms.ParameterTypes = parameterPart
@@ -80,8 +72,7 @@ public static class ResolvingUtils
             return primType;
         }
 
-        if (resolver.TypeCache.TryGetValue(fullname, out var cachedType))
-        {
+        if (resolver.TypeCache.TryGetValue(fullname, out var cachedType)) {
             return cachedType;
         }
 
@@ -91,8 +82,7 @@ public static class ResolvingUtils
 
         foreach (var type in resolver._loadedModules
                      .Select(module => module.FindType(ns, typeName))
-                     .OfType<TypeDef>())
-        {
+                     .OfType<TypeDef>()) {
             resolver.TypeCache.AddOrUpdate(fullname, _ => type, (_, oldType) => oldType);
             return type;
         }

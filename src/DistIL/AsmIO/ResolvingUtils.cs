@@ -11,24 +11,51 @@ public static class ResolvingUtils
     /// <returns></returns>
     public static MethodDesc? FindMethod(this ModuleResolver resolver, string selector)
     {
-        if (resolver.FunctionCache.TryGetValue(selector, out MethodDesc? cachedMethod)) {
+        var convertedSelector = GetSelector(resolver, selector);
+        if (resolver.FunctionCache.TryGetValue(convertedSelector, out MethodDesc? cachedMethod)) {
             return cachedMethod;
         }
-
-        var convertedSelector = GetSelector(resolver, selector);
 
         if (convertedSelector.Type == null) {
             return null;
         }
 
-        var methods = convertedSelector.Type.Methods
-            .Where(_ => _.Name.ToString() == convertedSelector.FunctionName)
-            .Where(_ => _.ParamSig.Count == convertedSelector.ParameterTypes.Length).ToArray();
+        return ResolveMethod(resolver, convertedSelector, convertedSelector);
+    }
+
+    /// <summary>
+    /// Finds a method based on a selector and arguments
+    /// </summary>
+    /// <param name="resolver"></param>
+    /// <param name="selector">Specifies which method to select</param>
+    /// <example>FindMethod("System.Text.StringBuilder::AppendLine", [ConstString.Create("Hello World")])</example>
+    /// <returns></returns>
+    public static MethodDesc? FindMethod(this ModuleResolver resolver, string selector, IEnumerable<Value> values)
+    {
+        var convertedSelector = GetSelector(resolver, selector);
+        convertedSelector.ParameterTypes.AddRange(values.Select(value => value.ResultType));
+
+        if (resolver.FunctionCache.TryGetValue(convertedSelector, out MethodDesc? cachedMethod)) {
+            return cachedMethod;
+        }
+
+        if (convertedSelector.Type == null) {
+            return null;
+        }
+
+        return ResolveMethod(resolver, convertedSelector, convertedSelector);
+    }
+
+    private static MethodDesc? ResolveMethod(ModuleResolver resolver, MethodSelector selector, MethodSelector convertedSelector)
+    {
+        var methods = convertedSelector.Type!.Methods
+            .Where(method => method.Name.ToString() == convertedSelector.MethodName)
+            .Where(method => method.ParamSig.Count == convertedSelector.ParameterTypes.Count).ToArray();
 
         foreach (var method in methods) {
             for (int i = 0; i < method.ParamSig.Count; i++) {
                 if (method.ParamSig[i].Type == convertedSelector.ParameterTypes[i]) {
-                    resolver.FunctionCache.AddOrUpdate(selector, _ => method, (_, oldMethod) => oldMethod);
+                    resolver.FunctionCache.Add(selector, method);
 
                     return method;
                 }
@@ -40,28 +67,26 @@ public static class ResolvingUtils
 
     private static MethodSelector GetSelector(this ModuleResolver resolver, string selector)
     {
-        var ms = new MethodSelector();
-
         var spl = selector.Split("::");
 
-        ms.Type = GetTypeSpec(resolver, spl[0].Trim());
+        var type = GetTypeSpec(resolver, spl[0].Trim());
 
         var methodPart = spl[1].Trim();
-        ms.FunctionName = methodPart[..methodPart.IndexOf('(')];
+        var methodName = methodPart.Contains('(') ? methodPart[..methodPart.IndexOf('(')] : methodPart;
 
-        var parameterPart = methodPart[ms.FunctionName.Length..].Trim('(', ')');
+        var parameterPart = methodPart[methodName.Length..].Trim('(', ')');
 
         TypeDesc? GetParameterType(string fullname)
         {
-            return fullname == "this" ? ms.Type : GetTypeSpec(resolver, fullname.Trim());
+            return fullname == "this" ? type : GetTypeSpec(resolver, fullname.Trim());
         }
 
-        ms.ParameterTypes = parameterPart
+        var parameterTypes = parameterPart
             .Split(",", StringSplitOptions.RemoveEmptyEntries)
             .Select(GetParameterType)
-            .ToArray();
+            .ToList();
 
-        return ms;
+        return new MethodSelector(type, methodName, parameterTypes);
     }
 
     private static TypeDesc? GetTypeSpec(this ModuleResolver resolver, string fullname)
@@ -83,17 +108,33 @@ public static class ResolvingUtils
         foreach (var type in resolver._loadedModules
                      .Select(module => module.FindType(ns, typeName))
                      .OfType<TypeDef>()) {
-            resolver.TypeCache.AddOrUpdate(fullname, _ => type, (_, oldType) => oldType);
+            resolver.TypeCache.Add(fullname, type);
             return type;
         }
 
         return null;
     }
 
-    private class MethodSelector
+    internal record MethodSelector(TypeDesc? Type, string MethodName, List<TypeDesc?> ParameterTypes)
     {
-        public TypeDesc? Type { get; set; }
-        public string FunctionName { get; set; }
-        public TypeDesc?[] ParameterTypes { get; set; }
+        public override int GetHashCode()
+        {
+            int hash = 5;
+
+            foreach (TypeDesc parameterType in ParameterTypes) {
+                hash = HashCode.Combine(hash, parameterType);
+            }
+
+            hash = HashCode.Combine(hash, Type, MethodName);
+
+            return hash;
+        }
+
+        public virtual bool Equals(MethodSelector? other)
+        {
+            return MethodName.Equals(other.MethodName)
+                   && Type.Equals(other.Type)
+                   && ParameterTypes.SequenceEqual(other.ParameterTypes);
+        }
     }
 }

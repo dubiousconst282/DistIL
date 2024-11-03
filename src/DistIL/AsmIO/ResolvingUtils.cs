@@ -55,7 +55,7 @@ public static class ResolvingUtils
         foreach (var method in methods) {
             for (int i = 0; i < method.ParamSig.Count; i++) {
                 if (method.ParamSig[i].Type == convertedSelector.ParameterTypes[i]) {
-                    resolver.FunctionCache.AddOrUpdate(selector, _ => method, (_, oldMethod) => oldMethod);
+                    resolver.FunctionCache.Add(selector, method);
 
                     return method;
                 }
@@ -108,7 +108,7 @@ public static class ResolvingUtils
         foreach (var type in resolver._loadedModules
                      .Select(module => module.FindType(ns, typeName))
                      .OfType<TypeDef>()) {
-            resolver.TypeCache.AddOrUpdate(fullname, _ => type, (_, oldType) => oldType);
+            resolver.TypeCache.Add(fullname, type);
             return type;
         }
 
@@ -117,5 +117,24 @@ public static class ResolvingUtils
 
     internal record MethodSelector(TypeDesc? Type, string MethodName, List<TypeDesc?> ParameterTypes)
     {
+        public override int GetHashCode()
+        {
+            int hash = 5;
+
+            foreach (TypeDesc parameterType in ParameterTypes) {
+                hash = HashCode.Combine(hash, parameterType);
+            }
+
+            hash = HashCode.Combine(hash, Type, MethodName);
+
+            return hash;
+        }
+
+        public virtual bool Equals(MethodSelector? other)
+        {
+            return MethodName.Equals(other.MethodName)
+                   && Type.Equals(other.Type)
+                   && ParameterTypes.SequenceEqual(other.ParameterTypes);
+        }
     }
 }

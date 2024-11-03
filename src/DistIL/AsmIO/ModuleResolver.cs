@@ -9,7 +9,7 @@ public class ModuleResolver
 {
     // TODO: Do we need to care about FullName (public keys and versions)?
     protected readonly Dictionary<string, ModuleDef> _cache = new(StringComparer.OrdinalIgnoreCase);
-    internal readonly ConcurrentDictionary<string, MethodDesc> FunctionCache = new();
+    internal readonly ConcurrentDictionary<ResolvingUtils.MethodSelector, MethodDesc> FunctionCache = new();
     internal readonly ConcurrentDictionary<string, TypeDefOrSpec> TypeCache = new();
     internal readonly List<ModuleDef> _loadedModules = new();
 

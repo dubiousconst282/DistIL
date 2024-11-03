@@ -11,17 +11,16 @@ public static class ResolvingUtils
     /// <returns></returns>
     public static MethodDesc? FindMethod(this ModuleResolver resolver, string selector)
     {
-        if (resolver.FunctionCache.TryGetValue(selector, out MethodDesc? cachedMethod)) {
+        var convertedSelector = GetSelector(resolver, selector);
+        if (resolver.FunctionCache.TryGetValue(convertedSelector, out MethodDesc? cachedMethod)) {
             return cachedMethod;
         }
-
-        var convertedSelector = GetSelector(resolver, selector);
 
         if (convertedSelector.Type == null) {
             return null;
         }
 
-        return ResolveMethod(resolver, selector, convertedSelector);
+        return ResolveMethod(resolver, convertedSelector, convertedSelector);
     }
 
     /// <summary>
@@ -36,14 +35,18 @@ public static class ResolvingUtils
         var convertedSelector = GetSelector(resolver, selector);
         convertedSelector.ParameterTypes.AddRange(values.Select(value => value.ResultType));
 
+        if (resolver.FunctionCache.TryGetValue(convertedSelector, out MethodDesc? cachedMethod)) {
+            return cachedMethod;
+        }
+
         if (convertedSelector.Type == null) {
             return null;
         }
 
-        return ResolveMethod(resolver, selector, convertedSelector);
+        return ResolveMethod(resolver, convertedSelector, convertedSelector);
     }
 
-    private static MethodDesc? ResolveMethod(ModuleResolver resolver, string selector, MethodSelector convertedSelector)
+    private static MethodDesc? ResolveMethod(ModuleResolver resolver, MethodSelector selector, MethodSelector convertedSelector)
     {
         var methods = convertedSelector.Type!.Methods
             .Where(method => method.Name.ToString() == convertedSelector.MethodName)
@@ -64,28 +67,26 @@ public static class ResolvingUtils
 
     private static MethodSelector GetSelector(this ModuleResolver resolver, string selector)
     {
-        var ms = new MethodSelector();
-
         var spl = selector.Split("::");
 
-        ms.Type = GetTypeSpec(resolver, spl[0].Trim());
+        var type = GetTypeSpec(resolver, spl[0].Trim());
 
         var methodPart = spl[1].Trim();
-        ms.MethodName = methodPart.Contains('?') ? methodPart[..methodPart.IndexOf('(')] : methodPart;
+        var methodName = methodPart.Contains('(') ? methodPart[..methodPart.IndexOf('(')] : methodPart;
 
-        var parameterPart = methodPart[ms.MethodName.Length..].Trim('(', ')');
+        var parameterPart = methodPart[methodName.Length..].Trim('(', ')');
 
         TypeDesc? GetParameterType(string fullname)
         {
-            return fullname == "this" ? ms.Type : GetTypeSpec(resolver, fullname.Trim());
+            return fullname == "this" ? type : GetTypeSpec(resolver, fullname.Trim());
         }
 
-        ms.ParameterTypes = parameterPart
+        var parameterTypes = parameterPart
             .Split(",", StringSplitOptions.RemoveEmptyEntries)
             .Select(GetParameterType)
             .ToList();
 
-        return ms;
+        return new MethodSelector(type, methodName, parameterTypes);
     }
 
     private static TypeDesc? GetTypeSpec(this ModuleResolver resolver, string fullname)
@@ -114,10 +115,7 @@ public static class ResolvingUtils
         return null;
     }
 
-    private class MethodSelector
+    internal record MethodSelector(TypeDesc? Type, string MethodName, List<TypeDesc?> ParameterTypes)
     {
-        public TypeDesc? Type { get; set; }
-        public string MethodName { get; set; }
-        public List<TypeDesc?> ParameterTypes { get; set; }
     }
 }

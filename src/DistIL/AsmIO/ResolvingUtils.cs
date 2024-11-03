@@ -21,9 +21,33 @@ public static class ResolvingUtils
             return null;
         }
 
-        var methods = convertedSelector.Type.Methods
-            .Where(_ => _.Name.ToString() == convertedSelector.FunctionName)
-            .Where(_ => _.ParamSig.Count == convertedSelector.ParameterTypes.Length).ToArray();
+        return ResolveMethod(resolver, selector, convertedSelector);
+    }
+
+    /// <summary>
+    /// Finds a method based on a selector and arguments
+    /// </summary>
+    /// <param name="resolver"></param>
+    /// <param name="selector">Specifies which method to select</param>
+    /// <example>FindMethod("System.Text.StringBuilder::AppendLine", [ConstString.Create("Hello World")])</example>
+    /// <returns></returns>
+    public static MethodDesc? FindMethod(this ModuleResolver resolver, string selector, IEnumerable<Value> values)
+    {
+        var convertedSelector = GetSelector(resolver, selector);
+        convertedSelector.ParameterTypes.AddRange(values.Select(value => value.ResultType));
+
+        if (convertedSelector.Type == null) {
+            return null;
+        }
+
+        return ResolveMethod(resolver, selector, convertedSelector);
+    }
+
+    private static MethodDesc? ResolveMethod(ModuleResolver resolver, string selector, MethodSelector convertedSelector)
+    {
+        var methods = convertedSelector.Type!.Methods
+            .Where(method => method.Name.ToString() == convertedSelector.MethodName)
+            .Where(method => method.ParamSig.Count == convertedSelector.ParameterTypes.Count).ToArray();
 
         foreach (var method in methods) {
             for (int i = 0; i < method.ParamSig.Count; i++) {
@@ -47,9 +71,9 @@ public static class ResolvingUtils
         ms.Type = GetTypeSpec(resolver, spl[0].Trim());
 
         var methodPart = spl[1].Trim();
-        ms.FunctionName = methodPart[..methodPart.IndexOf('(')];
+        ms.MethodName = methodPart.Contains('?') ? methodPart[..methodPart.IndexOf('(')] : methodPart;
 
-        var parameterPart = methodPart[ms.FunctionName.Length..].Trim('(', ')');
+        var parameterPart = methodPart[ms.MethodName.Length..].Trim('(', ')');
 
         TypeDesc? GetParameterType(string fullname)
         {
@@ -59,7 +83,7 @@ public static class ResolvingUtils
         ms.ParameterTypes = parameterPart
             .Split(",", StringSplitOptions.RemoveEmptyEntries)
             .Select(GetParameterType)
-            .ToArray();
+            .ToList();
 
         return ms;
     }
@@ -93,7 +117,7 @@ public static class ResolvingUtils
     private class MethodSelector
     {
         public TypeDesc? Type { get; set; }
-        public string FunctionName { get; set; }
-        public TypeDesc?[] ParameterTypes { get; set; }
+        public string MethodName { get; set; }
+        public List<TypeDesc?> ParameterTypes { get; set; }
     }
 }

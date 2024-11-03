@@ -19,7 +19,7 @@ public class MethodResolvingTests
     [Fact]
     public void Test_MethodResolving()
     {
-        var selector = "System.Text.StringBuilder::AppendLine(this, System.String)";
+        var selector = "System.Text.StringBuilder::AppendLine(this, string)";
         var method = _modResolver.FindMethod(selector);
 
         Assert.NotNull(method);

@@ -1,12 +1,7 @@
 ﻿namespace DistIL.AsmIO;
 
-using System.Collections.Concurrent;
-
 public static class ResolvingUtils
 {
-    private static readonly ConcurrentDictionary<string, MethodDesc> FunctionCache = new();
-    private static readonly ConcurrentDictionary<string, TypeDefOrSpec> TypeCache = new();
-
     /// <summary>
     /// Finds a method based on a selector
     /// </summary>
@@ -16,7 +11,7 @@ public static class ResolvingUtils
     /// <returns></returns>
     public static MethodDesc? FindMethod(this ModuleResolver resolver, string selector)
     {
-        if (FunctionCache.TryGetValue(selector, out MethodDesc? cachedMethod))
+        if (resolver.FunctionCache.TryGetValue(selector, out MethodDesc? cachedMethod))
         {
             return cachedMethod;
         }
@@ -37,7 +32,7 @@ public static class ResolvingUtils
             {
                 if (method.ParamSig[i].Type == convertedSelector.ParameterTypes[i])
                 {
-                    FunctionCache.AddOrUpdate(selector, _ => method, (_, oldMethod) => oldMethod);
+                    resolver.FunctionCache.AddOrUpdate(selector, _ => method, (_, oldMethod) => oldMethod);
 
                     return method;
                 }
@@ -53,20 +48,20 @@ public static class ResolvingUtils
 
         var spl = selector.Split("::");
 
-        ms.Type = GetTypeSpec(resolver, spl[0]);
+        ms.Type = GetTypeSpec(resolver, spl[0].Trim());
 
-        var methodPart = spl[1];
+        var methodPart = spl[1].Trim();
         ms.FunctionName = methodPart[..methodPart.IndexOf('(')];
 
         var parameterPart = methodPart[ms.FunctionName.Length..].Trim('(', ')');
 
-        TypeDefOrSpec? GetParameterType(string fullname)
+        TypeDesc? GetParameterType(string fullname)
         {
             if (fullname == "this") {
                 return ms.Type;
             }
 
-            return GetTypeSpec(resolver, fullname);
+            return GetTypeSpec(resolver, fullname.Trim());
         }
 
         ms.ParameterTypes = parameterPart
@@ -77,9 +72,15 @@ public static class ResolvingUtils
         return ms;
     }
 
-    private static TypeDefOrSpec? GetTypeSpec(this ModuleResolver resolver, string fullname)
+    private static TypeDesc? GetTypeSpec(this ModuleResolver resolver, string fullname)
     {
-        if (TypeCache.TryGetValue(fullname, out var cachedType))
+        var primType = PrimType.GetFromAlias(fullname);
+
+        if (primType != null) {
+            return primType;
+        }
+
+        if (resolver.TypeCache.TryGetValue(fullname, out var cachedType))
         {
             return cachedType;
         }
@@ -92,7 +93,7 @@ public static class ResolvingUtils
                      .Select(module => module.FindType(ns, typeName))
                      .OfType<TypeDef>())
         {
-            TypeCache.AddOrUpdate(fullname, _ => type, (_, oldType) => oldType);
+            resolver.TypeCache.AddOrUpdate(fullname, _ => type, (_, oldType) => oldType);
             return type;
         }
 
@@ -101,8 +102,8 @@ public static class ResolvingUtils
 
     private class MethodSelector
     {
-        public TypeDefOrSpec? Type { get; set; }
+        public TypeDesc? Type { get; set; }
         public string FunctionName { get; set; }
-        public TypeDefOrSpec?[] ParameterTypes { get; set; }
+        public TypeDesc?[] ParameterTypes { get; set; }
     }
 }

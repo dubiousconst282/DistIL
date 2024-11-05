@@ -29,6 +29,10 @@ public unsafe struct ValueMatchInterpolator(int literalLength, int formattedCoun
 
     public void SetValue(int index, Value value)
     {
+        if (index > Outputs.Count) {
+            return;
+        }
+
         var key = Outputs.Keys.ElementAt(index);
         var ptr = Outputs[key];
 

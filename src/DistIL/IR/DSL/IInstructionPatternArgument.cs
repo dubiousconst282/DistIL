@@ -1,6 +1,6 @@
 ﻿namespace DistIL.IR;
 
-interface IInstructionPatternArgument
+public interface IInstructionPatternArgument
 {
     
 }

@@ -5,6 +5,12 @@ internal ref struct ValueMatchInterpolator(int literalLength, int formattedCount
 {
     public readonly Dictionary<string, Value> Outputs = [];
     private StringBuilder _builder = new StringBuilder();
+    private Instruction _instructionToMatch;
+
+    public void SetInstruction(Instruction instruction)
+    {
+        _instruction = instruction;
+    }
 
     public void AppendLiteral(string value)
     {

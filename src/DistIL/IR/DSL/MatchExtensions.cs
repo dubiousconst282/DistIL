@@ -12,14 +12,19 @@ public static class MatchExtensions
         TypeDesc numberType = ConstInt.CreateI(0).ResultType;
         var instrPattern = new InstructionPattern("add", [new NumberArgument(42, numberType), new NumberArgument(2, numberType)]);
 
-        if (instruction is BinaryInst b && instrPattern.Arguments.Count == 2) {
+        if (instrPattern.Arguments.Count == 2 && instruction is BinaryInst bin) {
+            var operation = Enum.Parse<BinaryOp>(instrPattern.Operation, true);
 
+            if (operation != bin.Op) {
+                return false;
+            }
+
+            pattern.SetValue(0, bin.Left);
+            pattern.SetValue(1, bin.Right);
+
+            return true;
         }
 
-        var bin = (BinaryInst)instruction;
-        pattern.SetValue(0, bin.Left);
-        pattern.SetValue(1, bin.Right);
-
-        return true;
+        return false;
     } 
 }

@@ -1,16 +1,12 @@
 namespace DistIL.IR.DSL;
 
-[InterpolatedStringHandler]
-internal ref struct ValueMatchInterpolator(int literalLength, int formattedCount)
-{
-    public readonly Dictionary<string, Value> Outputs = [];
-    private StringBuilder _builder = new StringBuilder();
-    private Instruction _instructionToMatch;
+using System.Runtime.CompilerServices;
 
-    public void SetInstruction(Instruction instruction)
-    {
-        _instruction = instruction;
-    }
+[InterpolatedStringHandler]
+public unsafe struct ValueMatchInterpolator(int literalLength, int formattedCount)
+{
+    public readonly Dictionary<string, IntPtr> Outputs = [];
+    private readonly StringBuilder _builder = new StringBuilder();
 
     public void AppendLiteral(string value)
     {
@@ -22,16 +18,20 @@ internal ref struct ValueMatchInterpolator(int literalLength, int formattedCount
     {
         if (name != null)
         {
-            Outputs[name] = new ConstInt(Outputs.Count);
-            Unsafe.AsRef(value) = (T)Outputs[name];
+            Outputs[name] = (IntPtr)Unsafe.AsPointer(ref Unsafe.AsRef(in value));
             _builder.Append("{" + name + "}");
         }
     }
 
-    public Value? GetOutput(string name)
-    {
-        return Outputs.TryGetValue(name, out var value) ? value : null;
+    public string GetPattern() {
+        return _builder.ToString();
     }
-        
-    public string GetPattern() => _builder.ToString();
+
+    public void SetValue(int index, Value value)
+    {
+        var key = Outputs.Keys.ElementAt(index);
+        var ptr = Outputs[key];
+
+        *((Value*)ptr) = value;
+    }
 }

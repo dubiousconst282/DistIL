@@ -8,7 +8,7 @@ public class MatchingTests
     public void TestMatch()
     {
         ConstInt? x = null, y = null;
-        var inst = new BinaryInst(BinaryOp.Add, ConstInt.CreateI(42), ConstInt.CreateI(2));
+        var inst = new BinaryInst(BinaryOp.Add, ConstInt.CreateI(42), new BinaryInst(BinaryOp.Mul, ConstInt.CreateI(1), ConstInt.CreateI(3)));
 
         if (inst.Match($"add ({x}, {y})"))
         {

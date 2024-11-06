@@ -11,6 +11,8 @@ public class BinaryMatcher : IInstructionMatcher
                 return false;
             }
 
+
+
             outputs.SetValue(0, bin.Left);
             outputs.SetValue(1, bin.Right);
 

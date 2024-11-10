@@ -1,6 +1,6 @@
-﻿namespace DistIL.IR;
+﻿namespace DistIL.IR.DSL;
 
-public interface IInstructionPatternArgument
+internal interface IInstructionPatternArgument
 {
     
 }

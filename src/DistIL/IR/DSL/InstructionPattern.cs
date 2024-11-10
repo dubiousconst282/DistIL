@@ -1,18 +1,22 @@
-﻿namespace DistIL.IR;
+﻿namespace DistIL.IR.DSL;
 
 using System;
 using System.Collections.Generic;
 
-using DSL.PatternArguments;
-using Utils.Parser;
+using DistIL.IR.DSL.PatternArguments;
+using DistIL.IR.Utils.Parser;
 
 internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArgument> Arguments)
     : IInstructionPatternArgument
 {
-    public static InstructionPattern Parse(string pattern)
+    public static InstructionPattern? Parse(string pattern)
     {
         // Remove whitespace and validate parentheses balance
         pattern = pattern.Trim();
+        if (pattern.Length == 0) {
+            return null;
+        }
+
         if (pattern[0] != '(' || pattern[^1] != ')')
             throw new ArgumentException("Pattern must start with '(' and end with ')'.");
 
@@ -96,7 +100,7 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
         }
         if (double.TryParse(arg, out var dnumber))
         {
-            return new ConstantArgument(dnumber, PrimType.Int32); // Assuming NumberArgument implements IInstructionPatternArgument
+            return new ConstantArgument(dnumber, PrimType.Double);
         }
 
         return null;

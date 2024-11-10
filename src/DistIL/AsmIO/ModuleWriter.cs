@@ -31,7 +31,7 @@ internal partial class ModuleWriter
         var mainModHandle = _builder.AddModule(
             0, 
             AddString(_mod.ModName), 
-            _builder.GetOrAddGuid(default),
+            _builder.GetOrAddGuid(Guid.NewGuid()),
             _builder.GetOrAddGuid(default),
             _builder.GetOrAddGuid(default)
         );

@@ -35,9 +35,41 @@ public class MethodResolvingTests
     }
 
     [Fact]
+    public void Test_MethodResolvingReturnType()
+    {
+        var selector = "System.Text.StringBuilder::AppendLine(this, string) -> this";
+        var method = _modResolver.FindMethod(selector);
+
+        Assert.NotNull(method);
+        Assert.Equal("System.Text", method.DeclaringType.Namespace);
+        Assert.Equal("StringBuilder", method.DeclaringType.Name);
+        Assert.Equal("AppendLine", method.Name);
+        Assert.Equal("StringBuilder", method.ReturnType.Name);
+        Assert.Equal(2, method.ParamSig.Count);
+        Assert.Equal("StringBuilder", method.ParamSig[0].Type.Name);
+        Assert.Equal("StringBuilder", method.ReturnType.Name);
+        Assert.Equal("String", method.ParamSig[1].Type.Name);
+    }
+
+    [Fact]
     public void Test_MethodResolvingByValues()
     {
         var selector = "System.Console::WriteLine";
+        var method = _modResolver.FindMethod(selector, [ConstString.Create("Hello World")]);
+
+        Assert.NotNull(method);
+        Assert.Equal("System", method.DeclaringType.Namespace);
+        Assert.Equal("Console", method.DeclaringType.Name);
+        Assert.Equal("WriteLine", method.Name);
+        Assert.Equal("Void", method.ReturnType.Name);
+        Assert.Equal(1, method.ParamSig.Count);
+        Assert.Equal("String", method.ParamSig[0].Type.Name);
+    }
+
+    [Fact]
+    public void Test_MethodResolvingByValuesReturnType()
+    {
+        var selector = "System.Console::WriteLine() -> void";
         var method = _modResolver.FindMethod(selector, [ConstString.Create("Hello World")]);
 
         Assert.NotNull(method);

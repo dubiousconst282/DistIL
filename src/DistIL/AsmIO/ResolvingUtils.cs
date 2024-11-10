@@ -53,13 +53,18 @@ public static class ResolvingUtils
             .Where(method => method.ParamSig.Count == convertedSelector.ParameterTypes.Count).ToArray();
 
         foreach (var method in methods) {
-            for (int i = 0; i < method.ParamSig.Count; i++) {
-                if (method.ParamSig[i].Type == convertedSelector.ParameterTypes[i]) {
-                    resolver.FunctionCache.Add(selector, method);
+            if (method.ParamSig.Select((type, index) => (i: index, e: type)).Any(_ => _.e != convertedSelector.ParameterTypes[_.i])) {
+                continue;
+            }
 
-                    return method;
+            if (selector.ReturnType is not null) {
+                if (method.ReturnType != selector.ReturnType) {
+                    continue;
                 }
             }
+
+            resolver.FunctionCache.Add(selector, method);
+            return method;
         }
 
         return methods.FirstOrDefault();
@@ -68,7 +73,6 @@ public static class ResolvingUtils
     private static MethodSelector GetSelector(this ModuleResolver resolver, string selector)
     {
         var spl = selector.Split("::");
-
         var type = GetTypeSpec(resolver, spl[0].Trim());
 
         var methodPart = spl[1].Trim();
@@ -76,8 +80,20 @@ public static class ResolvingUtils
 
         var parameterPart = methodPart[methodName.Length..].Trim('(', ')');
 
+        string? returnTypeString = null;
+        if (parameterPart.Contains("->"))
+        {
+            var parts = parameterPart.Split("->", StringSplitOptions.RemoveEmptyEntries);
+            parameterPart = parts[0].Trim();
+            returnTypeString = parts.Length > 1 ? parts[1].Trim() : null;
+        }
+
         TypeDesc? GetParameterType(string fullname)
         {
+            if (fullname is null) {
+                return null;
+            }
+
             return fullname == "this" ? type : GetTypeSpec(resolver, fullname.Trim());
         }
 
@@ -86,7 +102,7 @@ public static class ResolvingUtils
             .Select(GetParameterType)
             .ToList();
 
-        return new MethodSelector(type, methodName, parameterTypes);
+        return new MethodSelector(type, methodName, parameterTypes, GetParameterType(returnTypeString));
     }
 
     private static TypeDesc? GetTypeSpec(this ModuleResolver resolver, string fullname)
@@ -115,7 +131,7 @@ public static class ResolvingUtils
         return null;
     }
 
-    internal record MethodSelector(TypeDesc? Type, string MethodName, List<TypeDesc?> ParameterTypes)
+    internal record MethodSelector(TypeDesc? Type, string MethodName, List<TypeDesc?> ParameterTypes, TypeDesc? ReturnType)
     {
         public override int GetHashCode()
         {
@@ -125,7 +141,7 @@ public static class ResolvingUtils
                 hash = HashCode.Combine(hash, parameterType);
             }
 
-            hash = HashCode.Combine(hash, Type, MethodName);
+            hash = HashCode.Combine(hash, Type, MethodName, ReturnType);
 
             return hash;
         }

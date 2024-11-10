@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 public unsafe struct ValueMatchInterpolator(int literalLength, int formattedCount)
 {
     public readonly Dictionary<string, IntPtr> Outputs = [];
+    public readonly Dictionary<string, Value> OutputBuffer = [];
     private readonly StringBuilder _builder = new StringBuilder();
 
     public void AppendLiteral(string value)
@@ -27,15 +28,32 @@ public unsafe struct ValueMatchInterpolator(int literalLength, int formattedCoun
         return _builder.ToString();
     }
 
-    public void SetValue(int index, Value value)
+    private void SetValue(int index, Value value)
     {
         if (index > Outputs.Count) {
             return;
         }
 
         var key = Outputs.Keys.ElementAt(index);
-        var ptr = Outputs[key];
+        SetValue(key, value);
+    }
+
+    private void SetValue(string name, Value value)
+    {
+        var ptr = Outputs[name];
 
         *((Value*)ptr) = value;
+    }
+
+    public void AddToOutputBuffer(string key, Value value)
+    {
+        OutputBuffer[key] = value;
+    }
+
+    public void ApplyOutputs()
+    {
+        foreach (var output in OutputBuffer) {
+            SetValue(output.Key, output.Value);
+        }
     }
 }

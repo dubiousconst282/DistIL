@@ -1,8 +1,6 @@
-﻿namespace DistIL.IR;
+﻿namespace DistIL.IR.DSL;
 
-using DSL;
-
-public interface IInstructionMatcher
+internal interface IInstructionMatcher
 {
     bool Match(Instruction instruction, ValueMatchInterpolator outputs, InstructionPattern pattern);
 }

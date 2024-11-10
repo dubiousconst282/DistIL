@@ -1,6 +1,6 @@
 ﻿namespace DistIL.IR.DSL.PatternArguments;
 
-public record NumberArgument(object Value, TypeDesc? Type) : IInstructionPatternArgument
+internal record ConstantArgument(object Value, TypeDesc? Type) : IInstructionPatternArgument
 {
 
 }

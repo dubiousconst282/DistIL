@@ -84,6 +84,11 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
 
     private static IInstructionPatternArgument ParseArgument(string arg)
     {
+        if (arg.StartsWith('*') || arg.StartsWith('\''))
+        {
+            return ParseStringArgument(arg);
+        }
+
         if (arg.StartsWith('{') && arg.EndsWith('}'))
         {
             return new OutputArgument(arg[1..^1]);
@@ -103,6 +108,30 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
             return new ConstantArgument(dnumber, PrimType.Double);
         }
 
-        return null;
+        throw new ArgumentException("Invalid Argument");
     }
+
+    private static IInstructionPatternArgument ParseStringArgument(string arg)
+    {
+        StringOperation operation = StringOperation.None;
+
+        if (arg.StartsWith('*') && arg.EndsWith('*')) {
+            operation = StringOperation.Contains;
+        }
+        else if(arg.StartsWith('*')) {
+            operation = StringOperation.EndsWith;
+        }
+        else if(arg.EndsWith('*')) {
+            operation = StringOperation.StartsWith;
+        }
+        
+        arg = arg.TrimStart('*').TrimEnd('*');
+
+        if (arg.StartsWith('\'') && arg.EndsWith('\'')) {
+            return new StringArgument(arg[1..^1], operation);
+        }
+
+        throw new ArgumentException("Invalid string");
+    }
+
 }

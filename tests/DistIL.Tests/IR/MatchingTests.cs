@@ -19,4 +19,15 @@ public class MatchingTests
         Assert.IsType<ConstInt>(x);
         Assert.Equal(42L, x.Value);
     }
+
+    [Fact]
+    public void Test_Strings()
+    {
+        var instr = new BinaryInst(BinaryOp.Add, ConstString.Create("hello"), ConstString.Create("world")); //Todo: fix
+
+        Assert.True(instr.Match($"(add 'hello' ?)"));
+        Assert.True(instr.Match($"(add *'o' ?)"));
+        Assert.True(instr.Match($"(add 'h'* ?)"));
+        Assert.True(instr.Match($"(add *'l'* ?)"));
+    }
 }

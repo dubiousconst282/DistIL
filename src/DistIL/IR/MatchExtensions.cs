@@ -4,6 +4,8 @@ using DSL.PatternArguments;
 using DSL;
 
 using Utils.Parser;
+using System;
+
 
 public static class MatchExtensions
 {
@@ -41,8 +43,8 @@ public static class MatchExtensions
             case OutputArgument output:
                 outputs.Add(output.Name, value);
                 return true;
-            case ConstantArgument number when value is Const constant:
-                return MatchNumberArgument(number, constant);
+            case ConstantArgument constArg when value is Const constant:
+                return MatchConstArgument(constArg, constant);
             case InstructionPattern pattern:
                 return MatchValue(value, pattern, outputs);
             default:
@@ -58,9 +60,14 @@ public static class MatchExtensions
         };
     }
 
-    private static bool MatchNumberArgument(ConstantArgument constantArg, Const constant)
+    private static bool MatchConstArgument(ConstantArgument constantArg, Const constant)
     {
         if (constantArg.Type == constant.ResultType) {
+            if (constantArg is StringArgument strArg)
+            {
+                return MatchStringArg(strArg, constant as ConstString);
+            }
+
             object? value = constant switch {
                 ConstInt constInt => constInt.Value,
                 ConstFloat constFloat => constFloat.Value,
@@ -73,6 +80,22 @@ public static class MatchExtensions
 
         return false;
     }
+
+    private static bool MatchStringArg(StringArgument strArg, ConstString constant)
+    {
+        if (strArg.Operation == StringOperation.StartsWith) {
+            return constant.Value.StartsWith(strArg.Value.ToString()!);
+        }
+        if (strArg.Operation == StringOperation.EndsWith) {
+            return constant.Value.EndsWith(strArg.Value.ToString()!);
+        }
+        if (strArg.Operation == StringOperation.Contains) {
+            return constant.Value.Contains(strArg.Value.ToString()!);
+        }
+
+        return strArg.Value.Equals(constant.Value);
+    }
+
 
     private static bool MatchBinary(BinaryInst bin, InstructionPattern pattern, OutputPattern outputs)
     {

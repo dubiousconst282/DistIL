@@ -111,7 +111,7 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
             return new OutputArgument(arg[1..^1]);
         }
 
-        if (arg == "?")
+        if (arg == "_")
         {
             return new IgnoreArgument();
         }

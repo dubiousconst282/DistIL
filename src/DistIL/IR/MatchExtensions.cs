@@ -49,10 +49,24 @@ public static class MatchExtensions
                 return MatchConstArgument(constArg, constant);
             case InstructionPattern pattern:
                 return MatchValue(value, pattern, outputs);
+            case TypedArgument typed:
+                return MatchTypeSpecifier(value, typed);
             default:
                 return false;
         }
     }
+
+    private static bool MatchTypeSpecifier(Value value, TypedArgument typed)
+    {
+        // ToDo: implement type matching
+        // check if "const" or "instr" otherwise use primitive type
+        if (typed.Argument is null)
+        {
+        }
+
+        return false;
+    }
+
 
     private static bool MatchValue(Value value, IInstructionPatternArgument pattern, OutputPattern outputs)
     {

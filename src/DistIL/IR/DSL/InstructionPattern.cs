@@ -84,8 +84,21 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
 
     private static IInstructionPatternArgument ParseArgument(string arg)
     {
+        if (arg.Contains(':'))
+        {
+            var left = arg[..arg.IndexOf(':')];
+            var typeSpecifier = arg[arg.IndexOf(':')..];
+
+            var argument = left != "" ? ParseArgument(left) : null;
+            return new TypedArgument(argument, typeSpecifier);
+        }
+
         if (arg.StartsWith('!')) {
             return ParseNot(arg);
+        }
+
+        if (arg.StartsWith(':')) {
+            return new TypedArgument(default, arg[1..]);
         }
 
         if (arg.StartsWith('*') || arg.StartsWith('\''))
@@ -114,14 +127,12 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
 
         throw new ArgumentException("Invalid Argument");
     }
-
     private static IInstructionPatternArgument ParseNot(string arg)
     {
         var trimmed = arg.TrimStart('!');
 
         return new NotArgument(ParseArgument(trimmed));
     }
-
 
     private static IInstructionPatternArgument ParseStringArgument(string arg)
     {

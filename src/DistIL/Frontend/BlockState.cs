@@ -18,7 +18,7 @@ internal class BlockState
     private InstFlags _prefixFlags = InstFlags.None;
     private TypeDesc? _callConstraint;
 
-    private SourceLocation _currLoc = default;
+    private DebugSourceLocation? _currDebugLoc = null;
 
     public BlockState(ILImporter importer, int startOffset)
     {
@@ -36,7 +36,7 @@ internal class BlockState
     public void Emit(Instruction inst)
     {
         Block.InsertLast(inst);
-        inst.Location = _currLoc;
+        inst.DebugLoc = _currDebugLoc;
     }
 
     public void PushNoEmit(Value value)
@@ -148,11 +148,23 @@ internal class BlockState
     public void ImportCode(Span<ILInstruction> code)
     {
         MergePredStacks();
-        _currLoc = new SourceLocation(_body.Definition, 0);
+        var seqPoints = _importer._debugSyms?.SequencePoints;
+        int seqIndex = _importer._debugSyms?.IndexOfSequencePoint(code[0].Offset) ?? -1;
 
         foreach (ref var inst in code) {
-            _currLoc = _currLoc.WithOffset(inst.Offset);
-            
+            // Update debug location info
+            if (seqPoints != null) {
+                while (seqIndex + 1 < seqPoints.Count &&  inst.Offset >= seqPoints[seqIndex + 1].Offset) {
+                    seqIndex++;
+                }
+                var sp = seqPoints[seqIndex];
+
+                if (sp.IsHidden) {
+                    _currDebugLoc = null;
+                } else if (_currDebugLoc == null || !SequencePoint.Create(_currDebugLoc, 0).IsSameSourceRange(sp)) {
+                    _currDebugLoc = new DebugSourceLocation(sp);
+                }
+            }
             var prefix = InstFlags.None;
             var opcode = inst.OpCode;
 

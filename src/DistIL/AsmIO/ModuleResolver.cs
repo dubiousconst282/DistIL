@@ -7,10 +7,9 @@ using System.Text.RegularExpressions;
 public class ModuleResolver
 {
     // TODO: Do we need to care about FullName (public keys and versions)?
-    protected readonly Dictionary<string, ModuleDef> _cache = new(StringComparer.OrdinalIgnoreCase);
+    internal readonly Dictionary<string, ModuleDef> _cache = new(StringComparer.OrdinalIgnoreCase);
     internal readonly Dictionary<ResolvingUtils.MethodSelector, MethodDesc> FunctionCache = new();
     internal readonly Dictionary<string, TypeDefOrSpec> TypeCache = new();
-    internal readonly List<ModuleDef> _loadedModules = new();
 
     private string[] _searchPaths = [];
     internal readonly ICompilationLogger? _logger;
@@ -164,8 +163,5 @@ public class ModuleResolver
     private void AddToCache(string name, ModuleDef module)
     {
         _cache.Add(name, module);
-
-        module._resolverIndex = _loadedModules.Count;
-        _loadedModules.Add(module);
     }
 }

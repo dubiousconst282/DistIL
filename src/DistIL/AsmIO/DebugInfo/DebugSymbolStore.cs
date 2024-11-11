@@ -4,16 +4,11 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 
 // https://github.com/dotnet/runtime/blob/main/docs/design/specs/PortablePdb-Metadata.md
-public partial class DebugSymbolStore
+public partial class DebugSymbolStore(ModuleDef module)
 {
-    public ModuleDef Module { get; }
+    public ModuleDef Module { get; } = module;
 
     internal readonly Dictionary<MethodDef, MethodDebugSymbols> _methodSymbols = new();
-
-    public DebugSymbolStore(ModuleDef module)
-    {
-        Module = module;
-    }
 
     public virtual MethodDebugSymbols? GetMethodSymbols(MethodDef method)
     {
@@ -30,9 +25,9 @@ public partial class DebugSymbolStore
     }
 
     /// <summary> Scans for all documents associated with the current debug symbols. </summary>
-    public virtual IReadOnlyCollection<SourceDocument> GetDocuments()
+    public virtual IReadOnlyCollection<DebugSourceDocument> GetDocuments()
     {
-        var set = new HashSet<SourceDocument>();
+        var set = new HashSet<DebugSourceDocument>();
 
         foreach (var method in _methodSymbols.Values) {
             if (method.Document != null) {
@@ -53,20 +48,20 @@ public partial class DebugSymbolStore
 internal partial class PortablePdbSymbolStore : DebugSymbolStore
 {
     readonly MetadataReader _reader;
-    readonly SourceDocument[] _documents;
+    readonly DebugSourceDocument[] _documents;
 
     public PortablePdbSymbolStore(ModuleDef module, MetadataReader reader)
         : base(module)
     {
         _reader = reader;
 
-        _documents = new SourceDocument[reader.Documents.Count];
+        _documents = new DebugSourceDocument[reader.Documents.Count];
         int idx = 0;
 
         foreach (var handle in reader.Documents) {
             var doc = reader.GetDocument(handle);
 
-            _documents[idx++] = new SourceDocument() {
+            _documents[idx++] = new DebugSourceDocument() {
                 Name = reader.GetString(doc.Name),
                 Hash = reader.GetBlobBytes(doc.Hash),
                 Language = reader.GetGuid(doc.Language),
@@ -111,9 +106,9 @@ internal partial class PortablePdbSymbolStore : DebugSymbolStore
         return symbols;
     }
 
-    public override IReadOnlyCollection<SourceDocument> GetDocuments()
+    public override IReadOnlyCollection<DebugSourceDocument> GetDocuments()
     {
-        var docs = (HashSet<SourceDocument>)base.GetDocuments();
+        var docs = (HashSet<DebugSourceDocument>)base.GetDocuments();
 
         if (docs.Count == 0) {
             return _documents;
@@ -122,7 +117,7 @@ internal partial class PortablePdbSymbolStore : DebugSymbolStore
         return docs;
     }
 
-    private SourceDocument? GetDocument(DocumentHandle handle)
+    private DebugSourceDocument? GetDocument(DocumentHandle handle)
     {
         return handle.IsNil ? null : _documents[MetadataTokens.GetRowNumber(handle) - 1];
     }

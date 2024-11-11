@@ -1,6 +1,6 @@
 namespace DistIL.AsmIO;
 
-public class SourceDocument
+public class DebugSourceDocument
 {
     public string Name { get; init; } = "";
     public byte[] Hash { get; init; } = [];
@@ -10,7 +10,7 @@ public class SourceDocument
 
     public override string ToString() => Path.GetFileName(Name);
     
-    public override bool Equals(object? obj) => obj is SourceDocument other && other.Name == Name;
+    public override bool Equals(object? obj) => obj is DebugSourceDocument other && other.Name == Name;
     public override int GetHashCode() => Name.GetHashCode();
 
     // Known GUIDs

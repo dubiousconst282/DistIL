@@ -53,7 +53,7 @@ public static class ResolvingUtils
             .Where(method => method.ParamSig.Count == convertedSelector.ParameterTypes.Count).ToArray();
 
         foreach (var method in methods) {
-            if (method.ParamSig.Select((type, index) => (i: index, e: type)).Any(_ => _.e != convertedSelector.ParameterTypes[_.i])) {
+            if (method.ParamSig.Select((type, index) => (i: index, e: type)).Any(_ => _.e.Type != convertedSelector.ParameterTypes[_.i])) {
                 continue;
             }
 
@@ -88,7 +88,7 @@ public static class ResolvingUtils
             returnTypeString = parts.Length > 1 ? parts[1].Trim() : null;
         }
 
-        TypeDesc? GetParameterType(string fullname)
+        TypeDesc? GetParameterType(string? fullname)
         {
             if (fullname is null) {
                 return null;
@@ -121,7 +121,7 @@ public static class ResolvingUtils
         var typeName = spl.Last();
         var ns = string.Join('.', spl[..^1]);
 
-        foreach (var type in resolver._loadedModules
+        foreach (var type in resolver._cache.Values
                      .Select(module => module.FindType(ns, typeName))
                      .OfType<TypeDef>()) {
             resolver.TypeCache.Add(fullname, type);
@@ -137,7 +137,7 @@ public static class ResolvingUtils
         {
             int hash = 5;
 
-            foreach (TypeDesc parameterType in ParameterTypes) {
+            foreach (var parameterType in ParameterTypes) {
                 hash = HashCode.Combine(hash, parameterType);
             }
 
@@ -148,8 +148,9 @@ public static class ResolvingUtils
 
         public virtual bool Equals(MethodSelector? other)
         {
-            return MethodName.Equals(other.MethodName)
-                   && Type.Equals(other.Type)
+            return other != null 
+                   && MethodName.Equals(other.MethodName)
+                   && Type == other.Type
                    && ParameterTypes.SequenceEqual(other.ParameterTypes);
         }
     }

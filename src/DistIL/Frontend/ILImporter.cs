@@ -11,6 +11,7 @@ public class ILImporter
     internal readonly ILMethodBody _ilBody;
     internal readonly VarFlags[] _varFlags;
     internal readonly Value?[] _varSlots;
+    internal readonly MethodDebugSymbols? _debugSyms;
 
     readonly Dictionary<int, BlockState> _blocks = new();
     internal List<BlockState> _blocksEndingWithEhResume = new();
@@ -24,6 +25,7 @@ public class ILImporter
         _body = new MethodBody(method);
 
         _regionTree = RegionNode.BuildTree(_ilBody.ExceptionClauses);
+        _debugSyms = method.GetDebugSymbols();
 
         int numVars = _body.Args.Length + _ilBody.Locals.Length;
         _varFlags = new VarFlags[numVars];

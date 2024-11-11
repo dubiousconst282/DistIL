@@ -15,8 +15,7 @@ public abstract class Instruction : TrackedValue
     internal UseDef[] _useDefs;
     public ReadOnlySpan<Value> Operands => _operands;
 
-    /// <summary> Location of the source CIL instruction. </summary>
-    public SourceLocation Location { get; set; }
+    public DebugSourceLocation? DebugLoc { get; set; }
 
     public abstract string InstName { get; }
 

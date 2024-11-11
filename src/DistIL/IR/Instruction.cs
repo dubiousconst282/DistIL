@@ -15,7 +15,7 @@ public abstract class Instruction : TrackedValue
     internal UseDef[] _useDefs;
     public ReadOnlySpan<Value> Operands => _operands;
 
-    public DebugSourceLocation? DebugLoc { get; set; }
+    public DebugSourceLocation? DebugLoc { get; internal set; }
 
     public abstract string InstName { get; }
 
@@ -204,5 +204,11 @@ public abstract class Instruction : TrackedValue
     public override SymbolTable? GetSymbolTable()
     {
         return Block?.Method.GetSymbolTable();
+    }
+
+    public Instruction SetDebugSourceLocation(DebugSourceDocument doc, int startLine, int startColumn, int endLine, int endColumn)
+    {
+        DebugLoc = new DebugSourceLocation(doc, startLine, endLine, startColumn, endColumn);
+        return this;
     }
 }

@@ -84,6 +84,10 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
 
     private static IInstructionPatternArgument ParseArgument(string arg)
     {
+        if (arg.StartsWith('!')) {
+            return ParseNot(arg);
+        }
+
         if (arg.StartsWith('*') || arg.StartsWith('\''))
         {
             return ParseStringArgument(arg);
@@ -110,6 +114,14 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
 
         throw new ArgumentException("Invalid Argument");
     }
+
+    private static IInstructionPatternArgument ParseNot(string arg)
+    {
+        var trimmed = arg.TrimStart('!');
+
+        return new NotArgument(ParseArgument(trimmed));
+    }
+
 
     private static IInstructionPatternArgument ParseStringArgument(string arg)
     {

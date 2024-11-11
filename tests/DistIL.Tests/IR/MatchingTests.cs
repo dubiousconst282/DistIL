@@ -30,4 +30,12 @@ public class MatchingTests
         Assert.True(instr.Match($"(add 'h'* ?)"));
         Assert.True(instr.Match($"(add *'l'* ?)"));
     }
+
+    [Fact]
+    public void TestNot()
+    {
+        var inst = new BinaryInst(BinaryOp.Add, ConstInt.CreateI(42), new BinaryInst(BinaryOp.Mul, ConstInt.CreateI(1), ConstInt.CreateI(3)));
+
+        Assert.True(inst.Match($"(add ? !42)"));
+    }
 }

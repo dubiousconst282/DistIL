@@ -38,6 +38,8 @@ public static class MatchExtensions
     {
         switch (argument)
         {
+            case NotArgument not:
+                return !MatchArgument(value, not.Inner, outputs);
             case IgnoreArgument:
                 return true;
             case OutputArgument output:

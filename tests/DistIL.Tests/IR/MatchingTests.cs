@@ -1,9 +1,30 @@
 ﻿namespace DistIL.Tests.IR;
 
+using DistIL.AsmIO;
+using DistIL.Frontend;
 using DistIL.IR;
 
+[Collection("ModuleResolver")]
 public class MatchingTests
 {
+    private readonly ModuleResolver _modResolver;
+    private MethodDesc _stub;
+
+
+    public MatchingTests(ModuleResolverFixture mrf)
+    {
+        _modResolver = mrf.Resolver;
+        var type = _modResolver.Import(typeof(MatchingTests));
+        _stub = type.FindMethod("StubMethod");
+        
+    }
+
+    public static void StubMethod()
+    {
+        var x = 2 + 6;
+        System.Console.WriteLine(x);
+    }
+
     [Fact]
     public void TestMatch()
     {

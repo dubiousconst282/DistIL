@@ -79,7 +79,6 @@ public static class MatchExtensions
         return result;
     }
 
-
     private static bool MatchValue(Value value, IInstructionPatternArgument pattern, OutputPattern outputs)
     {
         return pattern switch {

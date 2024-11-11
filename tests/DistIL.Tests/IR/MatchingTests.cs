@@ -1,9 +1,25 @@
 ﻿namespace DistIL.Tests.IR;
 
+using DistIL.AsmIO;
 using DistIL.IR;
 
+[Collection("ModuleResolver")]
 public class MatchingTests
 {
+    private readonly ModuleResolver _modResolver;
+    private readonly MethodDesc? _stub;
+
+    public MatchingTests(ModuleResolverFixture mrf)
+    {
+        _modResolver = mrf.Resolver;
+        _stub = _modResolver.Import(typeof(MatchingTests)).FindMethod("Stub");
+    }
+
+    static void Stub(string str, string s)
+    {
+
+    }
+
     [Fact]
     public void TestMatch()
     {
@@ -37,14 +53,14 @@ public class MatchingTests
     }
 
     [Fact]
-    public void Test_Strings()
+    public void TestCallStrings()
     {
-        var instr = new BinaryInst(BinaryOp.Add, ConstString.Create("hello"), ConstString.Create("world")); //Todo: fix
+        var instr = new CallInst(_stub, [ConstString.Create("hello"), ConstString.Create("world")]);
 
-        Assert.True(instr.Match($"(add 'hello' _)"));
-        Assert.True(instr.Match($"(add *'o' _)"));
-        Assert.True(instr.Match($"(add 'h'* _)"));
-        Assert.True(instr.Match($"(add *'l'* _)"));
+        Assert.True(instr.Match($"(call 'hello' _)"));
+        Assert.True(instr.Match($"(call *'o' _)"));
+        Assert.True(instr.Match($"(call _ 'h'*)"));
+        Assert.True(instr.Match($"(call *'l'* _)"));
     }
 
 }

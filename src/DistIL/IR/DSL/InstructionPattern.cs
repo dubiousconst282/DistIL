@@ -87,7 +87,7 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
         if (arg.Contains(':'))
         {
             var left = arg[..arg.IndexOf(':')];
-            var typeSpecifier = arg[arg.IndexOf(':')..];
+            var typeSpecifier = arg[arg.IndexOf(':')..].TrimStart(':');
 
             var argument = left != "" ? ParseArgument(left) : null;
             return new TypedArgument(argument, typeSpecifier);

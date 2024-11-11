@@ -50,21 +50,33 @@ public static class MatchExtensions
             case InstructionPattern pattern:
                 return MatchValue(value, pattern, outputs);
             case TypedArgument typed:
-                return MatchTypeSpecifier(value, typed);
+                return MatchTypeSpecifier(value, typed, outputs);
             default:
                 return false;
         }
     }
 
-    private static bool MatchTypeSpecifier(Value value, TypedArgument typed)
+    private static bool MatchTypeSpecifier(Value value, TypedArgument typed, OutputPattern outputs)
     {
-        // ToDo: implement type matching
-        // check if "const" or "instr" otherwise use primitive type
-        if (typed.Argument is null)
+        bool result = true;
+        if (typed.Argument is not null)
         {
+            result = MatchArgument(value, typed.Argument, outputs);
         }
 
-        return false;
+        if (typed.Type is "const")
+        {
+            result &= value is Const;
+        }
+        else if (typed.Type is "instr")
+        {
+            result &= value is Instruction;
+        }
+        else {
+            result &= PrimType.GetFromAlias(typed.Type) == value.ResultType;
+        }
+
+        return result;
     }
 
 

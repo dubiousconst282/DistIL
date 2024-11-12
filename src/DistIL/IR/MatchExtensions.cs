@@ -60,19 +60,24 @@ public static class MatchExtensions
 
     private static bool MatchNumOperator(Value value, NumberOperatorArgument numOp, OutputPattern outputs)
     {
-        if (numOp.Argument is not ConstantArgument constant)
+        if (numOp.Argument is not ConstantArgument constantArg)
         {
             return false;
         }
 
-        if (constant.Type != PrimType.Int32 && constant.Type != PrimType.Double)
+        if (constantArg.Type != PrimType.Int32 && constantArg.Type != PrimType.Double)
         {
             return false;
         }
 
-        if (numOp.Operator == '<')
-        {
-            // Todo: implement number operator matching
+        dynamic constant = constantArg;
+        dynamic val = value;
+
+        if (numOp.Operator == '<') {
+            return constant.Value < val.Value;
+        }
+        else if (numOp.Operator == '>') {
+            return constant.Value > val.Value;
         }
 
         return false;

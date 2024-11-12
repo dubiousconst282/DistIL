@@ -13,6 +13,13 @@ public static class MatchExtensions
         return MatchInstruction(instruction, outputs.Pattern!, outputs);
     }
 
+    public static bool Match(this Instruction instruction, string pattern)
+    {
+        var outputs = new OutputPattern(pattern);
+
+        return MatchInstruction(instruction, outputs.Pattern!, outputs);
+    }
+
     private static bool MatchInstruction(Instruction instruction, InstructionPattern instrPattern, OutputPattern outputs)
     {
         if (instrPattern.Arguments.Count == 2 && instruction is BinaryInst bin) {

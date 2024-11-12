@@ -30,11 +30,12 @@ public class MatchingTests
         var inst = new BinaryInst(BinaryOp.Add, ConstInt.CreateI(42), new BinaryInst(BinaryOp.Mul, ConstInt.CreateI(1), ConstInt.CreateI(3)));
 
         Assert.True(inst.Match("(add 42 {instr})", out var outputs));
+        var instr = (BinaryInst)outputs["instr"];
         Assert.IsType<BinaryInst>(instr);
         Assert.Equal(BinaryOp.Mul, instr.Op);
 
-        ConstInt? x = null;
-        Assert.True(inst.Match($"(add {x} (mul _ _))"));
+        Assert.True(inst.Match("(add {x} (mul _ _))", out outputs));
+        var x = (ConstInt)outputs["x"];
         Assert.IsType<ConstInt>(x);
         Assert.Equal(42L, x.Value);
     }
@@ -44,7 +45,7 @@ public class MatchingTests
     {
         var inst = new BinaryInst(BinaryOp.Add, ConstInt.CreateI(42), new BinaryInst(BinaryOp.Mul, ConstInt.CreateI(1), ConstInt.CreateI(3)));
 
-        Assert.True(inst.Match($"(add _ !42)"));
+        Assert.True(inst.Match("(add _ !42)"));
     }
 
     [Fact]
@@ -52,7 +53,7 @@ public class MatchingTests
     {
         var inst = new BinaryInst(BinaryOp.Add, ConstInt.CreateI(42), new BinaryInst(BinaryOp.Mul, ConstInt.CreateI(1), ConstInt.CreateI(3)));
 
-        Assert.True(inst.Match($"(add :int !42)"));
+        Assert.True(inst.Match("(add :int !42)"));
     }
 
     [Fact]

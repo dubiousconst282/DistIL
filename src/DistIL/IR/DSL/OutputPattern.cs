@@ -1,6 +1,6 @@
 namespace DistIL.IR.DSL;
 
-public unsafe struct OutputPattern
+public struct OutputPattern
 {
     private readonly Dictionary<string, Value> _outputBuffer = [];
     internal InstructionPattern? Pattern = null;

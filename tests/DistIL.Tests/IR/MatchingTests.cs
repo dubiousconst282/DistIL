@@ -29,8 +29,7 @@ public class MatchingTests
     {
         var inst = new BinaryInst(BinaryOp.Add, ConstInt.CreateI(42), new BinaryInst(BinaryOp.Mul, ConstInt.CreateI(1), ConstInt.CreateI(3)));
 
-        BinaryInst? instr = null;
-        Assert.True(inst.Match($"(add 42 {instr})"));
+        Assert.True(inst.Match("(add 42 {instr})", out var outputs));
         Assert.IsType<BinaryInst>(instr);
         Assert.Equal(BinaryOp.Mul, instr.Op);
 

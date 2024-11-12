@@ -2,27 +2,15 @@ namespace DistIL.IR;
 
 using DSL.PatternArguments;
 using DSL;
-
 using Utils.Parser;
-using System;
-
 
 public static class MatchExtensions
 {
-    public static bool Match(this Instruction instruction, OutputPattern outputs)
+    public static bool Match(this Instruction instruction, string pattern, out OutputPattern outputs)
     {
-        var instrPattern = outputs.GetPattern();
+        outputs = new OutputPattern(pattern);
 
-        if (instrPattern is null) {
-            return false;
-        }
-
-        if (MatchInstruction(instruction, instrPattern, outputs)) {
-            outputs.Apply();
-            return true;
-        }
-
-        return false;
+        return MatchInstruction(instruction, outputs.Pattern!, outputs);
     }
 
     private static bool MatchInstruction(Instruction instruction, InstructionPattern instrPattern, OutputPattern outputs)
@@ -36,8 +24,7 @@ public static class MatchExtensions
 
     private static bool MatchArgument(Value value, IInstructionPatternArgument argument, OutputPattern outputs)
     {
-        switch (argument)
-        {
+        switch (argument) {
             case NotArgument not:
                 return !MatchArgument(value, not.Inner, outputs);
             case IgnoreArgument:
@@ -60,13 +47,11 @@ public static class MatchExtensions
 
     private static bool MatchNumOperator(Value value, NumberOperatorArgument numOp, OutputPattern outputs)
     {
-        if (numOp.Argument is not ConstantArgument constantArg)
-        {
+        if (numOp.Argument is not ConstantArgument constantArg) {
             return false;
         }
 
-        if (constantArg.Type != PrimType.Int32 && constantArg.Type != PrimType.Double)
-        {
+        if (constantArg.Type != PrimType.Int32 && constantArg.Type != PrimType.Double) {
             return false;
         }
 
@@ -75,8 +60,7 @@ public static class MatchExtensions
 
         if (numOp.Operator == '<') {
             return constant.Value < val.Value;
-        }
-        else if (numOp.Operator == '>') {
+        } else if (numOp.Operator == '>') {
             return constant.Value > val.Value;
         }
 
@@ -87,20 +71,15 @@ public static class MatchExtensions
     private static bool MatchTypeSpecifier(Value value, TypedArgument typed, OutputPattern outputs)
     {
         bool result = true;
-        if (typed.Argument is not null)
-        {
+        if (typed.Argument is not null) {
             result = MatchArgument(value, typed.Argument, outputs);
         }
 
-        if (typed.Type is "const")
-        {
+        if (typed.Type is "const") {
             result &= value is Const;
-        }
-        else if (typed.Type is "instr")
-        {
+        } else if (typed.Type is "instr") {
             result &= value is Instruction;
-        }
-        else {
+        } else {
             result &= PrimType.GetFromAlias(typed.Type) == value.ResultType;
         }
 
@@ -110,7 +89,7 @@ public static class MatchExtensions
     private static bool MatchValue(Value value, IInstructionPatternArgument pattern, OutputPattern outputs)
     {
         return pattern switch {
-            InstructionPattern p when value is Instruction instruction  => MatchInstruction(instruction, p, outputs),
+            InstructionPattern p when value is Instruction instruction => MatchInstruction(instruction, p, outputs),
             _ => MatchArgument(value, pattern, outputs)
         };
     }
@@ -118,8 +97,7 @@ public static class MatchExtensions
     private static bool MatchConstArgument(ConstantArgument constantArg, Const constant)
     {
         if (constantArg.Type == constant.ResultType) {
-            if (constantArg is StringArgument strArg)
-            {
+            if (constantArg is StringArgument strArg) {
                 return MatchStringArg(strArg, constant as ConstString);
             }
 

@@ -58,6 +58,14 @@ public class MatchingTests
     }
 
     [Fact]
+    public void TestNumberOperator()
+    {
+        var inst = new BinaryInst(BinaryOp.Add, ConstInt.CreateI(42), new BinaryInst(BinaryOp.Mul, ConstInt.CreateI(1), ConstInt.CreateI(3)));
+
+        Assert.True(inst.Match($"(add >5 _)"));
+    }
+
+    [Fact]
     public void Test_Strings()
     {
         var instr = new BinaryInst(BinaryOp.Add, ConstString.Create("hello"), ConstString.Create("world")); //Todo: fix

@@ -97,6 +97,10 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
             return ParseNot(arg);
         }
 
+        if (arg.StartsWith('<') || arg.StartsWith('>')) {
+            return ParseNumOperator(arg);
+        }
+
         if (arg.StartsWith(':')) {
             return new TypedArgument(default, arg[1..]);
         }
@@ -127,6 +131,15 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
 
         throw new ArgumentException("Invalid Argument");
     }
+
+    private static IInstructionPatternArgument ParseNumOperator(string arg)
+    {
+        var op = arg[0];
+
+        return new NumberOperatorArgument(op, ParseArgument(arg[1..]));
+    }
+
+
     private static IInstructionPatternArgument ParseNot(string arg)
     {
         var trimmed = arg.TrimStart('!');

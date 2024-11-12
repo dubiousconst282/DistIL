@@ -51,10 +51,33 @@ public static class MatchExtensions
                 return MatchValue(value, pattern, outputs);
             case TypedArgument typed:
                 return MatchTypeSpecifier(value, typed, outputs);
+            case NumberOperatorArgument numOp:
+                return MatchNumOperator(value, numOp, outputs);
             default:
                 return false;
         }
     }
+
+    private static bool MatchNumOperator(Value value, NumberOperatorArgument numOp, OutputPattern outputs)
+    {
+        if (numOp.Argument is not ConstantArgument constant)
+        {
+            return false;
+        }
+
+        if (constant.Type != PrimType.Int32 && constant.Type != PrimType.Double)
+        {
+            return false;
+        }
+
+        if (numOp.Operator == '<')
+        {
+            // Todo: implement number operator matching
+        }
+
+        return false;
+    }
+
 
     private static bool MatchTypeSpecifier(Value value, TypedArgument typed, OutputPattern outputs)
     {

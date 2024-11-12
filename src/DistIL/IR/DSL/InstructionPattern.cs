@@ -9,7 +9,7 @@ using DistIL.IR.Utils.Parser;
 internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArgument> Arguments)
     : IInstructionPatternArgument
 {
-    public static InstructionPattern? Parse(string pattern)
+    public static InstructionPattern? Parse(ReadOnlySpan<char> pattern)
     {
         // Remove whitespace and validate parentheses balance
         pattern = pattern.Trim();
@@ -28,7 +28,7 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
         if (spaceIndex == -1)
             throw new ArgumentException("Invalid pattern format.");
 
-        var operation = Opcodes.TryParse(pattern[..spaceIndex]);
+        var operation = Opcodes.TryParse(pattern[..spaceIndex].ToString()); // TryParse does not support span yet
         var argsString = pattern[spaceIndex..].Trim();
 
         List<IInstructionPatternArgument> arguments = new List<IInstructionPatternArgument>();
@@ -37,7 +37,7 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
         return new InstructionPattern(operation.Op, arguments);
     }
 
-    private static void ParseArguments(string argsString, List<IInstructionPatternArgument> arguments)
+    private static void ParseArguments(ReadOnlySpan<char> argsString, List<IInstructionPatternArgument> arguments)
     {
         int depth = 0;
         string currentArg = "";
@@ -56,7 +56,7 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
                 if (depth == 0)
                 {
                     // Completed a nested argument
-                    arguments.Add(Parse(currentArg));
+                    arguments.Add(Parse(currentArg.AsSpan()));
                     currentArg = "";
                 }
             }

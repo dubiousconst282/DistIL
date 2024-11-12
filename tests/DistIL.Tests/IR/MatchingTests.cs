@@ -1,27 +1,18 @@
 ﻿namespace DistIL.Tests.IR;
 
 using DistIL.AsmIO;
-<<<<<<< HEAD
-using DistIL.Frontend;
-=======
->>>>>>> 6ecbd15f521745917994d1f0e542d3386c88a231
 using DistIL.IR;
 
 [Collection("ModuleResolver")]
 public class MatchingTests
 {
     private readonly ModuleResolver _modResolver;
-<<<<<<< HEAD
     private MethodDesc _stub;
 
-=======
-    private readonly MethodDesc? _stub;
->>>>>>> 6ecbd15f521745917994d1f0e542d3386c88a231
 
     public MatchingTests(ModuleResolverFixture mrf)
     {
         _modResolver = mrf.Resolver;
-<<<<<<< HEAD
         var type = _modResolver.Import(typeof(MatchingTests));
         _stub = type.FindMethod("StubMethod");
         
@@ -31,14 +22,6 @@ public class MatchingTests
     {
         var x = 2 + 6;
         System.Console.WriteLine(x);
-=======
-        _stub = _modResolver.Import(typeof(MatchingTests)).FindMethod("Stub");
-    }
-
-    static void Stub(string str, string s)
-    {
-
->>>>>>> 6ecbd15f521745917994d1f0e542d3386c88a231
     }
 
     [Fact]

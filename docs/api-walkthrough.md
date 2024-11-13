@@ -97,6 +97,14 @@ if (inst is BinaryInst { Op: BinaryOp.Sub, Left: BinaryInst { Op: BinaryOp.Add }
 }
 ```
 
+or you can use the pattern matching dsl:
+```csharp
+if (ins.Match("(sub (add {x} {y}) $y)", out var outputs))
+{
+    inst.ReplaceWith(lhs.Left);
+}
+```
+
 ## Generating complex IR
 While it's possible to generate IR through constructors and individual insert calls, such quickly becomes tedious. The `IRBuilder` class helps with the creation of complex sequences and control flow:
 

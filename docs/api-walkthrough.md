@@ -99,7 +99,7 @@ if (inst is BinaryInst { Op: BinaryOp.Sub, Left: BinaryInst { Op: BinaryOp.Add }
 
 or you can use the pattern matching dsl:
 ```csharp
-if (ins.Match("(sub (add {x} {y}) $y)", out var outputs))
+if (ins.Match("(sub (add {x} $y) $y)", out var outputs))
 {
     inst.ReplaceWith(lhs.Left);
 }

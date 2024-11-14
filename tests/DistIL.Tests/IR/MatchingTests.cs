@@ -41,6 +41,17 @@ public class MatchingTests
     }
 
     [Fact]
+    public void TestSubMatchOutput()
+    {
+        var inst = new BinaryInst(BinaryOp.Add, ConstInt.CreateI(42), new BinaryInst(BinaryOp.Mul, ConstInt.CreateI(1), ConstInt.CreateI(3)));
+
+        Assert.True(inst.Match("(sub {lhs: (add {x} $y)} $y)", out var outputs));
+        var instr = (BinaryInst)outputs["instr"];
+        Assert.IsType<BinaryInst>(instr);
+        Assert.Equal(BinaryOp.Mul, instr.Op);
+    }
+
+    [Fact]
     public void TestNot()
     {
         var inst = new BinaryInst(BinaryOp.Add, ConstInt.CreateI(42), new BinaryInst(BinaryOp.Mul, ConstInt.CreateI(1), ConstInt.CreateI(3)));

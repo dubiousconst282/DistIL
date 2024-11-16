@@ -68,6 +68,14 @@ public class MatchingTests
     }
 
     [Fact]
+    public void TestCompare()
+    {
+        var inst = new CompareInst(CompareOp.Eq, ConstInt.CreateI(1), ConstInt.CreateI(3));
+
+        Assert.True(inst.Match("(cmp.eq)"));
+    }
+
+    [Fact]
     public void TestUnary()
     {
         var inst = new UnaryInst(UnaryOp.Neg, new UnaryInst(UnaryOp.Neg, ConstInt.CreateI(2)));

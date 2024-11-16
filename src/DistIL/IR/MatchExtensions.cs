@@ -22,11 +22,90 @@ public static class MatchExtensions
 
     private static bool MatchInstruction(Instruction instruction, InstructionPattern instrPattern, OutputPattern outputs)
     {
-        if (instrPattern.Arguments.Count == 2 && instruction is BinaryInst bin) {
+        if (instruction is BinaryInst bin) {
             return MatchBinary(bin, instrPattern, outputs);
         }
+        if (instruction is CompareInst comp) {
+            return MatchCompare(comp, instrPattern, outputs);
+        }
+        else if (instruction is UnaryInst un) {
+            return MatchUnary(un, instrPattern, outputs);
+        }
 
-        return false;
+        return MatchOtherInstruction(instruction, instrPattern, outputs);
+    }
+
+    private static bool MatchOtherInstruction(Instruction instruction, InstructionPattern pattern, OutputPattern outputs)
+    {
+        var op = pattern.OpCode;
+        var ops = MatchOpCode(op, instruction);
+
+        return MatchOperands(instruction, pattern, outputs);
+    }
+
+    private static bool MatchOpCode(Opcode op, Instruction instruction)
+    {
+        return op switch {
+            Opcode.Unknown => false,
+        /*    Opcode.Goto => expr,
+            Opcode.Switch => expr,
+            Opcode.Ret => expr,
+            Opcode.Phi => expr,
+            Opcode.Call => expr,
+            Opcode.CallVirt => expr,
+            Opcode.NewObj => expr,
+            Opcode.Intrinsic => expr,
+            Opcode.Select => expr,
+            Opcode.Lea => expr,
+            Opcode.Getfld => expr,
+            Opcode.Setfld => expr,
+            Opcode.ArrAddr => expr,
+            Opcode.FldAddr => expr,
+            Opcode.Load => expr,
+            Opcode.Store => expr,
+            Opcode.Conv => expr,
+            Opcode._Cmp_First => expr,
+            Opcode.Cmp_Eq => expr,
+            Opcode.Cmp_Ne => expr,
+            Opcode.Cmp_Slt => expr,
+            Opcode.Cmp_Sgt => expr,
+            Opcode.Cmp_Sle => expr,
+            Opcode.Cmp_Sge => expr,
+            Opcode.Cmp_Ult => expr,
+            Opcode.Cmp_Ugt => expr,
+            Opcode.Cmp_Ule => expr,
+            Opcode.Cmp_Uge => expr,
+            Opcode.Cmp_FOlt => expr,
+            Opcode.Cmp_FOgt => expr,
+            Opcode.Cmp_FOle => expr,
+            Opcode.Cmp_FOge => expr,
+            Opcode.Cmp_FOeq => expr,
+            Opcode.Cmp_FOne => expr,
+            Opcode.Cmp_FUlt => expr,
+            Opcode.Cmp_FUgt => expr,
+            Opcode.Cmp_FUle => expr,
+            Opcode.Cmp_FUge => expr,
+            Opcode.Cmp_FUeq => expr,
+            Opcode.Cmp_FUne => expr,
+            Opcode._Cmp_Last => expr,*/
+            _ => throw new ArgumentOutOfRangeException(nameof(op), op, null)
+        };
+    }
+
+    private static bool MatchOperands(Instruction instruction, InstructionPattern pattern, OutputPattern outputs)
+    {
+        bool matched = true;
+
+        if (pattern.Arguments.Count > instruction.Operands.Length) {
+            return false;
+        }
+
+        for (int index = 0; index < pattern.Arguments.Count; index++) {
+            Value? operand = instruction.Operands[index];
+            matched &= MatchValue(operand, pattern.Arguments[index], outputs);
+        }
+
+        return matched;
     }
 
     private static bool MatchArgument(Value value, IInstructionPatternArgument argument, OutputPattern outputs)
@@ -167,16 +246,37 @@ public static class MatchExtensions
 
     private static bool MatchBinary(BinaryInst bin, InstructionPattern pattern, OutputPattern outputs)
     {
-        var operation = pattern.Operation;
+        var operation = pattern.OpCode;
         var op = (BinaryOp)(operation - (Opcode._Bin_First + 1));
 
         if (bin.Op != op) {
             return false;
         }
 
-        bool left = MatchValue(bin.Left, pattern.Arguments[0], outputs);
-        bool right = MatchValue(bin.Right, pattern.Arguments[1], outputs);
+        return MatchOperands(bin, pattern, outputs);
+    }
 
-        return left && right;
+    private static bool MatchCompare(CompareInst comp, InstructionPattern pattern, OutputPattern outputs)
+    {
+        var operation = pattern.OpCode;
+        var op = (CompareOp)(operation - (Opcode._Cmp_First + 1));
+
+        if (comp.Op != op) {
+            return false;
+        }
+
+        return MatchOperands(comp, pattern, outputs);
+    }
+
+    private static bool MatchUnary(UnaryInst un, InstructionPattern pattern, OutputPattern outputs)
+    {
+        var operation = pattern.OpCode;
+        var op = (UnaryOp)(operation - (Opcode._Bin_First + 1));
+
+        if (un.Op != op) {
+            return false;
+        }
+
+        return MatchOperands(un, pattern, outputs);;
     }
 }

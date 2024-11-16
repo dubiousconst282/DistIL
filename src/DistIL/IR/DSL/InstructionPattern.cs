@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using PatternArguments;
 using Utils.Parser;
 
-internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArgument> Arguments)
+internal record InstructionPattern(Opcode OpCode, List<IInstructionPatternArgument> Arguments)
     : IInstructionPatternArgument
 {
     public static InstructionPattern? Parse(ReadOnlySpan<char> pattern)
@@ -25,8 +25,9 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
 
         // Split the operation from its arguments
         int spaceIndex = pattern.IndexOf(' ');
-        if (spaceIndex == -1)
-            throw new ArgumentException("Invalid pattern format.");
+        if (spaceIndex == -1) {
+            spaceIndex = pattern.Length;
+        }
 
         var operation = Opcodes.TryParse(pattern[..spaceIndex].ToString()); // TryParse does not support span yet
         var argsString = pattern[spaceIndex..].Trim();

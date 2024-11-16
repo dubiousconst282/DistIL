@@ -19,7 +19,11 @@ public abstract class MethodDesc : MemberDesc
     public bool IsGeneric => GenericParams.Count > 0;
     public bool IsPublic => (Attribs & MethodAttributes.MemberAccessMask) == MethodAttributes.Public;
 
+    public bool IsConstructor => Name == ".ctor";
+    public bool IsDestructor => Name == "Finalize";
+
     public TypeDesc ReturnType => ReturnSig.Type;
+
 
     public override void Print(PrintContext ctx)
     {

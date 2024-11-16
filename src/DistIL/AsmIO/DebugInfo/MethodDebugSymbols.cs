@@ -2,7 +2,7 @@ namespace DistIL.AsmIO;
 
 public class MethodDebugSymbols
 {
-    public required SourceDocument? Document { get; init; }
+    public required DebugSourceDocument? Document { get; init; }
     public required List<SequencePoint> SequencePoints { get; init; }
     public MethodDef? StateMachineKickoffMethod { get; init; }
 
@@ -27,7 +27,7 @@ public class MethodDebugSymbols
 
 public record struct SequencePoint
 {
-    public SourceDocument Document { get; set; }
+    public DebugSourceDocument Document { get; set; }
     public int Offset { get; set; }
     public int StartLine { get; set; }
     public int EndLine { get; set; }
@@ -36,9 +36,27 @@ public record struct SequencePoint
 
     public bool IsHidden => StartLine == 0xfeefee;
 
-    public static SequencePoint CreateHidden(SourceDocument doc, int offset)
+    public static SequencePoint CreateHidden(DebugSourceDocument doc, int offset)
         => new() { Document = doc, StartLine = 0xfeefee, EndLine = 0xfeefee, Offset = offset };
 
+    public static SequencePoint Create(DebugSourceLocation loc, int offset)
+        => new() {
+            Document = loc.Document,
+            Offset = offset,
+            StartLine = loc.StartLine,
+            EndLine = loc.EndLine,
+            StartColumn = loc.StartColumn,
+            EndColumn = loc.EndColumn,
+        };
+
+        
+    public readonly bool IsSameSourceRange(SequencePoint other)
+    {
+        return Document == other.Document && 
+               StartLine == other.StartLine && EndLine == other.EndLine &&
+               StartColumn == other.StartColumn && EndColumn == other.EndColumn;
+    }
+
     public override string ToString()
-        => $"IL_{Offset:X4}, " + (IsHidden ? "hidden" : $"{StartLine}:{StartColumn}-{EndLine}:{EndColumn} in '{Document}'");
+        => $"IL_{Offset:X4}, " + (IsHidden ? "hidden" : $"{StartLine}:{StartColumn}-{EndLine}:{EndColumn} at '{Document}'");
 }

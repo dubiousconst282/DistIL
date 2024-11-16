@@ -3,34 +3,26 @@ namespace DistIL.CodeGen.Cil;
 public class SequencePointBuilder(MethodDef method)
 {
     readonly List<SequencePoint> _points = new();
-    readonly SourceDocument _parentDoc = method.GetDebugSymbols()?.Document ?? s_EmptyDoc;
+    readonly DebugSourceDocument _parentDoc = method.GetDebugSymbols()?.Document ?? s_EmptyDoc;
 
-    (MethodDef? M, int I) _lastPoint;
     bool _spansMultipleDocs = false;
     int _lastCilIndex = -1;
 
-    static readonly SourceDocument s_EmptyDoc = new();
+    static readonly DebugSourceDocument s_EmptyDoc = new();
 
-    public void Add(SourceLocation loc, int cilIndex)
+    public void Add(DebugSourceLocation? loc, int cilIndex)
     {
         if (cilIndex == _lastCilIndex) return;
 
         Debug.Assert(_lastCilIndex < cilIndex, "Sequence points must be added in ascending order");
         _lastCilIndex = cilIndex;
 
-        var currMethod = loc.GetMethod(method.Module.Resolver);
-        var currSymbols = currMethod?.GetDebugSymbols();
+        if (loc != null) {
+            var sp = SequencePoint.Create(loc, cilIndex);
 
-        if (currSymbols?.SequencePoints.Count > 0) {
-            // Remap a sequence point at the current location and add it at `cilIndex`
-            int pointIdx = currSymbols.IndexOfSequencePoint(loc.Offset);
-
-            if (pointIdx >= 0 && _lastPoint != (currMethod, pointIdx)) {
-                var point = currSymbols.SequencePoints[pointIdx];
-                _points.Add(point with { Offset = cilIndex });
-
-                _spansMultipleDocs |= _lastPoint.M != currMethod && _lastPoint.M != null;
-                _lastPoint = (currMethod, pointIdx);
+            if (_points.Count == 0 || !sp.IsSameSourceRange(_points[^1])) {
+                _points.Add(sp);
+                _spansMultipleDocs |= _points.Count > 0 && _points[^1].Document != loc.Document;
             }
         } else if (_points.Count > 0 && !_points[^1].IsHidden) {
             // If there's no sequence point at the current location in the source,

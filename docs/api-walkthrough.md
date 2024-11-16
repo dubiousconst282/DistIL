@@ -121,6 +121,18 @@ Pattern Matching Operations:
 | *"hello"*  | Matches if the operand is a string constant that contains the value    |
 | *"hello"   | Matches if the operand is a string constant that end with the value    |
 | "hello"*   | Matches if the operand is a string constant that starts with the value |
+=======
+## Finding Methods
+
+The module resolver has an `FindMethod` extension method that makes it easier to find methods from the IR.
+You can get a MethodDesc by passing a selector. Found methods will be cached.
+
+````cs
+var writeLine = moduleResolver.FindMethod("System.Console::WriteLine(string) -> void");
+var sbWriteLine = moduleResolver.FindMethod("System.Text.StringBuilder::WriteLine(this, string) -> this"); // "this" refers to the declaring type of the method
+
+var parseInt = moduleResolver.FindMethod("System.Int32::Parse() -> int", [ConstString.Create("42")]);
+````
 
 ## Generating complex IR
 While it's possible to generate IR through constructors and individual insert calls, such quickly becomes tedious. The `IRBuilder` class helps with the creation of complex sequences and control flow:

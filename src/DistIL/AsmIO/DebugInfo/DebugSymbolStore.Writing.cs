@@ -96,10 +96,10 @@ partial class DebugSymbolStore
 internal class PdbBuilder(ModuleWriter modWriter)
 {
     public readonly MetadataBuilder TableBuilder = new();
-    private readonly Dictionary<SourceDocument, DocumentHandle> _documents = new();
+    private readonly Dictionary<DebugSourceDocument, DocumentHandle> _documents = new();
     public readonly ModuleWriter ModWriter = modWriter;
 
-    public DocumentHandle GetHandle(SourceDocument? doc)
+    public DocumentHandle GetHandle(DebugSourceDocument? doc)
     {
         if (doc == null) return default;
 

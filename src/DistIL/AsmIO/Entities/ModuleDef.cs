@@ -28,7 +28,6 @@ public class ModuleDef : EntityDesc
     internal ModuleLoader? _loader;
     private DebugSymbolStore? _debugSymbols;
     private bool _triedToLoadDebugSymbols = false;
-    internal int _resolverIndex;
 
     internal ModuleDef(ModuleResolver resolver)
     {

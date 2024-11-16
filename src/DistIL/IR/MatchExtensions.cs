@@ -94,9 +94,9 @@ public static class MatchExtensions
         dynamic val = value;
 
         if (numOp.Operator == '<') {
-            return constant.Value < val.Value;
+            return val.Value < constant.Value;
         } else if (numOp.Operator == '>') {
-            return constant.Value > val.Value;
+            return val.Value > constant.Value;
         }
 
         return false;

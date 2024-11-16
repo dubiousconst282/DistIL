@@ -105,6 +105,23 @@ if (ins.Match("(sub {lhs: (add {x} $y)} $y)", out var outputs))
 }
 ```
 
+Pattern Matching Operations:
+| Example    | Description                                                            |
+|------------|------------------------------------------------------------------------|
+| $x         | Use the value later for matching                                       |
+| {x}        | Output the operand                                                     |
+| {x: (add)} | Output the operand if the subpattern matched                           |
+| _          | Ignore the operand                                                     |
+| !          | Matches if the subpattern doesn't match                                |
+| #instr     | Matches if the operand is an instruction                               |
+| #const     | Matches if the operand is a constant                                   |
+| #int       | Matches if the operand is a constant of type int32                     |
+| >5         | Matches if the value is greater than 5                                 |
+| <5         | Matches if the value is less than 5                                    |
+| *"hello"*  | Matches if the operand is a string constant that contains the value    |
+| *"hello"   | Matches if the operand is a string constant that end with the value    |
+| "hello"*   | Matches if the operand is a string constant that starts with the value |
+
 ## Generating complex IR
 While it's possible to generate IR through constructors and individual insert calls, such quickly becomes tedious. The `IRBuilder` class helps with the creation of complex sequences and control flow:
 

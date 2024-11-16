@@ -56,7 +56,7 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
                 if (depth == 0)
                 {
                     // Completed a nested argument
-                    arguments.Add(Parse(currentArg.AsSpan()));
+                    arguments.Add(Parse(currentArg.AsSpan())!);
                     currentArg = "";
                 }
             }
@@ -97,6 +97,10 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
             return ParseNot(arg);
         }
 
+        if (arg.StartsWith('$')) {
+            return ParseBuffer(arg);
+        }
+
         if (arg.StartsWith('<') || arg.StartsWith('>')) {
             return ParseNumOperator(arg);
         }
@@ -130,6 +134,11 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
         }
 
         throw new ArgumentException("Invalid Argument");
+    }
+
+    private static IInstructionPatternArgument ParseBuffer(string arg)
+    {
+        return new BufferArgument(arg[1..]);
     }
 
     private static IInstructionPatternArgument ParseNumOperator(string arg)

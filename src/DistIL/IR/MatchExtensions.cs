@@ -36,6 +36,8 @@ public static class MatchExtensions
                 return !MatchArgument(value, not.Inner, outputs);
             case IgnoreArgument:
                 return true;
+            case BufferArgument buffer:
+                return MatchBuffer(value, buffer, outputs);
             case OutputArgument output:
                 outputs.Add(output.Name, value);
                 return true;
@@ -50,6 +52,18 @@ public static class MatchExtensions
             default:
                 return false;
         }
+    }
+
+    private static bool MatchBuffer(Value value, BufferArgument buffer, OutputPattern outputs)
+    {
+        if (outputs.IsValueInBuffer(buffer.Name)) {
+            var v = outputs.GetFromBuffer(buffer.Name);
+
+            return v == value;
+        }
+
+        outputs.AddToBuffer(buffer.Name, value);
+        return true;
     }
 
     private static bool MatchNumOperator(Value value, NumberOperatorArgument numOp, OutputPattern outputs)

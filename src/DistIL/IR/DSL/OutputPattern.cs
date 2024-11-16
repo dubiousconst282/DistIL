@@ -1,9 +1,10 @@
 namespace DistIL.IR.DSL;
 
-public struct OutputPattern
+public readonly struct OutputPattern
 {
-    private readonly Dictionary<string, Value> _outputBuffer = [];
-    internal InstructionPattern? Pattern = null;
+    private readonly Dictionary<string, Value> _outputs = [];
+    private readonly Dictionary<string, Value> _buffer = [];
+    internal readonly InstructionPattern? Pattern = null;
 
     public OutputPattern(string input)
     {
@@ -12,17 +13,31 @@ public struct OutputPattern
 
     internal void Add(string key, Value value)
     {
-        _outputBuffer[key] = value;
+        _outputs[key] = value;
     }
 
-    public Value this[string name] => _outputBuffer[name];
+    internal void AddToBuffer(string key, Value value)
+    {
+        _buffer[key] = value;
+    }
+
+    public Value this[string name] => _outputs[name];
 
     public Value this[int position] {
         get {
-            string name = _outputBuffer.Keys.ElementAt(position);
+            string name = _outputs.Keys.ElementAt(position);
 
-            return _outputBuffer[name];
+            return _outputs[name];
         }
     }
 
+    internal Value GetFromBuffer(string name)
+    {
+        return _buffer[name];
+    }
+
+    internal bool IsValueInBuffer(string name)
+    {
+        return _buffer.ContainsKey(name);
+    }
 }

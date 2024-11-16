@@ -45,7 +45,7 @@ public class MatchingTests
     {
         var inst = new BinaryInst(BinaryOp.Sub, new BinaryInst(BinaryOp.Add, ConstInt.CreateI(1), ConstInt.CreateI(3)), ConstInt.CreateI(3));
 
-        Assert.True(inst.Match("(sub {lhs:(add {x} $y)} {y})", out var outputs));
+        Assert.True(inst.Match("(sub {lhs:(add {x} $y)} $y)", out var outputs));
         var instr = (BinaryInst)outputs["lhs"];
         Assert.IsType<BinaryInst>(instr);
         Assert.Equal(BinaryOp.Add, instr.Op);
@@ -57,6 +57,22 @@ public class MatchingTests
         var inst = new BinaryInst(BinaryOp.Add, ConstInt.CreateI(42), new BinaryInst(BinaryOp.Mul, ConstInt.CreateI(1), ConstInt.CreateI(3)));
 
         Assert.True(inst.Match("(add _ !42)"));
+    }
+
+    [Fact]
+    public void TestReturn()
+    {
+        var inst = new ReturnInst(new BinaryInst(BinaryOp.Mul, ConstInt.CreateI(1), ConstInt.CreateI(3)));
+
+        Assert.True(inst.Match("(ret _)"));
+    }
+
+    [Fact]
+    public void TestUnary()
+    {
+        var inst = new UnaryInst(UnaryOp.Neg, new UnaryInst(UnaryOp.Neg, ConstInt.CreateI(2)));
+
+        Assert.True(inst.Match("(neg (neg {x}))"));
     }
 
     [Fact]

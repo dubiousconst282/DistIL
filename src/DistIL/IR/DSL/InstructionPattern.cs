@@ -130,7 +130,7 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
             return ParseOutputArgument(arg);
         }
 
-        if (arg == "_")
+        if (arg[0] == '_')
         {
             return new IgnoreArgument();
         }

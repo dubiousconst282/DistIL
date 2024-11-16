@@ -38,57 +38,29 @@ public static class MatchExtensions
     private static bool MatchOtherInstruction(Instruction instruction, InstructionPattern pattern, OutputPattern outputs)
     {
         var op = pattern.OpCode;
-        var ops = MatchOpCode(op, instruction);
+        var ops = MatchOpCode((op, instruction));
 
         return MatchOperands(instruction, pattern, outputs);
     }
 
-    private static bool MatchOpCode(Opcode op, Instruction instruction)
+    private static bool MatchOpCode((Opcode op, Instruction instruction) opInstrTuple)
     {
-        return op switch {
-            Opcode.Unknown => false,
-        /*    Opcode.Goto => expr,
-            Opcode.Switch => expr,
-            Opcode.Ret => expr,
-            Opcode.Phi => expr,
-            Opcode.Call => expr,
-            Opcode.CallVirt => expr,
-            Opcode.NewObj => expr,
-            Opcode.Intrinsic => expr,
-            Opcode.Select => expr,
-            Opcode.Lea => expr,
-            Opcode.Getfld => expr,
-            Opcode.Setfld => expr,
-            Opcode.ArrAddr => expr,
-            Opcode.FldAddr => expr,
-            Opcode.Load => expr,
-            Opcode.Store => expr,
-            Opcode.Conv => expr,
-            Opcode._Cmp_First => expr,
-            Opcode.Cmp_Eq => expr,
-            Opcode.Cmp_Ne => expr,
-            Opcode.Cmp_Slt => expr,
-            Opcode.Cmp_Sgt => expr,
-            Opcode.Cmp_Sle => expr,
-            Opcode.Cmp_Sge => expr,
-            Opcode.Cmp_Ult => expr,
-            Opcode.Cmp_Ugt => expr,
-            Opcode.Cmp_Ule => expr,
-            Opcode.Cmp_Uge => expr,
-            Opcode.Cmp_FOlt => expr,
-            Opcode.Cmp_FOgt => expr,
-            Opcode.Cmp_FOle => expr,
-            Opcode.Cmp_FOge => expr,
-            Opcode.Cmp_FOeq => expr,
-            Opcode.Cmp_FOne => expr,
-            Opcode.Cmp_FUlt => expr,
-            Opcode.Cmp_FUgt => expr,
-            Opcode.Cmp_FUle => expr,
-            Opcode.Cmp_FUge => expr,
-            Opcode.Cmp_FUeq => expr,
-            Opcode.Cmp_FUne => expr,
-            Opcode._Cmp_Last => expr,*/
-            _ => throw new ArgumentOutOfRangeException(nameof(op), op, null)
+        return opInstrTuple switch {
+            (Opcode.Unknown, _) => false,
+            (Opcode.Goto, BranchInst) => true,
+            (Opcode.Switch, SwitchInst) => true,
+            (Opcode.Ret, ReturnInst) => true,
+            (Opcode.Phi, PhiInst) => true,
+            (Opcode.Select, SelectInst) => true,
+            (Opcode.Lea, PtrOffsetInst) => true,
+            (Opcode.Getfld,FieldExtractInst) => true,
+            (Opcode.Setfld, FieldInsertInst) => true,
+            (Opcode.ArrAddr, ArrayAddrInst) => true,
+            (Opcode.FldAddr, FieldAddrInst) => true,
+            (Opcode.Load, LoadInst) => true,
+            (Opcode.Store, StoreInst) => true,
+            (Opcode.Conv, ConvertInst) => true,
+            _ => false
         };
     }
 

@@ -6,7 +6,10 @@ using System.Collections.Generic;
 using PatternArguments;
 using Utils.Parser;
 
-internal record InstructionPattern(Opcode OpCode, List<IInstructionPatternArgument> Arguments)
+internal record InstructionPattern(
+    Opcode OpCode,
+    string Operation,
+    List<IInstructionPatternArgument> Arguments)
     : IInstructionPatternArgument
 {
     public static InstructionPattern? Parse(ReadOnlySpan<char> pattern)
@@ -29,13 +32,14 @@ internal record InstructionPattern(Opcode OpCode, List<IInstructionPatternArgume
             spaceIndex = pattern.Length;
         }
 
-        var operation = Opcodes.TryParse(pattern[..spaceIndex].ToString()); // TryParse does not support span yet
+        var op = pattern[..spaceIndex].ToString();
+        var operation = Opcodes.TryParse(op); // TryParse does not support span yet
         var argsString = pattern[spaceIndex..].Trim();
 
         List<IInstructionPatternArgument> arguments = new List<IInstructionPatternArgument>();
         ParseArguments(argsString, arguments);
 
-        return new InstructionPattern(operation.Op, arguments);
+        return new InstructionPattern(operation.Op, op, arguments);
     }
 
     private static void ParseArguments(ReadOnlySpan<char> argsString, List<IInstructionPatternArgument> arguments)
@@ -102,7 +106,7 @@ internal record InstructionPattern(Opcode OpCode, List<IInstructionPatternArgume
             var left = arg[..arg.IndexOf('#')];
             var typeSpecifier = arg[arg.IndexOf('#')..].TrimStart('#');
 
-            var argument = left != "" ? ParseArgument(left) : null;
+            var argument = left is not "" ? ParseArgument(left) : null;
             return new TypedArgument(argument, typeSpecifier.ToString());
         }
 

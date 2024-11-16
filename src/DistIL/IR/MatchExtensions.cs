@@ -39,8 +39,7 @@ public static class MatchExtensions
             case BufferArgument buffer:
                 return MatchBuffer(value, buffer, outputs);
             case OutputArgument output:
-                outputs.Add(output.Name, value);
-                return true;
+                return MatchOutput(value, outputs, output);
             case ConstantArgument constArg when value is Const constant:
                 return MatchConstArgument(constArg, constant);
             case InstructionPattern pattern:
@@ -54,12 +53,27 @@ public static class MatchExtensions
         }
     }
 
+    private static bool MatchOutput(Value value, OutputPattern outputs, OutputArgument output)
+    {
+        if (output.SubPattern is null) {
+            outputs.Add(output.Name, value);
+            return true;
+        }
+
+        if (MatchValue(value, output.SubPattern, outputs)) {
+            outputs.Add(output.Name, value);
+            return true;
+        }
+
+        return false;
+    }
+
     private static bool MatchBuffer(Value value, BufferArgument buffer, OutputPattern outputs)
     {
         if (outputs.IsValueInBuffer(buffer.Name)) {
-            var v = outputs.GetFromBuffer(buffer.Name);
+            var bufferedValue = outputs.GetFromBuffer(buffer.Name);
 
-            return v == value;
+            return bufferedValue == value;
         }
 
         outputs.AddToBuffer(buffer.Name, value);

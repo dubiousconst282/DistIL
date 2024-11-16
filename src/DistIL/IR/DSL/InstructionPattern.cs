@@ -41,9 +41,17 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
     {
         int depth = 0;
         string currentArg = "";
+        Stack<char> outputStack = new();
 
         foreach (var c in argsString)
         {
+            if (c == '{') {
+                outputStack.Push(c);
+            }
+            else if (c == '}') {
+                outputStack.Pop();
+            }
+
             if (c == '(')
             {
                 depth++;
@@ -53,7 +61,7 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
             {
                 depth--;
                 currentArg += c;
-                if (depth == 0)
+                if (depth == 0 && outputStack.Count == 0)
                 {
                     // Completed a nested argument
                     arguments.Add(Parse(currentArg.AsSpan())!);
@@ -84,10 +92,14 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
 
     private static IInstructionPatternArgument ParseArgument(string arg)
     {
-        if (arg.Contains(':'))
+        if (arg.StartsWith('(') && arg.EndsWith(')')) {
+            return Parse(arg.AsSpan())!;
+        }
+
+        if (arg.Contains('#'))
         {
-            var left = arg[..arg.IndexOf(':')];
-            var typeSpecifier = arg[arg.IndexOf(':')..].TrimStart(':');
+            var left = arg[..arg.IndexOf('#')];
+            var typeSpecifier = arg[arg.IndexOf('#')..].TrimStart('#');
 
             var argument = left != "" ? ParseArgument(left) : null;
             return new TypedArgument(argument, typeSpecifier);
@@ -105,7 +117,7 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
             return ParseNumOperator(arg);
         }
 
-        if (arg.StartsWith(':')) {
+        if (arg.StartsWith('#')) {
             return new TypedArgument(default, arg[1..]);
         }
 
@@ -114,9 +126,8 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
             return ParseStringArgument(arg);
         }
 
-        if (arg.StartsWith('{') && arg.EndsWith('}'))
-        {
-            return new OutputArgument(arg[1..^1]);
+        if (arg.StartsWith('{') && arg.EndsWith('}')) {
+            return ParseOutputArgument(arg);
         }
 
         if (arg == "_")
@@ -134,6 +145,20 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
         }
 
         throw new ArgumentException("Invalid Argument");
+    }
+
+    private static IInstructionPatternArgument ParseOutputArgument(string arg)
+    {
+        arg = arg[1..^1];
+
+        if (arg.Contains(':')) {
+            var name = arg[..arg.IndexOf(':')];
+            var subPattern = ParseArgument(arg[(arg.IndexOf(':') + 1)..]);
+
+            return new OutputArgument(name, subPattern);
+        }
+
+        return new OutputArgument(arg);
     }
 
     private static IInstructionPatternArgument ParseBuffer(string arg)

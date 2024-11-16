@@ -3,8 +3,8 @@
 using System;
 using System.Collections.Generic;
 
-using DistIL.IR.DSL.PatternArguments;
-using DistIL.IR.Utils.Parser;
+using PatternArguments;
+using Utils.Parser;
 
 internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArgument> Arguments)
     : IInstructionPatternArgument
@@ -90,10 +90,10 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
         }
     }
 
-    private static IInstructionPatternArgument ParseArgument(string arg)
+    private static IInstructionPatternArgument ParseArgument(ReadOnlySpan<char> arg)
     {
-        if (arg.StartsWith('(') && arg.EndsWith(')')) {
-            return Parse(arg.AsSpan())!;
+        if (arg[0] == '(' && arg[^1] == ')') {
+            return Parse(arg)!;
         }
 
         if (arg.Contains('#'))
@@ -102,31 +102,31 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
             var typeSpecifier = arg[arg.IndexOf('#')..].TrimStart('#');
 
             var argument = left != "" ? ParseArgument(left) : null;
-            return new TypedArgument(argument, typeSpecifier);
+            return new TypedArgument(argument, typeSpecifier.ToString());
         }
 
-        if (arg.StartsWith('!')) {
+        if (arg[0] == '!') {
             return ParseNot(arg);
         }
 
-        if (arg.StartsWith('$')) {
+        if (arg[0] == '$') {
             return ParseBuffer(arg);
         }
 
-        if (arg.StartsWith('<') || arg.StartsWith('>')) {
+        if (arg[0] == '<' || arg[0] == '>') {
             return ParseNumOperator(arg);
         }
 
-        if (arg.StartsWith('#')) {
-            return new TypedArgument(default, arg[1..]);
+        if (arg[0] == '#') {
+            return new TypedArgument(default, arg[1..].ToString());
         }
 
-        if (arg.StartsWith('*') || arg.StartsWith('\''))
+        if (arg[0] == '*' || arg[0] == '\'')
         {
             return ParseStringArgument(arg);
         }
 
-        if (arg.StartsWith('{') && arg.EndsWith('}')) {
+        if (arg[0] == '{' && arg[^1] == '}') {
             return ParseOutputArgument(arg);
         }
 
@@ -147,7 +147,7 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
         throw new ArgumentException("Invalid Argument");
     }
 
-    private static IInstructionPatternArgument ParseOutputArgument(string arg)
+    private static IInstructionPatternArgument ParseOutputArgument(ReadOnlySpan<char> arg)
     {
         arg = arg[1..^1];
 
@@ -155,18 +155,18 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
             var name = arg[..arg.IndexOf(':')];
             var subPattern = ParseArgument(arg[(arg.IndexOf(':') + 1)..]);
 
-            return new OutputArgument(name, subPattern);
+            return new OutputArgument(name.ToString(), subPattern);
         }
 
-        return new OutputArgument(arg);
+        return new OutputArgument(arg.ToString());
     }
 
-    private static IInstructionPatternArgument ParseBuffer(string arg)
+    private static IInstructionPatternArgument ParseBuffer(ReadOnlySpan<char> arg)
     {
-        return new BufferArgument(arg[1..]);
+        return new BufferArgument(arg[1..].ToString());
     }
 
-    private static IInstructionPatternArgument ParseNumOperator(string arg)
+    private static IInstructionPatternArgument ParseNumOperator(ReadOnlySpan<char> arg)
     {
         var op = arg[0];
 
@@ -174,31 +174,31 @@ internal record InstructionPattern(Opcode Operation, List<IInstructionPatternArg
     }
 
 
-    private static IInstructionPatternArgument ParseNot(string arg)
+    private static IInstructionPatternArgument ParseNot(ReadOnlySpan<char> arg)
     {
         var trimmed = arg.TrimStart('!');
 
         return new NotArgument(ParseArgument(trimmed));
     }
 
-    private static IInstructionPatternArgument ParseStringArgument(string arg)
+    private static IInstructionPatternArgument ParseStringArgument(ReadOnlySpan<char> arg)
     {
         StringOperation operation = StringOperation.None;
 
-        if (arg.StartsWith('*') && arg.EndsWith('*')) {
+        if (arg[0] == '*' && arg[^1] == '*') {
             operation = StringOperation.Contains;
         }
-        else if(arg.StartsWith('*')) {
+        else if(arg[0] == '*') {
             operation = StringOperation.EndsWith;
         }
-        else if(arg.EndsWith('*')) {
+        else if(arg[^1] == '*') {
             operation = StringOperation.StartsWith;
         }
         
         arg = arg.TrimStart('*').TrimEnd('*');
 
-        if (arg.StartsWith('\'') && arg.EndsWith('\'')) {
-            return new StringArgument(arg[1..^1], operation);
+        if (arg[0] == '\'' && arg[^1] == '\'') {
+            return new StringArgument(arg[1..^1].ToString(), operation);
         }
 
         throw new ArgumentException("Invalid string");

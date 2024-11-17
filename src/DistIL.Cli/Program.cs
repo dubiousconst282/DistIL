@@ -83,11 +83,6 @@ static void RunPasses(OptimizerOptions options, Compilation comp)
         .Apply<LoopStrengthReduction>()
         .IfChanged(simplifySeg);
 
-    manager.AddPasses()
-        .Apply<LoopVectorizer>()
-       // .Apply<ExtractThrows>()
-        .IfChanged(simplifySeg);
-
     if (comp.Logger.IsEnabled(LogLevel.Debug)) {
         manager.AddPasses().Apply<VerificationPass>();
     }

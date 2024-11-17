@@ -161,7 +161,7 @@ public partial class ILGenerator : InstVisitor
     private void BeginSequencePoint(Instruction inst, bool isTreeRoot)
     {
         if (_spBuilder != null && (isTreeRoot || inst.HasSideEffects)) {
-            _spBuilder.Add(inst.DebugLoc, _asm.Count);
+            _spBuilder.Add(inst.DebugLocation, _asm.Count);
         }
     }
 

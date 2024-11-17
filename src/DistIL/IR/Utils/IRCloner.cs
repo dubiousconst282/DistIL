@@ -176,7 +176,7 @@ public class IRCloner
             inst.Accept(this);
             
             if (_result is Instruction clonedInst) {
-                clonedInst.DebugLoc = inst.DebugLoc;
+                clonedInst.DebugLocation = inst.DebugLocation;
             }
             return _result;
         }

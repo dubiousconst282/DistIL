@@ -6,6 +6,7 @@ public class IRBuilder
     Instruction? _last;
     BasicBlock _block = null!;
     InsertionDir _initialDir = InsertionDir._Invalid;
+    DebugSourceLocation? _debugLoc = null;
 
     public BasicBlock Block => _block!;
     public MethodBody Method => _block!.Method;
@@ -54,6 +55,20 @@ public class IRBuilder
         _initialDir = _last == null ? InsertionDir.Before : InsertionDir._Invalid;
     }
 
+    /// <summary> Sets the debug source location for next emitted instructions. </summary>
+    /// <param name="loc">Can be null to generate hidden sequence points (for compiler-generated code).</param> 
+    public IRBuilder SetNextDebugLocation(DebugSourceLocation? loc)
+    {
+        _debugLoc = loc;
+        return this;
+    }
+    
+    public IRBuilder SetNextDebugLocation(DebugSourceDocument doc, int startLine, int endLine, int startColumn, int endColumn)
+        => SetNextDebugLocation(new DebugSourceLocation(doc, startLine, endLine, startColumn, endColumn));
+    
+    public IRBuilder SetNextDebugLocation(DebugSourceDocument doc, int lineNo, int startColumn, int endColumn)
+        => SetNextDebugLocation(new DebugSourceLocation(doc, lineNo, lineNo, startColumn, endColumn));
+
     public PhiInst CreatePhi(TypeDesc type) 
         => _block.InsertPhi(type);
 
@@ -68,7 +83,7 @@ public class IRBuilder
     }
 
     public void SetBranch(Value cond, BasicBlock then, BasicBlock else_) 
-        => _block.SetBranch(new BranchInst(cond, then, else_));
+        => _block.SetBranch(new BranchInst(cond, then, else_) { DebugLocation = _debugLoc });
 
     /// <summary>
     /// Terminates the current block with a new branch <c>goto cond ? newBlock : elseBlock</c>,
@@ -343,6 +358,7 @@ public class IRBuilder
             AppendInitial(inst);
         }
         _last = inst;
+        inst.DebugLocation = _debugLoc;
     }
 
     private void AppendInitial(Instruction inst)

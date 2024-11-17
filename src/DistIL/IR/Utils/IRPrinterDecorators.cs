@@ -6,8 +6,8 @@ public class SourceLocationPrintDecorator : IPrintDecorator
 
     public void DecorateInst(PrintContext ctx, Instruction inst)
     {
-        if (inst.DebugLoc != null) {
-            ctx.Print($" @ {inst.DebugLoc}", PrintToner.Comment);
+        if (inst.DebugLocation != null) {
+            ctx.Print($" @ {inst.DebugLocation}", PrintToner.Comment);
         }
     }
 }

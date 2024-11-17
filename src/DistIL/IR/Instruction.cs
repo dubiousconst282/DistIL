@@ -15,7 +15,8 @@ public abstract class Instruction : TrackedValue
     internal UseDef[] _useDefs;
     public ReadOnlySpan<Value> Operands => _operands;
 
-    public DebugSourceLocation? DebugLoc { get; set; }
+    /// <summary> Location of source code that maps into this instruction. May be null to indicate unknown or compiler-generated code. </summary>
+    public DebugSourceLocation? DebugLocation { get; set; }
 
     public abstract string InstName { get; }
 

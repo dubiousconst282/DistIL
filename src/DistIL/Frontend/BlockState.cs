@@ -36,7 +36,7 @@ internal class BlockState
     public void Emit(Instruction inst)
     {
         Block.InsertLast(inst);
-        inst.DebugLoc = _currDebugLoc;
+        inst.DebugLocation = _currDebugLoc;
     }
 
     public void PushNoEmit(Value value)

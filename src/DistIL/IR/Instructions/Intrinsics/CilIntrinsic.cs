@@ -152,4 +152,12 @@ public abstract class CilIntrinsic : IntrinsicInst
         public override ILCode Opcode => ILCode.Ckfinite;
         public override bool MayThrow => true;
     }
+
+    /// <summary> The no-op instruction. </summary>
+    /// <param name="allowDCE">Whether to allow this instruction to be removed as part of the Dead Code Elimination pass. </param>
+    public class Nop(bool allowDCE = false) : CilIntrinsic(PrimType.Void, [])
+    {
+        public override ILCode Opcode => ILCode.Nop;
+        public override bool SafeToRemove => allowDCE;
+    }
 }

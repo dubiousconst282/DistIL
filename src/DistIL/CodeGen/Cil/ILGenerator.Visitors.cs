@@ -238,6 +238,7 @@ partial class ILGenerator
                 _asm.Emit(op, inst.StaticArgs[0]);
                 break;
             }
+            case ILCode.Nop:
             case ILCode.Ldlen:
             case ILCode.Localloc:
             case ILCode.Ckfinite: {

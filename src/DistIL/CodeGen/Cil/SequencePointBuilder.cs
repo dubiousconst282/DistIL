@@ -50,6 +50,6 @@ public class SequencePointBuilder(MethodDef method)
     public void BuildAndReplace()
     {
         var symbols = BuildSymbols(method.ILBody!.Instructions);
-        method.Module.GetDebugSymbols()?.SetMethodSymbols(method, symbols);
+        method.Module.GetDebugSymbols(create: true)?.SetMethodSymbols(method, symbols);
     }
 }

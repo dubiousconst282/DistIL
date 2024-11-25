@@ -2,12 +2,15 @@
 
 using DistIL.AsmIO;
 using DistIL.IR;
+using DistIL.IR.Utils;
 
 [Collection("ModuleResolver")]
 public class MatchingTests
 {
     private readonly ModuleResolver _modResolver;
     private MethodDesc _stub;
+    private readonly ModuleDef _module;
+    private readonly TypeDef _testType;
 
 
     public MatchingTests(ModuleResolverFixture mrf)
@@ -15,7 +18,8 @@ public class MatchingTests
         _modResolver = mrf.Resolver;
         var type = _modResolver.Import(typeof(MatchingTests));
         _stub = type.FindMethod("StubMethod");
-        
+        _module = _modResolver.Create("Test");
+        _testType = _module.CreateType("Test", "Stub");
     }
 
     public static void StubMethod()
@@ -49,6 +53,19 @@ public class MatchingTests
         var instr = (BinaryInst)outputs["lhs"];
         Assert.IsType<BinaryInst>(instr);
         Assert.Equal(BinaryOp.Add, instr.Op);
+    }
+
+    [Fact]
+    public void TestReplace()
+    {
+        var method = _testType.CreateMethod("ReplaceMe", new TypeSig(PrimType.Void), []);
+        var body = new MethodBody(method);
+        var builder = new IRBuilder(body.CreateBlock());
+
+        var inst = new BinaryInst(BinaryOp.Sub, new BinaryInst(BinaryOp.Add, ConstInt.CreateI(1), ConstInt.CreateI(3)), ConstInt.CreateI(3));
+        builder.Emit(inst);
+
+        inst.Replace("(sub {lhs:(add $x $y)} $y) -> $x");
     }
 
     [Fact]

@@ -12,7 +12,7 @@ internal record InstructionPattern(
     List<IInstructionPatternArgument> Arguments)
     : IInstructionPatternArgument
 {
-    public static InstructionPattern? Parse(ReadOnlySpan<char> pattern)
+    public static IInstructionPatternArgument? Parse(ReadOnlySpan<char> pattern)
     {
         // Remove whitespace and validate parentheses balance
         pattern = pattern.Trim();
@@ -21,7 +21,7 @@ internal record InstructionPattern(
         }
 
         if (pattern[0] != '(' || pattern[^1] != ')')
-            throw new ArgumentException("Pattern must start with '(' and end with ')'.");
+            return ParseArgument(pattern);
 
         // Remove the outer parentheses
         pattern = pattern[1..^1].Trim();
@@ -40,6 +40,13 @@ internal record InstructionPattern(
         ParseArguments(argsString, arguments);
 
         return new InstructionPattern(operation.Op, op, arguments);
+    }
+
+    private static IInstructionPatternArgument? ParseEval(ReadOnlySpan<char> pattern)
+    {
+        var op = pattern[1..].Trim();
+
+        return new EvalArgument(ParseArgument(op));
     }
 
     private static void ParseArguments(ReadOnlySpan<char> argsString, List<IInstructionPatternArgument> arguments)

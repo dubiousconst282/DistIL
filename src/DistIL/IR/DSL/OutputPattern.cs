@@ -6,9 +6,9 @@ public readonly struct OutputPattern
     private readonly Dictionary<string, Value> _buffer = [];
     internal readonly InstructionPattern? Pattern = null;
 
-    public OutputPattern(string input)
+    public OutputPattern(ReadOnlySpan<char> input)
     {
-        Pattern = InstructionPattern.Parse(input);
+        Pattern = InstructionPattern.Parse(input) as InstructionPattern;
     }
 
     internal void Add(string key, Value value)
@@ -34,6 +34,11 @@ public readonly struct OutputPattern
     internal Value GetFromBuffer(string name)
     {
         return _buffer[name];
+    }
+
+    internal Value? Get(string name)
+    {
+        return _buffer.TryGetValue(name, out Value? value) ? value : _outputs.GetValueOrDefault(name);
     }
 
     internal bool IsValueInBuffer(string name)

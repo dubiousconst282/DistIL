@@ -20,7 +20,7 @@ public static class MatchExtensions
         return MatchInstruction(instruction, outputs.Pattern!, outputs);
     }
 
-    private static bool MatchInstruction(Instruction instruction, InstructionPattern instrPattern, OutputPattern outputs)
+    internal static bool MatchInstruction(this Instruction instruction, InstructionPattern instrPattern, OutputPattern outputs)
     {
         if (instruction is BinaryInst bin) {
             return MatchBinary(bin, instrPattern, outputs);

@@ -37,6 +37,14 @@ internal record InstructionPattern(
         var argsString = pattern[spaceIndex..].Trim();
 
         List<IInstructionPatternArgument> arguments = new List<IInstructionPatternArgument>();
+
+        if (operation.Op is Opcode.Call or Opcode.CallVirt) {
+            var selector = argsString[..argsString.IndexOf(' ')].ToString();
+            arguments.Add(new MethodRefArgument(selector));
+
+            argsString = argsString[argsString.IndexOf(' ')..];
+        }
+
         ParseArguments(argsString, arguments);
 
         return new InstructionPattern(operation.Op, op, arguments);

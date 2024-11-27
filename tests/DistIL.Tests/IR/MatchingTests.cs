@@ -56,6 +56,17 @@ public class MatchingTests
     }
 
     [Fact]
+    public void TestCallMatchOutput()
+    {
+        var inst = new CallInst(_stub, []);
+
+        Assert.True(inst.Match("(call DistIL.Tests.IR.MatchingTests.SubMethod())", out var outputs));
+        var instr = (BinaryInst)outputs["lhs"];
+        Assert.IsType<BinaryInst>(instr);
+        Assert.Equal(BinaryOp.Add, instr.Op);
+    }
+
+    [Fact]
     public void TestReplace()
     {
         var method = _testType.CreateMethod("ReplaceMe", new TypeSig(PrimType.Void), []);

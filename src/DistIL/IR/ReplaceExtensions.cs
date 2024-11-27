@@ -16,7 +16,11 @@ public static class ReplaceExtensions
         if (matched) {
             var pattern = InstructionPattern.Parse(replacementPattern[parts[1]]);
             var newInstr = Evaluate(pattern, outputs);
-            instruction.ReplaceWith(newInstr);
+            instruction.ReplaceUses(newInstr);
+
+            if (instruction.NumUses == 0) {
+                instruction.Remove();
+            }
         }
     }
 

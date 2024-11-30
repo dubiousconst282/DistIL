@@ -20,6 +20,7 @@ public abstract class MethodDesc : MemberDesc
     public bool IsPublic => (Attribs & MethodAttributes.MemberAccessMask) == MethodAttributes.Public;
 
     public bool IsConstructor => Name == ".ctor";
+    public bool IsStaticConstructor => Name == ".cctor";
     public bool IsDestructor => Name == "Finalize";
 
     public TypeDesc ReturnType => ReturnSig.Type;

@@ -157,7 +157,7 @@ internal record InstructionPattern(
 
         if (long.TryParse(arg, out var number))
         {
-            return new ConstantArgument(number, PrimType.Int32);
+            return new ConstantArgument(number, PrimType.Int64);
         }
         if (double.TryParse(arg, out var dnumber))
         {

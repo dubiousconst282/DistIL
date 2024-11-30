@@ -73,10 +73,10 @@ public class MatchingTests
         var body = new MethodBody(method);
         var builder = new IRBuilder(body.CreateBlock());
 
-        var inst = new BinaryInst(BinaryOp.Sub, new BinaryInst(BinaryOp.Add, ConstInt.CreateI(1), ConstInt.CreateI(3)), ConstInt.CreateI(3));
+        var inst = new BinaryInst(BinaryOp.Sub, new BinaryInst(BinaryOp.Add, ConstInt.CreateL(1), ConstInt.CreateL(3)), ConstInt.CreateL(3));
         builder.Emit(inst);
 
-        inst.Replace("(sub {lhs:(add $x $y)} $y) -> $x");
+        inst.Replace("(sub {lhs:(add $x $y)} $y) -> (add $x 0)");
     }
 
     [Fact]

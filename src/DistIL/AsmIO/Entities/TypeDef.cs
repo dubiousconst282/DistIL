@@ -13,6 +13,8 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
 
     public abstract TypeAttributes Attribs { get; }
 
+    public bool IsStatic => Attribs.HasFlag(TypeAttributes.Abstract) && Attribs.HasFlag(TypeAttributes.Sealed);
+
     public override bool IsValueType {
         get {
             var sys = Module.Resolver.SysTypes;

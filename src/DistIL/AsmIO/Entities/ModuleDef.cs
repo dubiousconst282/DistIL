@@ -3,7 +3,6 @@ namespace DistIL.AsmIO;
 using System.Collections;
 using System.IO;
 using System.Reflection;
-using System.Reflection.Metadata;
 
 public class ModuleDef : EntityDesc
 {
@@ -18,9 +17,14 @@ public class ModuleDef : EntityDesc
     /// <summary> All types exported by this module (incl. nested). </summary>
     public IReadOnlyCollection<TypeDef> ExportedTypes => _exportedTypes;
 
+    /// <summary> A list of resources embedded in, or referenced by this module. </summary>
+    /// <remarks> For more information, see <c>II.6.2.2 Manifest resources</c> of the ECMA335 spec. </remarks>
+    public ICollection<ResourceDesc> ManifestResources => _manifestResources;
+
     public ModuleResolver Resolver { get; }
 
     internal TypeList _typeDefs = new(), _exportedTypes = new();
+    internal List<ResourceDesc> _manifestResources = new();
 
     internal Dictionary<TypeDef, ModuleDef> _typeRefRoots = new(); // root assemblies for references of forwarded types
     internal List<CustomAttrib> _asmCustomAttribs = new(), _modCustomAttribs = new();
@@ -67,8 +71,31 @@ public class ModuleDef : EntityDesc
     public IEnumerable<MethodDef> MethodDefs()
         => TypeDefs.SelectMany(t => t.Methods);
 
+    // TODO: consider deprecating this in favor of exposing CustomAttribs and AssemblyCustomAttribs properties directly
     public List<CustomAttrib> GetCustomAttribs(bool forAssembly)
         => forAssembly ? _asmCustomAttribs : _modCustomAttribs;
+
+    public ResourceDesc? GetManifestResource(string name)
+    {
+        return ManifestResources.FirstOrDefault(m => m.Name == name);
+    }
+
+    /// <summary> Adds or replaces an embedded manifest resource. </summary>
+    /// <param name="overwrite"> If true, indicates that existing resources should be replaced with the new contents. Otherwise, an exception is thrown. </param>
+    public ResourceDesc CreateEmbeddedResource(string name, byte[] data, bool overwrite = false, ManifestResourceAttributes attrs = ManifestResourceAttributes.Public)
+    {
+        int index = _manifestResources.FindIndex(e => e.Name == name);
+        Ensure.That(index < 0 || overwrite, "A resource with the same name already exists");
+
+        var resource = new EmbeddedResource(this, name, attrs, data);
+
+        if (index < 0) {
+            _manifestResources.Add(resource);
+        } else {
+            _manifestResources[index] = resource;
+        }
+        return resource;
+    }
 
     /// <summary> Serializes this module to the specified stream. </summary>
     /// <param name="pdbStream">

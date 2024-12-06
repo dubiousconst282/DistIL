@@ -67,6 +67,35 @@ internal class ModuleLoader
             _mod._exportedTypes.Add(ResolveExportedType(handle));
         }
 
+        foreach (var handle in _reader.ManifestResources) {
+            var info = _reader.GetManifestResource(handle);
+            string name = _reader.GetString(info.Name);
+            var customAttribs = LoadCustomAttribs(info.GetCustomAttributes());
+
+            if (info.Implementation.IsNil) {
+                _mod._manifestResources.Add(new EmbeddedResource(_mod, name, info.Attributes, checked((int)info.Offset)) {
+                    _customAttribs = customAttribs
+                });
+            } else if (info.Implementation.Kind == HandleKind.AssemblyReference) {
+                var parent = (ModuleDef)GetEntity(info.Implementation);
+                var resource = parent.GetManifestResource(name) ?? throw new BadImageFormatException("Invalid resource reference");
+                _mod._manifestResources.Add(resource!);
+
+                Ensure.That(customAttribs.Length == 0); // design limitation
+            } else if (info.Implementation.Kind == HandleKind.AssemblyFile) {
+                Ensure.That(info.Offset == 0); // forbidden by spec
+
+                var fileInfo = _reader.GetAssemblyFile((AssemblyFileHandle)info.Implementation);
+
+                _mod._manifestResources.Add(new LinkedResource(
+                    _mod, name, info.Attributes, _reader.GetString(fileInfo.Name), 
+                    _reader.GetBlobBytes(fileInfo.HashValue), fileInfo.ContainsMetadata
+                ) { _customAttribs = customAttribs });
+            } else {
+                throw new BadImageFormatException("Invalid ManifestResource implementation");
+            }
+        }
+
         // Other module stuff
         int entryPointToken = _pe.PEHeaders.CorHeader?.EntryPointTokenOrRelativeVirtualAddress ?? 0;
         if (entryPointToken != 0) {

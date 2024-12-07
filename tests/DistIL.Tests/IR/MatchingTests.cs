@@ -16,16 +16,10 @@ public class MatchingTests
     public MatchingTests(ModuleResolverFixture mrf)
     {
         _modResolver = mrf.Resolver;
-        var type = _modResolver.Import(typeof(MatchingTests));
-        _stub = type.FindMethod("StubMethod");
-        _module = _modResolver.Create("Test");
-        _testType = _module.CreateType("Test", "Stub");
-    }
 
-    public static void StubMethod()
-    {
-        var x = 2 + 6;
-        System.Console.WriteLine(x);
+        _module = _modResolver.Create("Test");
+        _testType = _modResolver.Resolve("TestAsm").FindType(null, "Stub")!;
+        _stub = _testType.FindMethod("StubMethod");
     }
 
     [Fact]

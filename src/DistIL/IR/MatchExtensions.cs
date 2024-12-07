@@ -243,6 +243,7 @@ public static class MatchExtensions
     private static bool MatchUnary(UnaryInst un, InstructionPattern pattern, OutputPattern outputs)
     {
         var operation = pattern.OpCode;
+        //ToDo: replace _Bin_first with unary_first when it's available 
         var op = (UnaryOp)(operation - (Opcode._Bin_First + 1));
 
         if (un.Op != op) {

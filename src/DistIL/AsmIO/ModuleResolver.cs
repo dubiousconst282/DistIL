@@ -4,12 +4,14 @@ using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
-public class ModuleResolver
+public class ModuleResolver : IDisposable
 {
     // TODO: Do we need to care about FullName (public keys and versions)?
     internal readonly Dictionary<string, ModuleDef> _cache = new(StringComparer.OrdinalIgnoreCase);
     internal readonly Dictionary<ResolvingUtils.MethodSelector, MethodDesc> FunctionCache = new();
     internal readonly Dictionary<string, TypeDefOrSpec> TypeCache = new();
+
+    private List<IDisposable> _disposables;
 
     private string[] _searchPaths = [];
     internal readonly ICompilationLogger? _logger;
@@ -133,10 +135,12 @@ public class ModuleResolver
         return null;
     }
 
+
     public ModuleDef Load(string path)
     {
         var module = new ModuleDef(this);
         module._loader = new ModuleLoader(path, module);
+        _disposables.Add(module._loader);
 
         AddToCache(module.AsmName.Name!, module); // AsmName is loaded by ModuleLoader ctor
         _logger?.Debug($"Loading module '{module.AsmName.Name}, v{module.AsmName.Version}'");
@@ -164,4 +168,18 @@ public class ModuleResolver
     {
         _cache.Add(name, module);
     }
+
+    public void Dispose()
+    {
+        foreach (var disposable in _disposables)
+        {
+            disposable.Dispose();
+        }
+
+        _disposables.Clear();
+        _cache.Clear();
+        TypeCache.Clear();
+        FunctionCache.Clear();
+    }
+
 }

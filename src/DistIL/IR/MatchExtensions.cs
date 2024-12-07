@@ -66,18 +66,18 @@ public static class MatchExtensions
 
     private static bool MatchOperands(Instruction instruction, InstructionPattern pattern, OutputPattern outputs)
     {
-        bool matched = true;
-
         if (pattern.Arguments.Count > instruction.Operands.Length) {
             return false;
         }
 
         for (int index = 0; index < pattern.Arguments.Count; index++) {
             Value? operand = instruction.Operands[index];
-            matched &= MatchValue(operand, pattern.Arguments[index], outputs);
+            if (!MatchValue(operand, pattern.Arguments[index], outputs)) {
+                return false;
+            }
         }
 
-        return matched;
+        return true;
     }
 
     private static bool MatchArgument(Value value, IInstructionPatternArgument argument, OutputPattern outputs)

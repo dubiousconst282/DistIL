@@ -19,12 +19,16 @@ public abstract class MethodDesc : MemberDesc
     public bool IsGeneric => GenericParams.Count > 0;
     public bool IsPublic => (Attribs & MethodAttributes.MemberAccessMask) == MethodAttributes.Public;
 
-    public bool IsConstructor => Name == ".ctor";
-    public bool IsStaticConstructor => Name == ".cctor";
+    public bool IsConstructor => IsSpecialMethod(".ctor");
+    public bool IsStaticConstructor => IsSpecialMethod(".cctor");
     public bool IsDestructor => Name == "Finalize";
 
     public TypeDesc ReturnType => ReturnSig.Type;
 
+    private bool IsSpecialMethod(string name)
+    {
+        return Name == name && Attribs.HasFlag(MethodAttributes.SpecialName);
+    }
 
     public override void Print(PrintContext ctx)
     {

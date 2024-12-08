@@ -17,8 +17,8 @@ public class MatchingTests
     {
         _modResolver = mrf.Resolver;
 
-        _module = _modResolver.Create("Test");
-        _testType = _modResolver.Resolve("TestAsm").FindType(null, "Stub")!;
+        _module = _modResolver.Resolve("TestAsm");
+        _testType = _module.FindType(null, "MatcherStub")!;
         _stub = _testType.FindMethod("StubMethod");
     }
 

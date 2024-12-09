@@ -6,7 +6,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
-internal class ModuleLoader : IDisposable
+internal class ModuleLoader
 {
     public readonly string _path;
     public readonly PEReader _pe;
@@ -541,13 +541,6 @@ internal class ModuleLoader : IDisposable
             default: throw new NotSupportedException();
         }
     }
-
-    public void Dispose()
-    {
-        _pe.Dispose();
-        _reader.Dispose();
-    }
-
 
     class TableEntryCache
     {

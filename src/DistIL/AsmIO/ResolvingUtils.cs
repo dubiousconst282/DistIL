@@ -105,6 +105,17 @@ public static class ResolvingUtils
         return new MethodSelector(type, methodName, parameterTypes, GetParameterType(returnTypeString));
     }
 
+   /// <summary>
+    /// Finds a type based on its full name.
+    /// </summary>
+    /// <param name="resolver">The module resolver.</param>
+    /// <param name="fullname">The full name of the type to find.</param>
+    /// <example>
+    /// <code>
+    /// var type = resolver.FindType("System.Text.StringBuilder");
+    /// </code>
+    /// </example>
+    /// <returns>The type descriptor if found; otherwise, null.</returns>
     public static TypeDesc? FindType(this ModuleResolver resolver, string fullname)
     {
         var primType = PrimType.GetFromAlias(fullname);

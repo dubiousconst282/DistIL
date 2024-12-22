@@ -73,7 +73,7 @@ public static class ResolvingUtils
     private static MethodSelector GetSelector(this ModuleResolver resolver, string selector)
     {
         var spl = selector.Split("::");
-        var type = GetTypeSpec(resolver, spl[0].Trim());
+        var type = FindType(resolver, spl[0].Trim());
 
         var methodPart = spl[1].Trim();
         var methodName = methodPart.Contains('(') ? methodPart[..methodPart.IndexOf('(')] : methodPart;
@@ -94,7 +94,7 @@ public static class ResolvingUtils
                 return null;
             }
 
-            return fullname == "this" ? type : GetTypeSpec(resolver, fullname.Trim());
+            return fullname == "this" ? type : FindType(resolver, fullname.Trim());
         }
 
         var parameterTypes = parameterPart
@@ -105,7 +105,18 @@ public static class ResolvingUtils
         return new MethodSelector(type, methodName, parameterTypes, GetParameterType(returnTypeString));
     }
 
-    private static TypeDesc? GetTypeSpec(this ModuleResolver resolver, string fullname)
+   /// <summary>
+    /// Finds a type based on its full name.
+    /// </summary>
+    /// <param name="resolver">The module resolver.</param>
+    /// <param name="fullname">The full name of the type to find.</param>
+    /// <example>
+    /// <code>
+    /// var type = resolver.FindType("System.Text.StringBuilder");
+    /// </code>
+    /// </example>
+    /// <returns>The type descriptor if found; otherwise, null.</returns>
+    public static TypeDesc? FindType(this ModuleResolver resolver, string fullname)
     {
         var primType = PrimType.GetFromAlias(fullname);
 

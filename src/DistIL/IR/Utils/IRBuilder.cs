@@ -224,6 +224,8 @@ public class IRBuilder
         return CreateCallVirt(method, args);
     }
 
+    public ReturnInst CreateReturn(Value? value = null)
+        => Emit(new ReturnInst(value));
 
     public NewObjInst CreateNewObj(MethodDesc ctor, params Value[] args)
         => Emit(new NewObjInst(ctor, args));

@@ -5,7 +5,7 @@ public class IRCloner
     // Mapping from old to new (clonned) values
     readonly Dictionary<Value, Value> _mappings = new();
     // Values that must be remapped and replaced last (they depend on defs in an unprocessed block).
-    readonly RefSet<PendingValue> _pendingValues = new();
+    readonly RefSet<PendingClone> _pendingClones = new();
     readonly InstCloner _instCloner;
     readonly List<BasicBlock> _blocks = new();
     protected readonly GenericContext _genericContext;
@@ -78,7 +78,7 @@ public class IRCloner
 
         // At this point the only pending values should be from phi uses for
         // unreachable pred blocks. Check that they're no longer used.
-        foreach (var pending in _pendingValues) {
+        foreach (var pending in _pendingClones) {
             Ensure.That(pending.NumUses == 0);
         }
     }
@@ -105,11 +105,11 @@ public class IRCloner
             ref var mapping = ref _mappings.GetOrAddRef(inst, out bool exists);
 
             if (exists) {
-                if (mapping is not PendingValue pending) {
+                if (mapping is not PendingClone pending) {
                     throw new InvalidOperationException("Cloned instruction with an already existing mapping");
                 }
                 pending.ReplaceUses(clonedInst);
-                _pendingValues.Remove(pending);
+                _pendingClones.Remove(pending);
             }
             mapping = clonedInst;
         }
@@ -141,9 +141,10 @@ public class IRCloner
         if (value is Const or Undef) {
             return value;
         }
-        var pending = new PendingValue(value);
+        var inst = (Instruction)value;
+        var pending = new PendingClone(inst, GetRemappedType(inst));
         _mappings.Add(value, pending);
-        _pendingValues.Add(pending);
+        _pendingClones.Add(pending);
         return pending;
     }
     protected EntityDesc Remap(EntityDesc entity)
@@ -158,10 +159,17 @@ public class IRCloner
         };
     }
 
-    class PendingValue : TrackedValue
+    /// <summary> This method must be overriden if the derived cloner may change result types of cloned instructions, as some refs cannot be cloned ahead of time. </summary>
+    protected virtual TypeDesc GetRemappedType(Instruction inst)
     {
-        public PendingValue(Value actual) => ResultType = actual.ResultType;
-        public override void Print(PrintContext ctx) => ctx.Print("**PENDING**");
+        return (TypeDesc)Remap(inst.ResultType);
+    }
+
+    protected sealed class PendingClone : TrackedValue
+    {
+        public readonly Instruction Source;
+        public PendingClone(Instruction source, TypeDesc type) => (Source, ResultType) = (source, type);
+        public override void Print(PrintContext ctx) => ctx.Print($"PendingClone({Source.ToString()})");
     }
 
     sealed class InstCloner : InstVisitor

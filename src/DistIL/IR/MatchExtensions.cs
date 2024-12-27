@@ -182,22 +182,18 @@ public static class MatchExtensions
 
     private static bool MatchConstArgument(ConstantArgument constantArg, Const constant)
     {
-        if (constantArg.Type == constant.ResultType) {
-            if (constantArg is StringArgument strArg) {
-                return MatchStringArg(strArg, constant as ConstString);
-            }
-
-            object? value = constant switch {
-                ConstInt constInt => constInt.Value,
-                ConstFloat constFloat => constFloat.Value,
-                ConstNull => null,
-                _ => null
-            };
-
-            return value.Equals(constantArg.Value);
+        if (constantArg is StringArgument strArg) {
+            return constant is ConstString str && MatchStringArg(strArg, str);
         }
 
-        return false;
+        // TODO: consider supporting explicit number typing suffixes in ConstantArgument
+        object? value = constant switch {
+            ConstInt constInt => constInt.Value,
+            ConstFloat constFloat => constFloat.Value,
+            ConstNull => null,
+            _ => null
+        };
+        return constantArg.Value.Equals(value);
     }
 
     private static bool MatchStringArg(StringArgument strArg, ConstString constant)

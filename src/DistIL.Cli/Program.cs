@@ -26,7 +26,7 @@ static void RunOptimizer(OptimizerOptions options)
 {
     var logger = new ConsoleLogger() { MinLevel = options.Verbosity };
 
-    var resolver = new ModuleResolver(logger);
+    using var resolver = new ModuleResolver(logger);
     resolver.AddSearchPaths([Path.GetDirectoryName(Path.GetFullPath(options.InputPath))!]);
     resolver.AddSearchPaths(options.ResolverPaths);
 

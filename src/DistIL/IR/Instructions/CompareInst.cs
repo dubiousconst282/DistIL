@@ -26,8 +26,14 @@ public class CompareInst : Instruction
     public CompareInst(CompareOp op, Value left, Value right)
         : base(left, right)
     {
-        CheckOperandTypes(op, left.ResultType.StackType, right.ResultType.StackType);
-        ResultType = PrimType.Bool;
+        if (left.ResultType != right.ResultType) {
+            CheckOperandTypes(op, left.ResultType.StackType, right.ResultType.StackType);
+        }
+        if (left.ResultType is VectorType vecType) {
+            ResultType = VectorType.Create(PrimType.Bool, vecType.Width);
+        } else {
+            ResultType = PrimType.Bool;
+        }
         Op = op;
     }
 

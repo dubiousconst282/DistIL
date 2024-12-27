@@ -263,6 +263,30 @@ Entry:
     }
 
     [Fact]
+    public void ParseVectorType()
+    {
+        string code = @"
+import $Root from TestAsm
+
+public ParserDummy::TestCase(#ptr: int*) -> int[x16] {
+Entry:
+    r1 = load #ptr -> int[x16]
+    r2 = add r1, r1 -> int[x16]
+    r3 = icmp.slt r1, r2 -> bool[x16]
+    ret r1
+}
+";
+        var body = Parse(code);
+        var insts = body.Instructions().ToArray();
+
+        Assert.True(body.ReturnType is VectorType { ElemType.Kind: TypeKind.Int32, Width: 16 });
+        Assert.True(insts[0] is LoadInst { ElemType: VectorType { ElemType.Kind: TypeKind.Int32, Width: 16 } });
+        Assert.True(insts[1] is BinaryInst { Op: BinaryOp.Add, ResultType: VectorType { ElemType.Kind: TypeKind.Int32, Width: 16 } });
+        Assert.True(insts[2] is CompareInst { Op: CompareOp.Slt, ResultType: VectorType { ElemType.Kind: TypeKind.Bool, Width: 16 } });
+    }
+
+
+    [Fact]
     public void MultiErrors()
     {
         var code = @"

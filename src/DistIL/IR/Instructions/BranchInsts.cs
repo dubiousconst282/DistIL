@@ -74,7 +74,8 @@ public class SwitchInst : Instruction
     {
         TargetMappings = mappings;
     }
-    internal SwitchInst(Value[] operands, int[] targetMappings)
+    /// <summary> Unchecked constructor. </summary>
+    public SwitchInst(Value[] operands, int[] targetMappings)
         : base(operands)
     {
         Debug.Assert(operands.Distinct().Count() == operands.Length);

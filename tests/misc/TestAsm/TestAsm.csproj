@@ -4,4 +4,8 @@
     <OutputType>Library</OutputType>
   </PropertyGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Resources/lorem_ipsum.txt" />
+    <LinkResource Include="Resources/byte_sequence.bin" />
+  </ItemGroup>
 </Project>

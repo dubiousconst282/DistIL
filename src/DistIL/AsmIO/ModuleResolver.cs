@@ -4,7 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
-public class ModuleResolver
+public class ModuleResolver : IDisposable
 {
     // TODO: Do we need to care about FullName (public keys and versions)?
     internal readonly Dictionary<string, ModuleDef> _cache = new(StringComparer.OrdinalIgnoreCase);
@@ -163,5 +163,16 @@ public class ModuleResolver
     private void AddToCache(string name, ModuleDef module)
     {
         _cache.Add(name, module);
+    }
+    
+    public void Dispose()
+    {
+        foreach (var module in _cache.Values) {
+            module._loader!._pe.Dispose();
+            module._loader = null;
+        }
+        _cache.Clear();
+        TypeCache.Clear();
+        FunctionCache.Clear();
     }
 }

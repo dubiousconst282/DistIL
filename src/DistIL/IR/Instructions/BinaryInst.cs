@@ -52,6 +52,8 @@ public class BinaryInst : Instruction
                     => a is PointerType ? a : PrimType.IntPtr, // pick pointer over nint
                 StackType.ByRef when op == BinaryOp.Sub
                     => PrimType.IntPtr,
+                StackType.Struct when a is VectorType && a == b
+                    => a,
                 _ => null
             };
         }

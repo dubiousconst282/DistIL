@@ -10,19 +10,19 @@ internal partial class ModuleWriter
     readonly ModuleDef _mod;
     readonly MetadataBuilder _builder;
     readonly MethodBodyStreamEncoder _bodyEncoder;
-    private BlobBuilder? _fieldDataStream;
+    private BlobBuilder? _fieldDataStream, _resourceDataStream;
 
     readonly Dictionary<EntityDesc, EntityHandle> _handleMap = new();
     readonly Dictionary<string, ModuleReferenceHandle> _moduleRefs = new();
     // Generic parameters must be sorted based on the coded parent entity handle, we do that in a later pass.
     readonly List<EntityDesc> _genericDefs = new();
+    readonly Dictionary<(StringHandle, BlobHandle, bool), AssemblyFileHandle> _fileRefHandles = new();
 
     public ModuleWriter(ModuleDef mod)
     {
         _mod = mod;
         _builder = new MetadataBuilder();
         _bodyEncoder = new MethodBodyStreamEncoder(new BlobBuilder());
-
     }
 
     public void BuildTables()
@@ -60,6 +60,9 @@ internal partial class ModuleWriter
     {
         foreach (var type in _mod.TypeDefs) {
             EmitType(type);
+        }
+        foreach (var resource in _mod.ManifestResources) {
+            EmitResource(resource);
         }
         EmitPendingGenericParams();
     }
@@ -264,6 +267,40 @@ internal partial class ModuleWriter
         }
     }
 
+    private unsafe void EmitResource(ResourceDesc resource)
+    {
+        EntityHandle implHandle;
+        int dataOffset = 0;
+
+        if (resource is EmbeddedResource embedResource) {
+            _resourceDataStream ??= new();
+            dataOffset = _resourceDataStream.Count;
+
+            var data = embedResource.GetData();
+            _resourceDataStream.WriteInt32(data.Length);
+
+            fixed (byte* pData = data) {
+                _resourceDataStream.WriteBytes(pData, data.Length);
+            }
+            _resourceDataStream.Align(8); // unspecified in ECMA, same as Roslyn
+            
+            implHandle = embedResource.Module == _mod ? default(AssemblyFileHandle) : GetHandle(embedResource.Module);
+        } else if (resource is LinkedResource linkedResource) {
+            var nameHandle = AddString(linkedResource.FileName);
+            var hashHandle = AddBlob(linkedResource.Hash);
+
+            ref var cachedHandle = ref _fileRefHandles.GetOrAddRef((nameHandle, hashHandle, linkedResource.ContainsMetadata));
+            if (cachedHandle.IsNil) {
+                cachedHandle = _builder.AddAssemblyFile(nameHandle, hashHandle, linkedResource.ContainsMetadata);
+            }
+            implHandle = cachedHandle;
+        } else {
+            throw new InvalidOperationException();
+        }
+        var handle = _builder.AddManifestResource(resource.Attribs, AddString(resource.Name), implHandle, (uint)dataOffset);
+        EmitCustomAttribs(handle, resource.GetCustomAttribs());
+    }
+
     private void EmitCustomAttribs(EntityHandle parentHandle, IList<CustomAttrib>? attribs)
     {
         if (attribs == null) return;
@@ -308,6 +345,7 @@ internal partial class ModuleWriter
             metadataRootBuilder: new MetadataRootBuilder(_builder),
             ilStream: _bodyEncoder.Builder,
             mappedFieldData: _fieldDataStream,
+            managedResources: _resourceDataStream,
             entryPoint: entryPoint,
             debugDirectoryBuilder: debugDirBuilder
         );

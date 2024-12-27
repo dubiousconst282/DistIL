@@ -236,7 +236,7 @@ public partial class IRParser
         }
 
         if (type == null) {
-            _lexer.Error("Cound not find type", start);
+            _lexer.Error("Could not find type", start);
             return PrimType.Void;
         }
         // Generic arguments
@@ -250,17 +250,25 @@ public partial class IRParser
         // Compound types (array, pointer, byref)
         while (true) {
             if (_lexer.Match(TokenType.LBracket)) {
+                // Vector: int[x16]
+                if (_lexer.IsNext(TokenType.Identifier)) {
+                    string text = _lexer.Peek().StrValue;
+                    if (text[0] == 'x' && int.TryParse(text.AsSpan(1), out int width)) {
+                        _lexer.Next();
+                        _lexer.Expect(TokenType.RBracket);
+
+                        type = VectorType.Create(type, width);
+                        continue;
+                    }
+                }
                 // TODO: multi dim arrays
                 _lexer.Expect(TokenType.RBracket);
                 type = type.CreateArray();
-            }//
-            else if (_lexer.Match(TokenType.Asterisk)) {
+            } else if (_lexer.Match(TokenType.Asterisk)) {
                 type = type.CreatePointer();
-            }//
-            else if (_lexer.Match(TokenType.Ampersand)) {
+            } else if (_lexer.Match(TokenType.Ampersand)) {
                 type = type.CreateByref();
-            }//
-            else break;
+            } else break;
         }
         return type;
     }
@@ -661,7 +669,7 @@ public partial class IRParser
         string name = _lexer.ExpectId();
 
         return declType.FindField(name)
-                ?? throw _ctx.Fatal("Cound not find field", (start, _lexer.LastPos()));
+                ?? throw _ctx.Fatal("Could not find field", (start, _lexer.LastPos()));
     }
 
     private BasicBlock ParseLabel()

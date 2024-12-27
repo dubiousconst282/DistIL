@@ -28,7 +28,7 @@ public static class MatchExtensions
         if (instruction is CompareInst comp) {
             return MatchCompare(comp, instrPattern, outputs);
         }
-        else if (instruction is UnaryInst un) {
+        if (instruction is UnaryInst un) {
             return MatchUnary(un, instrPattern, outputs);
         }
 
@@ -214,38 +214,25 @@ public static class MatchExtensions
 
     private static bool MatchBinary(BinaryInst bin, InstructionPattern pattern, OutputPattern outputs)
     {
-        var operation = pattern.OpCode;
-        var op = (BinaryOp)(operation - (Opcode._Bin_First + 1));
-
-        if (bin.Op != op) {
-            return false;
+        if (pattern.OpCode.IsBinaryOp() && pattern.OpCode.GetBinaryOp() == bin.Op) {
+            return MatchOperands(bin, pattern, outputs);
         }
-
-        return MatchOperands(bin, pattern, outputs);
+        return false;
     }
 
     private static bool MatchCompare(CompareInst comp, InstructionPattern pattern, OutputPattern outputs)
     {
-        var operation = pattern.OpCode;
-        var op = (CompareOp)(operation - (Opcode._Cmp_First + 1));
-
-        if (comp.Op != op) {
-            return false;
+        if (pattern.OpCode.IsCompareOp() && pattern.OpCode.GetCompareOp() == comp.Op) {
+            return MatchOperands(comp, pattern, outputs);
         }
-
-        return MatchOperands(comp, pattern, outputs);
+        return false;
     }
 
     private static bool MatchUnary(UnaryInst un, InstructionPattern pattern, OutputPattern outputs)
     {
-        var operation = pattern.OpCode;
-        //ToDo: replace _Bin_first with unary_first when it's available 
-        var op = (UnaryOp)(operation - (Opcode._Bin_First + 1));
-
-        if (un.Op != op) {
-            return false;
+        if (pattern.OpCode.IsUnaryOp() && pattern.OpCode.GetUnaryOp() == un.Op) {
+            return MatchOperands(un, pattern, outputs);
         }
-
-        return MatchOperands(un, pattern, outputs);;
+        return false;
     }
 }

@@ -59,13 +59,11 @@ public static class ReplaceExtensions
     {
         var args = instr.Arguments.Select(a => Evaluate(a, outputs)).ToArray();
 
-        if (instr.OpCode is > Opcode._Bin_First and < Opcode._Bin_Last) {
-            var binOp = (BinaryOp)(instr.OpCode - (Opcode._Bin_First + 1));
-            return new BinaryInst(binOp, args[0], args[1]);
+        if (instr.OpCode.IsBinaryOp()) {
+            return new BinaryInst(instr.OpCode.GetBinaryOp(), args[0], args[1]);
         }
-        else if (instr.OpCode is > Opcode._Cmp_First and < Opcode._Cmp_Last) {
-            var cmpOp = (BinaryOp)(instr.OpCode - (Opcode._Cmp_First + 1));
-            return new BinaryInst(cmpOp, args[0], args[1]);
+        if (instr.OpCode.IsCompareOp()) {
+            return new CompareInst(instr.OpCode.GetCompareOp(), args[0], args[1]);
         }
 
         throw new ArgumentException("Invalid instruction opcode");

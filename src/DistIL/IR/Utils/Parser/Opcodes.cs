@@ -18,32 +18,38 @@ internal enum Opcode
     Load, Store,
     Conv,
 
-    // Note: Entries must be keept in the same order as in BinaryOp
-    _Bin_First,
-    Bin_Add, Bin_Sub, Bin_Mul,
-    Bin_SDiv, Bin_UDiv,
-    Bin_SRem, Bin_URem,
+    // BinaryOp
+    // NOTE: order must match respective enums
+    _FirstBinaryOp,
+    Add, Sub, Mul,
+    SDiv, UDiv,
+    SRem, URem,
 
-    Bin_And, Bin_Or, Bin_Xor,
-    Bin_Shl,    // <<   Shift left
-    Bin_Shra,   // >>   Shift right (arithmetic)
-    Bin_Shrl,   // >>>  Shift right (logical)
+    And, Or, Xor,
+    Shl,    // <<   Shift left
+    Shra,   // >>   Shift right (arithmetic)
+    Shrl,   // >>>  Shift right (logical)
 
-    Bin_FAdd, Bin_FSub, Bin_FMul, Bin_FDiv, Bin_FRem,
+    FAdd, FSub, FMul, FDiv, FRem,
 
-    Bin_AddOvf, Bin_SubOvf, Bin_MulOvf,
-    Bin_UAddOvf, Bin_USubOvf, Bin_UMulOvf,
-    _Bin_Last,
+    AddOvf, SubOvf, MulOvf,
+    UAddOvf, USubOvf, UMulOvf,
+    _LastBinaryOp,
 
-    // Note: Entries must be keept in the same order as in CompareOp
-    _Cmp_First,
+    // UnaryOp
+    _FirstUnaryOp,
+    Neg, Not, FNeg,
+    _LastUnaryOp,
+
+    // CompareOp
+    _FirstCompareOp,
     Cmp_Eq, Cmp_Ne,
     Cmp_Slt, Cmp_Sgt, Cmp_Sle, Cmp_Sge,
     Cmp_Ult, Cmp_Ugt, Cmp_Ule, Cmp_Uge,
 
     Cmp_FOlt, Cmp_FOgt, Cmp_FOle, Cmp_FOge, Cmp_FOeq, Cmp_FOne,
     Cmp_FUlt, Cmp_FUgt, Cmp_FUle, Cmp_FUge, Cmp_FUeq, Cmp_FUne,
-    _Cmp_Last,
+    _LastCompareOp,
 }
 
 [Flags]
@@ -77,30 +83,34 @@ internal static class Opcodes
             "getfld"    => Opcode.Getfld,
             "setfld"    => Opcode.Setfld,
 
-            "add"       => Opcode.Bin_Add,
-            "sub"       => Opcode.Bin_Sub,
-            "mul"       => Opcode.Bin_Mul,
-            "sdiv"      => Opcode.Bin_SDiv,
-            "srem"      => Opcode.Bin_SRem,
-            "udiv"      => Opcode.Bin_UDiv,
-            "urem"      => Opcode.Bin_URem,
-            "and"       => Opcode.Bin_And,
-            "or"        => Opcode.Bin_Or,
-            "xor"       => Opcode.Bin_Xor,
-            "shl"       => Opcode.Bin_Shl,
-            "shra"      => Opcode.Bin_Shra,
-            "shrl"      => Opcode.Bin_Shrl,
-            "fadd"      => Opcode.Bin_FAdd,
-            "fsub"      => Opcode.Bin_FSub,
-            "fmul"      => Opcode.Bin_FMul,
-            "fdiv"      => Opcode.Bin_FDiv,
-            "frem"      => Opcode.Bin_FRem,
-            "add.ovf"   => Opcode.Bin_AddOvf,
-            "sub.ovf"   => Opcode.Bin_SubOvf,
-            "mul.ovf"   => Opcode.Bin_MulOvf,
-            "uadd.ovf"  => Opcode.Bin_UAddOvf,
-            "usub.ovf"  => Opcode.Bin_USubOvf,
-            "umul.ovf"  => Opcode.Bin_UMulOvf,
+            "add"       => Opcode.Add,
+            "sub"       => Opcode.Sub,
+            "mul"       => Opcode.Mul,
+            "sdiv"      => Opcode.SDiv,
+            "srem"      => Opcode.SRem,
+            "udiv"      => Opcode.UDiv,
+            "urem"      => Opcode.URem,
+            "and"       => Opcode.And,
+            "or"        => Opcode.Or,
+            "xor"       => Opcode.Xor,
+            "shl"       => Opcode.Shl,
+            "shra"      => Opcode.Shra,
+            "shrl"      => Opcode.Shrl,
+            "fadd"      => Opcode.FAdd,
+            "fsub"      => Opcode.FSub,
+            "fmul"      => Opcode.FMul,
+            "fdiv"      => Opcode.FDiv,
+            "frem"      => Opcode.FRem,
+            "add.ovf"   => Opcode.AddOvf,
+            "sub.ovf"   => Opcode.SubOvf,
+            "mul.ovf"   => Opcode.MulOvf,
+            "uadd.ovf"  => Opcode.UAddOvf,
+            "usub.ovf"  => Opcode.USubOvf,
+            "umul.ovf"  => Opcode.UMulOvf,
+
+            "not"       => Opcode.Not,
+            "neg"       => Opcode.Neg,
+            "fneg"       => Opcode.FNeg,
 
             "cmp.eq"    => Opcode.Cmp_Eq,
             "cmp.ne"    => Opcode.Cmp_Ne,
@@ -157,6 +167,25 @@ internal static class Opcodes
                (str.Contains(".volatile")   ? OpcodeModifiers.Volatile : 0) |
                (str.Contains(".inbounds")   ? OpcodeModifiers.InBounds : 0) |
                (str.Contains(".readonly")   ? OpcodeModifiers.ReadOnly : 0);
+    }
 
+    public static bool IsBinaryOp(this Opcode op) => op is > Opcode._FirstBinaryOp and < Opcode._LastBinaryOp;
+    public static bool IsUnaryOp(this Opcode op) => op is > Opcode._FirstUnaryOp and < Opcode._LastUnaryOp;
+    public static bool IsCompareOp(this Opcode op) => op is > Opcode._FirstCompareOp and < Opcode._LastCompareOp;
+
+    public static BinaryOp GetBinaryOp(this Opcode op)
+    {
+        Ensure.That(op.IsBinaryOp());
+        return (BinaryOp)(op - (Opcode._FirstBinaryOp + 1));
+    }
+    public static UnaryOp GetUnaryOp(this Opcode op)
+    {
+        Ensure.That(op.IsUnaryOp());
+        return (UnaryOp)(op - (Opcode._FirstUnaryOp + 1));
+    }
+    public static CompareOp GetCompareOp(this Opcode op)
+    {
+        Ensure.That(op.IsCompareOp());
+        return (CompareOp)(op - (Opcode._FirstCompareOp + 1));
     }
 }

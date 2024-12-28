@@ -21,6 +21,9 @@ public abstract class MethodDesc : MemberDesc
 
     public bool IsConstructor => IsSpecialMethod(".ctor");
     public bool IsStaticConstructor => IsSpecialMethod(".cctor");
+
+    public bool IsSpecialName => Attribs.HasFlag(MethodAttributes.SpecialName);
+
     public bool IsDestructor => Name == "Finalize";
 
     public TypeDesc ReturnType => ReturnSig.Type;

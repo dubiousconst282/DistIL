@@ -126,11 +126,14 @@ public class MDArrayMethod : MethodDesc
         set => throw new InvalidOperationException();
     }
 
-    public override MethodAttributes Attribs
-        => MethodAttributes.Public | (Kind <= OpKind.RangeCtor ? MethodAttributes.SpecialName : 0);
-
-    public override MethodImplAttributes ImplAttribs
-        => MethodImplAttributes.InternalCall;
+    public override MethodAttributes Attribs {
+        get => MethodAttributes.Public | (Kind <= OpKind.RangeCtor ? MethodAttributes.SpecialName : 0);
+        set => throw new NotSupportedException();
+    }
+    public override MethodImplAttributes ImplAttribs {
+        get => MethodImplAttributes.InternalCall;
+        set => throw new NotSupportedException();
+    }
 
     public override TypeSig ReturnSig => Kind switch {
         <= OpKind.Set  => PrimType.Void,

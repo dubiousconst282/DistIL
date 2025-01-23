@@ -7,8 +7,8 @@ using System.Reflection.Metadata;
 /// <summary> Base class for all method entities. </summary>
 public abstract class MethodDesc : MemberDesc
 {
-    public abstract MethodAttributes Attribs { get; }
-    public abstract MethodImplAttributes ImplAttribs { get; }
+    public abstract MethodAttributes Attribs { get; set; }
+    public abstract MethodImplAttributes ImplAttribs { get; set; }
 
     public abstract TypeSig ReturnSig { get; }
     public abstract IReadOnlyList<TypeSig> ParamSig { get; }
@@ -91,14 +91,16 @@ public class MethodDef : MethodDefOrSpec
     public override TypeDef DeclaringType { get; }
     public override string Name { get; set; }
 
-    public override MethodAttributes Attribs { get; }
-    public override MethodImplAttributes ImplAttribs { get; }
+    public override MethodAttributes Attribs { get; set; }
+    public override MethodImplAttributes ImplAttribs { get; set; }
 
     public override TypeSig ReturnSig => ReturnParam.Sig;
 
     private ParamSigProxyList? _paramSig;
     public override IReadOnlyList<TypeSig> ParamSig => _paramSig ??= new() { Method = this };
-    public override GenericParamType[] GenericParams { get; }
+
+    GenericParamType[] _genericParams;
+    public override GenericParamType[] GenericParams => _genericParams;
 
     /// <summary> Placeholder for the <c>return</c> parameter, this contains the signature and custom attributes. </summary>
     public ParamDef ReturnParam { get; }
@@ -133,11 +135,18 @@ public class MethodDef : MethodDefOrSpec
         Name = name;
         Attribs = attribs;
         ImplAttribs = implAttribs;
-        GenericParams = genericParams ?? [];
+        _genericParams = genericParams ?? [];
 
         Ensure.That(
             IsStatic || !declaringType.IsGeneric || pars[0].Type is TypeSpec or ByrefType { ElemType: TypeSpec },
             "`this` parameter for generic type must be specialized with the default parameters");
+    }
+    
+    /// <summary> Updates the generic signature of the metho. </summary>
+    /// <remarks> Upon changes, all existing MethodSpec instances deriving from this definition will be invalidated. Malformed IL may be generated if they are referenced. </remarks>
+    public void SetGenericParams(GenericParamType[] genericPars)
+    {
+        _genericParams = genericPars;
     }
 
     public override IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
@@ -167,8 +176,14 @@ public class MethodSpec : MethodDefOrSpec
         set => throw new InvalidOperationException();
     }
 
-    public override MethodAttributes Attribs => Definition.Attribs;
-    public override MethodImplAttributes ImplAttribs => Definition.ImplAttribs;
+    public override MethodAttributes Attribs {
+        get => Definition.Attribs;
+        set => Definition.Attribs = value;
+    }
+    public override MethodImplAttributes ImplAttribs {
+        get => Definition.ImplAttribs;
+        set => Definition.ImplAttribs = value;
+    }
 
     public override TypeSig ReturnSig { get; }
     public override IReadOnlyList<TypeSig> ParamSig { get; }

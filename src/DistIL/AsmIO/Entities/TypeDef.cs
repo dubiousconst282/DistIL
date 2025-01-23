@@ -11,7 +11,7 @@ public abstract class TypeDefOrSpec : TypeDesc, ModuleEntity
     public abstract TypeDef Definition { get; }
     public abstract override TypeDefOrSpec? BaseType { get; }
 
-    public abstract TypeAttributes Attribs { get; }
+    public abstract TypeAttributes Attribs { get; set; }
 
     public bool IsStatic => Attribs.HasFlag(TypeAttributes.Abstract) && Attribs.HasFlag(TypeAttributes.Sealed);
 
@@ -56,7 +56,7 @@ public class TypeDef : TypeDefOrSpec
         }
     }
     public override StackType StackType => Kind.ToStackType();
-    public override TypeAttributes Attribs { get; }
+    public override TypeAttributes Attribs { get; set; }
 
     private TypeDefOrSpec? _baseType;
     public override TypeDefOrSpec? BaseType => _baseType ??= _loader?.GetBaseType(_handle);
@@ -200,6 +200,18 @@ public class TypeDef : TypeDefOrSpec
         return childType;
     }
 
+    public void SetBaseType(TypeDefOrSpec type)
+    {
+        _baseType = type;
+    }
+    /// <summary> Updates the generic signature of the type. </summary>
+    /// <remarks> Upon changes, all existing TypeSpec instances deriving from this definition will be invalidated. Malformed IL may be generated if they are referenced. </remarks>
+    public void SetGenericParams(GenericParamType[] genericPars)
+    {
+        _genericParams = genericPars;
+        _specCache = null;
+    }
+
     public override IList<CustomAttrib> GetCustomAttribs(bool readOnly = true)
         => CustomAttribUtils.GetOrInitList(ref _customAttribs, readOnly);
 
@@ -257,7 +269,10 @@ public class TypeSpec : TypeDefOrSpec
 
     public override TypeKind Kind => Definition.Kind;
     public override StackType StackType => Definition.StackType;
-    public override TypeAttributes Attribs => Definition.Attribs;
+    public override TypeAttributes Attribs {
+        get => Definition.Attribs;
+        set => Definition.Attribs = value;
+    }
 
     public override TypeDefOrSpec? BaseType {
         get {

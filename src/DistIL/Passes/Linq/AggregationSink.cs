@@ -40,7 +40,7 @@ internal class AggregationSink : LinqSink
                 // nextAccum = hasData ? Accum(currItem) : currItem
                 var emptyCheckBlock = builder.Block;
                 var mergeBlock = builder.Method.CreateBlock(insertAfter: emptyCheckBlock).SetName("LQ_MergeAccum");
-                builder.Fork(hasData, mergeBlock);
+                builder.ForkIf(hasData, mergeBlock, negate: true);
 
                 var accumulated = Accumulate(builder, curr, currItem, skipBlock);
                 var accumBlock = builder.Block;

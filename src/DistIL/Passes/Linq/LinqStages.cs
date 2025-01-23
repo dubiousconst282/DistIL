@@ -26,7 +26,7 @@ internal class WhereStage : LinqStageNode
         var filterLambda = SubjectCall!.Args[1];
         var cond = builder.CreateLambdaInvoke_ItemAndIndex(filterLambda, currItem, loopData.CreateAccum);
         // if (!cond) goto SkipBlock;
-        builder.Fork(cond, loopData.SkipBlock);
+        builder.ForkIf(cond, loopData.SkipBlock, negate: true);
         Drain.EmitBody(builder, currItem, loopData);
     }
 }
@@ -45,7 +45,7 @@ internal class OfTypeStage : LinqStageNode
             currItem = builder.CreateBox(currItem.ResultType, currItem);
         }
         currItem = builder.CreateAsInstance(destType, currItem);
-        builder.Fork(currItem, loopData.SkipBlock);
+        builder.ForkIf(currItem, loopData.SkipBlock, negate: true);
 
         if (destType.IsValueType) {
             currItem = builder.CreateUnboxObj(destType, currItem);
@@ -93,7 +93,7 @@ internal class SkipStage : LinqStageNode
             decrAndSkip.InsertFirst(decr);
             decrAndSkip.SetBranch(loopData.SkipBlock);
 
-            builder.Fork(builder.CreateSle(curr, ConstInt.CreateI(0)), decrAndSkip);
+            builder.ForkIf(builder.CreateSgt(curr, ConstInt.CreateI(0)), decrAndSkip);
             Drain.EmitBody(builder, currItem, loopData);
 
             return decr;

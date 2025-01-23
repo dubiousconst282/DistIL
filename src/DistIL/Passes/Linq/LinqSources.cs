@@ -124,8 +124,8 @@ internal class EnumeratorSource : LinqSourceNode
             builder.Emit(new CallInst(disposeFn, new[] { _enumerator }, isVirtual: true, constraint: structEnumerType));
         } else {
             var enumer = builder.CreateAsInstance(t_IDisposable, _enumerator);
-            var isNotDisposable = builder.CreateEq(enumer, ConstNull.Create());
-            builder.Fork(isNotDisposable, (elseBuilder, newBlock) => elseBuilder.CreateCallVirt(disposeFn, enumer));
+            var isDisposable = builder.CreateNe(enumer, ConstNull.Create());
+            builder.ForkIf(isDisposable, (thenBuilder, newBlock) => thenBuilder.CreateCallVirt(disposeFn, enumer));
         }
         builder.Emit(new ResumeInst([succBlock]));
 

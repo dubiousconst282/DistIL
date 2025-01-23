@@ -85,38 +85,29 @@ public class IRBuilder
     public void SetBranch(Value cond, BasicBlock then, BasicBlock else_) 
         => _block.SetBranch(new BranchInst(cond, then, else_) { DebugLocation = _debugLoc });
 
-    /// <summary>
-    /// Terminates the current block with a new branch <c>goto cond ? newBlock : elseBlock</c>,
-    /// and sets the builder position to the start of the new block.
-    /// </summary>
-    public void Fork(Value cond, BasicBlock elseBlock)
+    /// <summary> Creates a conditional branch to <paramref name="thenBlock"/>, forking builder's control flow to a new block. </summary>
+    /// <param name="negate"> Negate condition, so that <paramref name="thenBlock"/> executes only if cond is false. </param>
+    public void ForkIf(Value cond, BasicBlock thenBlock, bool negate = false)
     {
         var newBlock = Method.CreateBlock(insertAfter: Block);
-        SetBranch(cond, newBlock, elseBlock);
+        if (negate) {
+            SetBranch(cond, newBlock, thenBlock);
+        } else {
+            SetBranch(cond, thenBlock, newBlock);
+        }
         SetPosition(newBlock);
     }
-    /// <summary>
-    /// Terminates the current block with a new branch <c>goto cond ? newBlock : elseBlock</c>,
-    /// sets the builder position to the start of the new block, and calls <paramref name="emitElse"/> to build the code for `elseBlock`.
-    /// A branch to the new block will be placed at the `elseBlock` builder if t does not already has one.
-    /// </summary>
-    public void Fork(Value cond, Action<IRBuilder, BasicBlock> emitElse)
+    /// <summary> Creates an if-then statement. </summary>
+    public void ForkIf(Value cond, Action<IRBuilder, BasicBlock> emitBody)
     {
-        var elseBlock = Method.CreateBlock(insertAfter: Block);
-        var newBlock = Method.CreateBlock(insertAfter: elseBlock);
+        var thenBlock = Method.CreateBlock(insertAfter: Block);
+        var newBlock = Method.CreateBlock(insertAfter: thenBlock);
 
-        var elseBuilder = new IRBuilder(elseBlock);
-        emitElse(elseBuilder, newBlock);
-        elseBuilder.SetBranch(newBlock, replace: false);
+        var bodyBuilder = new IRBuilder(thenBlock);
+        emitBody(bodyBuilder, newBlock);
+        bodyBuilder.SetBranch(newBlock, replace: false);
 
-        SetBranch(cond, newBlock, elseBlock);
-        SetPosition(newBlock);
-    }
-
-    public void Fork(Action<IRBuilder, BasicBlock> emitTerminator)
-    {
-        var newBlock = Method.CreateBlock(insertAfter: Block);
-        emitTerminator(this, newBlock);
+        SetBranch(cond, thenBlock, newBlock);
         SetPosition(newBlock);
     }
 

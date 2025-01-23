@@ -19,7 +19,7 @@ internal class FindSink : LinqSink
         if (SubjectCall.Method.ParamSig is [_, { Type.Name: "Func`2" }, ..]) {
             // goto pred(currItem) ? NextBody : Latch
             var cond = builder.CreateLambdaInvoke(SubjectCall.Args[1], currItem);
-            builder.Fork(cond, loopData.SkipBlock);
+            builder.ForkIf(cond, loopData.SkipBlock, negate: true);
         }
         
         if (op.EndsWith("OrDefault")) {
@@ -35,12 +35,13 @@ internal class FindSink : LinqSink
             // Body:  goto Exit2
             // Exit:  goto ThrowHelper
             // Exit2: var result = currItem
-            exit.Fork((builder, newBlock) => builder.Throw(typeof(InvalidOperationException)));
+            exit.Throw(typeof(InvalidOperationException));
+            exit.SetPosition(exit.Method.CreateBlock(insertAfter: exit.Block));
             SubjectCall.ReplaceUses(currItem);
         }
         // LoopBuilder expects an edge to the latch from the last body block, 
         // create a dead cond branch here so it won't complain about it.
-        builder.Fork(ConstInt.CreateI(0), exit.Block);
+        builder.ForkIf(ConstInt.CreateI(1), exit.Block);
     }
 }
 
@@ -67,6 +68,6 @@ internal class QuantifySink : LinqSink
         SubjectCall.ReplaceUses(phi);
 
         var cond = builder.CreateLambdaInvoke(SubjectCall.Args[1], currItem);
-        builder.Fork(builder.CreateEq(cond, ConstInt.CreateI(normRes)), exit.Block);
+        builder.ForkIf(builder.CreateNe(cond, ConstInt.CreateI(normRes)), exit.Block);
     }
 }

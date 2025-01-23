@@ -38,7 +38,7 @@ internal static class IRBuilderExt
         if (cond == null) {
             ib.SetBranch(throwHelper);
         } else {
-            ib.Fork(ib.CreateEq(cond, Const.CreateZero(cond.ResultType)), throwHelper);
+            ib.ForkIf(ib.CreateNe(cond, Const.CreateZero(cond.ResultType)), throwHelper);
         }
     }
 }

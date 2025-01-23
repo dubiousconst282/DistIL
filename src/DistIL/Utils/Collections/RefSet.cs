@@ -7,7 +7,8 @@ using System.Runtime.CompilerServices;
 /// <remarks> Enumerators will be invalidated and throw after mutations (adds/removes). </remarks>
 public class RefSet<T> where T : class
 {
-    T?[] _slots;
+    struct Slot { public T? value; }
+    Slot[] _slots;
     int _count;
     // Used to invalidate the enumerator when the set is changed.
     // Add()/Remove() will set it to true, and GetEnumerator() to false.
@@ -18,12 +19,12 @@ public class RefSet<T> where T : class
 
     public RefSet()
     {
-        _slots = new T[8];
+        _slots = new Slot[8];
     }
     public RefSet(int initialCapacity)
     {
         // The initial capacity cannot be less than the load factor
-        _slots = new T[Math.Max(4, BitOperations.RoundUpToPowerOf2((uint)initialCapacity))];
+        _slots = new Slot[Math.Max(4, BitOperations.RoundUpToPowerOf2((uint)initialCapacity))];
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -34,10 +35,10 @@ public class RefSet<T> where T : class
         var slots = _slots;
         for (int index = Hash(value); ; index++) {
             index &= (slots.Length - 1);
-            var slot = slots[index];
+            var slot = slots[index].value;
 
             if (slot == null) {
-                MemUtils.WriteInvariant(slots, index, value);
+                slots[index].value = value;
                 _count++;
                 // Expand when load factor reaches 3/4
                 // Casting to uint avoids extra sign calcs in the resulting asm.
@@ -58,7 +59,7 @@ public class RefSet<T> where T : class
         var slots = _slots;
         for (int index = Hash(value); ; index++) {
             index &= (slots.Length - 1);
-            var slot = slots[index];
+            var slot = slots[index].value;
 
             if (slot == value) {
                 return true;
@@ -74,7 +75,7 @@ public class RefSet<T> where T : class
         var slots = _slots;
         for (int index = Hash(value); ; index++) {
             index &= (slots.Length - 1);
-            var slot = slots[index];
+            var slot = slots[index].value;
 
             if (slot == value) {
                 RemoveEntryAndShiftCluster(index);
@@ -94,19 +95,19 @@ public class RefSet<T> where T : class
         var slots = _slots;
         int j = i;
         while (true) {
-            slots[i] = null;
+            slots[i].value = null;
 
             while (true) {
                 j = (j + 1) & (slots.Length - 1);
-                if (slots[j] == null) return;
+                if (slots[j].value == null) return;
 
-                int k = Hash(slots[j]!) & (slots.Length - 1);
+                int k = Hash(slots[j].value!) & (slots.Length - 1);
                 // determine if k lies cyclically outside (i,j]
                 // |    i.k.j |
                 // |....j i.k.| or  |.k..j i...|
                 if (i <= j ? (i >= k || k > j) : (i >= k && k > j)) break;
             }
-            MemUtils.WriteInvariant(slots, i, slots[j]);
+            slots[i] = slots[j];
             i = j;
         }
     }
@@ -120,18 +121,18 @@ public class RefSet<T> where T : class
     private void Expand()
     {
         var oldSlots = _slots;
-        var newSlots = _slots = new T[oldSlots.Length * 2];
+        var newSlots = _slots = new Slot[oldSlots.Length * 2];
 
-        foreach (var value in oldSlots) {
-            if (value == null) continue;
+        foreach (var slot in oldSlots) {
+            if (slot.value == null) continue;
 
-            for (int index = Hash(value); ; index++) {
+            for (int index = Hash(slot.value); ; index++) {
                 index &= (newSlots.Length - 1);
-                if (newSlots[index] == null) {
-                    MemUtils.WriteInvariant(newSlots, index, value);
+                if (newSlots[index].value == null) {
+                    newSlots[index] = slot;
                     break;
                 }
-                Debug.Assert(newSlots[index] != value); // slots shouldn't have dupes
+                Debug.Assert(newSlots[index].value != slot.value); // slots shouldn't have dupes
             }
         }
     }
@@ -156,7 +157,7 @@ public class RefSet<T> where T : class
 
     public struct Iterator : Iterator<T>
     {
-        T?[] _slots;
+        Slot[] _slots;
         int _index;
         RefSet<T> _owner;
 
@@ -170,7 +171,7 @@ public class RefSet<T> where T : class
             Ensure.That(!_owner._changed, "RefSet cannot be modified during enumeration");
 
             while (_index < _slots.Length) {
-                Current = _slots[_index++]!;
+                Current = _slots[_index++].value!;
                 if (Current != null) {
                     return true;
                 }

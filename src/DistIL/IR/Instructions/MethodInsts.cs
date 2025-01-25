@@ -12,6 +12,10 @@ public class CallInst : Instruction
     public bool IsStatic => Method.IsStatic;
     public TypeDesc? Constraint { get; set; }
 
+    /// <summary> Indicates that the current method's stack frame should be discarded before the call. </summary>
+    /// <remarks> There are restrictions for when this flag can be used, and violations may result in invalid IL. See ECMA335 <c>III.2.4 tail. (prefix)</c> for details. </remarks>
+    public bool IsTailCall { get; set; }
+
     /// <summary> For virtual calls, indicates if the instance object is known to be non-null. </summary>
     public bool InBounds { get; set; }
 
@@ -19,7 +23,7 @@ public class CallInst : Instruction
     public override bool MayThrow => true;
     public override bool MayWriteToMemory => true;
     public override bool MayReadFromMemory => true;
-    public override string InstName => "call" + (IsVirtual ? "virt" : "");
+    public override string InstName => "call" + (IsVirtual ? "virt" : "") + (IsTailCall ? ".tail" : "");
 
     public CallInst(MethodDesc method, Value[] args, bool isVirtual = false, TypeDesc? constraint = null)
         : base(args)

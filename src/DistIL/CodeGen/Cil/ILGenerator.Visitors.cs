@@ -189,6 +189,9 @@ partial class ILGenerator
         foreach (var arg in inst.Args) {
             Push(arg);
         }
+        if (inst.IsTailCall) {
+            _asm.Emit(ILCode.Tail_);
+        }
         if (inst.Constraint != null) {
             _asm.Emit(ILCode.Constrained_, inst.Constraint);
         }

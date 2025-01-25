@@ -780,6 +780,7 @@ internal class BlockState
         var args = PopCallArgs(method);
         var constraint = HasPrefix(InstFlags.Constrained) ? _callConstraint : null;
         var inst = new CallInst(method, args, isVirt, constraint);
+        inst.IsTailCall = HasPrefix(InstFlags.Tailcall);
         Push(inst);
     }
     private void ImportLoadFuncPtr(MethodDesc method, bool isVirt)

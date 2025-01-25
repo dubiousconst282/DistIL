@@ -76,6 +76,12 @@ public class IRVerifier
                 Check(argTypesMatch, phi, "Phi arguments should be assignable to its result type", DiagnosticSeverity.Warn);
                 break;
             }
+            case CallInst call: {
+                if (call.IsTailCall) {
+                    Check(call.Next is ReturnInst, call, "Next instruction after tail call must be a return.");
+                }
+                break;
+            }
             case { IsBranch: true, Next: not null }: {
                 Error(inst, "Branch must be the last instruction in the block");
                 break;

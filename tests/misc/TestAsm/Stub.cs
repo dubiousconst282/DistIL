@@ -1,8 +1,9 @@
+namespace TestAsm;
+
 public class MatcherStub
 {
-    public static void StubMethod()
+    public static void StubMethod(string first, string second)
     {
-        var x = 2 + 6;
-        System.Console.WriteLine(x);
+        System.Console.WriteLine(first + second);
     }
 }

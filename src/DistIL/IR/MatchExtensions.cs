@@ -137,7 +137,7 @@ public static class MatchExtensions
             return false;
         }
 
-        if (constantArg.Type != PrimType.Int32 && constantArg.Type != PrimType.Double) {
+        if (constantArg.Type != PrimType.Int64 && constantArg.Type != PrimType.Double) {
             return false;
         }
 

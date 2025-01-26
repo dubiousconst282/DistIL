@@ -70,7 +70,7 @@ public static class ResolvingUtils
         return methods.FirstOrDefault();
     }
 
-    private static MethodSelector GetSelector(this ModuleResolver resolver, string selector)
+    internal static MethodSelector GetSelector(this ModuleResolver resolver, string selector)
     {
         var spl = selector.Split("::");
         var type = FindType(resolver, spl[0].Trim());

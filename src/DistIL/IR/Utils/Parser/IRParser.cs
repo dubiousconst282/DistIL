@@ -347,30 +347,22 @@ public partial class IRParser
 
     private Instruction ParseMultiOpInst(Opcode op, AbsRange pos)
     {
-        if (op is > Opcode._Bin_First and < Opcode._Bin_Last) {
-            return Schedule(PendingInst.Kind.Binary, op - (Opcode._Bin_First + 1));
-        }
-        if (op is > Opcode._Cmp_First and < Opcode._Cmp_Last) {
-            return Schedule(PendingInst.Kind.Compare, op - (Opcode._Cmp_First + 1));
-        }
-        throw _ctx.Fatal("Unknown instruction", pos);
-
-        // Some insts have dynamic result types and depend on the real value type,
-        // once they're found, we'll materialize them.
-        Instruction Schedule(PendingInst.Kind kind, int op)
-        {
+        // Some insts have dynamic result types and depend on the real value type.
+        // We'll defer materialization until they have been parsed.
+        if (op.IsBinaryOp() || op.IsCompareOp()) {
             var left = ParseValue();
             _lexer.Expect(TokenType.Comma);
             var right = ParseValue();
             var type = ParseResultType();
 
-            if (PendingInst.Resolve(kind, op, left, right) is { } resolved) {
+            if (PendingInst.Resolve(op, left, right) is { } resolved) {
                 return resolved;
             }
-            var inst = new PendingInst(kind, op, left, right, type);
+            var inst = new PendingInst(op, left, right, type);
             _pendingInsts.Add(inst);
             return inst;
         }
+        throw _ctx.Fatal("Unknown instruction", pos);
     }
 
     // Goto := Label | (Value "?" Label ":" Label)
@@ -827,19 +819,17 @@ public partial class IRParser
     }
     sealed class PendingInst : Instruction
     {
-        public Kind InstKind;
-        public int Op;
+        public Opcode Op;
 
-        public override string InstName => "pending." + InstKind;
+        public override string InstName => "pending." + Op;
         public override void Accept(InstVisitor visitor) => throw new InvalidOperationException();
 
-        public PendingInst(Kind kind, int op, Value left, Value right, TypeDesc resultType)
-            : base(left, right)
-            => (InstKind, Op, ResultType) = (kind, op, resultType);
+        public PendingInst(Opcode op, Value left, Value right, TypeDesc resultType) : base(left, right)
+            => (Op, ResultType) = (op, resultType);
 
         public bool TryResolve()
         {
-            if (Resolve(InstKind, Op, Operands[0], Operands[1]) is { } resolved) {
+            if (Resolve(Op, Operands[0], Operands[1]) is { } resolved) {
                 Ensure.That(resolved.ResultType == ResultType);
                 ReplaceWith(resolved, insertIfInst: true);
                 return true;
@@ -847,15 +837,18 @@ public partial class IRParser
             return false;
         }
 
-        public static Instruction? Resolve(Kind kind, int op, Value left, Value right)
+        public static Instruction? Resolve(Opcode op, Value left, Value right)
         {
             if (left is PendingValue || right is PendingValue) {
                 return null;
             }
-            return kind switch {
-                PendingInst.Kind.Binary => new BinaryInst((BinaryOp)op, left, right),
-                PendingInst.Kind.Compare => new CompareInst((CompareOp)op, left, right)
-            };
+            if (op.IsBinaryOp()) {
+                return new BinaryInst(op.GetBinaryOp(), left, right);
+            }
+            if (op.IsCompareOp()) {
+                return new CompareInst(op.GetCompareOp(), left, right);
+            }
+            throw new InvalidOperationException();
         }
 
         public enum Kind { Binary, Compare };

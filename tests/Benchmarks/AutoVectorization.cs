@@ -5,7 +5,7 @@ using DistIL.Attributes;
 using System.Runtime.Intrinsics;
 using System.Runtime.InteropServices;
 
-[Optimize(TryVectorize = true), DisassemblyDiagnoser]
+[Optimize(), DisassemblyDiagnoser]
 public class AutoVectorization
 {
     [Params(4096)]

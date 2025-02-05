@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 using DistIL.AsmIO;
 
@@ -29,6 +30,12 @@ public static class TypeAssertions
     public static void ShouldBeEnum(this TypeDef type)
     {
         type.IsEnum.ShouldBeTrue();
+    }
+
+    public static void ShouldBeEnumWithFlags(this TypeDef type)
+    {
+        type.IsEnum.ShouldBeTrue();
+        type.HasCustomAttrib(typeof(FlagsAttribute));
     }
 
     public static void ShouldBeClass(this TypeDef type)
@@ -104,5 +111,5 @@ public static class TypeAssertions
     public static void ShouldHaveMethod(this TypeDef type, string name, string returnType)
     {
         type.Methods.ShouldContain(m => m.Name == name && m.ReturnType.Namespace == returnType);
-    }    
+    }
 }

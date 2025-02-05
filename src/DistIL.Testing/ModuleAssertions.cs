@@ -32,4 +32,15 @@ public static class ModuleAssertions
     {
         module.FindType(ns, name, includeExports, throwIfNotFound: true).ShouldNotBeNull();
     }
+
+    public static void ShouldNotContainType(this ModuleDef module, string ns, string name, bool includeExports = true)
+    {
+        module.FindType(ns, name, includeExports, throwIfNotFound: false).ShouldBeNull();
+    }
+
+    public static void ShouldTargetRuntimeVersion(this ModuleDef module, string version)
+    {
+        module.GetCustomAttribs(true).FirstOrDefault(a => a.Type.Namespace == "System.Runtime.Versioning" && a.Type.Name == "TargetFrameworkAttribute")?
+            .Args[0].ShouldBe(".NETCoreApp,Version=v" + version);
+    }
 }
